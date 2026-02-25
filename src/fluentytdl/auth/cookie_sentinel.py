@@ -207,13 +207,19 @@ class CookieSentinel:
 
     @property
     def is_stale(self) -> bool:
-        """Cookie 是否过期（文件年龄 > 30 分钟，或关键 Cookie 已过期）"""
-        age = self.age_minutes
-        if age is None or age > 30:
+        """Cookie 是否过期（基于实际的 expires 字段，兜底文件年龄 > 24小时）"""
+        if not self.exists:
             return True
-        # 也检查 Cookie 实际 expires
+
+        # 优先检查 Cookie 实际 expires
         expiry = self.get_earliest_expiry()
-        if expiry is not None and expiry <= 0:
+        if expiry is not None:
+            return expiry <= 0
+
+        # 如果无法解析出 expiry（比如全为不含时间戳的 Session Cookie）
+        # 则作为兜底，仅当文件距今超过 24 小时才视为过期
+        age = self.age_minutes
+        if age is not None and age > 24 * 60:
             return True
         return False
 

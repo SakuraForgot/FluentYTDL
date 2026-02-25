@@ -1114,20 +1114,29 @@ class MainWindow(FluentWindow):
                     logger.warning(f"[MainWindow] {browser_name} 需要管理员权限提取Cookie")
                 return
 
-            # 检查Cookie文件是否存在且不太旧
-            if not cookie_sentinel.exists or cookie_sentinel.is_stale:
-                # Cookie不存在或过期，给出提示
+            # 检查Cookie状态
+            if not cookie_sentinel.exists:
+                # Cookie完全不存在
                 InfoBar.warning(
                     "Cookie提取提示",
-                    f"尚未从{browser_name}提取到Cookie，部分视频可能无法下载。\n"
-                    f"建议前往【设置】页面点击【立即刷新】手动提取Cookie。",
+                    f"尚未从 {browser_name} 提取到 Cookie，部分视频可能无法下载。\n"
+                    f"建议前往【设置】页面点击【立即提取】。",
                     duration=8000,
                     parent=self,
                     position=InfoBarPosition.TOP,
                 )
-                logger.warning(
-                    f"[MainWindow] Cookie状态检查：未找到有效Cookie（来源：{browser_name}）"
+                logger.warning(f"[MainWindow] Cookie状态检查：未找到Cookie文件（来源：{browser_name}）")
+            elif cookie_sentinel.is_stale:
+                # Cookie文件存在，但已过期
+                InfoBar.warning(
+                    "Cookie已过期",
+                    f"您提取的 {browser_name} Cookie 已过期。\n"
+                    f"建议前往【设置】页面点击【立即刷新】重新获取。",
+                    duration=8000,
+                    parent=self,
+                    position=InfoBarPosition.TOP,
                 )
+                logger.warning(f"[MainWindow] Cookie状态检查：Cookie已过期（来源：{browser_name}）")
             else:
                 # Cookie正常
                 logger.info(
