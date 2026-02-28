@@ -829,7 +829,7 @@ class DownloadConfigWindow(FramelessWindow):
             parent = self.parent()
             while parent is not None:
                 if hasattr(parent, "show_settings_network"):
-                    parent.show_settings_network()
+                    parent.show_settings_network()  # type: ignore[attr-defined]
                     return
                 parent = parent.parent()
         except Exception:

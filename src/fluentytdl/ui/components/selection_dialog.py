@@ -620,26 +620,26 @@ class PlaylistFormatDialog(MessageBoxBase):
 
     def get_selection(self) -> dict:
         if self._mode == "subtitle":
-            opts = self.selector.get_opts()
+            opts = self.selector.get_opts()  # type: ignore[attr-defined]
             return {"extra_opts": opts, "format": "subtitle_custom"}
         elif self._mode == "cover":
-            url = self.selector.get_selected_url()
-            ext = self.selector.get_selected_ext()
+            url = self.selector.get_selected_url()  # type: ignore[attr-defined]
+            ext = self.selector.get_selected_ext()  # type: ignore[attr-defined]
             return {"cover_url": url, "cover_ext": ext, "format": "cover_custom"}
         else:
-            return self.selector.get_selection_result()
+            return self.selector.get_selection_result()  # type: ignore[attr-defined]
 
     def get_summary(self) -> str:
         if self._mode == "subtitle":
-            selected = self.selector.get_selected_tracks()
+            selected = self.selector.get_selected_tracks()  # type: ignore[attr-defined]
             if not selected:
                 return "未选择字幕"
             return f"已选择 {len(selected)} 种语言"
         elif self._mode == "cover":
-            ext = self.selector.get_selected_ext()
+            ext = self.selector.get_selected_ext()  # type: ignore[attr-defined]
             return f"已选择 {ext.upper()} 封面"
         else:
-            return self.selector.get_summary_text()
+            return self.selector.get_summary_text()  # type: ignore[attr-defined]
 
 
 class SelectionDialog(MessageBoxBase):

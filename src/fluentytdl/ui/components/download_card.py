@@ -391,7 +391,7 @@ class DownloadItemCard(CardWidget):
             # 优先使用 switchTo(settings_interface)
             settings_iface = getattr(main_win, "settings_interface", None)
             if settings_iface is not None:
-                main_win.switchTo(settings_iface)
+                main_win.switchTo(settings_iface)  # type: ignore[attr-defined]
             else:
                 handler = getattr(main_win, "switch_to_settings", None)
                 if callable(handler):

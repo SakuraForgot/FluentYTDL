@@ -488,7 +488,8 @@ class VideoFormatSelectorWidget(QWidget):
         )
         self._rows = candidates
 
-    def _refresh_table(self):
+    def _refresh_table_selection_state(self):
+        """Reset incompatible selections based on current mode (helper for _refresh_table)."""
         mode = self.mode_combo.currentIndex()
         self.hint_label.setVisible(mode == 0)
 

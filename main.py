@@ -181,7 +181,7 @@ def main() -> None:
         app.setQuitOnLastWindowClosed(True)
         window = MainWindow()
         window.show()
-        app._main_window = window  # 保持引用防回收
+        app._main_window = window  # type: ignore[attr-defined]  # 保持引用防回收
 
         # === Cookie Sentinel: 启动时静默预提取 (Best-Effort) ===
         def start_cookie_sentinel_thread():
@@ -218,10 +218,10 @@ def main() -> None:
         splash.move(w // 2 - splash.width() // 2, h // 2 - splash.height() // 2)
         splash.show()
 
-        app._splash = splash  # 防回收
+        app._splash = splash  # type: ignore[attr-defined]  # 防回收
 
         init_thread = PotInitThread()
-        app._init_thread = init_thread
+        app._init_thread = init_thread  # type: ignore[attr-defined]
 
         # 包装器避免多次启动
         is_launched = [False]

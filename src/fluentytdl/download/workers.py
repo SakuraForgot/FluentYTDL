@@ -522,9 +522,9 @@ class DownloadWorker(QThread):
                     return
 
                 try:
-                    line = raw.decode("utf-8").rstrip("\r\n")
+                    line = raw.decode("utf-8").rstrip("\r\n")  # type: ignore[union-attr]
                 except UnicodeDecodeError:
-                    line = raw.decode("utf-8", errors="replace").rstrip("\r\n")
+                    line = raw.decode("utf-8", errors="replace").rstrip("\r\n")  # type: ignore[union-attr]
 
                 if line:
                     logger.debug("[LightweightExtract] {}", line)

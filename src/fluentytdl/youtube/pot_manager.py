@@ -452,6 +452,7 @@ class POTManager:
             return False, "服务未运行"
 
         import json
+        import urllib.error
         import urllib.request
 
         try:
@@ -490,6 +491,7 @@ class POTManager:
             return False, "服务未运行"
 
         import json
+        import urllib.error
         import urllib.request
 
         try:
