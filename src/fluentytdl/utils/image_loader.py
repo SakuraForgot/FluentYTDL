@@ -60,7 +60,9 @@ def trim_disk_cache(max_mb: int = 50) -> None:
                 except Exception:
                     pass
         if removed:
-            logger.info(f"[ImageLoader] 磁盘缓存清理：删除 {removed} 个旧文件，当前 {total // 1024 // 1024} MB")
+            logger.info(
+                f"[ImageLoader] 磁盘缓存清理：删除 {removed} 个旧文件，当前 {total // 1024 // 1024} MB"
+            )
     except Exception as e:
         logger.warning(f"[ImageLoader] 磁盘缓存清理失败: {e}")
 

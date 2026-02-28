@@ -219,6 +219,52 @@ def fetch_ffmpeg(dest_dir: Path) -> None:
     print(f"  ✓ ffmpeg (yt-dlp) 已安装到 {dest_dir}")
 
 
+def fetch_deno(dest_dir: Path) -> None:
+    """获取 Deno (JavaScript 运行时)"""
+    print("\n🔧 获取 Deno...")
+    dest_dir.mkdir(parents=True, exist_ok=True)
+
+    release = github_api("/repos/denoland/deno/releases/latest")
+    tag = release.get("tag_name", "unknown")
+    print(f"  最新版本: {tag}")
+
+    # 查找 Windows x86_64 zip
+    zip_asset = next(
+        (
+            a
+            for a in release["assets"]
+            if "x86_64" in a["name"]
+            and "windows" in a["name"].lower()
+            and a["name"].endswith(".zip")
+        ),
+        None,
+    )
+    if not zip_asset:
+        raise RuntimeError("未找到 Deno Windows x86_64 zip 资产")
+
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_path = Path(tmp)
+        zip_path = tmp_path / "deno.zip"
+
+        download_file(zip_asset["browser_download_url"], zip_path)
+
+        # 解压
+        print("  📦 解压中...")
+        with zipfile.ZipFile(zip_path, "r") as z:
+            z.extractall(tmp_path)
+
+        # 查找 deno.exe
+        exe_found = False
+        for f in tmp_path.rglob("deno.exe"):
+            shutil.copy2(f, dest_dir / "deno.exe")
+            exe_found = True
+            break
+
+        if not exe_found:
+            raise RuntimeError("未找到 deno.exe")
+
+    print(f"  ✓ Deno {tag} 已安装到 {dest_dir}")
+
 
 def fetch_atomicparsley(dest_dir: Path) -> None:
     """获取 AtomicParsley (用于嵌入封面)"""
@@ -320,6 +366,7 @@ def main():
     checks = [
         TARGET_DIR / "yt-dlp" / "yt-dlp.exe",
         TARGET_DIR / "ffmpeg" / "ffmpeg.exe",
+        TARGET_DIR / "deno" / "deno.exe",
         TARGET_DIR / "pot-provider" / "bgutil-pot-provider.exe",
         TARGET_DIR / "atomicparsley" / "AtomicParsley.exe",
     ]
@@ -340,6 +387,7 @@ def main():
     try:
         fetch_yt_dlp(TARGET_DIR / "yt-dlp")
         fetch_ffmpeg(TARGET_DIR / "ffmpeg")
+        fetch_deno(TARGET_DIR / "deno")
         fetch_pot_provider(TARGET_DIR / "pot-provider")
         fetch_atomicparsley(TARGET_DIR / "atomicparsley")
     except Exception as e:

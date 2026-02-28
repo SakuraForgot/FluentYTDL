@@ -30,10 +30,11 @@ class CookieRepairDialog(QDialog):
     repair_requested = Signal()  # 用户点击自动修复
     manual_import_requested = Signal()  # 用户点击手动导入
 
-    def __init__(self, error_message: str = "", parent=None):
+    def __init__(self, error_message: str = "", parent=None, auth_source: str = "browser"):
         super().__init__(parent)
 
         self.error_message = error_message
+        self._auth_source = auth_source
         self._setup_ui()
 
     def _setup_ui(self):
@@ -51,13 +52,27 @@ class CookieRepairDialog(QDialog):
         title_label.setStyleSheet("font-size: 16px;")
         layout.addWidget(title_label)
 
-        # 说明文本
-        desc_text = (
-            "YouTube 需要重新验证身份，请选择以下方式修复：\n\n"
-            "• 自动修复：尝试重新提取 Cookie (Chrome/Edge 若失败请使用下方方案)\n"
-            "• 强烈建议：将设置页面的提取来源换为 Firefox 或 LibreWolf\n"
-            "• 手动导入：使用浏览器扩展 Get cookies.txt LOCALLY 导出并手动导入"
-        )
+        # 根据验证模式动态调整说明文本
+        if self._auth_source == "dle":
+            desc_text = (
+                "YouTube 需要重新验证身份，请选择以下方式修复：\n\n"
+                "• 重新登录：点击下方按钮在浏览器中重新登录 YouTube\n"
+                "• 手动导入：使用浏览器扩展 Get cookies.txt LOCALLY 导出并导入"
+            )
+        elif self._auth_source == "file":
+            desc_text = (
+                "YouTube 需要重新验证身份，请选择以下方式修复：\n\n"
+                "• 重新导入：选择更新的 Cookie 文件 (Netscape 格式)\n"
+                "• 推荐使用浏览器扩展 Get cookies.txt LOCALLY 导出\n"
+                "• 或切换到「登录获取」模式，无需手动导出"
+            )
+        else:
+            desc_text = (
+                "YouTube 需要重新验证身份，请选择以下方式修复：\n\n"
+                "• 自动修复：尝试重新提取 Cookie (Chrome/Edge 若失败请使用下方方案)\n"
+                "• 强烈建议：将设置页面的提取来源换为 Firefox 或 LibreWolf\n"
+                "• 手动导入：使用浏览器扩展 Get cookies.txt LOCALLY 导出并手动导入"
+            )
         desc_label = BodyLabel(desc_text, self)
         desc_label.setWordWrap(True)
         layout.addWidget(desc_label)

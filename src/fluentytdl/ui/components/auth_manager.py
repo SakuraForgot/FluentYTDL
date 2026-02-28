@@ -23,7 +23,6 @@ from qfluentwidgets import (
     ComboBox,
     FluentIcon,
     IconWidget,
-    InfoBar,
     InfoBarPosition,
     LineEdit,
     PrimaryPushButton,
@@ -43,6 +42,7 @@ from ...auth.cookie_manager import (
     cookie_manager,
 )
 from ...utils.logger import logger
+from .custom_info_bar import InfoBar
 
 
 class AuthProfileCard(QFrame):
@@ -64,17 +64,22 @@ class AuthProfileCard(QFrame):
     def _init_ui(self):
         self.setObjectName("authProfileCard")
         self.setFrameShape(QFrame.Shape.StyledPanel)
-        self.setStyleSheet("""
-            #authProfileCard {
-                background-color: rgba(255, 255, 255, 0.7);
-                border: 1px solid rgba(0, 0, 0, 0.1);
+        from qfluentwidgets import isDarkTheme
+
+        bg = "rgba(255, 255, 255, 0.05)" if isDarkTheme() else "rgba(255, 255, 255, 0.7)"
+        bd = "rgba(255, 255, 255, 0.08)" if isDarkTheme() else "rgba(0, 0, 0, 0.1)"
+        hov_bg = "rgba(255, 255, 255, 0.08)" if isDarkTheme() else "rgba(255, 255, 255, 0.9)"
+        self.setStyleSheet(f"""
+            #authProfileCard {{
+                background-color: {bg};
+                border: 1px solid {bd};
                 border-radius: 8px;
                 padding: 12px;
-            }
-            #authProfileCard:hover {
-                background-color: rgba(255, 255, 255, 0.9);
+            }}
+            #authProfileCard:hover {{
+                background-color: {hov_bg};
                 border-color: rgba(0, 120, 212, 0.3);
-            }
+            }}
         """)
 
         layout = QHBoxLayout(self)
@@ -205,12 +210,16 @@ class AddAuthProfileDialog(QFrame):
 
     def _init_ui(self):
         self.setObjectName("addAuthDialog")
-        self.setStyleSheet("""
-            #addAuthDialog {
-                background-color: rgba(240, 240, 240, 0.95);
-                border: 1px solid rgba(0, 0, 0, 0.15);
+        from qfluentwidgets import isDarkTheme
+
+        bg = "rgba(43, 43, 43, 0.95)" if isDarkTheme() else "rgba(240, 240, 240, 0.95)"
+        bd = "rgba(255, 255, 255, 0.08)" if isDarkTheme() else "rgba(0, 0, 0, 0.15)"
+        self.setStyleSheet(f"""
+            #addAuthDialog {{
+                background-color: {bg};
+                border: 1px solid {bd};
                 border-radius: 8px;
-            }
+            }}
         """)
 
         layout = QVBoxLayout(self)

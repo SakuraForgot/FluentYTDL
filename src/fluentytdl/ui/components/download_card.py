@@ -141,7 +141,9 @@ class DownloadItemCard(CardWidget):
         # 1. 左侧缩略图 (16:9)
         self.iconLabel = QLabel(self)
         self.iconLabel.setFixedSize(80, 45)
-        self.iconLabel.setStyleSheet("background-color: rgba(0, 0, 0, 0.1); border-radius: 6px;")
+
+        # Style setup moved to _update_style
+
         self.iconLabel.setScaledContents(True)
         self.hLayout.addWidget(self.iconLabel)
 
@@ -210,6 +212,17 @@ class DownloadItemCard(CardWidget):
         # running / queued / paused / completed / error
         self._state: str = "queued"
 
+        from qfluentwidgets import qconfig
+
+        qconfig.themeChanged.connect(self._update_style)
+        self._update_style()
+
+    def _update_style(self):
+        from qfluentwidgets import isDarkTheme
+
+        bg_alpha = "rgba(255, 255, 255, 0.06)" if isDarkTheme() else "rgba(0, 0, 0, 0.06)"
+        self.iconLabel.setStyleSheet(f"background-color: {bg_alpha}; border-radius: 6px;")
+
     def state(self) -> str:
         return self._state
 
@@ -274,47 +287,92 @@ class DownloadItemCard(CardWidget):
 
     def _on_cookie_error(self, error_message: str) -> None:
         """
-        处理 Cookie 错误
+        处理 Cookie / Bot 检测错误
 
-        弹出修复对话框，引导用户修复 Cookie
+        先尝试 POT 渐进式恢复（清缓存 → 重置 Token → 重启），
+        如果恢复成功则自动重试下载；否则再弹出 Cookie 修复对话框。
         """
         try:
+            # ===== 第一步：尝试 POT 自动恢复 =====
+            from ...core.config_manager import config_manager
+
+            if config_manager.get("pot_provider_enabled", True):
+                try:
+                    from ...youtube.pot_manager import pot_manager
+
+                    pot_recovered = pot_manager.try_recover()
+                    if pot_recovered:
+                        from ...utils.logger import logger
+
+                        logger.info("Bot 检测恢复: POT 服务已恢复，自动重试下载")
+                        InfoBar.success(
+                            "POT 服务已恢复",
+                            "已自动清除 Token 缓存并重新生成，正在重试下载...",
+                            parent=self.window(),
+                            position=InfoBarPosition.TOP,
+                            duration=4000,
+                        )
+                        from PySide6.QtCore import QTimer
+
+                        QTimer.singleShot(1500, lambda: self._retry_download())
+                        return
+                except Exception as e:
+                    from ...utils.logger import logger
+
+                    logger.debug(f"POT 恢复尝试失败: {e}")
+
+            # ===== 第二步：POT 恢复失败，走 Cookie 修复流程 =====
+            from ...auth.auth_service import AuthSourceType, auth_service
             from ...auth.cookie_sentinel import cookie_sentinel
             from .cookie_repair_dialog import CookieRepairDialog
 
+            current_source = auth_service.current_source
+
+            # 映射 auth_source 字符串给 CookieRepairDialog
+            source_map = {
+                AuthSourceType.DLE: "dle",
+                AuthSourceType.FILE: "file",
+            }
+            auth_source_str = source_map.get(current_source, "browser")
+
             # 创建修复对话框
-            dialog = CookieRepairDialog(error_message, parent=self.window())
+            dialog = CookieRepairDialog(
+                error_message, parent=self.window(), auth_source=auth_source_str
+            )
 
-            # 连接自动修复信号
+            # 根据验证模式自适应文案和按钮行为
+            if current_source == AuthSourceType.DLE:
+                dialog.setWindowTitle("需要重新登录 YouTube")
+                dialog.repair_btn.setText("重新登录")
+            elif current_source == AuthSourceType.FILE:
+                dialog.setWindowTitle("Cookie 文件需要更新")
+                dialog.repair_btn.setText("重新导入")
+
+            # 连接自动修复信号（根据模式分流）
             def on_auto_repair():
-                success, message = cookie_sentinel.force_refresh_with_uac()
-                dialog.show_repair_result(success, message)
+                if current_source == AuthSourceType.DLE:
+                    # DLE → 跳转到设置页重新登录
+                    dialog.accept()
+                    self._jump_to_settings("请点击「登录 YouTube」按钮重新登录")
+                elif current_source == AuthSourceType.FILE:
+                    # 手动导入 → 跳转到设置页重新导入
+                    dialog.accept()
+                    self._jump_to_settings("请重新选择 Cookie 文件导入")
+                else:
+                    # 浏览器提取 → 直接自动修复
+                    success, message = cookie_sentinel.force_refresh_with_uac()
+                    dialog.show_repair_result(success, message)
 
-                if success:
-                    # 修复成功，自动重试下载
-                    from PySide6.QtCore import QTimer
+                    if success:
+                        from PySide6.QtCore import QTimer
 
-                    QTimer.singleShot(2000, lambda: self._retry_download())
+                        QTimer.singleShot(2000, lambda: self._retry_download())
 
             dialog.repair_requested.connect(on_auto_repair)
 
             # 连接手动导入信号
             def on_manual_import():
-                # 打开设置页面的验证选项卡
-                try:
-                    main_win = self.window()
-                    handler = getattr(main_win, "switch_to_settings", None)
-                    if callable(handler):
-                        handler()
-                        InfoBar.info(
-                            "请在设置页面导入 Cookie 文件",
-                            "导入完成后可重试下载",
-                            parent=main_win,
-                            position=InfoBarPosition.TOP,
-                            duration=5000,
-                        )
-                except Exception:
-                    pass
+                self._jump_to_settings("请在设置页面导入 Cookie 文件")
 
             dialog.manual_import_requested.connect(on_manual_import)
 
@@ -325,6 +383,28 @@ class DownloadItemCard(CardWidget):
             from ...utils.logger import logger
 
             logger.error(f"显示 Cookie 修复对话框失败: {e}", exc_info=True)
+
+    def _jump_to_settings(self, hint: str) -> None:
+        """跳转到设置页并显示提示"""
+        try:
+            main_win = self.window()
+            # 优先使用 switchTo(settings_interface)
+            settings_iface = getattr(main_win, "settings_interface", None)
+            if settings_iface is not None:
+                main_win.switchTo(settings_iface)
+            else:
+                handler = getattr(main_win, "switch_to_settings", None)
+                if callable(handler):
+                    handler()
+            InfoBar.info(
+                hint,
+                "操作完成后可重试下载",
+                parent=main_win,
+                position=InfoBarPosition.TOP,
+                duration=5000,
+            )
+        except Exception:
+            pass
 
     def _retry_download(self) -> None:
         try:

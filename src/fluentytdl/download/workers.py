@@ -221,6 +221,15 @@ class DownloadWorker(QThread):
         self.is_running = True
         self.is_cancelled = False
         try:
+            # ======================================================================
+            # 快速通道：纯字幕/纯封面提取 — 完全绕过 Executor / Strategy / Feature 管线
+            # ======================================================================
+            if self.opts.get("skip_download", False):
+                logger.info("⚡ 检测到纯提取任务 (skip_download)，走快速原生通道")
+                self.status_msg.emit("⚡ 原生直接提取（字幕/封面）...")
+                self._run_lightweight_extract()
+                return
+
             # 合并 YoutubeService 的基础反封锁/网络配置
             base_opts = youtube_service.build_ydl_options()
             merged = dict(base_opts)
@@ -378,8 +387,173 @@ class DownloadWorker(QThread):
             self.is_running = False
             self.executor = None
 
+    # ── 小文件快速通道 ────────────────────────────────────
+    def _run_lightweight_extract(self) -> None:
+        """纯字幕/封面提取：完全绕过 Executor / Strategy / Feature 管线，
+        直接用最干净的 subprocess 调用 yt-dlp。
+        仅保留 Cookie、输出路径、ffmpeg、extractor-args 等必需参数。
+        """
+        import subprocess
+
+        from ..youtube.yt_dlp_cli import (
+            prepare_yt_dlp_env,
+            resolve_yt_dlp_exe,
+        )
+
+        exe = resolve_yt_dlp_exe()
+        if exe is None:
+            self.error.emit({"title": "错误", "message": "yt-dlp 可执行文件未找到"})
+            return
+
+        # 构建最精简的 CLI 参数
+        cmd: list[str] = [str(exe), "--ignore-config", "--no-warnings", "--newline"]
+
+        opts = self.opts
+
+        # 从 youtube_service 获取基础选项（仅一次）
+        try:
+            base_opts = youtube_service.build_ydl_options()
+        except Exception:
+            base_opts = {}
+
+        # Cookie（必须保留，否则可能无法访问受限视频）
+        cookiefile = opts.get("cookiefile") or base_opts.get("cookiefile")
+        if isinstance(cookiefile, str) and cookiefile:
+            cmd += ["--cookies", cookiefile]
+
+        # 输出路径
+        outtmpl = opts.get("outtmpl")
+        if isinstance(outtmpl, str) and outtmpl:
+            cmd += ["-o", outtmpl]
+
+        paths = opts.get("paths")
+        if isinstance(paths, dict):
+            home = paths.get("home")
+            if isinstance(home, str) and home.strip():
+                cmd += ["-P", home.strip()]
+                self.download_dir = os.path.abspath(home.strip())
+
+        # ffmpeg 位置（字幕转换可能需要）
+        ffmpeg_loc = base_opts.get("ffmpeg_location")
+        if isinstance(ffmpeg_loc, str) and ffmpeg_loc.strip():
+            cmd += ["--ffmpeg-location", ffmpeg_loc.strip()]
+
+        # skip_download
+        cmd.append("--skip-download")
+
+        # 字幕相关
+        if opts.get("writesubtitles"):
+            cmd.append("--write-subs")
+        if opts.get("writeautomaticsub"):
+            cmd.append("--write-auto-subs")
+        subtitleslangs = opts.get("subtitleslangs")
+        if isinstance(subtitleslangs, (list, tuple)) and subtitleslangs:
+            cmd += ["--sub-langs", ",".join(str(lang) for lang in subtitleslangs)]
+        convertsubtitles = opts.get("convertsubtitles")
+        if isinstance(convertsubtitles, str) and convertsubtitles:
+            cmd += ["--convert-subs", convertsubtitles]
+
+        # 封面相关
+        if opts.get("writethumbnail"):
+            cmd.append("--write-thumbnail")
+
+        # extractor-args（含 POT Provider 配置）
+        extractor_args = base_opts.get("extractor_args")
+        if isinstance(extractor_args, dict):
+            for ie_key, ie_args in extractor_args.items():
+                if not isinstance(ie_args, dict):
+                    continue
+                parts = []
+                for k, v in ie_args.items():
+                    if isinstance(v, (list, tuple)):
+                        parts.append(f"{k}={','.join(str(x) for x in v)}")
+                    else:
+                        parts.append(f"{k}={v}")
+                if parts:
+                    cmd += ["--extractor-args", f"{ie_key}:{';'.join(parts)}"]
+
+        # JS runtimes
+        js_runtimes = base_opts.get("js_runtimes")
+        if isinstance(js_runtimes, dict):
+            for runtime_id, cfg in js_runtimes.items():
+                rid = str(runtime_id or "").strip()
+                if not rid:
+                    continue
+                path = ""
+                if isinstance(cfg, dict):
+                    path = str(cfg.get("path") or "").strip()
+                elif isinstance(cfg, str):
+                    path = cfg.strip()
+                value = f"{rid}:{path}" if path else rid
+                cmd += ["--js-runtimes", value]
+
+        cmd.append(self.url)
+
+        logger.info("[LightweightExtract] cmd={}", " ".join(cmd))
+
+        env = prepare_yt_dlp_env()
+        env["PYTHONIOENCODING"] = "utf-8"
+
+        # Windows 隐藏窗口
+        extra_kw: dict[str, Any] = {}
+        if os.name == "nt":
+            try:
+                extra_kw["creationflags"] = subprocess.CREATE_NO_WINDOW
+            except Exception:
+                pass
+
+        try:
+            proc = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=False,
+                env=env,
+                cwd=self.download_dir or os.getcwd(),
+                **extra_kw,
+            )
+            self._proc_ref = proc  # 用于取消
+
+            assert proc.stdout is not None
+            for raw in proc.stdout:
+                if self.is_cancelled:
+                    proc.terminate()
+                    self.cancelled.emit()
+                    return
+
+                try:
+                    line = raw.decode("utf-8").rstrip("\r\n")
+                except UnicodeDecodeError:
+                    line = raw.decode("utf-8", errors="replace").rstrip("\r\n")
+
+                if line:
+                    logger.debug("[LightweightExtract] {}", line)
+                    # 仅在日志中记录，不将原始 yt-dlp 输出暴露给用户
+
+            rc = proc.wait()
+            self._proc_ref = None
+
+            if rc != 0:
+                logger.warning("[LightweightExtract] yt-dlp 退出码 {}", rc)
+                self.status_msg.emit(f"⚠️ 提取完成（退出码: {rc}）")
+
+            self.completed.emit()
+
+        except Exception as exc:
+            logger.exception("[LightweightExtract] 提取失败: {}", self.url)
+            self.error.emit(translate_error(exc))
+        finally:
+            self.is_running = False
+
     def stop(self) -> None:
         """外部调用此方法暂停/取消下载"""
         self.is_cancelled = True
         if self.executor:
             self.executor.terminate()
+        # 也终止轻量提取的子进程
+        proc = getattr(self, "_proc_ref", None)
+        if proc is not None:
+            try:
+                proc.terminate()
+            except Exception:
+                pass

@@ -42,7 +42,6 @@ from ...youtube.youtube_service import YoutubeServiceOptions
 from .cover_selector import CoverSelectorWidget
 from .format_selector import VideoFormatSelectorWidget
 from .selection_dialog import (
-    _TABLE_SELECTION_QSS,
     PlaylistActionWidget,
     PlaylistFormatDialog,
     PlaylistInfoWidget,
@@ -53,6 +52,7 @@ from .selection_dialog import (
     _format_duration,
     _format_size,
     _format_upload_date,
+    _get_table_selection_qss,
     _infer_entry_thumbnail,
     _infer_entry_url,
 )
@@ -746,6 +746,26 @@ class DownloadConfigWindow(FramelessWindow):
                     self.retryLayout.insertWidget(0, alt_label)
             except Exception:
                 pass
+            # POT 服务状态提示
+            try:
+                from ...core.config_manager import config_manager
+
+                if config_manager.get("pot_provider_enabled", True):
+                    from ...youtube.pot_manager import pot_manager
+
+                    if not pot_manager.is_running():
+                        pot_label = CaptionLabel(
+                            "⚠️ POT Provider 服务未运行 — 这可能是触发机器人检测的主要原因。"
+                            "请前往「设置 → 组件」检查 POT Provider 是否已安装。",
+                            self,
+                        )
+                        pot_label.setWordWrap(True)
+                        pot_label.setStyleSheet(
+                            "QLabel { color: #c62828; font-weight: bold; padding: 4px 0; }"
+                        )
+                        self.retryLayout.insertWidget(0, pot_label)
+            except Exception:
+                pass
         elif category == ErrorCategory.NETWORK:
             self.retryWidget.hide()
             self.networkDiagWidget.show()
@@ -809,7 +829,7 @@ class DownloadConfigWindow(FramelessWindow):
             parent = self.parent()
             while parent is not None:
                 if hasattr(parent, "show_settings_network"):
-                    getattr(parent, "show_settings_network")()
+                    parent.show_settings_network()
                     return
                 parent = parent.parent()
         except Exception:
@@ -1233,6 +1253,14 @@ class DownloadConfigWindow(FramelessWindow):
         toolbar.addWidget(self.preset_combo)
         toolbar.addWidget(self.applyPresetBtn)
 
+        if self._mode in ("subtitle", "cover"):
+            self.playlist_subtitle_check.hide()
+            self.playlist_cover_check.hide()
+            self.playlist_metadata_check.hide()
+            self.type_combo.hide()
+            self.preset_combo.hide()
+            self.applyPresetBtn.hide()
+
         # 暂停 / 继续后台解析
         from qfluentwidgets import SwitchButton as _SwitchBtn
 
@@ -1249,7 +1277,7 @@ class DownloadConfigWindow(FramelessWindow):
         # table
         table = QTableWidget(self.contentWidget)
         self._table = table
-        table.setStyleSheet(_TABLE_SELECTION_QSS)
+        table.setStyleSheet(_get_table_selection_qss())
         table.setColumnCount(3)
         table.setHorizontalHeaderLabels(["预览", "信息", "操作"])
         table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
@@ -1472,6 +1500,23 @@ class DownloadConfigWindow(FramelessWindow):
         data = self._playlist_rows[row]
         aw = self._action_widget_by_row.get(row)
         if aw is None:
+            return
+
+        if self._mode == "subtitle":
+            aw.set_loading(False)
+            if data.get("custom_summary"):
+                aw.qualityButton.setText(data["custom_summary"])
+            else:
+                aw.qualityButton.setText("独立字幕")
+            aw.infoLabel.setText("")
+            return
+        elif self._mode == "cover":
+            aw.set_loading(False)
+            if data.get("custom_summary"):
+                aw.qualityButton.setText(data["custom_summary"])
+            else:
+                aw.qualityButton.setText("独立封面")
+            aw.infoLabel.setText("")
             return
 
         mode = int(self.type_combo.currentIndex()) if self.type_combo is not None else 0
@@ -2063,7 +2108,7 @@ class DownloadConfigWindow(FramelessWindow):
         if not info:
             return
 
-        dialog = PlaylistFormatDialog(info, self, vr_mode=self._vr_mode)
+        dialog = PlaylistFormatDialog(info, self, vr_mode=self._vr_mode, mode=self._mode)
         if dialog.exec():
             sel = dialog.get_selection()
             if sel and sel.get("format"):
@@ -2271,6 +2316,69 @@ class DownloadConfigWindow(FramelessWindow):
             thumb = str(row_data.get("thumbnail"))
 
             row_opts = {}
+
+            if self._mode == "subtitle":
+                row_opts["skip_download"] = True
+                row_opts["writethumbnail"] = False
+                row_opts["embedthumbnail"] = False
+                row_opts["addmetadata"] = False
+                row_opts["embedsubtitles"] = False
+                row_opts["sponsorblock_remove"] = None
+                row_opts["sponsorblock_mark"] = None
+                row_opts["postprocessors"] = []
+
+                custom_sel = row_data.get("custom_selection_data") or {}
+
+                if custom_sel.get("extra_opts"):
+                    # Use explicit interactive options
+                    row_opts.update(custom_sel["extra_opts"])
+                else:
+                    if row_data.get("detail"):
+                        sub_opts = subtitle_service.apply(
+                            video_id=str(row_data.get("id")),
+                            video_info=row_data["detail"],
+                            user_config=pl_sub_override,
+                        )
+                        row_opts.update(sub_opts)
+                    else:
+                        if pl_sub_override.enabled:
+                            row_opts["writesubtitles"] = True
+                            row_opts["writeautomaticsub"] = pl_sub_override.enable_auto_captions
+                            row_opts["subtitleslangs"] = pl_sub_override.default_languages
+                            if pl_sub_override.embed_type == "external":
+                                if pl_sub_override.format in ["srt", "ass", "vtt"]:
+                                    row_opts["convertsubtitles"] = pl_sub_override.format
+
+                self._apply_download_dir_to_opts(row_opts)
+                tasks.append((f"[字幕] {title}", url, row_opts, thumb))
+                continue
+
+            elif self._mode == "cover":
+                row_opts["skip_download"] = True
+                row_opts["writethumbnail"] = True
+                row_opts["embedthumbnail"] = False
+                row_opts["addmetadata"] = False
+                row_opts["embedsubtitles"] = False
+                row_opts["sponsorblock_remove"] = None
+                row_opts["sponsorblock_mark"] = None
+                row_opts["postprocessors"] = []
+
+                custom_sel = row_data.get("custom_selection_data") or {}
+                if custom_sel.get("cover_url"):
+                    url = custom_sel["cover_url"]
+                    if custom_sel.get("cover_ext"):
+                        row_opts["outtmpl"] = (
+                            f"{sanitize_filename(title)}.{custom_sel['cover_ext']}"
+                        )
+                    else:
+                        row_opts["outtmpl"] = f"{sanitize_filename(title)}.%(ext)s"
+                else:
+                    safe_title = sanitize_filename(title)
+                    row_opts["outtmpl"] = f"{safe_title}.%(ext)s"
+
+                self._apply_download_dir_to_opts(row_opts)
+                tasks.append((f"[封面] {title}", url, row_opts, thumb))
+                continue
 
             # VR 模式注入
             if self._vr_mode:

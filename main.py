@@ -47,9 +47,19 @@ def main() -> None:
     app = QApplication(sys.argv)
     app.setAttribute(Qt.ApplicationAttribute.AA_DontCreateNativeWidgetSiblings)
 
-    # === 强制使用明亮主题 (避免深色模式下一黑一白) ===
+    # === 避免强制写死浅色模式，跟随用户配置动态调整 ===
     import qfluentwidgets
-    qfluentwidgets.setTheme(qfluentwidgets.Theme.LIGHT)
+
+    # Needs to be imported before UI but after config is ready
+    from fluentytdl.core.config_manager import config_manager
+
+    theme_mode = config_manager.get("theme_mode", "Auto")
+    if theme_mode == "Light":
+        qfluentwidgets.setTheme(qfluentwidgets.Theme.LIGHT)
+    elif theme_mode == "Dark":
+        qfluentwidgets.setTheme(qfluentwidgets.Theme.DARK)
+    else:
+        qfluentwidgets.setTheme(qfluentwidgets.Theme.AUTO)
 
     # Set application icon from assets/logo.png if available (comprehensive replacement)
     try:
@@ -73,73 +83,167 @@ def main() -> None:
     # Import UI after QApplication is created to avoid triggering Qt font operations
     # during module import (which can cause QFont warnings if done before app exists).
     # from fluentytdl.ui.main_window import MainWindow
-    import threading
+    # === 新增预加载界面逻辑 ===
+    from PySide6.QtCore import QThread, QTimer, Signal
+    from PySide6.QtWidgets import QVBoxLayout, QWidget
 
     from fluentytdl.core.config_manager import config_manager
-    from fluentytdl.ui.reimagined_main_window import MainWindow
-    
 
-    # 2. 创建主窗口
-    window = MainWindow()
-    window.show()
+    class PotInitThread(QThread):
+        finished_signal = Signal()
 
-    # === 3. 在后台线程中启动 POT Provider 服务 (完全不阻塞主界面) ===
-    def start_pot_service_thread():
-        import time
+        def run(self):
+            import time
 
-        time.sleep(1)  # 延迟 1 秒（从3秒改为1秒，减少等待时间）
-
-        try:
-            if config_manager.get("pot_provider_enabled", True):
+            try:
                 from loguru import logger
 
                 from fluentytdl.youtube.pot_manager import pot_manager
 
-                # 尝试启动服务（带重试）
                 for attempt in range(3):
                     if pot_manager.start_server():
                         logger.info("POT Provider 服务已启动")
+                        logger.info("POT Provider: 开始预热 BotGuard ...")
+                        # 缩短超时设为12秒，避免过长等待
+                        ok, msg = pot_manager.verify_token_generation(timeout=12)
+                        if ok:
+                            logger.info(f"POT Provider: 预热完成 — {msg}")
+                        else:
+                            logger.warning(f"POT Provider: 预热未成功 — {msg}")
                         break
                     elif attempt < 2:
                         logger.debug(f"POT Provider 启动尝试 {attempt + 1} 失败，1秒后重试...")
                         time.sleep(1)
                     else:
                         logger.warning("POT Provider 服务启动失败：已达到最大重试次数")
-        except Exception as e:
-            try:
-                from loguru import logger
+            except Exception as e:
+                try:
+                    from loguru import logger
 
-                logger.warning(f"POT Provider 服务启动异常: {e}")
+                    logger.warning(f"POT Provider 服务启动异常: {e}")
+                except Exception:
+                    pass
+            finally:
+                self.finished_signal.emit()
+
+    class PotSplashBox(QWidget):
+        def __init__(self):
+            super().__init__()
+            self.setWindowFlags(
+                Qt.WindowType.FramelessWindowHint
+                | Qt.WindowType.WindowStaysOnTopHint
+                | Qt.WindowType.Tool
+            )
+            self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+
+            self.setStyleSheet("background-color: transparent;")
+
+            from qfluentwidgets import IndeterminateProgressRing, SubtitleLabel, isDarkTheme
+
+            self.panel = QWidget(self)
+            self.panel.setObjectName("PotSplashPanel")
+            bg_color = "rgba(32, 32, 32, 0.95)" if isDarkTheme() else "rgba(255, 255, 255, 0.95)"
+            text_color = "white" if isDarkTheme() else "black"
+
+            self.panel.setStyleSheet(f"""
+                QWidget#PotSplashPanel {{
+                    background-color: {bg_color};
+                    border-radius: 12px;
+                    border: 1px solid rgba(128, 128, 128, 0.2);
+                }}
+                QLabel {{
+                    color: {text_color};
+                }}
+            """)
+
+            layout = QVBoxLayout(self)
+            layout.setContentsMargins(10, 10, 10, 10)
+            layout.addWidget(self.panel)
+
+            panel_layout = QVBoxLayout(self.panel)
+            panel_layout.setContentsMargins(30, 30, 30, 30)
+            panel_layout.setSpacing(15)
+
+            self.ring = IndeterminateProgressRing(self.panel)
+            self.ring.setFixedSize(50, 50)
+            panel_layout.addWidget(self.ring, 0, Qt.AlignmentFlag.AlignHCenter)
+
+            self.lbl = SubtitleLabel("正在预热 YouTube 验证引擎 ...", self.panel)
+            panel_layout.addWidget(self.lbl, 0, Qt.AlignmentFlag.AlignHCenter)
+
+            self.ring.start()
+            self.setFixedSize(350, 200)
+
+    def launch_main_window():
+        from fluentytdl.ui.reimagined_main_window import MainWindow
+
+        # 恢复应用退出机制
+        app.setQuitOnLastWindowClosed(True)
+        window = MainWindow()
+        window.show()
+        app._main_window = window  # 保持引用防回收
+
+        # === Cookie Sentinel: 启动时静默预提取 (Best-Effort) ===
+        def start_cookie_sentinel_thread():
+            import time
+
+            time.sleep(2)  # 延迟 2 秒，不阻塞主界面
+            try:
+                from fluentytdl.auth.cookie_sentinel import cookie_sentinel
+
+                cookie_sentinel.silent_refresh_on_startup()
+            except Exception as e:
+                try:
+                    from loguru import logger
+
+                    logger.debug(f"Cookie Sentinel 启动失败（预期行为）: {e}")
+                except Exception:
+                    pass
+
+        import threading
+
+        cookie_thread = threading.Thread(
+            target=start_cookie_sentinel_thread, daemon=True, name="CookieSentinel-Startup"
+        )
+        cookie_thread.start()
+
+    # 启动控制
+    if config_manager.get("pot_provider_enabled", True):
+        # 预热期间阻止最后窗口关闭退出程序
+        app.setQuitOnLastWindowClosed(False)
+
+        splash = PotSplashBox()
+        desktop = QApplication.screens()[0].availableGeometry()
+        w, h = desktop.width(), desktop.height()
+        splash.move(w // 2 - splash.width() // 2, h // 2 - splash.height() // 2)
+        splash.show()
+
+        app._splash = splash  # 防回收
+
+        init_thread = PotInitThread()
+        app._init_thread = init_thread
+
+        # 包装器避免多次启动
+        is_launched = [False]
+
+        def on_pot_ready():
+            if is_launched[0]:
+                return
+            is_launched[0] = True
+            try:
+                splash.close()
+                splash.deleteLater()
             except Exception:
                 pass
+            launch_main_window()
 
-    # 在后台线程启动 POT 服务
-    pot_thread = threading.Thread(target=start_pot_service_thread, daemon=True)
-    pot_thread.start()
-
-    # === 4. Cookie Sentinel: 启动时静默预提取 (Best-Effort) ===
-    def start_cookie_sentinel_thread():
-        import time
-
-        time.sleep(2)  # 延迟 2 秒，不阻塞主界面
-
-        try:
-            from fluentytdl.auth.cookie_sentinel import cookie_sentinel
-
-            cookie_sentinel.silent_refresh_on_startup()
-        except Exception as e:
-            try:
-                from loguru import logger
-
-                logger.debug(f"Cookie Sentinel 启动失败（预期行为）: {e}")
-            except Exception:
-                pass
-
-    # 在后台线程启动 Cookie Sentinel
-    cookie_thread = threading.Thread(
-        target=start_cookie_sentinel_thread, daemon=True, name="CookieSentinel-Startup"
-    )
-    cookie_thread.start()
+        init_thread.finished_signal.connect(on_pot_ready)
+        # 最多等待 12 秒
+        QTimer.singleShot(12000, on_pot_ready)
+        init_thread.start()
+    else:
+        # 直接启动
+        launch_main_window()
 
     # 4. 进入事件循环
     exit_code = app.exec()

@@ -92,9 +92,7 @@ class HistoryItemWidget(CardWidget):
         self.thumb = QLabel(self)
         self.thumb.setFixedSize(128, 72)
         self.thumb.setScaledContents(True)
-        self.thumb.setStyleSheet(
-            "background: rgba(0,0,0,0.03); border-radius: 6px; border: 1px solid rgba(0,0,0,0.08);"
-        )
+        # Style setup moved to _update_style
         h.addWidget(self.thumb)
 
         # 2) 信息区
@@ -172,6 +170,18 @@ class HistoryItemWidget(CardWidget):
         # 加载缩略图
         if record.thumbnail_url:
             self.image_loader.load(record.thumbnail_url)
+
+        from qfluentwidgets import qconfig
+
+        qconfig.themeChanged.connect(self._update_style)
+        self._update_style()
+
+    def _update_style(self):
+        from qfluentwidgets import isDarkTheme
+
+        bg = "rgba(255, 255, 255, 0.05)" if isDarkTheme() else "rgba(0, 0, 0, 0.03)"
+        bd = "rgba(255, 255, 255, 0.08)" if isDarkTheme() else "rgba(0, 0, 0, 0.08)"
+        self.thumb.setStyleSheet(f"background: {bg}; border-radius: 6px; border: 1px solid {bd};")
 
     def _on_thumb_loaded(self, pixmap: QPixmap) -> None:
         if pixmap and not pixmap.isNull():

@@ -125,7 +125,77 @@ def prepare_yt_dlp_env(extra_paths: list[str] | None = None) -> dict[str, str]:
             if p and Path(p).exists():
                 _prepend_path(env, p)
 
+    # Allow yt-dlp to load plugins from the internal directory
+    # The plugin directory structure is: src/fluentytdl/yt_dlp_plugins_ext/yt_dlp_plugins/
+    plugin_dir = Path(__file__).resolve().parent.parent / "yt_dlp_plugins_ext"
+    if plugin_dir.exists():
+        existing_pypath = env.get("PYTHONPATH") or ""
+        env["PYTHONPATH"] = (
+            f"{plugin_dir}{os.pathsep}{existing_pypath}"
+            if existing_pypath
+            else str(plugin_dir)
+        )
+
     return env
+
+
+def _inject_language_into_format(fmt: str, format_sort: list | str | None) -> str:
+    """Prepend language-filtered format alternatives to the format string.
+
+    yt-dlp's ``-S lang:xx`` cannot override the built-in ``language_preference=10``
+    assigned to audio tracks marked as *original* + *default*.  To truly prefer a
+    specific language, we need ``[language=xx]`` filters directly in the format
+    selection string, using the original (unfiltered) format as the final fallback.
+
+    Example::
+
+        fmt   = "bv*[height<=1080]+ba[ext=m4a]/b[height<=1080]/bv*[height<=1080]+ba"
+        langs from format_sort = ["ja", "zh-hans"]
+        result = ("bv*[height<=1080]+ba[ext=m4a][language=ja]/b[height<=1080][language=ja]"
+                  "/bv*[height<=1080]+ba[language=ja]"
+                  "/bv*[height<=1080]+ba[ext=m4a][language=zh-hans]/b[height<=1080][language=zh-hans]"
+                  "/bv*[height<=1080]+ba[language=zh-hans]"
+                  "/bv*[height<=1080]+ba[ext=m4a]/b[height<=1080]/bv*[height<=1080]+ba")
+    """
+    if not fmt or not format_sort:
+        return fmt
+
+    # Extract language codes from format_sort entries (e.g. "lang:ja" -> "ja")
+    langs: list[str] = []
+    items = format_sort if isinstance(format_sort, list) else [format_sort]
+    for item in items:
+        s = str(item).strip().lower()
+        if s.startswith("lang:"):
+            code = s[5:].strip()
+            if code and code != "orig":
+                langs.append(code)
+
+    if not langs:
+        return fmt
+
+    alternatives = [a.strip() for a in fmt.split("/") if a.strip()]
+    if not alternatives:
+        return fmt
+
+    lang_groups: list[str] = []
+    for lang in langs:
+        lang_alts: list[str] = []
+        for alt in alternatives:
+            if "+" in alt:
+                # Merge pattern: video+audio -> add [language=xx] to audio part
+                parts = alt.split("+", 1)
+                lang_alts.append(f"{parts[0]}+{parts[1]}[language={lang}]")
+            else:
+                # Single format (muxed or audio-only) -> append [language=xx]
+                lang_alts.append(f"{alt}[language={lang}]")
+        if lang_alts:
+            lang_groups.append("/".join(lang_alts))
+
+    if not lang_groups:
+        return fmt
+
+    # Prepend language-filtered alternatives, with original format as fallback
+    return "/".join(lang_groups) + "/" + fmt
 
 
 def ydl_opts_to_cli_args(ydl_opts: dict[str, Any]) -> list[str]:
@@ -256,11 +326,39 @@ def ydl_opts_to_cli_args(ydl_opts: dict[str, Any]) -> list[str]:
 
     fmt = ydl_opts.get("format")
     if isinstance(fmt, str) and fmt:
+        # Inject [language=xx] filters into format string for multi-language audio.
+        # -S lang:xx alone cannot override language_preference=10 on original tracks.
+        format_sort_val = ydl_opts.get("format_sort")
+        fmt = _inject_language_into_format(fmt, format_sort_val)
         args += ["-f", fmt]
+
+    # 格式排序（音轨语言偏好等）
+    format_sort = ydl_opts.get("format_sort")
+    if isinstance(format_sort, list) and format_sort:
+        args += ["-S", ",".join(str(x) for x in format_sort)]
+    elif isinstance(format_sort, str) and format_sort:
+        args += ["-S", format_sort]
+
+    # format_sort_force: 强制排序覆盖用户提供的格式
+    if ydl_opts.get("format_sort_force"):
+        args += ["--format-sort-force"]
 
     merge_fmt = ydl_opts.get("merge_output_format")
     if isinstance(merge_fmt, str) and merge_fmt:
         args += ["--merge-output-format", merge_fmt]
+
+    # ========== top-level audio extract params (simple/playlist mode) ==========
+    # extract_audio / audio_format / audio_quality as top-level keys
+    if ydl_opts.get("extract_audio"):
+        args += ["--extract-audio"]
+        audio_fmt = ydl_opts.get("audio_format")
+        if isinstance(audio_fmt, str) and audio_fmt:
+            args += ["--audio-format", audio_fmt]
+        audio_quality = ydl_opts.get("audio_quality")
+        if isinstance(audio_quality, str) and audio_quality:
+            args += ["--audio-quality", audio_quality]
+        elif isinstance(audio_quality, (int, float)):
+            args += ["--audio-quality", str(audio_quality)]
 
     if ydl_opts.get("addmetadata") is True:
         args += ["--add-metadata"]

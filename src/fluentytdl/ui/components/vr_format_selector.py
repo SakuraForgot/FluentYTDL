@@ -118,29 +118,45 @@ _VR_PLAYBACK_HINT = "\U0001f4a1 \u64ad\u653e\u63d0\u793a\uff1a\u8bf7\u5728\u64ad
 
 # ── QSS ──────────────────────────────────────────────────────
 
-_TABLE_SELECTION_QSS = """
-QTableWidget {
+
+def _get_table_selection_qss() -> str:
+    from qfluentwidgets import isDarkTheme
+
+    is_dark = isDarkTheme()
+    sel_bg = "rgba(255, 255, 255, 0.08)" if is_dark else "#E8E8E8"
+    sel_fg = "#ffffff" if is_dark else "#000000"
+    sel_bd = "rgba(255, 255, 255, 0.15)" if is_dark else "#D0D0D0"
+    hov_bg = "rgba(255, 255, 255, 0.04)" if is_dark else "#F3F3F3"
+    border = "rgba(255, 255, 255, 0.06)" if is_dark else "rgba(0, 0, 0, 0.06)"
+    hover_border = "rgba(255, 255, 255, 0.1)" if is_dark else "rgba(0, 0, 0, 0.1)"
+
+    return f"""
+QTableWidget {{
     background-color: transparent;
     outline: none;
     border: none;
-}
-QTableWidget::item {
+}}
+QTableWidget::item {{
     padding-left: 0px;
-    border: 1px solid rgba(0, 0, 0, 0.06);
+    border: 1px solid {border};
     margin-top: 3px;
     margin-bottom: 3px;
     margin-left: 4px;
     margin-right: 4px;
     border-radius: 6px;
-}
-QTableWidget::item:selected {
-    background-color: #E8E8E8;
-    color: #000000;
-    border: 1px solid #D0D0D0;
-}
-QTableWidget::item:hover {
-    background-color: #F3F3F3;
-}
+}}
+QTableWidget::item:selected {{
+    background-color: {sel_bg};
+    color: {sel_fg};
+    border: 1px solid {sel_bd};
+    border-radius: 6px;
+    font-weight: 600;
+}}
+QTableWidget::item:hover {{
+    background-color: {hov_bg};
+    border: 1px solid {hover_border};
+    border-radius: 6px;
+}}
 """
 
 
@@ -206,9 +222,11 @@ class VRPresetWidget(QWidget):
 
         for i, (pid, title, desc, fmt, args) in enumerate(VR_PRESETS):
             container = QFrame(self)
+            from qfluentwidgets import isDarkTheme
+
+            card_bd = "rgba(255, 255, 255, 0.08)" if isDarkTheme() else "rgba(0, 0, 0, 0.05)"
             container.setStyleSheet(
-                ".QFrame { background-color: rgba(255, 255, 255, 0.05); "
-                "border-radius: 6px; border: 1px solid rgba(0,0,0,0.05); }"
+                f".QFrame {{ background-color: rgba(255, 255, 255, 0.05); border-radius: 6px; border: 1px solid {card_bd}; }}"
             )
             h_layout = QHBoxLayout(container)
 
@@ -312,8 +330,12 @@ class VRFormatTableWidget(QWidget):
 
         # Video Section
         self.video_container = QFrame(self.split_container)
+        from qfluentwidgets import isDarkTheme
+
+        card_bg = "rgba(255, 255, 255, 0.03)" if isDarkTheme() else "rgba(255, 255, 255, 0.7)"
+        card_bd = "rgba(255, 255, 255, 0.08)" if isDarkTheme() else "rgba(0, 0, 0, 0.05)"
         self.video_container.setStyleSheet(
-            ".QFrame { background-color: rgba(255, 255, 255, 0.03); border: 1px solid rgba(0, 0, 0, 0.05); border-radius: 8px; }"
+            f".QFrame {{ background-color: {card_bg}; border: 1px solid {card_bd}; border-radius: 8px; }}"
         )
         v_layout = QVBoxLayout(self.video_container)
         v_layout.setContentsMargins(8, 8, 8, 8)
@@ -328,7 +350,7 @@ class VRFormatTableWidget(QWidget):
         self.video_table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.video_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.video_table.verticalHeader().setVisible(False)
-        self.video_table.setStyleSheet(_TABLE_SELECTION_QSS)
+        self.video_table.setStyleSheet(_get_table_selection_qss())
         self.video_table.setShowGrid(False)
         self.video_table.setAlternatingRowColors(True)
         self.video_table.setWordWrap(False)
@@ -364,7 +386,7 @@ class VRFormatTableWidget(QWidget):
         # Audio Section
         self.audio_container = QFrame(self.split_container)
         self.audio_container.setStyleSheet(
-            ".QFrame { background-color: rgba(255, 255, 255, 0.03); border: 1px solid rgba(0, 0, 0, 0.05); border-radius: 8px; }"
+            f".QFrame {{ background-color: {card_bg}; border: 1px solid {card_bd}; border-radius: 8px; }}"
         )
         a_layout = QVBoxLayout(self.audio_container)
         a_layout.setContentsMargins(8, 8, 8, 8)
@@ -379,7 +401,7 @@ class VRFormatTableWidget(QWidget):
         self.audio_table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.audio_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.audio_table.verticalHeader().setVisible(False)
-        self.audio_table.setStyleSheet(_TABLE_SELECTION_QSS)
+        self.audio_table.setStyleSheet(_get_table_selection_qss())
         self.audio_table.setShowGrid(False)
         self.audio_table.setAlternatingRowColors(True)
         self.audio_table.setWordWrap(False)

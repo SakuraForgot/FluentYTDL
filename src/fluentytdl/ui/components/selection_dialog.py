@@ -80,28 +80,35 @@ def _ensure_subtitle_compatible_container(opts: dict[str, Any]) -> None:
     # 其他格式保持不变，由用户自行负责
 
 
-_TABLE_SELECTION_QSS = """
-QTableWidget {
+def _get_table_selection_qss() -> str:
+    from qfluentwidgets import isDarkTheme
+
+    is_dark = isDarkTheme()
+    sel_bg = "rgba(255, 255, 255, 0.08)" if is_dark else "#E8E8E8"
+    sel_fg = "#ffffff" if is_dark else "#000000"
+    sel_bd = "rgba(255, 255, 255, 0.15)" if is_dark else "#C0C0C0"
+    hov_bg = "rgba(255, 255, 255, 0.04)" if is_dark else "#F3F3F3"
+
+    return f"""
+QTableWidget {{
     background-color: transparent;
-    outline: none; /* 去掉选中时的虚线框 */
+    outline: none;
     border: none;
-}
-QTableWidget::item {
-    padding-left: 8px; /* 给左边一点呼吸空间 */
-}
-/* 选中态：淡灰色背景，黑色文字，带圆角 */
-QTableWidget::item:selected {
-    background-color: #E8E8E8;
-    color: #000000;
-    border: 1px solid #D0D0D0;
+}}
+QTableWidget::item {{
+    padding-left: 8px;
+}}
+QTableWidget::item:selected {{
+    background-color: {sel_bg};
+    color: {sel_fg};
+    border: 1px solid {sel_bd};
     border-radius: 6px;
     font-weight: 600;
-}
-/* 悬停态：极淡灰色 */
-QTableWidget::item:hover {
-    background-color: #F3F3F3;
+}}
+QTableWidget::item:hover {{
+    background-color: {hov_bg};
     border-radius: 6px;
-}
+}}
 """
 
 
@@ -298,7 +305,10 @@ class PlaylistPreviewWidget(QWidget):
         self.thumb_label = QLabel(self)
         self.thumb_label.setFixedSize(150, 84)
         self.thumb_label.setScaledContents(True)
-        self.thumb_label.setStyleSheet("background-color: rgba(0,0,0,0.06); border-radius: 8px;")
+        from qfluentwidgets import isDarkTheme
+
+        thumb_bg = "rgba(255, 255, 255, 0.06)" if isDarkTheme() else "rgba(0, 0, 0, 0.06)"
+        self.thumb_label.setStyleSheet(f"background-color: {thumb_bg}; border-radius: 8px;")
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -390,6 +400,17 @@ class PlaylistActionWidget(QWidget):
 
 
 def _infer_entry_url(entry: dict[str, Any]) -> str:
+    # Prefer webpage_url / original_url over url.
+    # When yt-dlp -J is combined with -S lang:xx, the top-level "url" field may
+    # become the HLS manifest URL of the *sorted-best* format rather than the
+    # original YouTube watch page URL.  Passing that HLS URL to the download
+    # worker causes the [generic] extractor to kick in, which does not support
+    # format selection and fails with "Requested format is not available".
+    for key in ("webpage_url", "original_url"):
+        val = str(entry.get(key) or "").strip()
+        if val.startswith("http://") or val.startswith("https://"):
+            return val
+
     url = str(entry.get("url") or "").strip()
     if url.startswith("http://") or url.startswith("https://"):
         return url
@@ -565,16 +586,25 @@ def _choose_lossless_merge_container(video_ext: str | None, audio_ext: str | Non
 
 
 class PlaylistFormatDialog(MessageBoxBase):
-    """用于播放列表单项的“高级格式选择”弹窗 (复用 VideoFormatSelectorWidget / VRFormatSelectorWidget)"""
+    """用于播放列表单项的“高级格式选择”弹窗 (复用各类 SelectorWidget)"""
 
-    def __init__(self, info: dict[str, Any], parent=None, *, vr_mode: bool = False):
+    def __init__(
+        self, info: dict[str, Any], parent=None, *, vr_mode: bool = False, mode: str = "default"
+    ):
         super().__init__(parent)
         self.widget.setMinimumSize(700, 500)
+        self._mode = mode
 
         self.titleLabel = SubtitleLabel("选择格式", self)
         self.viewLayout.addWidget(self.titleLabel)
 
-        if vr_mode:
+        if self._mode == "subtitle":
+            self.titleLabel.setText("选择字幕")
+            self.selector = SubtitleSelectorWidget(info, self)
+        elif self._mode == "cover":
+            self.titleLabel.setText("选择封面")
+            self.selector = CoverSelectorWidget(info, self)
+        elif vr_mode:
             self.selector = VRFormatSelectorWidget(info, self)
         else:
             self.selector = VideoFormatSelectorWidget(info, self)
@@ -589,10 +619,27 @@ class PlaylistFormatDialog(MessageBoxBase):
         # self.selector.selectionChanged.connect(self._validate_selection)
 
     def get_selection(self) -> dict:
-        return self.selector.get_selection_result()
+        if self._mode == "subtitle":
+            opts = self.selector.get_opts()
+            return {"extra_opts": opts, "format": "subtitle_custom"}
+        elif self._mode == "cover":
+            url = self.selector.get_selected_url()
+            ext = self.selector.get_selected_ext()
+            return {"cover_url": url, "cover_ext": ext, "format": "cover_custom"}
+        else:
+            return self.selector.get_selection_result()
 
     def get_summary(self) -> str:
-        return self.selector.get_summary_text()
+        if self._mode == "subtitle":
+            selected = self.selector.get_selected_tracks()
+            if not selected:
+                return "未选择字幕"
+            return f"已选择 {len(selected)} 种语言"
+        elif self._mode == "cover":
+            ext = self.selector.get_selected_ext()
+            return f"已选择 {ext.upper()} 封面"
+        else:
+            return self.selector.get_summary_text()
 
 
 class SelectionDialog(MessageBoxBase):
@@ -1226,7 +1273,7 @@ class SelectionDialog(MessageBoxBase):
         # table
         table = QTableWidget(self.contentWidget)
         self._table = table
-        table.setStyleSheet(_TABLE_SELECTION_QSS)
+        table.setStyleSheet(_get_table_selection_qss())
         table.setColumnCount(3)
         table.setHorizontalHeaderLabels(["预览", "信息", "操作"])
         table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
@@ -1263,7 +1310,8 @@ class SelectionDialog(MessageBoxBase):
 
         # kick off progressive detail fill
         self._idle_timer.start()
-        self._enqueue_detail_rows([0, 1, 2], priority=True)
+        # Ensure visible rows are queued immediately
+        QTimer.singleShot(100, self._enqueue_detail_for_visible_rows)
         self._maybe_start_next_detail()
 
         # 延迟加载缩略图（等待表格布局完成）
@@ -1744,21 +1792,45 @@ class SelectionDialog(MessageBoxBase):
         table = self._table
         if table is None:
             return (0, -1)
+
         first = table.rowAt(0)
+        # If the table hasn't been drawn yet, rowAt will return -1.
+        # Default to showing the first 10 rows in this edge case mapping.
         if first < 0:
             first = 0
+
         last = table.rowAt(table.viewport().height() - 1)
         if last < 0:
-            last = min(table.rowCount() - 1, first + 12)
+            last = min(table.rowCount() - 1, first + 10)
+
         return (first, last)
 
     def _enqueue_detail_for_visible_rows(self) -> None:
         first, last = self._visible_row_range()
-        # small prefetch window
+        # prefetch slightly ahead and behind
         first = max(0, first - 3)
         last = min(len(self._playlist_rows) - 1, last + 6)
         rows = list(range(first, last + 1))
-        self._enqueue_detail_rows(rows, priority=False)
+        # Remove anything out of view from the high priority front of the queue
+        self._clean_invisible_from_queue()
+        self._enqueue_detail_rows(rows, priority=True)
+        self._maybe_start_next_detail()
+
+    def _clean_invisible_from_queue(self) -> None:
+        """从队列中清理不再处于当前滚动缓冲区的解析项"""
+        first, last = self._visible_row_range()
+        buff_first = max(0, first - 8)
+        buff_last = min(len(self._playlist_rows) - 1, last + 12)
+
+        # We don't drop them completely so they can load on idle,
+        # but we remove them from the front to allow visible items priority.
+        # It's simpler to just clear the queue of anything not in buff range,
+        # since idle tick will re-add them when needed.
+        new_q = deque()
+        for r in self._detail_queue:
+            if buff_first <= r <= buff_last:
+                new_q.append(r)
+        self._detail_queue = new_q
 
     def _on_thumb_init_timeout(self) -> None:
         """延迟加载首批缩略图（等待表格布局完成）"""
@@ -1926,19 +1998,58 @@ class SelectionDialog(MessageBoxBase):
                 pass
 
     def _enqueue_detail_rows(self, rows: list[int], priority: bool) -> None:
-        for r in rows:
+        for r in reversed(rows) if priority else rows:
             if r < 0 or r >= len(self._playlist_rows):
                 continue
             if r in self._detail_loaded:
                 continue
             if self._detail_inflight_row == r:
                 continue
-            if r in self._detail_queue:
+
+            # If cover mode bypass is active, we don't need to load info for it.
+            # Handle the row immediately via shortcut.
+            if self._mode == "cover":
+                # We do this asynchronously to avoid freezing the UI thread if many queue up
+                QTimer.singleShot(0, partial(self._process_cover_bypass, r))
                 continue
+
+            if r in self._detail_queue:
+                if priority:
+                    self._detail_queue.remove(r)
+                    self._detail_queue.appendleft(r)
+                continue
+
             if priority:
                 self._detail_queue.appendleft(r)
             else:
                 self._detail_queue.append(r)
+
+    def _process_cover_bypass(self, row: int) -> None:
+        if self._is_closing or row in self._detail_loaded:
+            return
+
+        data = self._playlist_rows[row]
+        # Simulate an entry detail using the bare minimum from flat playlist items
+        info = {
+            "id": data.get("id"),
+            "url": data.get("url"),
+            "title": data.get("title"),
+            "thumbnail": data.get("thumbnail"),
+            "uploader": data.get("uploader"),
+            "duration": data.get("duration"),
+        }
+
+        # Cleanly bypass full extraction overhead
+        self._playlist_rows[row]["detail"] = info
+        self._playlist_rows[row]["video_formats"] = []
+        self._playlist_rows[row]["audio_formats"] = []
+        self._playlist_rows[row]["highest_height"] = None
+
+        self._detail_loaded.add(row)
+        self._auto_apply_row_preset(row)
+
+        self._refresh_progress_label()
+        self._update_download_btn_state()
 
     def _maybe_start_next_detail(self) -> None:
         if self._is_closing:
@@ -2016,15 +2127,23 @@ class SelectionDialog(MessageBoxBase):
     def _on_idle_tick(self) -> None:
         if not self._is_playlist:
             return
-        # only auto-fill when user is idle
-        if time.monotonic() - self._last_interaction < 2.0:
+        # Wait a moment after user stops scrolling/interacting
+        if time.monotonic() - self._last_interaction < 1.0:
             return
+
         if self._detail_inflight_row is None and not self._detail_queue:
-            # enqueue next pending row (2s -> 1 item)
+            # When completely idle, start filling in details for the rest of the list
+            # We add them with priority=False so they go to the back of the queue
+            # and won't block visible items if the user starts scrolling again
+            added = 0
             for i in range(len(self._playlist_rows)):
-                if i not in self._detail_loaded:
-                    self._detail_queue.append(i)
-                    break
+                if i not in self._detail_loaded and i not in self._detail_queue:
+                    # Enqueue a small batch to not lock up memory with huge lists
+                    self._enqueue_detail_rows([i], priority=False)
+                    added += 1
+                    if added >= 3:
+                        break
+
         self._maybe_start_next_detail()
 
     def _open_row_format_picker(self, row: int) -> None:

@@ -46,6 +46,8 @@ build/
 dist/
 release/
 *.spec
+!main.spec
+!FluentYTDL.spec
 
 # PyInstaller 临时文件
 *.manifest
@@ -110,6 +112,7 @@ debug_*.txt
 cache/
 .cache/
 crash_reports/
+dle_profile/
 
 # ==============================================================================
 # IDE / 编辑器配置

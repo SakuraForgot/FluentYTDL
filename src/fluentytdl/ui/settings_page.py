@@ -14,7 +14,6 @@ from qfluentwidgets import (
     ComboBox,
     FluentIcon,
     HyperlinkCard,
-    InfoBar,
     LineEdit,
     MessageBox,
     ProgressBar,
@@ -39,6 +38,7 @@ from ..processing.subtitle_manager import COMMON_SUBTITLE_LANGUAGES
 from ..utils.logger import LOG_DIR
 from ..utils.paths import find_bundled_executable, is_frozen
 from ..youtube.yt_dlp_cli import resolve_yt_dlp_exe, run_version
+from .components.custom_info_bar import InfoBar
 from .components.smart_setting_card import SmartSettingCard
 
 # ============================================================================
@@ -623,6 +623,39 @@ class AudioLanguageMultiSelectCard(SettingCard):
         self._update_button_text()
 
 
+from qfluentwidgets import TextEdit  # noqa: E402
+
+
+class ProbePoolEditorDialog(MessageBox):
+    """探针链接池编辑对话框"""
+
+    def __init__(self, current_pool: list[str], parent=None):
+        super().__init__(
+            "管理探针链接池", "添加或删除风控探测时用于测试的 YouTube 链接（每行一个）。", parent
+        )
+
+        self.textEdit = TextEdit(self.widget)
+        self.textEdit.setMinimumHeight(250)
+        self.textEdit.setMinimumWidth(500)
+
+        # 将现有的列表转成多行文本
+        self.textEdit.setPlainText("\n".join(current_pool))
+
+        self.textLayout.addWidget(self.textEdit)
+        self.widget.setMinimumWidth(550)
+
+    def get_links(self) -> list[str]:
+        """获取编辑后的有效链接列表"""
+        text = self.textEdit.toPlainText()
+        links = []
+        for line in text.split("\n"):
+            line = line.strip()
+            # 简单的验证，只保留非空且看起来像 url 的行
+            if line and line.startswith("http"):
+                links.append(line)
+        return links
+
+
 class EmbedTypeComboCard(SettingCard):
     """嵌入类型下拉框卡片"""
 
@@ -756,6 +789,7 @@ class SettingsPage(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("settingsPage")
+        self.setStyleSheet("SettingsPage, #settingsPage { background: transparent; }")
 
         # Main Layout
         self.mainLayout = QVBoxLayout(self)
@@ -764,6 +798,7 @@ class SettingsPage(QWidget):
 
         # Pivot Navigation (SegmentedWidget for smaller text & rounded look)
         self.pivotContainer = QWidget(self)
+        self.pivotContainer.setStyleSheet("background: transparent;")
         self.pivotLayout = QVBoxLayout(self.pivotContainer)
         self.pivot = SegmentedWidget(self)
         self.pivotLayout.addWidget(self.pivot)
@@ -773,6 +808,7 @@ class SettingsPage(QWidget):
 
         # Content Stack
         self.stackedWidget = QStackedWidget(self)
+        self.stackedWidget.setStyleSheet("background: transparent;")
         self.mainLayout.addWidget(self.stackedWidget)
 
         # Cookie刷新worker引用（防止垃圾回收）
@@ -861,6 +897,7 @@ class SettingsPage(QWidget):
         self._init_component_group(self.componentsScroll.widget(), self.componentsLayout)
 
         # === System Tab ===
+        self._init_appearance_group(self.systemScroll.widget(), self.systemLayout)
         self._init_advanced_group(self.systemScroll.widget(), self.systemLayout)
         self._init_behavior_group(self.systemScroll.widget(), self.systemLayout)
         self._init_log_group(self.systemScroll.widget(), self.systemLayout)
@@ -876,8 +913,10 @@ class SettingsPage(QWidget):
         scroll = ScrollArea(page)
         scroll.setWidgetResizable(True)
         scroll.setObjectName(f"{object_name}Scroll")
+        scroll.setStyleSheet("background: transparent; border: none;")
         scrollWidget = QWidget()
         scrollWidget.setObjectName(f"{object_name}ScrollWidget")
+        scrollWidget.setStyleSheet("background: transparent;")
         expandLayout = QVBoxLayout(scrollWidget)
         expandLayout.setSpacing(20)
         expandLayout.setContentsMargins(30, 20, 30, 20)
@@ -1157,6 +1196,21 @@ class SettingsPage(QWidget):
         self.coreGroup.addSettingCard(self.jsRuntimeCard)
         layout.addWidget(self.coreGroup)
 
+    def _init_appearance_group(self, parent_widget: QWidget | None, layout: QVBoxLayout) -> None:
+        self.appearanceGroup = SettingCardGroup("外观", parent_widget)
+
+        self.themeModeCard = InlineComboBoxCard(
+            FluentIcon.BRUSH,
+            "主题模式",
+            "选择应用的色彩主题",
+            ["跟随系统 (自动)", "浅色模式", "深色模式"],
+            self.appearanceGroup,
+        )
+        self.themeModeCard.comboBox.currentIndexChanged.connect(self._on_theme_mode_changed)
+
+        self.appearanceGroup.addSettingCard(self.themeModeCard)
+        layout.addWidget(self.appearanceGroup)
+
     def _init_advanced_group(self, parent_widget: QWidget | None, layout: QVBoxLayout) -> None:
         self.advancedGroup = SettingCardGroup("高级", parent_widget)
 
@@ -1416,9 +1470,35 @@ class SettingsPage(QWidget):
             self._on_playlist_skip_authcheck_changed
         )
 
+        self.autoRiskProbeCard = InlineSwitchCard(
+            FluentIcon.CERTIFICATE,
+            "自动风控探测",
+            "在启动或切页时自动向 YouTube 发送探针请求，以便提前预知 Cookie 失效。开启可能增加 IP 暴露风险（默认关闭）",
+            parent=self.behaviorGroup,
+        )
+        self.autoRiskProbeCard.checkedChanged.connect(self._on_auto_risk_probe_changed)
+
+        self.probePoolCard = SettingCard(
+            FluentIcon.LINK,
+            "探针链接池管理",
+            "管理用于风控探测测试的 YouTube 视频链接池（12小时内不会重复探测同一链接）",
+            parent=self.behaviorGroup,
+        )
+        self.probePoolEditBtn = PushButton("编辑连接池")
+        self.probePoolEditBtn.clicked.connect(self._on_probe_pool_clicked)
+        self.probePoolCard.hBoxLayout.addWidget(
+            self.probePoolEditBtn, 0, Qt.AlignmentFlag.AlignRight
+        )
+        self.probePoolCard.hBoxLayout.addSpacing(16)
+
         self.behaviorGroup.addSettingCard(self.preferredAudioLanguageCard)
         self.behaviorGroup.addSettingCard(self.deletionPolicyCard)
         self.behaviorGroup.addSettingCard(self.playlistSkipAuthcheckCard)
+        self.behaviorGroup.addSettingCard(self.autoRiskProbeCard)
+        self.behaviorGroup.addSettingCard(self.probePoolCard)
+
+        # 使其变为下属卡片的视觉样式
+        self._indent_setting_card(self.probePoolCard)
         layout.addWidget(self.behaviorGroup)
 
     def _init_postprocess_group(self, parent_widget: QWidget | None, layout: QVBoxLayout) -> None:
@@ -1781,6 +1861,13 @@ class SettingsPage(QWidget):
         self.jsRuntimeCard.comboBox.setCurrentIndex(js_index_map.get(js_runtime, 0))
         self.jsRuntimeCard.comboBox.blockSignals(False)
 
+        # Theme Mode -> combobox index
+        theme_mode = str(config_manager.get("theme_mode") or "Auto")
+        theme_index_map = {"Auto": 0, "Light": 1, "Dark": 2}
+        self.themeModeCard.comboBox.blockSignals(True)
+        self.themeModeCard.comboBox.setCurrentIndex(theme_index_map.get(theme_mode, 0))
+        self.themeModeCard.comboBox.blockSignals(False)
+
         # Clipboard auto-detect
         enabled = bool(config_manager.get("clipboard_auto_detect") or False)
         self.clipboardDetectCard.switchButton.blockSignals(True)
@@ -1807,6 +1894,12 @@ class SettingsPage(QWidget):
         self.playlistSkipAuthcheckCard.switchButton.blockSignals(True)
         self.playlistSkipAuthcheckCard.switchButton.setChecked(skip_authcheck)
         self.playlistSkipAuthcheckCard.switchButton.blockSignals(False)
+
+        # Behavior: auto risk probe
+        auto_risk_probe = bool(config_manager.get("auto_risk_probe", False))
+        self.autoRiskProbeCard.switchButton.blockSignals(True)
+        self.autoRiskProbeCard.switchButton.setChecked(auto_risk_probe)
+        self.autoRiskProbeCard.switchButton.blockSignals(False)
 
         # Postprocess: embed thumbnail
         embed_thumbnail = bool(config_manager.get("embed_thumbnail", True))
@@ -1925,6 +2018,22 @@ class SettingsPage(QWidget):
         config_manager.set("update_source", source)
         InfoBar.success("设置已更新", f"下载源已切换为: {source}", duration=5000, parent=self)
 
+    def _on_theme_mode_changed(self, index: int) -> None:
+        modes = ["Auto", "Light", "Dark"]
+        if 0 <= index < len(modes):
+            mode = modes[index]
+            config_manager.set("theme_mode", mode)
+            import qfluentwidgets
+
+            if mode == "Light":
+                qfluentwidgets.setTheme(qfluentwidgets.Theme.LIGHT)
+            elif mode == "Dark":
+                qfluentwidgets.setTheme(qfluentwidgets.Theme.DARK)
+            else:
+                qfluentwidgets.setTheme(qfluentwidgets.Theme.AUTO)
+            # Immediate UI refresh triggered automatically by setTheme in qfluentwidgets.
+            InfoBar.success("设置已更新", f"主题已切换为: {mode}", duration=3000, parent=self)
+
     def _on_check_updates_startup_changed(self, checked: bool) -> None:
         config_manager.set("check_updates_on_startup", bool(checked))
         InfoBar.success(
@@ -1977,6 +2086,15 @@ class SettingsPage(QWidget):
             "已开启：加速播放列表解析（实验性）"
             if checked
             else "已关闭：加速播放列表解析（实验性）",
+            duration=5000,
+            parent=self,
+        )
+
+    def _on_auto_risk_probe_changed(self, checked: bool) -> None:
+        config_manager.set("auto_risk_probe", bool(checked))
+        InfoBar.success(
+            "设置已更新",
+            "已开启自动风控探测" if checked else "已关闭自动风控探测",
             duration=5000,
             parent=self,
         )
@@ -2132,6 +2250,30 @@ class SettingsPage(QWidget):
             InfoBar.success("保存成功", f"代理已更新为 {new_proxy}", duration=5000, parent=self)
         else:
             InfoBar.info("已清空", "代理地址已清空。", duration=5000, parent=self)
+
+    def _on_probe_pool_clicked(self):
+        pool = config_manager.get("probe_link_pool")
+        if not isinstance(pool, list):
+            pool = []
+
+        dialog = ProbePoolEditorDialog(pool, self.window())
+        if dialog.exec():
+            new_links = dialog.get_links()
+            if not new_links:
+                InfoBar.error(
+                    "配置错误", "连接池不能为空，至少需要一个有效的探测 URL", parent=self.window()
+                )
+                return
+
+            config_manager.set("probe_link_pool", new_links)
+            # 用户修改了链接池，清除旧的伪随机历史记录
+            config_manager.set("probe_link_history", {})
+
+            InfoBar.success(
+                "保存成功",
+                f"探针链接池已更新，共计 {len(new_links)} 个可用链接",
+                parent=self.window(),
+            )
 
     def _on_cookie_mode_changed(self, index: int) -> None:
         """Cookie 模式切换：0=浏览器提取, 1=DLE登录获取, 2=手动文件"""
@@ -2607,6 +2749,7 @@ class SettingsPage(QWidget):
             3: "YouTube 连通性",
             4: "代理配置",
             5: "Cookie + IP 实测",
+            6: "POT 服务",
         }
 
         # ---- Worker (same logic, moved here for closure) ----
@@ -2713,6 +2856,48 @@ class SettingsPage(QWidget):
                     results["ip_ok"] = False
                     results["cookie_real"] = False
 
+                # Step 6: POT 服务状态 (L0 + L1 + L2 分层验证)
+                try:
+                    from ..core.config_manager import config_manager
+
+                    if config_manager.get("pot_provider_enabled", True):
+                        from ..youtube.pot_manager import pot_manager
+
+                        if not pot_manager.is_running():
+                            # 服务未运行，尝试自动启动
+                            pot_manager.start_server()
+
+                        # 用 get_health_status() 做综合诊断
+                        health = pot_manager.get_health_status()
+
+                        if health["overall_ok"]:
+                            detail_parts = [f"端口 {health['port']}"]
+                            detail_parts.append(health["token_detail"])
+                            if health["minter_ok"]:
+                                detail_parts.append(health["minter_detail"])
+                            self.step_done.emit(6, True, " | ".join(detail_parts))
+                            results["pot"] = True
+                        elif health["running"] and not health["token_ok"]:
+                            # 服务在运行但 Token 生成有问题
+                            self.step_done.emit(
+                                6, False, f"服务运行中但 Token 无效: {health['token_detail']}"
+                            )
+                            results["pot"] = False
+                        else:
+                            self.step_done.emit(
+                                6,
+                                False,
+                                health["summary"]
+                                or "未运行且启动失败 — 请检查 POT Provider 是否已安装",
+                            )
+                            results["pot"] = False
+                    else:
+                        self.step_done.emit(6, True, "已禁用 (不影响基本功能)")
+                        results["pot"] = True
+                except Exception as e:
+                    self.step_done.emit(6, False, f"检测失败: {e}")
+                    results["pot"] = False
+
                 # 综合建议
                 suggestions = []
                 if not results.get("proxy"):
@@ -2725,6 +2910,26 @@ class SettingsPage(QWidget):
                     suggestions.append("请先通过登录或浏览器提取获取 Cookie")
                 elif results.get("cookie_real") is False and results.get("ip_ok"):
                     suggestions.append("Cookie 已失效 (服务端验证不通过)，请重新获取")
+                if not results.get("pot", True):
+                    # 区分"未运行"和"运行中但 Token 异常"
+                    try:
+                        from ..youtube.pot_manager import pot_manager
+
+                        if pot_manager.is_running():
+                            suggestions.append(
+                                "POT Provider 服务运行中但 Token 生成异常（可能是首次初始化较慢或 BotGuard 被限制）。"
+                                "建议重启应用或更新 POT Provider 版本"
+                            )
+                        else:
+                            suggestions.append(
+                                "POT Provider 服务未运行，可能导致机器人检测。"
+                                "请在「组件管理」中安装或更新 POT Provider"
+                            )
+                    except Exception:
+                        suggestions.append(
+                            "POT Provider 服务异常，可能导致机器人检测。"
+                            "请在「组件管理」中安装或更新 POT Provider"
+                        )
                 elif not results.get("valid"):
                     suggestions.append("Cookie 缺少必要字段，请重新获取")
 
@@ -2751,7 +2956,7 @@ class SettingsPage(QWidget):
                 self._result_labels: dict[int, CaptionLabel] = {}
                 self._spinners: dict[int, IndeterminateProgressRing] = {}
 
-                for step in range(1, 6):
+                for step in range(1, 7):
                     row = step - 1
                     # spinner (will be hidden when done)
                     spinner = IndeterminateProgressRing(grid_widget)

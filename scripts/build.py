@@ -408,6 +408,9 @@ class Builder:
             f"{ROOT / 'assets' / 'logo.ico'}{os.pathsep}assets",
             "--add-data",
             f"{ROOT / 'assets' / 'logo.png'}{os.pathsep}assets",
+            # 手动添加非标准 Python 结构的 yt-dlp 插件目录
+            "--add-data",
+            f"{ROOT / 'src' / 'fluentytdl' / 'yt_dlp_plugins_ext'}{os.pathsep}fluentytdl/yt_dlp_plugins_ext",
             # 自动收集所有子模块（推荐方式）
             "--collect-submodules",
             "fluentytdl",
@@ -493,6 +496,9 @@ class Builder:
             f"{ROOT / 'assets' / 'logo.ico'}{os.pathsep}assets",
             "--add-data",
             f"{ROOT / 'assets' / 'logo.png'}{os.pathsep}assets",
+            # 手动添加非标准 Python 结构的 yt-dlp 插件目录
+            "--add-data",
+            f"{ROOT / 'src' / 'fluentytdl' / 'yt_dlp_plugins_ext'}{os.pathsep}fluentytdl/yt_dlp_plugins_ext",
             # 自动收集所有子模块（推荐方式）
             "--collect-submodules",
             "fluentytdl",

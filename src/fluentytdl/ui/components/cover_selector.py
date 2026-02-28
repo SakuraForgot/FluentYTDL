@@ -109,12 +109,16 @@ class CoverSelectorWidget(QFrame):
 
     def _init_ui(self):
         self.setObjectName("coverSelector")
-        self.setStyleSheet("""
-            #coverSelector {
-                background-color: rgba(255, 255, 255, 0.7);
-                border: 1px solid rgba(0, 0, 0, 0.08);
+        from qfluentwidgets import isDarkTheme
+
+        bg = "rgba(255, 255, 255, 0.05)" if isDarkTheme() else "rgba(255, 255, 255, 0.7)"
+        bd = "rgba(255, 255, 255, 0.08)" if isDarkTheme() else "rgba(0, 0, 0, 0.08)"
+        self.setStyleSheet(f"""
+            #coverSelector {{
+                background-color: {bg};
+                border: 1px solid {bd};
                 border-radius: 8px;
-            }
+            }}
         """)
 
         layout = QVBoxLayout(self)

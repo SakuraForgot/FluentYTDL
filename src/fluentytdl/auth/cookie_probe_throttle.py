@@ -55,6 +55,12 @@ class CookieProbeThrottle:
 
     def should_probe(self) -> bool:
         """检查是否允许探测（自动模式）"""
+        # 读取开关，如果用户关闭了自动探测，直接拦截
+        from ..core.config_manager import config_manager
+
+        if not config_manager.get("auto_risk_probe", False):
+            return False
+
         with self._lock:
             self._reset_daily_if_needed()
 
@@ -93,6 +99,13 @@ class CookieProbeThrottle:
             elapsed = now - self._last_probe_time
 
             if not force:
+                # 再次校验开关
+                from ..core.config_manager import config_manager
+
+                if not config_manager.get("auto_risk_probe", False):
+                    logger.debug("[ProbeThrottle] 自动探测已在设置中关闭，跳过")
+                    return None
+
                 if self._daily_count >= self.MAX_DAILY_PROBES:
                     logger.debug("[ProbeThrottle] 达到日限，使用缓存")
                     return None

@@ -1,16 +1,19 @@
 from __future__ import annotations
 
+import json
 import os
 import re
 import shutil
+import ssl
 import subprocess
 import sys
 import tempfile
 import time
+import urllib.error
+import urllib.request
 import zipfile
 from pathlib import Path
 
-import requests
 from PySide6.QtCore import QObject, QThread, Signal
 
 try:
@@ -173,6 +176,66 @@ class DependencyManager(QObject):
         self.install_finished.emit(key)
         self._workers.pop(f"install_{key}", None)
 
+    def _build_opener(self) -> urllib.request.OpenerDirector:
+        """
+        Builds a urllib OpenerDirector with proxy settings applied from the application config.
+        Also explicitly builds an SSL context that tries to use default verification,
+        but falls back to unverified if verification fails (to handle extremely broken setups).
+        """
+        handlers = []
+
+        # 1. Proxy Handler
+        proxy_url = config_manager.get("proxy_url")
+        if config_manager.get("proxy_mode") in ("http", "socks5") and proxy_url:
+            # urllib can handle http/https proxies.
+            # Note: For SOCKS5, urllib natively might not support it without PySocks,
+            # but typical standard SOCKS5 proxies can often be accessed if specified.
+            # We'll set it for both http and https as requests did.
+            proxies = {"http": proxy_url, "https": proxy_url}
+            handlers.append(urllib.request.ProxyHandler(proxies))
+
+        # 2. SSL Handler (use system certificates)
+        # Windows Python automatically loads system certs into default context.
+        ctx = ssl.create_default_context()
+        handlers.append(urllib.request.HTTPSHandler(context=ctx))
+
+        opener = urllib.request.build_opener(*handlers)
+        return opener
+
+    def _fetch_json(self, url: str) -> dict:
+        """
+        Fetches a JSON payload from the given URL using the configured opener.
+        Handles basic SSL errors by attempting a fallback if the default system certs still fail.
+        """
+        opener = self._build_opener()
+        req = urllib.request.Request(url, headers={"User-Agent": "FluentYTDL/DependencyManager"})
+
+        try:
+            with opener.open(req, timeout=10) as response:
+                return json.loads(response.read().decode("utf-8"))
+        except urllib.error.URLError as e:
+            # If we hit an SSL verification error, fallback to unverified context as a last resort
+            if isinstance(e.reason, ssl.SSLCertVerificationError):
+                logger.warning(
+                    f"SSL verification failed for {url}. Attempting fallback with unverified context."
+                )
+
+                # Rebuild opener with unverified context
+                handlers = []
+                proxy_url = config_manager.get("proxy_url")
+                if config_manager.get("proxy_mode") in ("http", "socks5") and proxy_url:
+                    handlers.append(
+                        urllib.request.ProxyHandler({"http": proxy_url, "https": proxy_url})
+                    )
+
+                unverified_ctx = ssl._create_unverified_context()
+                handlers.append(urllib.request.HTTPSHandler(context=unverified_ctx))
+
+                fallback_opener = urllib.request.build_opener(*handlers)
+                with fallback_opener.open(req, timeout=10) as fb_response:
+                    return json.loads(fb_response.read().decode("utf-8"))
+            raise
+
 
 class UpdateCheckerWorker(QThread):
     finished_signal = Signal(str, dict)
@@ -292,8 +355,9 @@ class UpdateCheckerWorker(QThread):
                 if m:
                     return m.group(1)
             elif key == "atomicparsley":
-                # AtomicParsley outputs: "AtomicParsley version: 20240608.083822.1ed9031" or similar
-                m = re.search(r"(\d{8}\.\d+\.\w+)", out)
+                # AtomicParsley outputs: "AtomicParsley version: 20240608.083822.0 1ed9031..."
+                # 只取日期+时间部分 (YYYYMMDD.HHMMSS)，忽略后面的 build/commit 信息
+                m = re.search(r"(\d{8}\.\d{6})", out)
                 if m:
                     return m.group(1)
             elif key == "aria2c":
@@ -308,18 +372,34 @@ class UpdateCheckerWorker(QThread):
 
     def _get_remote_version(self, key: str) -> tuple[str, str]:
         # Return (version_tag, download_url)
-        # Using GitHub API
-        proxies = {}
-        proxy_url = config_manager.get("proxy_url")
-        if config_manager.get("proxy_mode") in ("http", "socks5") and proxy_url:
-            proxies = {"http": proxy_url, "https": proxy_url}
+        # Using GitHub API via urllib
 
+        url = ""
         if key == "yt-dlp":
             url = "https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest"
-            resp = requests.get(url, proxies=proxies, timeout=10)
-            resp.raise_for_status()
-            data = resp.json()
-            tag = data["tag_name"]  # e.g. "2023.11.16"
+        elif key == "deno":
+            url = "https://api.github.com/repos/denoland/deno/releases/latest"
+        elif key == "ffmpeg":
+            url = "https://api.github.com/repos/BtbN/FFmpeg-Builds/releases/latest"
+        elif key == "pot-provider":
+            url = (
+                "https://api.github.com/repos/jim60105/bgutil-ytdlp-pot-provider-rs/releases/latest"
+            )
+        elif key == "ytarchive":
+            url = "https://api.github.com/repos/Kethsar/ytarchive/releases/latest"
+        elif key == "atomicparsley":
+            url = "https://api.github.com/repos/wez/atomicparsley/releases/latest"
+        else:
+            return "unknown", ""
+
+        try:
+            data = self.manager._fetch_json(url)
+        except Exception as e:
+            logger.error(f"Failed to fetch release info for {key}: {e}")
+            return "unknown", ""
+
+        if key == "yt-dlp":
+            tag = data.get("tag_name", "unknown")
 
             # Find exe asset
             dl_url = ""
@@ -330,11 +410,7 @@ class UpdateCheckerWorker(QThread):
             return tag, dl_url
 
         elif key == "deno":
-            url = "https://api.github.com/repos/denoland/deno/releases/latest"
-            resp = requests.get(url, proxies=proxies, timeout=10)
-            resp.raise_for_status()
-            data = resp.json()
-            tag = data["tag_name"].lstrip("v")  # e.g. "1.38.0"
+            tag = data.get("tag_name", "vunknown").lstrip("v")
 
             # Find windows zip
             dl_url = ""
@@ -346,10 +422,6 @@ class UpdateCheckerWorker(QThread):
 
         elif key == "ffmpeg":
             # BtbN/FFmpeg-Builds: "latest" release 包含多个版本 (n7.1, n8.0, master)
-            url = "https://api.github.com/repos/BtbN/FFmpeg-Builds/releases/latest"
-            resp = requests.get(url, proxies=proxies, timeout=10)
-            resp.raise_for_status()
-            data = resp.json()
 
             # 收集所有版本化的 win64-gpl static 构建，选取最高版本
             candidates: list[tuple[tuple[int, ...], str, str, str]] = []
@@ -383,13 +455,7 @@ class UpdateCheckerWorker(QThread):
 
         elif key == "pot-provider":
             # bgutil-ytdlp-pot-provider-rs from jim60105
-            url = (
-                "https://api.github.com/repos/jim60105/bgutil-ytdlp-pot-provider-rs/releases/latest"
-            )
-            resp = requests.get(url, proxies=proxies, timeout=10)
-            resp.raise_for_status()
-            data = resp.json()
-            tag = data["tag_name"].lstrip("v")  # e.g. "0.1.5"
+            tag = data.get("tag_name", "vunknown").lstrip("v")
 
             # Find windows exe or zip
             dl_url = ""
@@ -403,11 +469,7 @@ class UpdateCheckerWorker(QThread):
 
         elif key == "ytarchive":
             # Kethsar/ytarchive from GitHub
-            url = "https://api.github.com/repos/Kethsar/ytarchive/releases/latest"
-            resp = requests.get(url, proxies=proxies, timeout=10)
-            resp.raise_for_status()
-            data = resp.json()
-            tag = data["tag_name"].lstrip("v")  # e.g. "0.4.0"
+            tag = data.get("tag_name", "vunknown").lstrip("v")
 
             # Find windows amd64 executable
             dl_url = ""
@@ -421,11 +483,15 @@ class UpdateCheckerWorker(QThread):
 
         elif key == "atomicparsley":
             # wez/atomicparsley from GitHub
-            url = "https://api.github.com/repos/wez/atomicparsley/releases/latest"
-            resp = requests.get(url, proxies=proxies, timeout=10)
-            resp.raise_for_status()
-            data = resp.json()
-            tag = data["tag_name"]  # e.g. "20240608.083822.1ed9031"
+            tag = data.get("tag_name", "unknown")
+
+            # 只取日期+时间部分 (YYYYMMDD.HHMMSS)，与本地版本格式一致
+            # 否则 "20240608.083822.1ed9031" 会被 _parse_version_tuple 误解析为
+            # (20240608, 83822, 1)，而本地输出 "20240608.083822.0" 解析为
+            # (20240608, 83822, 0)，导致同版本也被判定为需要更新
+            m = re.match(r"(\d{8}\.\d{6})", tag)
+            if m:
+                tag = m.group(1)
 
             # Find Windows zip asset
             dl_url = ""
@@ -459,17 +525,16 @@ class DownloaderWorker(QThread):
     def run(self):
         tmp_path: str | None = None
         try:
-            # 1. Download to temp file
-            proxies = {}
-            proxy_url = config_manager.get("proxy_url")
-            if config_manager.get("proxy_mode") in ("http", "socks5") and proxy_url:
-                proxies = {"http": proxy_url, "https": proxy_url}
-
             logger.info(f"Downloading {self.key} from {self.url}")
+            # 1. Download to temp file
+            opener = dependency_manager._build_opener()
+            req = urllib.request.Request(
+                self.url, headers={"User-Agent": "FluentYTDL/DependencyManager"}
+            )
 
-            with requests.get(self.url, stream=True, proxies=proxies, timeout=30) as r:
-                r.raise_for_status()
-                total_length = int(r.headers.get("content-length", 0))
+            with opener.open(req, timeout=30) as r:
+                total_length_str = r.headers.get("content-length")
+                total_length = int(total_length_str) if total_length_str else 0
 
                 # Create a temp file
                 fd, tmp_path = tempfile.mkstemp()
@@ -480,23 +545,25 @@ class DownloaderWorker(QThread):
 
                 with open(tmp_path, "wb") as f:
                     downloaded = 0
-                    for chunk in r.iter_content(chunk_size=8192):
-                        if chunk:
-                            f.write(chunk)
-                            downloaded += len(chunk)
-                            if total_length > 0:
-                                percent = int(downloaded * 100 / total_length)
-                                current_time = time.time()
-                                # Throttle: emit only if percent changed AND (>= 1% diff OR > 100ms passed)
-                                if percent != last_emit_percent:
-                                    if (
-                                        (percent - last_emit_percent >= 1)
-                                        or (current_time - last_emit_time > 0.1)
-                                        or percent == 100
-                                    ):
-                                        self.progress_signal.emit(self.key, percent)
-                                        last_emit_percent = percent
-                                        last_emit_time = current_time
+                    while True:
+                        chunk = r.read(8192)
+                        if not chunk:
+                            break
+                        f.write(chunk)
+                        downloaded += len(chunk)
+                        if total_length > 0:
+                            percent = int(downloaded * 100 / total_length)
+                            current_time = time.time()
+                            # Throttle: emit only if percent changed AND (>= 1% diff OR > 100ms passed)
+                            if percent != last_emit_percent:
+                                if (
+                                    (percent - last_emit_percent >= 1)
+                                    or (current_time - last_emit_time > 0.1)
+                                    or percent == 100
+                                ):
+                                    self.progress_signal.emit(self.key, percent)
+                                    last_emit_percent = percent
+                                    last_emit_time = current_time
 
             # 2. Extract or Move
             # Kill processes first? Ideally UI should ensure nothing is running.

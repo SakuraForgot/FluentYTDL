@@ -92,7 +92,6 @@ class UnifiedTaskListPage(QWidget):
         self.pivot_line = QFrame(self)
         self.pivot_line.setFrameShape(QFrame.Shape.HLine)
         self.pivot_line.setFrameShadow(QFrame.Shadow.Plain)
-        self.pivot_line.setStyleSheet("color: rgba(0, 0, 0, 0.08);")  # Light mode subtle line
         self.v_layout.addWidget(self.pivot_line)
 
         # === 任务列表 ScrollArea ===
@@ -129,7 +128,6 @@ class UnifiedTaskListPage(QWidget):
         # self.empty_icon.setPixmap(...)
         # 暂时用大号 Emoji 或 Icon 替代
         self.empty_icon.setText("🍃")
-        self.empty_icon.setStyleSheet("font-size: 64px; color: rgba(0,0,0,0.1);")
         self.empty_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         text_container = QWidget(self.empty_placeholder)
@@ -174,6 +172,20 @@ class UnifiedTaskListPage(QWidget):
         self.action_layout.setSpacing(8)
         self.action_layout.addStretch()
         self.v_layout.insertLayout(1, self.action_layout)  # 插入到标题下方
+
+        from qfluentwidgets import qconfig
+
+        qconfig.themeChanged.connect(self._update_style)
+        self._update_style()
+
+    def _update_style(self):
+        from qfluentwidgets import isDarkTheme
+
+        line_color = "rgba(255, 255, 255, 0.08)" if isDarkTheme() else "rgba(0, 0, 0, 0.08)"
+        self.pivot_line.setStyleSheet(f"color: {line_color};")
+
+        empty_color = "rgba(255, 255, 255, 0.1)" if isDarkTheme() else "rgba(0, 0, 0, 0.1)"
+        self.empty_icon.setStyleSheet(f"font-size: 64px; color: {empty_color};")
 
     def set_selection_mode(self, enabled: bool) -> None:
         """设置批量选择模式"""

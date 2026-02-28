@@ -1036,6 +1036,10 @@ class MainWindow(FluentWindow):
             logger.info("[AdminMode] 手动文件模式，跳过自动刷新")
             return
 
+        if auth_service.current_source == AuthSourceType.DLE:
+            logger.info("[AdminMode] 登录模式(DLE)，跳过自动刷新（需要用户交互）")
+            return
+
         browser_name = auth_service.current_source_display
         logger.info(f"[AdminMode] 以管理员身份自动刷新Cookie: {browser_name}")
 
@@ -1069,38 +1073,66 @@ class MainWindow(FluentWindow):
             InfoBar.error("Cookie提取异常", str(e), duration=5000, parent=self)
 
     def check_cookie_status(self):
-        """检查Cookie提取状态，如果失败则提示用户"""
+        """
+        统一 Cookie 有效性检查（适用于所有验证模式）
+
+        三层检查:
+        1. cookie_sentinel.exists → Cookie 文件是否存在
+        2. cookie_sentinel.is_stale → Cookie 是否已过期（基于 SID/HSID expires）
+        3. auth_service.last_status.valid → 关键字段完整性（SID/HSID/SSID 等）
+
+        当检测到问题时，弹出 CookieRepairDialog 引导用户修复。
+        """
         try:
             from ..auth.auth_service import AuthSourceType, auth_service
             from ..auth.cookie_sentinel import cookie_sentinel
             from ..utils.admin_utils import is_admin
 
-            # 只在配置了浏览器来源时检查
-            if auth_service.current_source == AuthSourceType.NONE:
+            current_source = auth_service.current_source
+
+            # 未启用验证，无需检查
+            if current_source == AuthSourceType.NONE:
                 return
 
-            if auth_service.current_source == AuthSourceType.FILE:
-                return  # 手动文件不需要检查
+            source_name = auth_service.current_source_display
 
-            current_source = auth_service.current_source
-            browser_name = auth_service.current_source_display
+            # ── 统一有效性检查（适用于 DLE / 浏览器 / 手动导入） ──
+            # 只检查两层：
+            #   1. cookie_sentinel.exists → Cookie 文件是否存在
+            #   2. auth_service.last_status.valid → 关键字段完整性 + 过期检查
+            #      (_validate_cookies 会先过滤掉已过期的 Cookie，再检查 SID/HSID 等是否存在)
+            is_invalid = False
+            reason = ""
 
-            # 检查是否是 Chromium 内核浏览器且非管理员 - 弹出对话框
-            from ..auth.auth_service import ADMIN_REQUIRED_BROWSERS
+            if not cookie_sentinel.exists:
+                is_invalid = True
+                if current_source == AuthSourceType.DLE:
+                    reason = "尚未登录获取 Cookie"
+                elif current_source == AuthSourceType.FILE:
+                    reason = "尚未导入 Cookie 文件"
+                else:
+                    reason = f"尚未从 {source_name} 提取 Cookie"
+            elif not auth_service.last_status.valid:
+                is_invalid = True
+                reason = auth_service.last_status.message or "Cookie 无效"
 
-            if current_source in ADMIN_REQUIRED_BROWSERS and not is_admin():
-                # Cookie不存在或过期时才提示
-                if not cookie_sentinel.exists or cookie_sentinel.is_stale:
+            if is_invalid:
+                logger.warning(f"[MainWindow] Cookie 无效 ({source_name}): {reason}")
+
+                # Chromium 浏览器非管理员 → 特殊处理：提示以管理员重启
+                from ..auth.auth_service import ADMIN_REQUIRED_BROWSERS
+
+                if current_source in ADMIN_REQUIRED_BROWSERS and not is_admin():
                     from qfluentwidgets import MessageBox
 
                     box = MessageBox(
-                        f"{browser_name} 需要管理员权限",
-                        f"检测到您使用 {browser_name} 作为 Cookie 来源。\n\n"
+                        f"{source_name} 需要管理员权限",
+                        f"检测到您使用 {source_name} 作为 Cookie 来源。\n\n"
                         f"Chromium 内核浏览器使用了加密保护，\n"
                         f"需要以管理员身份运行程序才能提取 Cookie。\n\n"
                         "是否以管理员身份重启程序？\n\n"
                         "提示：您也可以切换到 Firefox/LibreWolf 浏览器，\n"
-                        "或手动导入 Cookie 文件。",
+                        "或使用「登录获取」方式，无需管理员权限。",
                         self,
                     )
                     box.yesButton.setText("以管理员身份重启")
@@ -1109,45 +1141,75 @@ class MainWindow(FluentWindow):
                     if box.exec():
                         from ..utils.admin_utils import restart_as_admin
 
-                        restart_as_admin(f"提取 {browser_name} Cookie")
-
-                    logger.warning(f"[MainWindow] {browser_name} 需要管理员权限提取Cookie")
-                return
-
-            # 检查Cookie状态
-            if not cookie_sentinel.exists:
-                # Cookie完全不存在
-                InfoBar.warning(
-                    "Cookie提取提示",
-                    f"尚未从 {browser_name} 提取到 Cookie，部分视频可能无法下载。\n"
-                    f"建议前往【设置】页面点击【立即提取】。",
-                    duration=8000,
-                    parent=self,
-                    position=InfoBarPosition.TOP,
-                )
-                logger.warning(f"[MainWindow] Cookie状态检查：未找到Cookie文件（来源：{browser_name}）")
-            elif cookie_sentinel.is_stale:
-                # Cookie文件存在，但已过期
-                InfoBar.warning(
-                    "Cookie已过期",
-                    f"您提取的 {browser_name} Cookie 已过期。\n"
-                    f"建议前往【设置】页面点击【立即刷新】重新获取。",
-                    duration=8000,
-                    parent=self,
-                    position=InfoBarPosition.TOP,
-                )
-                logger.warning(f"[MainWindow] Cookie状态检查：Cookie已过期（来源：{browser_name}）")
+                        restart_as_admin(f"提取 {source_name} Cookie")
+                else:
+                    # 所有模式通用：使用 CookieRepairDialog 引导修复
+                    self._show_cookie_repair(current_source, source_name, reason)
             else:
-                # Cookie正常
                 logger.info(
-                    f"[MainWindow] Cookie状态检查：正常（{auth_service.last_status.cookie_count}个Cookie）"
+                    f"[MainWindow] Cookie 有效 ({source_name}，"
+                    f"{auth_service.last_status.cookie_count} 个 Cookie)"
                 )
 
-            # 延迟 10 秒后执行一次带节流的 Cookie+IP 探测（后台线程）
+            # 所有模式统一：延迟服务端探测
             QTimer.singleShot(10000, self._startup_cookie_probe)
 
         except Exception as e:
             logger.error(f"[MainWindow] Cookie状态检查失败: {e}")
+
+    def _show_cookie_repair(self, source_type, source_name: str, reason: str) -> None:
+        """
+        弹出 Cookie 修复引导（复用 CookieRepairDialog）
+
+        根据当前验证模式自动调整引导文案和按钮行为。
+        """
+        from ..auth.auth_service import AuthSourceType
+        from ..auth.cookie_sentinel import cookie_sentinel
+        from .components.cookie_repair_dialog import CookieRepairDialog
+
+        # 映射 auth_source 字符串
+        source_map = {
+            AuthSourceType.DLE: "dle",
+            AuthSourceType.FILE: "file",
+        }
+        auth_source_str = source_map.get(source_type, "browser")
+
+        dialog = CookieRepairDialog(reason, parent=self, auth_source=auth_source_str)
+
+        # 根据模式定制按钮文案
+        if source_type == AuthSourceType.DLE:
+            dialog.repair_btn.setText("重新登录")
+            dialog.setWindowTitle("需要重新登录 YouTube")
+        elif source_type == AuthSourceType.FILE:
+            dialog.repair_btn.setText("重新导入")
+            dialog.setWindowTitle("Cookie 文件需要更新")
+        else:
+            dialog.repair_btn.setText("重新提取")
+
+        # 自动修复信号
+        def on_auto_repair():
+            if source_type == AuthSourceType.DLE:
+                # DLE → 跳转到设置页面的登录区域
+                dialog.accept()
+                self.switchTo(self.settings_interface)
+            elif source_type == AuthSourceType.FILE:
+                # 手动导入 → 跳转到设置页面
+                dialog.accept()
+                self.switchTo(self.settings_interface)
+            else:
+                # 浏览器提取 → 直接自动修复
+                success, message = cookie_sentinel.force_refresh_with_uac()
+                dialog.show_repair_result(success, message)
+
+        dialog.repair_requested.connect(on_auto_repair)
+
+        # 手动导入信号 → 跳转设置页
+        def on_manual_import():
+            self.switchTo(self.settings_interface)
+
+        dialog.manual_import_requested.connect(on_manual_import)
+
+        dialog.exec()
 
     def _startup_cookie_probe(self) -> None:
         """启动后延迟执行一次带节流的 Cookie+IP 探测"""
@@ -1161,11 +1223,37 @@ class MainWindow(FluentWindow):
 
             def _probe():
                 result = cookie_probe_throttle.probe_if_allowed()
-                if result and not result.get("cookie_ok"):
-                    from ..utils.logger import logger
+                if not result:
+                    return
 
-                    logger.warning(f"[StartupProbe] Cookie 服务端无效: {result.get('detail', '')}")
+                if result.get("cookie_ok"):
+                    return  # 一切正常
+
+                detail = result.get("detail", "")
+                ip_ok = result.get("ip_ok", True)
+                logger.warning(f"[StartupProbe] 服务端探测异常: {detail}")
+
+                # 准备 UI 提示内容
+                if not ip_ok:
+                    title = "⚠️ IP 可能被 YouTube 限制"
+                    content = "服务端检测到当前网络节点触发了风控，建议更换代理节点。"
+                else:
+                    title = "⚠️ Cookie 可能已失效"
+                    content = "服务端检测到 Cookie 无法通过验证，建议前往设置页刷新。"
+
+                # 回到主线程显示 UI（使用 QTimer.singleShot 线程安全）
+                QTimer.singleShot(0, lambda t=title, c=content: self._show_probe_warning(t, c))
 
             threading.Thread(target=_probe, daemon=True, name="StartupCookieProbe").start()
         except Exception:
             pass
+
+    def _show_probe_warning(self, title: str, content: str) -> None:
+        """在主线程显示服务端探测警告"""
+        InfoBar.warning(
+            title,
+            content,
+            duration=8000,
+            parent=self,
+            position=InfoBarPosition.TOP,
+        )

@@ -30,33 +30,45 @@ from qfluentwidgets import (
 from ...core.config_manager import config_manager
 from .badges import QualityCellWidget
 
-_TABLE_SELECTION_QSS = """
-QTableWidget {
+
+def _get_table_selection_qss() -> str:
+    from qfluentwidgets import isDarkTheme
+
+    is_dark = isDarkTheme()
+    sel_bg = "rgba(255, 255, 255, 0.08)" if is_dark else "#E8E8E8"
+    sel_fg = "#ffffff" if is_dark else "#000000"
+    sel_bd = "rgba(255, 255, 255, 0.15)" if is_dark else "#C0C0C0"
+    hov_bg = "rgba(255, 255, 255, 0.04)" if is_dark else "#F3F3F3"
+    border = "rgba(255, 255, 255, 0.06)" if is_dark else "rgba(0, 0, 0, 0.06)"
+    hover_border = "rgba(255, 255, 255, 0.1)" if is_dark else "rgba(0, 0, 0, 0.1)"
+
+    return f"""
+QTableWidget {{
     background-color: transparent;
     outline: none;
     border: none;
-}
-QTableWidget::item {
+}}
+QTableWidget::item {{
     padding-left: 0px;
-    border: 1px solid rgba(0, 0, 0, 0.06);
+    border: 1px solid {border};
     margin-top: 3px;
     margin-bottom: 3px;
     margin-left: 4px;
     margin-right: 4px;
     border-radius: 6px;
-}
-QTableWidget::item:selected {
-    background-color: #E8E8E8;
-    color: #000000;
-    border: 1px solid #C0C0C0;
+}}
+QTableWidget::item:selected {{
+    background-color: {sel_bg};
+    color: {sel_fg};
+    border: 1px solid {sel_bd};
     border-radius: 6px;
     font-weight: 600;
-}
-QTableWidget::item:hover {
-    background-color: #F3F3F3;
-    border: 1px solid rgba(0, 0, 0, 0.1);
+}}
+QTableWidget::item:hover {{
+    background-color: {hov_bg};
+    border: 1px solid {hover_border};
     border-radius: 6px;
-}
+}}
 """
 
 
@@ -166,89 +178,82 @@ class SimplePresetWidget(QWidget):
         self.btn_group = QButtonGroup(self)
         self.btn_group.buttonClicked.connect(self.presetSelected)
 
-        # Define presets
+        # Define presets: (id, title, description, intent_config)
         self.presets = [
             # === 推荐选项 ===
             (
                 "best_mp4",
                 "🎬 最佳画质 (MP4)",
                 "推荐。自动选择最佳画质并封装为 MP4，兼容性最好。",
-                "bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/bv*+ba",
-                {"merge_output_format": "mp4"},
+                {"type": "video", "max_height": None, "prefer_ext": "mp4"},
             ),
             (
                 "best_raw",
                 "🎯 最佳画质 (原盘)",
                 "追求极致画质。通常为 WebM/MKV 格式，适合本地播放。",
-                "bestvideo*+bestaudio/best",
-                {},
+                {"type": "video", "max_height": None, "prefer_ext": None},
             ),
             # === 分辨率限制 ===
             (
                 "2160p",
                 "📺 2160p 4K (MP4)",
                 "限制最高分辨率为 4K，超高清画质。",
-                "bv*[height<=2160][ext=mp4]+ba[ext=m4a]/b[height<=2160][ext=mp4]/bv*[height<=2160]+ba",
-                {"merge_output_format": "mp4"},
+                {"type": "video", "max_height": 2160, "prefer_ext": "mp4"},
             ),
             (
                 "1440p",
                 "📺 1440p 2K (MP4)",
                 "限制最高分辨率为 2K，高清画质。",
-                "bv*[height<=1440][ext=mp4]+ba[ext=m4a]/b[height<=1440][ext=mp4]/bv*[height<=1440]+ba",
-                {"merge_output_format": "mp4"},
+                {"type": "video", "max_height": 1440, "prefer_ext": "mp4"},
             ),
             (
                 "1080p",
                 "📺 1080p 高清 (MP4)",
                 "限制最高分辨率为 1080p，平衡画质与体积。",
-                "bv*[height<=1080][ext=mp4]+ba[ext=m4a]/b[height<=1080][ext=mp4]/bv*[height<=1080]+ba",
-                {"merge_output_format": "mp4"},
+                {"type": "video", "max_height": 1080, "prefer_ext": "mp4"},
             ),
             (
                 "720p",
                 "📺 720p 标清 (MP4)",
                 "限制最高分辨率为 720p，适合移动设备。",
-                "bv*[height<=720][ext=mp4]+ba[ext=m4a]/b[height<=720][ext=mp4]/bv*[height<=720]+ba",
-                {"merge_output_format": "mp4"},
+                {"type": "video", "max_height": 720, "prefer_ext": "mp4"},
             ),
             (
                 "480p",
                 "📺 480p (MP4)",
                 "限制最高分辨率为 480p，节省空间。",
-                "bv*[height<=480][ext=mp4]+ba[ext=m4a]/b[height<=480][ext=mp4]/bv*[height<=480]+ba",
-                {"merge_output_format": "mp4"},
+                {"type": "video", "max_height": 480, "prefer_ext": "mp4"},
             ),
             (
                 "360p",
                 "📺 360p (MP4)",
                 "限制最高分辨率为 360p，最小体积。",
-                "bv*[height<=360][ext=mp4]+ba[ext=m4a]/b[height<=360][ext=mp4]/bv*[height<=360]+ba",
-                {"merge_output_format": "mp4"},
+                {"type": "video", "max_height": 360, "prefer_ext": "mp4"},
             ),
             # === 纯音频 ===
             (
                 "audio_mp3",
                 "🎵 纯音频 (MP3 - 320k)",
                 "仅下载音频并转码为 MP3。",
-                "bestaudio/best",
-                {"extract_audio": True, "audio_format": "mp3", "audio_quality": "320K"},
+                {"type": "audio_only", "post_audio_format": "mp3", "post_audio_quality": "320K"},
             ),
         ]
 
         self.radios = []
 
-        for i, (pid, title, desc, fmt, args) in enumerate(self.presets):
+        for i, (pid, title, desc, intent) in enumerate(self.presets):
             container = QFrame(self)
+            from qfluentwidgets import isDarkTheme
+
+            card_bd = "rgba(255, 255, 255, 0.08)" if isDarkTheme() else "rgba(0, 0, 0, 0.05)"
             container.setStyleSheet(
-                ".QFrame { background-color: rgba(255, 255, 255, 0.05); border-radius: 6px; border: 1px solid rgba(0,0,0,0.05); }"
+                f".QFrame {{ background-color: rgba(255, 255, 255, 0.05); border-radius: 6px; border: 1px solid {card_bd}; }}"
             )
             h_layout = QHBoxLayout(container)
 
             rb = RadioButton(title, container)
             rb.setProperty("preset_id", pid)
-            rb.setProperty("format_str", fmt)
-            rb.setProperty("extra_args", args)
+            rb.setProperty("intent", intent)
 
             self.btn_group.addButton(rb, i)
             self.radios.append(rb)
@@ -276,9 +281,8 @@ class SimplePresetWidget(QWidget):
         if not btn:
             return {}
         return {
-            "format": btn.property("format_str"),
-            "extra": btn.property("extra_args"),
             "id": btn.property("preset_id"),
+            "intent": btn.property("intent"),
         }
 
 
@@ -363,8 +367,12 @@ class VideoFormatSelectorWidget(QWidget):
 
         # Video Section
         self.video_container = QFrame(self.split_container)
+        from qfluentwidgets import isDarkTheme
+
+        card_bg = "rgba(255, 255, 255, 0.03)" if isDarkTheme() else "rgba(255, 255, 255, 0.7)"
+        card_bd = "rgba(255, 255, 255, 0.08)" if isDarkTheme() else "rgba(0, 0, 0, 0.05)"
         self.video_container.setStyleSheet(
-            ".QFrame { background-color: rgba(255, 255, 255, 0.03); border: 1px solid rgba(0, 0, 0, 0.05); border-radius: 8px; }"
+            f".QFrame {{ background-color: {card_bg}; border: 1px solid {card_bd}; border-radius: 8px; }}"
         )
         v_layout = QVBoxLayout(self.video_container)
         v_layout.setContentsMargins(8, 8, 8, 8)
@@ -377,7 +385,7 @@ class VideoFormatSelectorWidget(QWidget):
         # Audio Section
         self.audio_container = QFrame(self.split_container)
         self.audio_container.setStyleSheet(
-            ".QFrame { background-color: rgba(255, 255, 255, 0.03); border: 1px solid rgba(0, 0, 0, 0.05); border-radius: 8px; }"
+            f".QFrame {{ background-color: {card_bg}; border: 1px solid {card_bd}; border-radius: 8px; }}"
         )
         a_layout = QVBoxLayout(self.audio_container)
         a_layout.setContentsMargins(8, 8, 8, 8)
@@ -396,7 +404,7 @@ class VideoFormatSelectorWidget(QWidget):
 
     def _create_table(self):
         t = QTableWidget(self.advanced_widget)
-        t.setStyleSheet(_TABLE_SELECTION_QSS)
+        t.setStyleSheet(_get_table_selection_qss())
         t.setColumnCount(3)
         t.setHorizontalHeaderLabels(["类型", "质量", "详情"])
         t.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
@@ -462,6 +470,8 @@ class VideoFormatSelectorWidget(QWidget):
                     "acodec": acodec,
                     "filesize": f.get("filesize") or f.get("filesize_approx"),
                     "fps": f.get("fps"),
+                    "vbr": f.get("vbr"),
+                    "tbr": f.get("tbr"),
                     "abr": f.get("abr"),
                     "dynamic_range": f.get("dynamic_range"),
                     "language": f.get("language"),
@@ -495,65 +505,143 @@ class VideoFormatSelectorWidget(QWidget):
             else:
                 self._selected_video_id = None
 
-        # 自动推断最优的音频流 (基于用户设定的语言偏好序列)
-        def _get_best_audio_id(audio_rows: list[dict]) -> str | None:
-            if not audio_rows:
-                return None
+    def _get_best_audio_id(self, audio_rows: list[dict]) -> str | None:
+        """自动推断最优的音频流 (基于用户设定的语言偏好序列)"""
+        if not audio_rows:
+            return None
 
-            pref_langs = config_manager.get("preferred_audio_languages")
-            if not isinstance(pref_langs, list):
-                pref_langs = ["orig", "zh-Hans", "en"]
+        pref_langs = config_manager.get("preferred_audio_languages")
+        if not isinstance(pref_langs, list):
+            pref_langs = ["orig", "zh-Hans", "en"]
 
-            # Normalize user preferences
-            normalized_prefs = [str(x).strip().lower() for x in pref_langs if str(x).strip()]
+        # Normalize user preferences
+        normalized_prefs = [str(x).strip().lower() for x in pref_langs if str(x).strip()]
 
-            # Helper to score an audio row based on user preference sequence
-            def _score_audio(r: dict) -> int:
-                lang = str(r.get("language") or "").strip().lower()
-                track_type = str(r.get("audio_track_type") or "").strip().lower()
+        # Helper to score an audio row based on user preference sequence
+        def _score_audio(r: dict) -> int:
+            lang = str(r.get("language") or "").strip().lower()
+            track_type = str(r.get("audio_track_type") or "").strip().lower()
 
-                is_orig = track_type == "original" or lang == "orig" or lang == "original"
+            is_orig = track_type == "original" or lang == "orig" or lang == "original"
 
-                # Baseline score is its bitrate
-                br = int(r.get("abr") or 0)
+            # Baseline score is its bitrate
+            br = int(r.get("abr") or 0)
 
-                # Check match against the preference list
-                # Highest priority gets the largest multiplier
-                max_score = 10000000
-                for i, pref in enumerate(normalized_prefs):
-                    multiplier = max_score // (10**i)
+            # Check match against the preference list
+            # Highest priority gets the largest multiplier
+            max_score = 10000000
+            for i, pref in enumerate(normalized_prefs):
+                multiplier = max_score // (10**i)
 
-                    if pref == "orig" and is_orig:
-                        return multiplier + br
+                if pref == "orig" and is_orig:
+                    return multiplier + br
 
-                    if pref == lang:
-                        return multiplier + br
+                if pref == lang:
+                    return multiplier + br
 
-                    # 模糊匹配：如果偏好写的是 zh-hans，但轨道给的是 zh，也应该命中
-                    if "zh" in pref and "zh" in lang:
-                        return multiplier + br
+                # 模糊匹配：如果偏好写的是 zh-hans，但轨道给的是 zh，也应该命中
+                if "zh" in pref and "zh" in lang:
+                    return multiplier + br
 
-                # 没有任何匹配项的情况，看看有没有基础的 orig 或者 en 加分
-                if is_orig:
-                    return 1000 + br
-                if lang == "en":
-                    return 100 + br
+            # 没有任何匹配项的情况，看看有没有基础的 orig 或者 en 加分
+            if is_orig:
+                return 1000 + br
+            if lang == "en":
+                return 100 + br
 
-                return br
+            return br
 
-            best_audio = max(audio_rows, key=_score_audio)
-            return best_audio["format_id"]
+        best_audio = max(audio_rows, key=_score_audio)
+        return best_audio["format_id"]
+
+    def _pick_best_video(self, video_rows: list[dict], intent: dict) -> str | None:
+        """根据预设意图从分离视频流中挑选最优项"""
+        if not video_rows:
+            return None
+
+        max_height = intent.get("max_height")
+        prefer_ext = intent.get("prefer_ext")
+
+        # 门槛过滤
+        candidates = video_rows
+        if max_height is not None:
+            candidates = [r for r in candidates if int(r.get("height") or 0) <= max_height]
+
+        if not candidates:
+            return None
+
+        def _score_video(r: dict) -> int:
+            score = 0
+            h = int(r.get("height") or 0)
+            # 分辨率分（权重最高）
+            score += h * 10000
+            # 码率分
+            br = int(r.get("vbr") or r.get("tbr") or 0)
+            score += br
+            # 容器偏好分
+            if prefer_ext and str(r.get("ext") or "").lower() == prefer_ext:
+                score += 500
+            return score
+
+        best = max(candidates, key=_score_video)
+        return best["format_id"]
+
+    def _pick_best_muxed(self, muxed_rows: list[dict], intent: dict) -> str | None:
+        """当没有分离流时，从整合流中挑选最优项"""
+        if not muxed_rows:
+            return None
+
+        max_height = intent.get("max_height")
+        prefer_ext = intent.get("prefer_ext")
+
+        candidates = muxed_rows
+        if max_height is not None:
+            candidates = [r for r in candidates if int(r.get("height") or 0) <= max_height]
+
+        if not candidates:
+            # 如果门槛过滤后为空，退而使用全部整合流中分辨率最低的
+            candidates = muxed_rows
+
+        def _score_muxed(r: dict) -> int:
+            score = 0
+            h = int(r.get("height") or 0)
+            score += h * 10000
+            br = int(r.get("vbr") or r.get("tbr") or 0)
+            score += br
+            if prefer_ext and str(r.get("ext") or "").lower() == prefer_ext:
+                score += 500
+            return score
+
+        best = max(candidates, key=_score_muxed)
+        return best["format_id"]
+
+    def _refresh_table(self):
+        mode = self.mode_combo.currentIndex()
+        self.hint_label.setVisible(mode == 0)
+
+        # Clear incompatible selections
+        if mode == 0:
+            self._selected_muxed_id = None
+        if mode == 1:
+            self._selected_video_id = None
+            self._selected_audio_id = None
+        if mode in (2, 3):
+            self._selected_muxed_id = None
+            if mode == 2:
+                self._selected_audio_id = None
+            else:
+                self._selected_video_id = None
 
         if mode == 0:
             # Split View
             self.table.hide()
             self.split_container.show()
 
-            video_rows = [r for r in self._rows if r["kind"] == "video"]
-            audio_rows = [r for r in self._rows if r["kind"] == "audio"]
+            video_rows = [r for r in getattr(self, "_rows", []) if r["kind"] == "video"]
+            audio_rows = [r for r in getattr(self, "_rows", []) if r["kind"] == "audio"]
 
             if not self._selected_audio_id and audio_rows:
-                self._selected_audio_id = _get_best_audio_id(audio_rows)
+                self._selected_audio_id = self._get_best_audio_id(audio_rows)
 
             if not self._selected_video_id and video_rows:
                 self._selected_video_id = video_rows[0]["format_id"]
@@ -580,7 +668,7 @@ class VideoFormatSelectorWidget(QWidget):
                         view_rows.append(r)
 
             if mode == 3 and not self._selected_audio_id and view_rows:
-                self._selected_audio_id = _get_best_audio_id(view_rows)
+                self._selected_audio_id = self._get_best_audio_id(view_rows)
             if mode == 2 and not self._selected_video_id and view_rows:
                 self._selected_video_id = view_rows[0]["format_id"]
             if mode == 1 and not self._selected_muxed_id and view_rows:
@@ -747,7 +835,57 @@ class VideoFormatSelectorWidget(QWidget):
             sel = self.simple_widget.get_current_selection()
             if not sel:
                 return {}
-            return {"format": sel["format"], "extra_opts": sel["extra"]}
+
+            intent = sel.get("intent") or {}
+            rows = getattr(self, "_rows", [])
+            video_rows = [r for r in rows if r.get("kind") == "video"]
+            audio_rows = [r for r in rows if r.get("kind") == "audio"]
+            muxed_rows = [r for r in rows if r.get("kind") == "muxed"]
+
+            # --- 纯音频模式 ---
+            if intent.get("type") == "audio_only":
+                best_aud = self._get_best_audio_id(audio_rows) if audio_rows else None
+                extra: dict = {
+                    "extract_audio": True,
+                    "audio_format": intent.get("post_audio_format", "mp3"),
+                    "audio_quality": intent.get("post_audio_quality", "320K"),
+                }
+                return {"format": best_aud or "bestaudio/best", "extra_opts": extra}
+
+            # --- 含视频模式：用打分引擎挑选最优视频+音频 ---
+            best_vid = self._pick_best_video(video_rows, intent)
+            best_aud = self._get_best_audio_id(audio_rows) if audio_rows else None
+
+            extra_opts: dict = {}
+
+            if best_vid and best_aud:
+                # 正常组装：视频+音频
+                vid_ext = next(
+                    (r.get("ext") for r in video_rows if r["format_id"] == best_vid), "mp4"
+                )
+                aud_ext = next(
+                    (r.get("ext") for r in audio_rows if r["format_id"] == best_aud), "m4a"
+                )
+                merge_fmt = _choose_lossless_merge_container(vid_ext, aud_ext)
+                if merge_fmt:
+                    extra_opts["merge_output_format"] = merge_fmt
+                return {"format": f"{best_vid}+{best_aud}", "extra_opts": extra_opts}
+
+            elif best_vid:
+                # 只有视频没有音频 → 降级找整合流
+                best_muxed = self._pick_best_muxed(muxed_rows, intent)
+                if best_muxed:
+                    return {"format": best_muxed, "extra_opts": extra_opts}
+                return {"format": best_vid, "extra_opts": extra_opts}
+
+            elif muxed_rows:
+                # 完全没有分离视频流 → 使用整合流
+                best_muxed = self._pick_best_muxed(muxed_rows, intent)
+                if best_muxed:
+                    return {"format": best_muxed, "extra_opts": extra_opts}
+
+            # 兜底
+            return {"format": "best", "extra_opts": extra_opts}
         else:
             # Advanced
             v = self._selected_video_id

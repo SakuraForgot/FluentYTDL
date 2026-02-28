@@ -101,11 +101,11 @@ class HistoryPage(QWidget):
         layout.addLayout(toolbar)
 
         # --- 分割线 ---
-        line = QFrame(self)
-        line.setFrameShape(QFrame.Shape.HLine)
-        line.setFrameShadow(QFrame.Shadow.Plain)
-        line.setStyleSheet("color: rgba(0, 0, 0, 0.08);")
-        layout.addWidget(line)
+        # --- 分割线 ---
+        self.line = QFrame(self)
+        self.line.setFrameShape(QFrame.Shape.HLine)
+        self.line.setFrameShadow(QFrame.Shadow.Plain)
+        layout.addWidget(self.line)
 
         # --- 列表 ScrollArea ---
         self.scroll_area = QScrollArea(self)
@@ -130,7 +130,6 @@ class HistoryPage(QWidget):
 
         self.empty_icon = QLabel(self.empty_placeholder)
         self.empty_icon.setText("📂")
-        self.empty_icon.setStyleSheet("font-size: 64px; color: rgba(0,0,0,0.1);")
         self.empty_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         self.empty_title = SubtitleLabel("暂无历史记录", self.empty_placeholder)
@@ -148,6 +147,20 @@ class HistoryPage(QWidget):
 
         self.empty_placeholder.setVisible(False)
         layout.addWidget(self.empty_placeholder, 1)
+
+        from qfluentwidgets import qconfig
+
+        qconfig.themeChanged.connect(self._update_style)
+        self._update_style()
+
+    def _update_style(self):
+        from qfluentwidgets import isDarkTheme
+
+        line_color = "rgba(255, 255, 255, 0.08)" if isDarkTheme() else "rgba(0, 0, 0, 0.08)"
+        self.line.setStyleSheet(f"color: {line_color};")
+
+        icon_color = "rgba(255, 255, 255, 0.1)" if isDarkTheme() else "rgba(0, 0, 0, 0.1)"
+        self.empty_icon.setStyleSheet(f"font-size: 64px; color: {icon_color};")
 
     # ------ 数据操作 ------
 

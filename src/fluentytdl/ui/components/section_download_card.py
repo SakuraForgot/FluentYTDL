@@ -51,13 +51,7 @@ class SectionDownloadCard(QFrame):
 
     def _init_ui(self):
         self.setObjectName("sectionDownloadCard")
-        self.setStyleSheet("""
-            #sectionDownloadCard {
-                background-color: rgba(255, 255, 255, 0.7);
-                border: 1px solid rgba(0, 0, 0, 0.08);
-                border-radius: 8px;
-            }
-        """)
+        # Style setup moved to _update_style
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(16, 12, 16, 12)
@@ -86,7 +80,7 @@ class SectionDownloadCard(QFrame):
         self.hintLabel = CaptionLabel(
             "仅下载指定时间段。格式: 1:30 或 1m30s 或 90 (秒)", self.optionsWidget
         )
-        self.hintLabel.setStyleSheet("color: #666;")
+        # Hint label style moved to _update_style
         self.optionsLayout.addWidget(self.hintLabel)
 
         # 时间输入行
@@ -131,6 +125,21 @@ class SectionDownloadCard(QFrame):
             m = int(self._duration // 60)
             s = int(self._duration % 60)
             self.hintLabel.setText(f"视频总时长: {m}:{s:02d}。格式: 1:30 或 1m30s 或 90 (秒)")
+
+        from qfluentwidgets import qconfig
+
+        qconfig.themeChanged.connect(self._update_style)
+        self._update_style()
+
+    def _update_style(self):
+        from qfluentwidgets import isDarkTheme
+
+        bg_color = "rgba(255, 255, 255, 0.05)" if isDarkTheme() else "rgba(255, 255, 255, 0.7)"
+        border_color = "rgba(255, 255, 255, 0.08)" if isDarkTheme() else "rgba(0, 0, 0, 0.08)"
+        self.setStyleSheet(
+            f"#sectionDownloadCard {{ background-color: {bg_color}; border: 1px solid {border_color}; border-radius: 8px; }}"
+        )
+        self.hintLabel.setStyleSheet("color: #AAA;" if isDarkTheme() else "color: #666;")
 
     def _on_enabled_changed(self, enabled: bool):
         """开关变更"""

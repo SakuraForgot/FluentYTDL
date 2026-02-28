@@ -26,11 +26,7 @@ class CoverDownloadPage(QWidget):
         super().__init__(parent)
         self.setObjectName("coverDownloadPage")
 
-        self.setStyleSheet("""
-            #coverDownloadPage {
-                background-color: #F5F5F5;
-            }
-        """)
+        # Style setup moved to _update_style
 
         self.vBoxLayout = QVBoxLayout(self)
         self.vBoxLayout.setContentsMargins(30, 30, 30, 30)
@@ -54,13 +50,7 @@ class CoverDownloadPage(QWidget):
         # 2. Input Card
         self.inputCard = CardWidget(self)
         self.inputCard.setMaximumWidth(760)
-        self.inputCard.setStyleSheet("""
-            CardWidget {
-                background-color: white;
-                border-radius: 12px;
-                border: 1px solid rgba(0, 0, 0, 0.05);
-            }
-        """)
+        # Style setup moved to _update_style
         self.cardLayout = QVBoxLayout(self.inputCard)
         self.cardLayout.setContentsMargins(20, 20, 20, 20)
         self.cardLayout.setSpacing(15)
@@ -105,6 +95,24 @@ class CoverDownloadPage(QWidget):
         self.tipsLabel.setWordWrap(True)
         self.tipsLabel.setMaximumWidth(760)
         self.centerLayout.addWidget(self.tipsLabel)
+
+        # Connect to theme changes
+        from qfluentwidgets import qconfig
+
+        qconfig.themeChanged.connect(self._update_style)
+        self._update_style()
+
+    def _update_style(self):
+        from qfluentwidgets import isDarkTheme
+
+        page_bg = "transparent" if isDarkTheme() else "#F5F5F5"
+        self.setStyleSheet(f"#coverDownloadPage {{ background-color: {page_bg}; }}")
+
+        card_bg = "rgba(255, 255, 255, 0.05)" if isDarkTheme() else "white"
+        card_bd = "rgba(255, 255, 255, 0.08)" if isDarkTheme() else "rgba(0, 0, 0, 0.05)"
+        self.inputCard.setStyleSheet(
+            f"CardWidget {{ background-color: {card_bg}; border-radius: 12px; border: 1px solid {card_bd}; }}"
+        )
 
     def on_parse_clicked(self) -> None:
         url = self.urlInput.text().strip()

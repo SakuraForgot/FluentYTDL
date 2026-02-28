@@ -36,7 +36,10 @@ class CategoryCheckBox(QFrame):
 
         # 描述文字
         desc_label = CaptionLabel(cat_desc, self)
-        desc_label.setStyleSheet("color: rgba(0, 0, 0, 0.45); margin-left: 28px;")
+        from qfluentwidgets import isDarkTheme
+
+        color_alpha = "rgba(255, 255, 255, 0.45)" if isDarkTheme() else "rgba(0, 0, 0, 0.45)"
+        desc_label.setStyleSheet(f"color: {color_alpha}; margin-left: 28px;")
         layout.addWidget(desc_label)
 
     def isChecked(self) -> bool:
@@ -77,7 +80,10 @@ class SponsorBlockCategoriesDialog(MessageBoxBase):
             "勾选下方要自动跳过的广告片段类型，这些片段将在下载时自动移除或标记为章节。", self
         )
         self.infoLabel.setWordWrap(True)
-        self.infoLabel.setStyleSheet("color: rgba(0, 0, 0, 0.6);")
+        from qfluentwidgets import isDarkTheme
+
+        info_color = "rgba(255, 255, 255, 0.6)" if isDarkTheme() else "rgba(0, 0, 0, 0.6)"
+        self.infoLabel.setStyleSheet(f"color: {info_color};")
         self.viewLayout.addWidget(self.infoLabel)
 
         # === 创建滚动区域（使用 qfluentwidgets 的 ScrollArea） ===

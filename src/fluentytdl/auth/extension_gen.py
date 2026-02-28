@@ -12,7 +12,7 @@ class ExtensionGenerator:
     def generate(self, output_dir: Path, receiver_port: int, auth_token: str = "") -> None:
         """
         Generates the extension files in the specified directory.
-        
+
         Args:
             output_dir: The directory where the extension files will be created.
             receiver_port: The port of the local HTTP server to receive cookies.
@@ -32,22 +32,19 @@ class ExtensionGenerator:
             "version": "1.0",
             "description": "Temporary extension to extract YouTube authentication cookies for FluentYTDL.",
             "permissions": ["cookies", "notifications"],
-            "host_permissions": [
-                "*://*.youtube.com/*",
-                "*://accounts.google.com/*"
-            ],
-            "background": {
-                "service_worker": "background.js"
-            },
+            "host_permissions": ["*://*.youtube.com/*", "*://accounts.google.com/*"],
+            "background": {"service_worker": "background.js"},
         }
-        
+
         manifest_path = output_dir / "manifest.json"
         with open(manifest_path, "w", encoding="utf-8") as f:
             json.dump(manifest, f, indent=2)
 
-    def _create_background_js(self, output_dir: Path, receiver_port: int, auth_token: str = "") -> None:
+    def _create_background_js(
+        self, output_dir: Path, receiver_port: int, auth_token: str = ""
+    ) -> None:
         """Creates the background.js file with the injected receiver port and auth token."""
-        
+
         # The JavaScript code to be injected
         js_content = f"""
 const RECEIVER_URL = "http://127.0.0.1:{receiver_port}/submit_cookies";
@@ -133,7 +130,7 @@ chrome.cookies.onChanged.addListener(async (changeInfo) => {{
     }}
 }});
 """
-        
+
         js_path = output_dir / "background.js"
         with open(js_path, "w", encoding="utf-8") as f:
             f.write(js_content)

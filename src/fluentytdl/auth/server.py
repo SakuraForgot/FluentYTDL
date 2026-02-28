@@ -41,16 +41,18 @@ class CookieReceiverHandler(BaseHTTPRequestHandler):
 
                 if isinstance(data, list):
                     self.server.received_cookies = data
-                    
+
                     self.send_response(200)
                     self.send_header("Content-Type", "application/json")
                     self.send_header("Access-Control-Allow-Origin", "*")
                     self.end_headers()
-                    self.wfile.write(b'{"status": "ok", "message": "Cookies received successfully"}')
-                    
+                    self.wfile.write(
+                        b'{"status": "ok", "message": "Cookies received successfully"}'
+                    )
+
                     # Signal that we are done
                     self.server.shutdown_event.set()
-                        
+
                 else:
                     self.send_error(400, "Invalid payload format: Expected list of cookies")
 
@@ -86,9 +88,9 @@ class LocalCookieServer:
     def start(self, port: int = 0) -> int:
         """
         Starts the server on a random port (or specified port).
-        
+
         Returns the port number.
-        
+
         Raises:
             RuntimeError: If server is already running.
             OSError: If the port is unavailable.
@@ -100,9 +102,9 @@ class LocalCookieServer:
         self._auth_token = secrets.token_hex(16)
 
         # Create server with random port (port 0 lets OS pick)
-        self._server = CookieHTTPServer(('127.0.0.1', port), CookieReceiverHandler)
+        self._server = CookieHTTPServer(("127.0.0.1", port), CookieReceiverHandler)
         self._port = self._server.server_port
-        
+
         # Configure server attributes
         self._server.received_cookies = []
         self._server.shutdown_event = self._shutdown_event
@@ -112,7 +114,7 @@ class LocalCookieServer:
         # Start server in a separate thread
         self._thread = threading.Thread(target=self._server.serve_forever, daemon=True)
         self._thread.start()
-        
+
         return self._port
 
     def wait_for_cookies(self, timeout: float = 300.0) -> list[dict[str, Any]] | None:
@@ -124,11 +126,11 @@ class LocalCookieServer:
             raise RuntimeError("Server not started")
 
         is_set = self._shutdown_event.wait(timeout)
-        
+
         if is_set:
-            self._cookies = getattr(self._server, 'received_cookies', [])
+            self._cookies = getattr(self._server, "received_cookies", [])
             return self._cookies
-        
+
         return None
 
     def stop(self):
@@ -137,15 +139,15 @@ class LocalCookieServer:
             self._server.shutdown()
             self._server.server_close()
             self._server = None
-        
+
         if self._thread:
             self._thread.join(timeout=1.0)
             self._thread = None
-            
+
     @property
     def port(self) -> int:
         return self._port
-    
+
     @property
     def auth_token(self) -> str:
         """The random auth token for this session."""

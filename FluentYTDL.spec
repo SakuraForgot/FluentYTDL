@@ -7,6 +7,8 @@ hiddenimports = []
 datas += copy_metadata('rookiepy')
 hiddenimports += collect_submodules('fluentytdl')
 hiddenimports += collect_submodules('rookiepy')
+# Explicitly collect the yt-dlp PO Token plugins
+datas += [('E:\\YouTube\\FluentYTDL\\src\\fluentytdl\\yt_dlp_plugins_ext', 'fluentytdl\\yt_dlp_plugins_ext')]
 
 
 a = Analysis(

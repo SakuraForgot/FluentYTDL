@@ -313,6 +313,14 @@ class YoutubeService:
                 from .pot_manager import pot_manager
 
                 if pot_manager.is_running():
+                    # 就绪门控：确保 POT 服务已完成预热
+                    if not pot_manager.is_warm:
+                        self._emit_log(
+                            "info",
+                            "⏳ POT Provider 正在初始化，请稍候...",
+                        )
+                        pot_manager.wait_until_ready(timeout=15)
+
                     pot_extractor_args = pot_manager.get_extractor_args()
                     if pot_extractor_args:
                         # pot_extractor_args 格式: "youtubepot-bgutilhttp:base_url=http://127.0.0.1:4416"

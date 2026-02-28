@@ -70,8 +70,12 @@ class DownloadItemWidget(CardWidget):
         self.iconLabel = QLabel(self)
         self.iconLabel.setFixedSize(128, 72)
         # 优化：增加边框和圆角
+        from qfluentwidgets import isDarkTheme
+
+        bg = "rgba(255, 255, 255, 0.05)" if isDarkTheme() else "rgba(0, 0, 0, 0.03)"
+        bd = "rgba(255, 255, 255, 0.08)" if isDarkTheme() else "rgba(0, 0, 0, 0.08)"
         self.iconLabel.setStyleSheet(
-            "background-color: rgba(0, 0, 0, 0.03); border-radius: 6px; border: 1px solid rgba(0,0,0,0.08);"
+            f"background-color: {bg}; border-radius: 6px; border: 1px solid {bd};"
         )
         self.iconLabel.setScaledContents(True)
         self.hLayout.addWidget(self.iconLabel)

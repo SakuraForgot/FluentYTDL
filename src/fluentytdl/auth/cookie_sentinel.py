@@ -207,20 +207,17 @@ class CookieSentinel:
 
     @property
     def is_stale(self) -> bool:
-        """Cookie 是否过期（基于实际的 expires 字段，兜底文件年龄 > 24小时）"""
+        """Cookie 是否过期（仅基于关键 Cookie 的实际 expires 字段）"""
         if not self.exists:
             return True
 
-        # 优先检查 Cookie 实际 expires
+        # 仅检查 Cookie 实际 expires（SID/HSID 等关键字段）
         expiry = self.get_earliest_expiry()
         if expiry is not None:
             return expiry <= 0
 
-        # 如果无法解析出 expiry（比如全为不含时间戳的 Session Cookie）
-        # 则作为兜底，仅当文件距今超过 24 小时才视为过期
-        age = self.age_minutes
-        if age is not None and age > 24 * 60:
-            return True
+        # 无法解析出 expiry（全为 Session Cookie）→ 不视为过期
+        # 真正的有效性由 auth_service._validate_cookies 判定
         return False
 
     def get_earliest_expiry(self) -> float | None:
@@ -311,11 +308,20 @@ class CookieSentinel:
 
                         shutil.copy2(str(cache_file), self.cookie_path)
                         self._last_update = datetime.now()
+
+                        # 复用 auth_service._update_status_from_file 验证 Cookie 有效性
+                        # 这会更新 auth_service.last_status，供 UI 层的 check_cookie_status 直接使用
+                        auth_service._update_status_from_file(str(cache_file))
                         self._save_meta("dle", auth_service.last_status.cookie_count)
+
+                        if auth_service.last_status.valid:
+                            logger.info("[CookieSentinel] DLE Cookie 有效")
+                        else:
+                            logger.warning(
+                                f"[CookieSentinel] DLE Cookie 无效: {auth_service.last_status.message}"
+                            )
                     else:
-                        logger.info(
-                            "[CookieSentinel] DLE 模式：无缓存 Cookie，请用户手动点击刷新登录"
-                        )
+                        logger.info("[CookieSentinel] DLE 模式：无缓存 Cookie，等待用户登录")
                     return
 
                 # 获取期望的来源标识
@@ -328,6 +334,8 @@ class CookieSentinel:
                     # 手动导入文件，直接复制
                     success = self._copy_from_auth_service()
                     if success:
+                        # 复用 auth_service 验证 Cookie 有效性，供 UI 层 check_cookie_status 使用
+                        auth_service._update_status_from_file(str(self.cookie_path))
                         self._save_meta("file", auth_service.last_status.cookie_count)
                         logger.info("[CookieSentinel] 已复制手动导入的Cookie文件")
                     else:
@@ -358,6 +366,8 @@ class CookieSentinel:
                             f"但提取失败，当前使用 {self._get_source_display(actual_source)} 的 Cookie"
                         )
                         logger.warning(f"[CookieSentinel] {self._fallback_warning}")
+                        # 验证回退 Cookie 的有效性，供 UI 层 check_cookie_status 使用
+                        auth_service._update_status_from_file(str(self.cookie_path))
                     else:
                         logger.warning(
                             f"[CookieSentinel] 启动时静默刷新失败: "

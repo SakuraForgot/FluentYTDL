@@ -108,6 +108,33 @@ class ConfigManager:
         # preferred_audio_languages: 首选音轨语言（多选优先级，对于多音轨视频）
         # 'orig': 优先原音/默认, 'zh-Hans': 中文, 'en': 英文, 'ja': 日语等
         "preferred_audio_languages": ["orig", "zh-Hans", "en"],
+        # 风控探测设置
+        "auto_risk_probe": False,  # 是否在后台自动探测风控状态
+        "probe_link_pool": [
+            "https://www.youtube.com/watch?v=543xUxalGYY",  # age-restricted
+            "https://www.youtube.com/watch?v=0k5wrt_6v3c",  # age-restricted
+            "https://www.youtube.com/watch?v=l_aB3_iR3XQ",  # age-restricted
+            "https://www.youtube.com/watch?v=N_H0gJ15mfs",  # typical warning
+            "https://www.youtube.com/watch?v=q6EoRBvdVPQ",  # vevo
+            "https://www.youtube.com/watch?v=YQHsXMglC9A",  # adele
+            "https://www.youtube.com/watch?v=fJ9rUzIMcZQ",  # queen
+            "https://www.youtube.com/watch?v=kJQP7kiw5Fk",  # despacito
+            "https://www.youtube.com/watch?v=JGwWNGJdvx8",  # ed sheeran
+            "https://www.youtube.com/watch?v=RgKAFK5djSk",  # wiz khalifa
+            "https://www.youtube.com/watch?v=60ItHLz5WEA",  # alan walker
+            "https://www.youtube.com/watch?v=CevxZvSJLk8",  # katy perry
+            "https://www.youtube.com/watch?v=V1bFr2SWP1I",  # maroon 5
+            "https://www.youtube.com/watch?v=09R8_2nJtjg",  # maroon 5 sugar
+            "https://www.youtube.com/watch?v=PT2_F-1esPk",  # the chainsmokers
+            "https://www.youtube.com/watch?v=OPf0YbXqDm0",  # mark ronson
+            "https://www.youtube.com/watch?v=7WTqi14s4Zk",  # major lazer
+            "https://www.youtube.com/watch?v=uelHwf8o7_U",  # eminem
+            "https://www.youtube.com/watch?v=hT_nvWreIhg",  # onerepublic
+            "https://www.youtube.com/watch?v=34Na4j8HLjc",  # the weeknd
+        ],
+        "probe_link_history": {},  # {url: timestamp_selected}
+        # Theme Mode
+        "theme_mode": "Auto",  # Light / Dark / Auto
     }
 
     def __new__(cls) -> ConfigManager:

@@ -26,11 +26,7 @@ class VRParsePage(QWidget):
         super().__init__(parent)
         self.setObjectName("vrParsePage")
 
-        self.setStyleSheet("""
-            #vrParsePage {
-                background-color: #F5F5F5;
-            }
-        """)
+        # Style setup moved to _update_style
 
         self.vBoxLayout = QVBoxLayout(self)
         self.vBoxLayout.setContentsMargins(30, 30, 30, 30)
@@ -54,13 +50,7 @@ class VRParsePage(QWidget):
         # 2. VR 说明卡片
         self.infoCard = CardWidget(self)
         self.infoCard.setMaximumWidth(760)
-        self.infoCard.setStyleSheet("""
-            CardWidget {
-                background-color: white;
-                border-radius: 12px;
-                border: 1px solid rgba(0, 0, 0, 0.05);
-            }
-        """)
+        # Style setup moved to _update_style
         infoLayout = QVBoxLayout(self.infoCard)
         infoLayout.setContentsMargins(20, 16, 20, 16)
         infoLayout.setSpacing(8)
@@ -84,13 +74,7 @@ class VRParsePage(QWidget):
         # 3. 核心操作区
         self.inputCard = CardWidget(self)
         self.inputCard.setMaximumWidth(760)
-        self.inputCard.setStyleSheet("""
-            CardWidget {
-                background-color: white;
-                border-radius: 12px;
-                border: 1px solid rgba(0, 0, 0, 0.05);
-            }
-        """)
+        # Style setup moved to _update_style
         self.cardLayout = QVBoxLayout(self.inputCard)
         self.cardLayout.setContentsMargins(20, 20, 20, 20)
         self.cardLayout.setSpacing(15)
@@ -140,10 +124,28 @@ class VRParsePage(QWidget):
         self.tipsLabel.setMaximumWidth(760)
         self.centerLayout.addWidget(self.tipsLabel)
 
+        # Connect to theme changes
+        from qfluentwidgets import qconfig
+
+        qconfig.themeChanged.connect(self._update_style)
+        self._update_style()
+
     def on_parse_clicked(self) -> None:
         url = self.urlInput.text().strip()
         if url:
             self.parse_requested.emit(url)
+
+    def _update_style(self):
+        from qfluentwidgets import isDarkTheme
+
+        page_bg = "transparent" if isDarkTheme() else "#F5F5F5"
+        self.setStyleSheet(f"#vrParsePage {{ background-color: {page_bg}; }}")
+
+        card_bg = "rgba(255, 255, 255, 0.05)" if isDarkTheme() else "white"
+        card_bd = "rgba(255, 255, 255, 0.08)" if isDarkTheme() else "rgba(0, 0, 0, 0.05)"
+        card_style = f"CardWidget {{ background-color: {card_bg}; border-radius: 12px; border: 1px solid {card_bd}; }}"
+        self.infoCard.setStyleSheet(card_style)
+        self.inputCard.setStyleSheet(card_style)
 
     def on_paste_clicked(self) -> None:
         text = (QApplication.clipboard().text() or "").strip()

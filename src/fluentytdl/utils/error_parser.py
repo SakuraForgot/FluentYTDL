@@ -5,10 +5,11 @@ from enum import Enum
 
 class ErrorCategory(Enum):
     """错误分类"""
-    COOKIE = "cookie"        # 确定是 Cookie / 身份验证问题
-    NETWORK = "network"      # 确定是网络连接问题
+
+    COOKIE = "cookie"  # 确定是 Cookie / 身份验证问题
+    NETWORK = "network"  # 确定是网络连接问题
     AMBIGUOUS = "ambiguous"  # 403 等模糊情况，需要探测
-    OTHER = "other"          # 其他错误
+    OTHER = "other"  # 其他错误
 
 
 @dataclass
@@ -26,11 +27,13 @@ YTDLP_ERRORS = [
     ErrorDefinition(
         keywords=[
             "Sign in to confirm you're not a bot",
+            "Sign in to confirm youre not a bot",
+            "Sign in to confirm",
             "This video is only available to registered users",
         ],
         title="需要验证 (Cookie 缺失或失效)",
-        description="YouTube 限制了对此视频的访问，必须进行身份验证。",
-        action="请在下方选择认证方式：登录 YouTube、从浏览器提取、或手动导入 Cookie 文件。",
+        description="YouTube 限制了对此视频的访问，必须进行身份验证。如果您的 IP 刚被检测为异常扫描，此限制通常需要等待 24-48 小时自动解除。",
+        action="建议操作：\n1. 导入最新鲜的浏览器 Cookie。\n2. 若导入后依然报错，说明当前 IP 节点已被严重拉黑，建议立即更换代理节点或等待 24 小时后再试。",
         category=ErrorCategory.COOKIE,
     ),
     ErrorDefinition(
@@ -100,8 +103,8 @@ YTDLP_ERRORS = [
             "Too Many Requests",
         ],
         title="请求频率过高 (429 限流)",
-        description="YouTube 检测到短时间内请求过多，暂时限制了访问。",
-        action="请等待几分钟后重试，或更换代理节点/IP。",
+        description="YouTube 检测到短时间内请求过多，进行了临时限流保护。通常在停止请求后的 2-12 小时内（或次日）会自动恢复。",
+        action="请暂停下载，等待 2-12 小时后重试。如急需下载，请尝试重启光猫/路由器获取新 IP，或更换代理软件的节点。",
         category=ErrorCategory.NETWORK,
     ),
     ErrorDefinition(
@@ -120,7 +123,7 @@ YTDLP_ERRORS = [
     ErrorDefinition(
         keywords=["HTTP Error 403"],
         title="访问被拒绝 (403)",
-        description="YouTube 拒绝了此请求。可能是 Cookie 失效，也可能是网络节点被封锁。",
+        description="YouTube 拒绝了此请求。这可能是 Cookie 过期，也可能是网络节点被临时封锁（解封通常需等待 24 小时）。",
         action="正在自动诊断原因，请稍候...",
         category=ErrorCategory.AMBIGUOUS,
     ),
@@ -243,7 +246,11 @@ def probe_youtube_connectivity(timeout: float = 5.0) -> bool:
         handlers: list = []
         if proxy_mode == "manual" and proxy_url:
             lower = proxy_url.lower()
-            if not (lower.startswith("http://") or lower.startswith("https://") or lower.startswith("socks5://")):
+            if not (
+                lower.startswith("http://")
+                or lower.startswith("https://")
+                or lower.startswith("socks5://")
+            ):
                 proxy_url = "http://" + proxy_url
             handlers.append(urllib.request.ProxyHandler({"https": proxy_url, "http": proxy_url}))
         elif proxy_mode == "system":
@@ -277,17 +284,59 @@ def _run_ytdlp_probe(cookie_file: str | None = None, timeout: float = 15.0) -> d
 
         exe = resolve_yt_dlp_exe()
         if exe is None:
-            return {"ok": False, "category": ErrorCategory.OTHER, "stderr": "yt-dlp 未安装", "latency_ms": -1}
+            return {
+                "ok": False,
+                "category": ErrorCategory.OTHER,
+                "stderr": "yt-dlp 未安装",
+                "latency_ms": -1,
+            }
 
         env = prepare_yt_dlp_env()
 
-        test_url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+        # 使用一个真实的、需要一定权限/容易触发风控的视频作为探针
+        import random
+
+        from ..core.config_manager import config_manager
+
+        # 获取历史记录和链接池配置
+        pool = config_manager.get("probe_link_pool")
+        if not isinstance(pool, list) or not pool:
+            # Fallback hardcoded if invalid
+            pool = ["https://www.youtube.com/watch?v=dQw4w9WgXcQ"]
+
+        history = config_manager.get("probe_link_history", {})
+        if not isinstance(history, dict):
+            history = {}
+
+        current_time = _time.time()
+        available_links = []
+
+        # 过滤出 12 小时内未使用过的链接
+        for link in pool:
+            last_used = history.get(link, 0)
+            if current_time - last_used > 12 * 3600:
+                available_links.append(link)
+
+        if available_links:
+            test_url = random.choice(available_links)
+        else:
+            # 如果所有的都被用过了（池子较小），则挑选距离现在最久远的那个
+            sorted_history = sorted(
+                [(link, history.get(link, 0)) for link in pool], key=lambda x: x[1]
+            )
+            test_url = sorted_history[0][0]
+
+        # 更新该链接的历史记录并保存
+        history[test_url] = current_time
+        config_manager.set("probe_link_history", history)
+
         cmd = [
             str(exe),
             "--dump-json",
             "--no-cache-dir",
             "--no-warnings",
-            "--socket-timeout", "10",
+            "--socket-timeout",
+            "10",
             test_url,
         ]
 
@@ -297,6 +346,7 @@ def _run_ytdlp_probe(cookie_file: str | None = None, timeout: float = 15.0) -> d
         # 代理配置
         try:
             from ..core.config_manager import config_manager
+
             proxy_mode = str(config_manager.get("proxy_mode") or "off").lower().strip()
             proxy_url = str(config_manager.get("proxy_url", "") or "").strip()
             if proxy_mode == "manual" and proxy_url:
@@ -311,18 +361,35 @@ def _run_ytdlp_probe(cookie_file: str | None = None, timeout: float = 15.0) -> d
             text=True,
             timeout=timeout,
             env=env,
-            creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0,
+            creationflags=subprocess.CREATE_NO_WINDOW
+            if hasattr(subprocess, "CREATE_NO_WINDOW")
+            else 0,
         )
         latency_ms = int((_time.monotonic() - start) * 1000)
 
         if proc.returncode == 0:
-            return {"ok": True, "category": ErrorCategory.OTHER, "stderr": "", "latency_ms": latency_ms}
+            return {
+                "ok": True,
+                "category": ErrorCategory.OTHER,
+                "stderr": "",
+                "latency_ms": latency_ms,
+            }
 
         stderr = proc.stderr or ""
-        return {"ok": False, "category": classify_error(stderr), "stderr": stderr, "latency_ms": latency_ms}
+        return {
+            "ok": False,
+            "category": classify_error(stderr),
+            "stderr": stderr,
+            "latency_ms": latency_ms,
+        }
 
     except subprocess.TimeoutExpired:
-        return {"ok": False, "category": ErrorCategory.NETWORK, "stderr": f"超时 ({timeout}s)", "latency_ms": int(timeout * 1000)}
+        return {
+            "ok": False,
+            "category": ErrorCategory.NETWORK,
+            "stderr": f"超时 ({timeout}s)",
+            "latency_ms": int(timeout * 1000),
+        }
     except Exception as e:
         return {"ok": False, "category": ErrorCategory.OTHER, "stderr": str(e), "latency_ms": -1}
 
@@ -346,6 +413,7 @@ def probe_cookie_and_ip(cookie_file: str | None = None, timeout: float = 15.0) -
         }
     """
     import time as _time
+
     start = _time.monotonic()
 
     # ====== 第 1 步：带 Cookie 探测 ======
@@ -353,7 +421,12 @@ def probe_cookie_and_ip(cookie_file: str | None = None, timeout: float = 15.0) -
         r1 = _run_ytdlp_probe(cookie_file=cookie_file, timeout=timeout)
     else:
         # 没有 Cookie 文件就直接跳到无 Cookie 探测
-        r1 = {"ok": False, "category": ErrorCategory.OTHER, "stderr": "无 Cookie 文件", "latency_ms": 0}
+        r1 = {
+            "ok": False,
+            "category": ErrorCategory.OTHER,
+            "stderr": "无 Cookie 文件",
+            "latency_ms": 0,
+        }
 
     if r1["ok"]:
         # 成功 → Cookie 有效 + IP 正常
@@ -424,12 +497,19 @@ def probe_ip_risk_control(timeout: float = 15.0) -> dict:
     if r["ok"]:
         return {"blocked": False, "detail": "未检测到风控", "latency_ms": r["latency_ms"]}
     if r["category"] in (ErrorCategory.COOKIE, ErrorCategory.AMBIGUOUS):
-        return {"blocked": True, "detail": "触发身份验证 (IP 被风控)", "latency_ms": r["latency_ms"]}
+        return {
+            "blocked": True,
+            "detail": "触发身份验证 (IP 被风控)",
+            "latency_ms": r["latency_ms"],
+        }
     if r["category"] == ErrorCategory.NETWORK:
-        return {"blocked": True, "detail": f"网络错误: {r['stderr'][:80]}", "latency_ms": r["latency_ms"]}
+        return {
+            "blocked": True,
+            "detail": f"网络错误: {r['stderr'][:80]}",
+            "latency_ms": r["latency_ms"],
+        }
     short = r["stderr"].strip()[:100] if r["stderr"].strip() else "未知错误"
     return {"blocked": False, "detail": f"解析异常但非风控: {short}", "latency_ms": r["latency_ms"]}
-
 
 
 def generate_issue_url(title: str, raw_error: str) -> str:
