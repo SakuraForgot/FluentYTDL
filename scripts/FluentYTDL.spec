@@ -39,6 +39,7 @@ datas = [
 hiddenimports = ['mutagen', 'webview']
 hiddenimports += collect_submodules('fluentytdl')
 hiddenimports += collect_submodules('rookiepy')
+hiddenimports += collect_submodules('webview')
 datas += copy_metadata('rookiepy')
 
 # ----------------------------------------------------------------------------

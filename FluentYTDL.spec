@@ -7,6 +7,7 @@ hiddenimports = ['webview']
 datas += copy_metadata('rookiepy')
 hiddenimports += collect_submodules('fluentytdl')
 hiddenimports += collect_submodules('rookiepy')
+hiddenimports += collect_submodules('webview')
 
 
 a = Analysis(
