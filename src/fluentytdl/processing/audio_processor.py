@@ -18,7 +18,7 @@ from typing import Any
 
 from ..core.config_manager import config_manager
 from ..utils.logger import logger
-from ..utils.paths import find_bundled_executable, is_frozen, locate_runtime_tool
+from ..utils.paths import find_bundled_executable, get_clean_env, is_frozen, locate_runtime_tool
 
 
 @dataclass
@@ -313,8 +313,9 @@ class AudioProcessor:
                 kwargs["startupinfo"] = si
                 kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
 
+            env = get_clean_env()
             result = subprocess.run(
-                cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", **kwargs
+                cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", env=env, **kwargs
             )
 
             if result.returncode != 0:
@@ -422,8 +423,9 @@ class AudioProcessor:
                 kwargs["startupinfo"] = si
                 kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
 
+            env = get_clean_env()
             result = subprocess.run(
-                cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", **kwargs
+                cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", env=env, **kwargs
             )
 
             if result.returncode != 0:

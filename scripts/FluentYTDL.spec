@@ -36,7 +36,7 @@ datas = [
 ]
 
 # 自动收集子模块和元数据
-hiddenimports = ['mutagen']
+hiddenimports = ['mutagen', 'webview']
 hiddenimports += collect_submodules('fluentytdl')
 hiddenimports += collect_submodules('rookiepy')
 datas += copy_metadata('rookiepy')

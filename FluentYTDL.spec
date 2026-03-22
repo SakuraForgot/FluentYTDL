@@ -3,7 +3,7 @@ from PyInstaller.utils.hooks import collect_submodules
 from PyInstaller.utils.hooks import copy_metadata
 
 datas = [('E:\\YouTube\\FluentYTDL\\docs', 'docs'), ('E:\\YouTube\\FluentYTDL\\assets\\logo.ico', 'assets'), ('E:\\YouTube\\FluentYTDL\\assets\\logo.png', 'assets'), ('E:\\YouTube\\FluentYTDL\\src\\fluentytdl\\yt_dlp_plugins_ext', 'fluentytdl/yt_dlp_plugins_ext')]
-hiddenimports = []
+hiddenimports = ['webview']
 datas += copy_metadata('rookiepy')
 hiddenimports += collect_submodules('fluentytdl')
 hiddenimports += collect_submodules('rookiepy')

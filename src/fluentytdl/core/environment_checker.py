@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from fluentytdl.utils.logger import logger
+from fluentytdl.utils.paths import get_clean_env
 
 if TYPE_CHECKING:
     pass
@@ -87,10 +88,12 @@ class EnvironmentChecker:
     def check_ffprobe(self) -> bool:
         """检查 FFprobe 是否可用"""
         try:
+            env = get_clean_env()
             subprocess.run(
                 ["ffprobe", "-version"],
                 capture_output=True,
                 creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
+                env=env,
             )
             self._ffprobe_exe = "ffprobe"
             return True
@@ -110,11 +113,13 @@ class EnvironmentChecker:
 
         encoders = []
         try:
+            env = get_clean_env()
             result = subprocess.run(
                 [self._ffmpeg_exe, "-encoders"],
                 capture_output=True,
                 text=True,
                 creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
+                env=env,
             )
             output = result.stdout
 

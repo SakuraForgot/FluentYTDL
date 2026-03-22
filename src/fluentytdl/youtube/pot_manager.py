@@ -23,7 +23,7 @@ from pathlib import Path
 
 from loguru import logger
 
-from ..utils.paths import find_bundled_executable, frozen_app_dir
+from ..utils.paths import find_bundled_executable, frozen_app_dir, get_clean_env
 
 
 class POTManager:
@@ -200,7 +200,7 @@ class POTManager:
                 # --- 注入代理配置 ---
                 # bgutil-pot-provider 需要通过代理访问 Google BotGuard API
                 # 支持 HTTPS_PROXY / HTTP_PROXY / ALL_PROXY 环境变量
-                env = os.environ.copy()
+                env = get_clean_env()
                 try:
                     from ..core.config_manager import config_manager
 

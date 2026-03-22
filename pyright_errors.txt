@@ -1,0 +1,217 @@
+﻿e:\YouTube\FluentYTDL\src\fluentytdl\auth\providers\webview2_provider.py
+  e:\YouTube\FluentYTDL\src\fluentytdl\auth\providers\webview2_provider.py:230:12 - error: "events" is not a known attribute of "None" (reportOptionalMemberAccess)
+e:\YouTube\FluentYTDL\src\fluentytdl\core\app_update_manager.py
+  e:\YouTube\FluentYTDL\src\fluentytdl\core\app_update_manager.py:27:27 - error: "detect_install_type" is unknown import symbol (reportAttributeAccessIssue)
+e:\YouTube\FluentYTDL\src\fluentytdl\core\dependency_manager.py
+  e:\YouTube\FluentYTDL\src\fluentytdl\core\dependency_manager.py:634:60 - error: Cannot access attribute "decode" for class "memoryview[int]"
+  聽聽Attribute "decode" is unknown (reportAttributeAccessIssue)
+  e:\YouTube\FluentYTDL\src\fluentytdl\core\dependency_manager.py:666:62 - error: Cannot access attribute "decode" for class "memoryview[int]"
+  聽聽Attribute "decode" is unknown (reportAttributeAccessIssue)
+e:\YouTube\FluentYTDL\src\fluentytdl\core\updater_worker.py
+  e:\YouTube\FluentYTDL\src\fluentytdl\core\updater_worker.py:57:24 - error: "process_iter" is not a known attribute of "None" (reportOptionalMemberAccess)
+  e:\YouTube\FluentYTDL\src\fluentytdl\core\updater_worker.py:70:28 - error: "AccessDenied" is not a known attribute of "None" (reportOptionalMemberAccess)
+  e:\YouTube\FluentYTDL\src\fluentytdl\core\updater_worker.py:70:49 - error: "NoSuchProcess" is not a known attribute of "None" (reportOptionalMemberAccess)
+  e:\YouTube\FluentYTDL\src\fluentytdl\core\updater_worker.py:72:24 - error: "NoSuchProcess" is not a known attribute of "None" (reportOptionalMemberAccess)
+  e:\YouTube\FluentYTDL\src\fluentytdl\core\updater_worker.py:72:46 - error: "AccessDenied" is not a known attribute of "None" (reportOptionalMemberAccess)
+e:\YouTube\FluentYTDL\src\fluentytdl\download\download_manager.py
+  e:\YouTube\FluentYTDL\src\fluentytdl\download\download_manager.py:56:20 - error: Cannot assign to attribute "total_bytes" for class "DownloadWorker"
+  聽聽Attribute "total_bytes" is unknown (reportAttributeAccessIssue)
+  e:\YouTube\FluentYTDL\src\fluentytdl\download\download_manager.py:123:20 - error: Cannot assign to attribute "db_id" for class "DownloadWorker"
+  聽聽Attribute "db_id" is unknown (reportAttributeAccessIssue)
+  e:\YouTube\FluentYTDL\src\fluentytdl\download\download_manager.py:126:20 - error: Cannot assign to attribute "db_id" for class "DownloadWorker"
+  聽聽Attribute "db_id" is unknown (reportAttributeAccessIssue)
+  e:\YouTube\FluentYTDL\src\fluentytdl\download\download_manager.py:135:45 - error: Cannot access attribute "db_id" for class "DownloadWorker"
+  聽聽Attribute "db_id" is unknown (reportAttributeAccessIssue)
+  e:\YouTube\FluentYTDL\src\fluentytdl\download\download_manager.py:143:45 - error: Cannot access attribute "db_id" for class "DownloadWorker"
+  聽聽Attribute "db_id" is unknown (reportAttributeAccessIssue)
+  e:\YouTube\FluentYTDL\src\fluentytdl\download\download_manager.py:153:49 - error: Cannot access attribute "db_id" for class "DownloadWorker"
+  聽聽Attribute "db_id" is unknown (reportAttributeAccessIssue)
+e:\YouTube\FluentYTDL\src\fluentytdl\download\workers.py
+  e:\YouTube\FluentYTDL\src\fluentytdl\download\workers.py:488:22 - error: Cannot assign to attribute "downloaded_bytes" for class "DownloadWorker*"
+  聽聽Attribute "downloaded_bytes" is unknown (reportAttributeAccessIssue)
+  e:\YouTube\FluentYTDL\src\fluentytdl\download\workers.py:489:22 - error: Cannot assign to attribute "total_bytes" for class "DownloadWorker*"
+  聽聽Attribute "total_bytes" is unknown (reportAttributeAccessIssue)
+  e:\YouTube\FluentYTDL\src\fluentytdl\download\workers.py:490:22 - error: Cannot assign to attribute "speed_val" for class "DownloadWorker*"
+  聽聽Attribute "speed_val" is unknown (reportAttributeAccessIssue)
+  e:\YouTube\FluentYTDL\src\fluentytdl\download\workers.py:491:22 - error: Cannot assign to attribute "eta_val" for class "DownloadWorker*"
+  聽聽Attribute "eta_val" is unknown (reportAttributeAccessIssue)
+e:\YouTube\FluentYTDL\src\fluentytdl\storage\task_db.py
+  e:\YouTube\FluentYTDL\src\fluentytdl\storage\task_db.py:112:20 - error: Type "int | None" is not assignable to return type "int"
+  聽聽Type "int | None" is not assignable to type "int"
+  聽聽聽聽"None" is not assignable to "int" (reportReturnType)
+e:\YouTube\FluentYTDL\src\fluentytdl\ui\components\download_config_window.py
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\components\download_config_window.py:85:25 - warning: Instance methods should take a "self" parameter (reportSelfClsParameterName)
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\components\download_config_window.py:99:28 - warning: Instance methods should take a "self" parameter (reportSelfClsParameterName)
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\components\download_config_window.py:103:25 - warning: Instance methods should take a "self" parameter (reportSelfClsParameterName)
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\components\download_config_window.py:810:23 - error: Cannot access attribute "cancel" for class "QThread"
+  聽聽Attribute "cancel" is unknown (reportAttributeAccessIssue)
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\components\download_config_window.py:1065:9 - error: Expression with type "tuple[str, str, bool]" cannot be assigned to target tuple
+  聽聽Type "tuple[str, str, bool]" is incompatible with target tuple
+  聽聽聽聽Tuple size mismatch; expected 2 but received 3 (reportAssignmentType)
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\components\download_config_window.py:2318:16 - error: Cannot assign to attribute "rect" for class "QStyleOptionViewItem"
+  聽聽Attribute "rect" is unknown (reportAttributeAccessIssue)
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\components\download_config_window.py:2595:22 - error: Cannot assign to attribute "raw_info" for class "VideoTask"
+  聽聽Attribute "raw_info" is unknown (reportAttributeAccessIssue)
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\components\download_config_window.py:2596:38 - error: Cannot assign to attribute "video_formats" for class "VideoTask"
+  聽聽"list[dict[str, Any]]" is not assignable to "list[YtFormatDTO]"
+  聽聽聽聽Type parameter "_T@list" is invariant, but "dict[str, Any]" is not the same as "YtFormatDTO"
+  聽聽聽聽Consider switching from "list" to "Sequence" which is covariant (reportAttributeAccessIssue)
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\components\download_config_window.py:2597:38 - error: Cannot assign to attribute "audio_formats" for class "VideoTask"
+  聽聽"list[dict[str, Any]]" is not assignable to "list[YtFormatDTO]"
+  聽聽聽聽Type parameter "_T@list" is invariant, but "dict[str, Any]" is not the same as "YtFormatDTO"
+  聽聽聽聽Consider switching from "list" to "Sequence" which is covariant (reportAttributeAccessIssue)
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\components\download_config_window.py:2657:22 - error: Cannot assign to attribute "raw_info" for class "VideoTask"
+  聽聽Attribute "raw_info" is unknown (reportAttributeAccessIssue)
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\components\download_config_window.py:2681:18 - error: Cannot access attribute "lazyPauseBtn" for class "DownloadConfigWindow*"
+  聽聽Attribute "lazyPauseBtn" is unknown (reportAttributeAccessIssue)
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\components\download_config_window.py:2958:52 - error: Cannot access attribute "format" for class "SubtitleConfig"
+  聽聽Attribute "format" is unknown (reportAttributeAccessIssue)
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\components\download_config_window.py:2959:84 - error: Cannot access attribute "format" for class "SubtitleConfig"
+  聽聽Attribute "format" is unknown (reportAttributeAccessIssue)
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\components\download_config_window.py:3014:39 - error: "currentText" is not a known attribute of "None" (reportOptionalMemberAccess)
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\components\download_config_window.py:3114:44 - error: Cannot access attribute "format" for class "SubtitleConfig"
+  聽聽Attribute "format" is unknown (reportAttributeAccessIssue)
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\components\download_config_window.py:3115:76 - error: Cannot access attribute "format" for class "SubtitleConfig"
+  聽聽Attribute "format" is unknown (reportAttributeAccessIssue)
+e:\YouTube\FluentYTDL\src\fluentytdl\ui\components\history_item_widget.py
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\components\history_item_widget.py:202:9 - error: Method "enterEvent" overrides class "BackgroundAnimationWidget" in an incompatible manner
+  聽聽Parameter 2 name mismatch: base parameter is named "e", override parameter is named "event" (reportIncompatibleMethodOverride)
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\components\history_item_widget.py:209:9 - error: Method "leaveEvent" overrides class "BackgroundAnimationWidget" in an incompatible manner
+  聽聽Parameter 2 name mismatch: base parameter is named "e", override parameter is named "event" (reportIncompatibleMethodOverride)
+e:\YouTube\FluentYTDL\src\fluentytdl\ui\components\selection_dialog.py
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\components\selection_dialog.py:529:25 - warning: Instance methods should take a "self" parameter (reportSelfClsParameterName)
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\components\selection_dialog.py:532:28 - warning: Instance methods should take a "self" parameter (reportSelfClsParameterName)
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\components\selection_dialog.py:536:25 - warning: Instance methods should take a "self" parameter (reportSelfClsParameterName)
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\components\selection_dialog.py:1655:17 - error: No parameter named "title" (reportCallIssue)
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\components\selection_dialog.py:1656:17 - error: No parameter named "uploader" (reportCallIssue)
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\components\selection_dialog.py:1657:17 - error: No parameter named "duration_str" (reportCallIssue)
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\components\selection_dialog.py:1658:17 - error: No parameter named "upload_date" (reportCallIssue)
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\components\selection_dialog.py:1659:17 - error: No parameter named "thumbnail_url" (reportCallIssue)
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\components\selection_dialog.py:1660:17 - error: No parameter named "is_parsing" (reportCallIssue)
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\components\selection_dialog.py:1661:17 - error: No parameter named "selected" (reportCallIssue)
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\components\selection_dialog.py:1923:18 - error: "chosen_fmt" is unbound (reportUnboundVariable)
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\components\selection_dialog.py:2183:16 - error: Cannot assign to attribute "rect" for class "QStyleOptionViewItem"
+  聽聽Attribute "rect" is unknown (reportAttributeAccessIssue)
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\components\selection_dialog.py:2515:22 - error: Cannot assign to attribute "raw_info" for class "VideoTask"
+  聽聽Attribute "raw_info" is unknown (reportAttributeAccessIssue)
+e:\YouTube\FluentYTDL\src\fluentytdl\ui\delegates\download_item_delegate.py
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\delegates\download_item_delegate.py:63:29 - error: Cannot access attribute "rect" for class "QStyleOptionViewItem"
+  聽聽Attribute "rect" is unknown (reportAttributeAccessIssue)
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\delegates\download_item_delegate.py:67:23 - error: Cannot access attribute "rect" for class "QStyleOptionViewItem"
+  聽聽Attribute "rect" is unknown (reportAttributeAccessIssue)
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\delegates\download_item_delegate.py:108:23 - error: Cannot access attribute "rect" for class "QStyleOptionViewItem"
+  聽聽Attribute "rect" is unknown (reportAttributeAccessIssue)
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\delegates\download_item_delegate.py:128:29 - error: Cannot access attribute "state" for class "QStyleOptionViewItem"
+  聽聽Attribute "state" is unknown (reportAttributeAccessIssue)
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\delegates\download_item_delegate.py:371:25 - error: Cannot access attribute "pos" for class "QEvent"
+  聽聽Attribute "pos" is unknown (reportAttributeAccessIssue)
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\delegates\download_item_delegate.py:384:31 - error: Cannot access attribute "widget" for class "QStyleOptionViewItem"
+  聽聽Attribute "widget" is unknown (reportAttributeAccessIssue)
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\delegates\download_item_delegate.py:386:51 - error: Cannot access attribute "rect" for class "QStyleOptionViewItem"
+  聽聽Attribute "rect" is unknown (reportAttributeAccessIssue)
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\delegates\download_item_delegate.py:393:31 - error: Cannot access attribute "widget" for class "QStyleOptionViewItem"
+  聽聽Attribute "widget" is unknown (reportAttributeAccessIssue)
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\delegates\download_item_delegate.py:399:25 - error: Cannot access attribute "pos" for class "QEvent"
+  聽聽Attribute "pos" is unknown (reportAttributeAccessIssue)
+e:\YouTube\FluentYTDL\src\fluentytdl\ui\delegates\history_item_delegate.py
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\delegates\history_item_delegate.py:46:29 - error: Cannot access attribute "rect" for class "QStyleOptionViewItem"
+  聽聽Attribute "rect" is unknown (reportAttributeAccessIssue)
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\delegates\history_item_delegate.py:50:23 - error: Cannot access attribute "rect" for class "QStyleOptionViewItem"
+  聽聽Attribute "rect" is unknown (reportAttributeAccessIssue)
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\delegates\history_item_delegate.py:84:23 - error: Cannot access attribute "rect" for class "QStyleOptionViewItem"
+  聽聽Attribute "rect" is unknown (reportAttributeAccessIssue)
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\delegates\history_item_delegate.py:91:34 - error: Cannot access attribute "state" for class "QStyleOptionViewItem"
+  聽聽Attribute "state" is unknown (reportAttributeAccessIssue)
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\delegates\history_item_delegate.py:187:31 - error: Cannot access attribute "get_local_time_str" for class "HistoryRecord"
+  聽聽Attribute "get_local_time_str" is unknown (reportAttributeAccessIssue)
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\delegates\history_item_delegate.py:256:25 - error: Cannot access attribute "pos" for class "QEvent"
+  聽聽Attribute "pos" is unknown (reportAttributeAccessIssue)
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\delegates\history_item_delegate.py:283:25 - error: Cannot access attribute "pos" for class "QEvent"
+  聽聽Attribute "pos" is unknown (reportAttributeAccessIssue)
+e:\YouTube\FluentYTDL\src\fluentytdl\ui\delegates\playlist_delegate.py
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\delegates\playlist_delegate.py:152:39 - error: Cannot access attribute "palette" for class "QStyleOptionViewItem"
+  聽聽Attribute "palette" is unknown (reportAttributeAccessIssue)
+e:\YouTube\FluentYTDL\src\fluentytdl\ui\models\download_list_model.py
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\models\download_list_model.py:38:9 - error: Method "rowCount" overrides class "QAbstractItemModel" in an incompatible manner
+  聽聽Parameter 2 type mismatch: base parameter is type "QModelIndex | QPersistentModelIndex", override parameter is type "QModelIndex"
+  聽聽聽聽Type "QModelIndex | QPersistentModelIndex" is not assignable to type "QModelIndex"
+  聽聽聽聽聽聽"QPersistentModelIndex" is not assignable to "QModelIndex" (reportIncompatibleMethodOverride)
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\models\download_list_model.py:43:9 - error: Method "data" overrides class "QAbstractItemModel" in an incompatible manner
+  聽聽Parameter 2 type mismatch: base parameter is type "QModelIndex | QPersistentModelIndex", override parameter is type "QModelIndex"
+  聽聽聽聽Type "QModelIndex | QPersistentModelIndex" is not assignable to type "QModelIndex"
+  聽聽聽聽聽聽"QPersistentModelIndex" is not assignable to "QModelIndex" (reportIncompatibleMethodOverride)
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\models\download_list_model.py:54:9 - error: Method "flags" overrides class "QAbstractListModel" in an incompatible manner
+  聽聽Parameter 2 type mismatch: base parameter is type "QModelIndex | QPersistentModelIndex", override parameter is type "QModelIndex"
+  聽聽聽聽Type "QModelIndex | QPersistentModelIndex" is not assignable to type "QModelIndex"
+  聽聽聽聽聽聽"QPersistentModelIndex" is not assignable to "QModelIndex" (reportIncompatibleMethodOverride)
+e:\YouTube\FluentYTDL\src\fluentytdl\ui\models\history_model.py
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\models\history_model.py:39:9 - error: Method "rowCount" overrides class "QAbstractItemModel" in an incompatible manner
+  聽聽Parameter 2 type mismatch: base parameter is type "QModelIndex | QPersistentModelIndex", override parameter is type "QModelIndex"
+  聽聽聽聽Type "QModelIndex | QPersistentModelIndex" is not assignable to type "QModelIndex"
+  聽聽聽聽聽聽"QPersistentModelIndex" is not assignable to "QModelIndex" (reportIncompatibleMethodOverride)
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\models\history_model.py:74:9 - error: Method "data" overrides class "QAbstractItemModel" in an incompatible manner
+  聽聽Parameter 2 type mismatch: base parameter is type "QModelIndex | QPersistentModelIndex", override parameter is type "QModelIndex"
+  聽聽聽聽Type "QModelIndex | QPersistentModelIndex" is not assignable to type "QModelIndex"
+  聽聽聽聽聽聽"QPersistentModelIndex" is not assignable to "QModelIndex" (reportIncompatibleMethodOverride)
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\models\history_model.py:85:9 - error: Method "flags" overrides class "QAbstractListModel" in an incompatible manner
+  聽聽Parameter 2 type mismatch: base parameter is type "QModelIndex | QPersistentModelIndex", override parameter is type "QModelIndex"
+  聽聽聽聽Type "QModelIndex | QPersistentModelIndex" is not assignable to type "QModelIndex"
+  聽聽聽聽聽聽"QPersistentModelIndex" is not assignable to "QModelIndex" (reportIncompatibleMethodOverride)
+e:\YouTube\FluentYTDL\src\fluentytdl\ui\models\playlist_model.py
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\models\playlist_model.py:39:9 - error: Method "rowCount" overrides class "QAbstractItemModel" in an incompatible manner
+  聽聽Parameter 2 type mismatch: base parameter is type "QModelIndex | QPersistentModelIndex", override parameter is type "QModelIndex"
+  聽聽聽聽Type "QModelIndex | QPersistentModelIndex" is not assignable to type "QModelIndex"
+  聽聽聽聽聽聽"QPersistentModelIndex" is not assignable to "QModelIndex" (reportIncompatibleMethodOverride)
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\models\playlist_model.py:74:38 - error: Cannot access attribute "from_raw_dict" for class "type[VideoTask]"
+  聽聽Attribute "from_raw_dict" is unknown (reportAttributeAccessIssue)
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\models\playlist_model.py:95:9 - error: Method "data" overrides class "QAbstractItemModel" in an incompatible manner
+  聽聽Parameter 2 type mismatch: base parameter is type "QModelIndex | QPersistentModelIndex", override parameter is type "QModelIndex"
+  聽聽聽聽Type "QModelIndex | QPersistentModelIndex" is not assignable to type "QModelIndex"
+  聽聽聽聽聽聽"QPersistentModelIndex" is not assignable to "QModelIndex" (reportIncompatibleMethodOverride)
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\models\playlist_model.py:107:9 - error: Method "flags" overrides class "QAbstractListModel" in an incompatible manner
+  聽聽Parameter 2 type mismatch: base parameter is type "QModelIndex | QPersistentModelIndex", override parameter is type "QModelIndex"
+  聽聽聽聽Type "QModelIndex | QPersistentModelIndex" is not assignable to type "QModelIndex"
+  聽聽聽聽聽聽"QPersistentModelIndex" is not assignable to "QModelIndex" (reportIncompatibleMethodOverride)
+e:\YouTube\FluentYTDL\src\fluentytdl\ui\reimagined_main_window.py
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\reimagined_main_window.py:663:46 - error: Cannot access attribute "insertWidget" for class "QLayout"
+  聽聽Attribute "insertWidget" is unknown (reportAttributeAccessIssue)
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\reimagined_main_window.py:663:46 - error: "insertWidget" is not a known attribute of "None" (reportOptionalMemberAccess)
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\reimagined_main_window.py:699:46 - error: Cannot access attribute "insertWidget" for class "QLayout"
+  聽聽Attribute "insertWidget" is unknown (reportAttributeAccessIssue)
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\reimagined_main_window.py:699:46 - error: "insertWidget" is not a known attribute of "None" (reportOptionalMemberAccess)
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\reimagined_main_window.py:944:42 - error: Cannot access attribute "insertWidget" for class "QLayout"
+  聽聽Attribute "insertWidget" is unknown (reportAttributeAccessIssue)
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\reimagined_main_window.py:944:42 - error: "insertWidget" is not a known attribute of "None" (reportOptionalMemberAccess)
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\reimagined_main_window.py:996:22 - error: Cannot access attribute "on_resume_task" for class "MainWindow*"
+  聽聽Attribute "on_resume_task" is unknown (reportAttributeAccessIssue)
+e:\YouTube\FluentYTDL\src\fluentytdl\ui\settings_page.py
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\settings_page.py:1448:18 - error: Import "...utils.logger" could not be resolved (reportMissingImports)
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\settings_page.py:1787:34 - error: Import "...utils.logger" could not be resolved (reportMissingImports)
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\settings_page.py:2061:9 - error: Method declaration "_on_update_source_changed" is obscured by a declaration of the same name (reportRedeclaration)
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\settings_page.py:2082:9 - error: Method declaration "_on_check_updates_startup_changed" is obscured by a declaration of the same name (reportRedeclaration)
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\settings_page.py:3208:18 - error: Import "...utils.logger" could not be resolved (reportMissingImports)
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\settings_page.py:3255:18 - error: Import "...utils.logger" could not be resolved (reportMissingImports)
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\settings_page.py:3295:22 - error: Import "...utils.logger" could not be resolved (reportMissingImports)
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\settings_page.py:3305:18 - error: Import "...utils.logger" could not be resolved (reportMissingImports)
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\settings_page.py:3316:22 - error: Import "...utils.logger" could not be resolved (reportMissingImports)
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\settings_page.py:3396:22 - error: Import "...utils.logger" could not be resolved (reportMissingImports)
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\settings_page.py:3404:22 - error: Import "...utils.logger" could not be resolved (reportMissingImports)
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\settings_page.py:3415:22 - error: Import "...utils.logger" could not be resolved (reportMissingImports)
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\settings_page.py:3507:18 - error: Import "...utils.logger" could not be resolved (reportMissingImports)
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\settings_page.py:3583:22 - error: Import "...utils.logger" could not be resolved (reportMissingImports)
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\settings_page.py:3593:18 - error: Import "...utils.logger" could not be resolved (reportMissingImports)
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\settings_page.py:3617:30 - error: Import "...utils.logger" could not be resolved (reportMissingImports)
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\settings_page.py:3626:30 - error: Import "...utils.logger" could not be resolved (reportMissingImports)
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\settings_page.py:3737:14 - error: Cannot access attribute "subtitleKeepSeparateCard" for class "SettingsPage*"
+  聽聽Attribute "subtitleKeepSeparateCard" is unknown (reportAttributeAccessIssue)
+e:\YouTube\FluentYTDL\src\fluentytdl\ui\unified_task_list_page.py
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\unified_task_list_page.py:40:9 - error: Method "filterAcceptsRow" overrides class "QSortFilterProxyModel" in an incompatible manner
+  聽聽Parameter 3 type mismatch: base parameter is type "QModelIndex | QPersistentModelIndex", override parameter is type "QModelIndex"
+  聽聽聽聽Type "QModelIndex | QPersistentModelIndex" is not assignable to type "QModelIndex"
+  聽聽聽聽聽聽"QPersistentModelIndex" is not assignable to "QModelIndex" (reportIncompatibleMethodOverride)
+  e:\YouTube\FluentYTDL\src\fluentytdl\ui\unified_task_list_page.py:48:22 - error: Cannot access attribute "get_task" for class "QAbstractItemModel"
+  聽聽Attribute "get_task" is unknown (reportAttributeAccessIssue)
+99 errors, 6 warnings, 0 informations
+WARNING: there is a new pyright version available (v1.1.407 -> v1.1.408).
+Please install the new version or set PYRIGHT_PYTHON_FORCE_VERSION to `latest`
+

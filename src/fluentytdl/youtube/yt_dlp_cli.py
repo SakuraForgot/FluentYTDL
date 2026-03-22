@@ -12,6 +12,7 @@ from typing import Any
 from fluentytdl.utils.paths import (
     config_path,
     find_bundled_executable,
+    get_clean_env,
     is_frozen,
     locate_runtime_tool,
 )
@@ -117,7 +118,7 @@ def prepare_yt_dlp_env(extra_paths: list[str] | None = None) -> dict[str, str]:
         extra_paths: Additional paths to prepend to PATH
     """
 
-    env = dict(os.environ)
+    env = get_clean_env()
 
     # FFmpeg
     ffmpeg_path = str(config_manager.get("ffmpeg_path") or "").strip() or None

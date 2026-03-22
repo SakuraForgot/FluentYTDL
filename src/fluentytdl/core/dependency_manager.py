@@ -21,7 +21,7 @@ except ImportError:
     HAS_PSUTIL = False
 
 from ..utils.logger import logger
-from ..utils.paths import frozen_app_dir, is_frozen
+from ..utils.paths import frozen_app_dir, get_clean_env, is_frozen
 from .config_manager import config_manager
 
 
@@ -337,8 +337,9 @@ class UpdateCheckerWorker(QThread):
                 kwargs["startupinfo"] = si
                 kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
 
+            env = get_clean_env()
             proc = subprocess.run(
-                cmd, capture_output=True, text=True, encoding="utf-8", errors="ignore", **kwargs
+                cmd, capture_output=True, text=True, encoding="utf-8", errors="ignore", env=env, **kwargs
             )
             if proc.returncode != 0:
                 return "unknown"

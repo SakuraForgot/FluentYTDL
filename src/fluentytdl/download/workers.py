@@ -546,7 +546,12 @@ class DownloadWorker(QThread):
             # 执行各模块的后处理逻辑（封面嵌入、字幕合并、VR转码等）
             if not self.is_cancelled:
                 for feature in self.features:
-                    feature.on_post_process(context)
+                    try:
+                        feature.on_post_process(context)
+                    except Exception as e:
+                        logger.exception("后处理功能 {} 发生异常: {}", feature.__class__.__name__, e)
+                        context.emit_warning(f"后处理异常 ({feature.__class__.__name__}): {str(e)}")
+                
                 self._clean_logger.force_update("completed", 100.0, "✅ 下载并处理完成！")
                 self.completed.emit()
 

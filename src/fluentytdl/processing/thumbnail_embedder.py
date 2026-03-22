@@ -21,7 +21,7 @@ from enum import Enum
 from pathlib import Path
 
 from ..utils.logger import logger
-from ..utils.paths import frozen_app_dir, is_frozen
+from ..utils.paths import frozen_app_dir, get_clean_env, is_frozen
 from .thumbnail_embed import (
     get_thumbnail_support,
 )
@@ -260,8 +260,9 @@ class ThumbnailEmbedder:
                 kwargs["startupinfo"] = si
                 kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
 
+            env = get_clean_env()
             result = subprocess.run(
-                cmd, capture_output=True, text=True, encoding="utf-8", errors="ignore", **kwargs
+                cmd, capture_output=True, text=True, encoding="utf-8", errors="ignore", env=env, **kwargs
             )
 
             if result.returncode == 0:
@@ -349,8 +350,9 @@ class ThumbnailEmbedder:
                 kwargs["startupinfo"] = si
                 kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
 
+            env = get_clean_env()
             result = subprocess.run(
-                cmd, capture_output=True, text=True, encoding="utf-8", errors="ignore", **kwargs
+                cmd, capture_output=True, text=True, encoding="utf-8", errors="ignore", env=env, **kwargs
             )
 
             if result.returncode == 0 and os.path.exists(temp_path):

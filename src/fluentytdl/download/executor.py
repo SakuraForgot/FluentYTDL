@@ -347,15 +347,32 @@ class DownloadExecutor:
             # 容错检查：如果预期输出文件存在且有效，视为成功 (忽略临时文件清理失败等非致命错误)
             # Windows 下 yt-dlp 常因无法删除 .part-Frag 文件返回 exit code 1
             is_valid = False
+            valid_path_found = None
+            
             if output_path and os.path.exists(output_path):
                 try:
                     if os.path.getsize(output_path) > 0:
                         is_valid = True
+                        valid_path_found = output_path
                 except OSError:
                     pass
 
+            # 兜底探测：如果日志没截出 output_path，但生成了物理产物
+            if not is_valid:
+                for d_path in dest_paths:
+                    if os.path.exists(d_path) and not _is_auxiliary_file(d_path):
+                        try:
+                            if os.path.getsize(d_path) > 0:
+                                is_valid = True
+                                valid_path_found = d_path
+                                break
+                        except OSError:
+                            pass
+
             if is_valid:
-                logger.warning(f"yt-dlp 退出码 {rc} (非零)，但输出文件有效。忽略错误。")
+                if not output_path and valid_path_found:
+                    output_path = valid_path_found
+                logger.warning(f"yt-dlp 退出码 {rc} (非零)，但输出文件有效 ({output_path})。忽略错误。")
             else:
                 last_lines = "\n".join(tail)
                 raise RuntimeError(f"yt-dlp 退出码 {rc}:\n{last_lines}")
