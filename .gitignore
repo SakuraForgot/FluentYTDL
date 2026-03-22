@@ -175,6 +175,10 @@ check_all_icons.py
 # 记录历史 (包含用户下载历史)
 record_history.json
 download_history.json
+download_history.db
+tasks.db
+tasks.db-shm
+tasks.db-wal
 
 # 本地调试文件
 *_debug_*.txt

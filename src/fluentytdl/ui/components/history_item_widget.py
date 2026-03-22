@@ -73,6 +73,7 @@ class HistoryItemWidget(CardWidget):
 
     remove_requested = Signal(object)  # 请求从历史删除
     play_requested = Signal(object)  # 请求播放
+    reparse_requested = Signal(str)  # 请求重新解析
 
     def __init__(self, record: HistoryRecord, parent: QWidget | None = None):
         super().__init__(parent)
@@ -101,8 +102,14 @@ class HistoryItemWidget(CardWidget):
         info.setAlignment(Qt.AlignmentFlag.AlignVCenter)
 
         # 标题
+        from PySide6.QtWidgets import QSizePolicy
+
         self.title_label = StrongBodyLabel(record.title or "未知标题", self)
         self.title_label.setWordWrap(False)
+        self.title_label.setMinimumWidth(10)
+        self.title_label.setSizePolicy(
+            QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.Preferred
+        )
 
         # 文件信息行
         meta_parts: list[str] = []
@@ -131,6 +138,14 @@ class HistoryItemWidget(CardWidget):
         btn_layout = QHBoxLayout()
         btn_layout.setSpacing(4)
 
+        # 重新解析
+        self.reparse_btn = TransparentToolButton(FluentIcon.LINK, self)
+        self.reparse_btn.setToolTip("重新解析")
+        self.reparse_btn.installEventFilter(
+            ToolTipFilter(self.reparse_btn, showDelay=300, position=ToolTipPosition.BOTTOM)
+        )
+        self.reparse_btn.clicked.connect(lambda: self.reparse_requested.emit(self.record.url))
+
         # 打开文件夹
         self.folder_btn = TransparentToolButton(FluentIcon.FOLDER, self)
         self.folder_btn.setToolTip("打开文件位置")
@@ -157,6 +172,7 @@ class HistoryItemWidget(CardWidget):
         )
         self.del_btn.clicked.connect(lambda: self.remove_requested.emit(self))
 
+        btn_layout.addWidget(self.reparse_btn)
         btn_layout.addWidget(self.play_btn)
         btn_layout.addWidget(self.folder_btn)
         btn_layout.addWidget(self.del_btn)
@@ -182,6 +198,17 @@ class HistoryItemWidget(CardWidget):
         bg = "rgba(255, 255, 255, 0.05)" if isDarkTheme() else "rgba(0, 0, 0, 0.03)"
         bd = "rgba(255, 255, 255, 0.08)" if isDarkTheme() else "rgba(0, 0, 0, 0.08)"
         self.thumb.setStyleSheet(f"background: {bg}; border-radius: 6px; border: 1px solid {bd};")
+
+    def enterEvent(self, event) -> None:
+        super().enterEvent(event)
+        from qfluentwidgets import isDarkTheme
+
+        c = "rgba(255, 255, 255, 0.08)" if isDarkTheme() else "rgba(0, 0, 0, 0.06)"
+        self.setStyleSheet(f"HistoryItemWidget {{ background: {c}; border-radius: 8px; }}")
+
+    def leaveEvent(self, event) -> None:
+        super().leaveEvent(event)
+        self.setStyleSheet("")
 
     def _on_thumb_loaded(self, pixmap: QPixmap) -> None:
         if pixmap and not pixmap.isNull():
@@ -217,3 +244,8 @@ class HistoryItemWidget(CardWidget):
         self.record.file_exists = exists
         self.folder_btn.setEnabled(exists)
         self.play_btn.setEnabled(exists)
+
+    def mouseDoubleClickEvent(self, event) -> None:
+        super().mouseDoubleClickEvent(event)
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.reparse_requested.emit(self.record.url)

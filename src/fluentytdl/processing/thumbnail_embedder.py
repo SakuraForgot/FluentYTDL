@@ -303,11 +303,14 @@ class ThumbnailEmbedder:
             # 根据格式选择不同的嵌入方式
             if ext in (".mkv", ".mka", ".webm"):
                 # MKV/WebM: 作为附件流嵌入
+                # -map 0 确保原始文件的所有流（包括多字幕轨）都被复制
                 cmd = [
                     str(ffmpeg_path),
                     "-y",
                     "-i",
                     str(video_path),
+                    "-map",
+                    "0",
                     "-attach",
                     str(thumbnail_path),
                     "-metadata:s:t",

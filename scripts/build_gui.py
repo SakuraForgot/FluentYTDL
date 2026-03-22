@@ -27,6 +27,7 @@ from PySide6.QtCore import QObject, QThread, Signal  # noqa: E402
 from PySide6.QtGui import QFont, QIcon, QTextCursor  # noqa: E402
 from PySide6.QtWidgets import (  # noqa: E402
     QApplication,
+    QCheckBox,
     QComboBox,
     QGroupBox,
     QHBoxLayout,
@@ -153,20 +154,29 @@ class BuildGUI(QMainWindow):
 
         # 目标选择
         target_row = QHBoxLayout()
-        target_row.addWidget(QLabel("选择目标:"))
+        target_row.addWidget(QLabel("发布产物:"))
         self.target_combo = QComboBox()
         self.target_combo.addItems(
             [
-                "全部 (All) - 安装包 + 完整版 + 便携版",
-                "安装包 (Setup) - Inno Setup 安装程序",
-                "完整版 (Full) - 7z 压缩包含工具",
-                "便携版 (Portable) - 单文件 EXE",
+                "全部 (All) - 免安装 7z 包 + Inno Setup 安装向导",
+                "免安装包 (7z) - 仅生成基于 7z 的绿化纯净包",
+                "安装向导 (Setup) - 仅生成 Inno Setup 安装包",
             ]
         )
         self.target_combo.setMinimumWidth(350)
         target_row.addWidget(self.target_combo)
         target_row.addStretch()
         target_layout.addLayout(target_row)
+
+        # 打包配置选项
+        options_row = QHBoxLayout()
+        self.skip_hygiene_cb = QCheckBox("跳过环境污染体检 (--skip-hygiene)")
+        self.skip_hygiene_cb.setToolTip(
+            "开启后，即使环境中安装了黑名单依赖（如 torch, pandas）也将强行打包"
+        )
+        options_row.addWidget(self.skip_hygiene_cb)
+        options_row.addStretch()
+        target_layout.addLayout(options_row)
 
         # 版本号
         version_row = QHBoxLayout()
@@ -304,6 +314,7 @@ class BuildGUI(QMainWindow):
         self.btn_cancel.setVisible(running)
         self.progress_bar.setVisible(running)
         self.target_combo.setEnabled(not running)
+        self.skip_hygiene_cb.setEnabled(not running)
         self.version_edit.setEnabled(not running)
         self.btn_fetch_tools.setEnabled(not running)
         self.btn_collect_licenses.setEnabled(not running)
@@ -312,22 +323,27 @@ class BuildGUI(QMainWindow):
     def _get_target(self) -> str:
         """获取选择的构建目标"""
         idx = self.target_combo.currentIndex()
-        return ["all", "setup", "full", "portable"][idx]
+        return ["all", "7z", "setup"][idx]
 
     def _start_build(self):
         """开始构建"""
         target = self._get_target()
         version = self.version_edit.text().strip()
+        skip_hygiene = self.skip_hygiene_cb.isChecked()
 
         self.log_text.clear()
-        self._log(f"🚀 开始构建: {target}", "#4ec9b0")
+        self._log(f"🚀 开始执行新编排流水线: 输出 {target}", "#4ec9b0")
         if version:
-            self._log(f"   版本号: {version}", "#808080")
+            self._log(f"   覆盖版本号: {version}", "#808080")
+        if skip_hygiene:
+            self._log("   ! 警告: 已跳过无菌环境体检", "#cca700")
         self._log("")
 
         cmd = [sys.executable, str(ROOT / "scripts" / "build.py"), "--target", target]
         if version:
             cmd.extend(["--version", version])
+        if skip_hygiene:
+            cmd.append("--skip-hygiene")
 
         self._run_command(cmd)
 
@@ -453,6 +469,9 @@ def main():
         QComboBox::drop-down {
             border: none;
             width: 20px;
+        }
+        QCheckBox {
+            color: #d4d4d4;
         }
         QPushButton {
             background-color: #3c3c3c;

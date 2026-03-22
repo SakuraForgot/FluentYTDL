@@ -9,13 +9,39 @@ from pathlib import Path
 from threading import Event
 from typing import Any
 
-from fluentytdl.utils.paths import find_bundled_executable, is_frozen, locate_runtime_tool
+from fluentytdl.utils.paths import (
+    config_path,
+    find_bundled_executable,
+    is_frozen,
+    locate_runtime_tool,
+)
 
 from ..core.config_manager import config_manager
 
 
 class YtDlpCancelled(Exception):
     """Raised when a yt-dlp subprocess is cancelled by the UI."""
+
+
+def _safe_working_dir() -> str:
+    """Return a stable writable working directory for yt-dlp child processes."""
+
+    try:
+        configured = str(config_manager.get("download_dir") or "").strip()
+        if configured:
+            Path(configured).mkdir(parents=True, exist_ok=True)
+            return str(Path(configured).resolve())
+    except Exception:
+        pass
+
+    try:
+        data_dir = config_path().parent
+        data_dir.mkdir(parents=True, exist_ok=True)
+        return str(data_dir.resolve())
+    except Exception:
+        pass
+
+    return str(Path.cwd())
 
 
 def _win_hide_console_kwargs() -> dict[str, Any]:
@@ -131,9 +157,7 @@ def prepare_yt_dlp_env(extra_paths: list[str] | None = None) -> dict[str, str]:
     if plugin_dir.exists():
         existing_pypath = env.get("PYTHONPATH") or ""
         env["PYTHONPATH"] = (
-            f"{plugin_dir}{os.pathsep}{existing_pypath}"
-            if existing_pypath
-            else str(plugin_dir)
+            f"{plugin_dir}{os.pathsep}{existing_pypath}" if existing_pypath else str(plugin_dir)
         )
 
     return env
@@ -453,8 +477,11 @@ def ydl_opts_to_cli_args(ydl_opts: dict[str, Any]) -> list[str]:
     # 嵌入字幕
     if ydl_opts.get("embedsubtitles"):
         args += ["--embed-subs"]
+        # 强制转换为 srt 以解决各大播放器对 mkv 中的 webvtt 轨兼容性差的问题（不转换会导致用户以为并没嵌进去）
+        if not ydl_opts.get("convertsubtitles"):
+            args += ["--convert-subs", "srt"]
 
-    # 字幕格式转换
+    # 字幕格式转换 (显式指定的情况下)
     convert_subs = ydl_opts.get("convertsubtitles")
     if isinstance(convert_subs, str) and convert_subs:
         args += ["--convert-subs", convert_subs]
@@ -531,7 +558,6 @@ def run_dump_single_json(
 
     cmd = [
         str(exe),
-        "--no-warnings",
         "--no-color",
         "--no-progress",
         "-J",
@@ -542,6 +568,7 @@ def run_dump_single_json(
     cmd.append(url)
 
     env = prepare_yt_dlp_env()
+    work_dir = _safe_working_dir()
 
     if cancel_event is None:
         proc = subprocess.run(
@@ -551,7 +578,7 @@ def run_dump_single_json(
             encoding="utf-8",
             errors="replace",
             env=env,
-            cwd=str(Path.cwd()),
+            cwd=work_dir,
             **_win_hide_console_kwargs(),
         )
 
@@ -567,7 +594,7 @@ def run_dump_single_json(
             encoding="utf-8",
             errors="replace",
             env=env,
-            cwd=str(Path.cwd()),
+            cwd=work_dir,
             **_win_hide_console_kwargs(),
         )
 

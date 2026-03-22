@@ -1,15 +1,13 @@
 from __future__ import annotations
 
 import os
-import time
-from collections.abc import Iterable
+from enum import Enum
 from typing import Any
 
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import Qt, QThread, QTimer
 from PySide6.QtGui import QAction, QColor, QIcon, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
-    QCheckBox,
     QFrame,
     QHBoxLayout,
     QMenu,
@@ -25,8 +23,6 @@ from qfluentwidgets import (
     InfoBarPosition,
     MessageBox,
     NavigationItemPosition,
-    PrimaryPushButton,
-    PushButton,
     SplashScreen,
     SubtitleLabel,
     ToolTipFilter,
@@ -40,7 +36,6 @@ from ..utils.logger import logger
 from ..utils.paths import resource_path
 from .components.clipboard_monitor import ClipboardMonitor
 from .components.download_config_window import DownloadConfigWindow
-from .components.download_item_widget import DownloadItemWidget
 from .cover_download_page import CoverDownloadPage
 from .help_window import HelpWindow
 from .pages.history_page import HistoryPage
@@ -50,6 +45,23 @@ from .subtitle_download_page import SubtitleDownloadPage
 from .unified_task_list_page import UnifiedTaskListPage
 from .vr_parse_page import VRParsePage
 from .welcome_wizard import WelcomeWizardDialog
+
+
+class DeletionPolicy(Enum):
+    ALWAYS_ASK = "alwaysask"
+    KEEP_FILES = "keep"
+    DELETE_FILES = "delete"
+
+    @classmethod
+    def from_config_str(cls, raw: Any) -> DeletionPolicy:
+        if not raw:
+            return cls.ALWAYS_ASK
+        s = str(raw).lower().strip()
+        if "keep" in s:
+            return cls.KEEP_FILES
+        if "delete" in s or "remove" in s:
+            return cls.DELETE_FILES
+        return cls.ALWAYS_ASK
 
 
 class TaskListPage(QWidget):
@@ -63,6 +75,9 @@ class TaskListPage(QWidget):
         self.v_layout = QVBoxLayout(self)
         self.v_layout.setContentsMargins(20, 20, 20, 20)
         self.v_layout.setSpacing(10)
+
+        # 保存游离的后台删除线程
+        self._delete_workers: list[QThread] = []
 
         # === 工具栏 ===
         self.tool_bar = QHBoxLayout()
@@ -145,8 +160,9 @@ class TaskListPage(QWidget):
 
 
 class MainWindow(FluentWindow):
-    def __init__(self) -> None:
+    def __init__(self, app_controller=None) -> None:
         super().__init__()
+        self.controller = app_controller
 
         # 检查管理员模式
         from ..utils.admin_utils import is_admin
@@ -198,17 +214,29 @@ class MainWindow(FluentWindow):
         self.splashScreen.finish()
 
         # 信号连接
-        self.parse_page.parse_requested.connect(self.show_selection_dialog)
+        self.parse_page.parse_requested.connect(
+            lambda url: self.show_selection_dialog(url, smart_detect=False, playlist_flat=True)
+        )
         self.vr_parse_page.parse_requested.connect(self.show_vr_selection_dialog)
         self.subtitle_page.parse_requested.connect(self.show_subtitle_selection_dialog)
         self.cover_page.parse_requested.connect(self.show_cover_selection_dialog)
+        self.history_page.reparse_requested.connect(
+            lambda url: self.show_selection_dialog(url, smart_detect=True)
+        )
         self.settings_interface.clipboardAutoDetectChanged.connect(
             self.set_clipboard_monitor_enabled
         )
 
         # 统一任务列表页面信号
-        self.task_page.card_remove_requested.connect(self.on_remove_card)
-        self.task_page.card_resume_requested.connect(self.on_resume_card)
+        self.task_page.card_remove_requested.connect(self.on_remove_task)
+        self.task_page.card_resume_requested.connect(self.on_pause_resume_task)
+        self.task_page.card_folder_requested.connect(self.on_open_target_folder)
+        self.task_page.route_to_parse.connect(lambda: self.switchTo(self.parse_page))
+
+        # 批量操作命令栏信号
+        self.task_page.batch_start_requested.connect(self.on_batch_start)
+        self.task_page.batch_pause_requested.connect(self.on_batch_pause)
+        self.task_page.batch_delete_requested.connect(self.on_batch_delete)
 
         # 历史记录实时更新
         from ..storage.history_service import on_history_added
@@ -267,14 +295,6 @@ class MainWindow(FluentWindow):
         """为统一任务页面设置操作按钮"""
         page = self.task_page
 
-        # 新建任务 (Primary Action - 位于任务列表内操作)
-        new_task_btn = PrimaryPushButton(FluentIcon.ADD, "新建任务", self)
-        new_task_btn.setToolTip("创建下载任务")
-        new_task_btn.installEventFilter(
-            ToolTipFilter(new_task_btn, showDelay=300, position=ToolTipPosition.BOTTOM)
-        )
-        new_task_btn.clicked.connect(lambda: self.switchTo(self.parse_page))
-
         # 全部开始/暂停按钮 (Secondary Actions)
         start_all = TransparentToolButton(FluentIcon.PLAY, self)
         start_all.setToolTip("全部开始")
@@ -307,74 +327,31 @@ class MainWindow(FluentWindow):
         clear_completed.clicked.connect(self.on_clear_completed)
 
         # 批量操作按钮
-        batch_btn = PushButton(FluentIcon.CHECKBOX, "批量操作", page)
-        batch_btn.setToolTip("进入批量操作模式")
+        from qfluentwidgets import TransparentPushButton
+
+        batch_btn = TransparentPushButton(FluentIcon.CHECKBOX, "批量操作", page)
+        batch_btn.setToolTip("进入或退出批量模式")
         batch_btn.installEventFilter(
             ToolTipFilter(batch_btn, showDelay=300, position=ToolTipPosition.BOTTOM)
         )
 
-        select_all_btn = PushButton(FluentIcon.ACCEPT, "全选", page)
-        select_all_btn.setToolTip("全选")
-        select_all_btn.installEventFilter(
-            ToolTipFilter(select_all_btn, showDelay=300, position=ToolTipPosition.BOTTOM)
-        )
-        select_all_btn.hide()
-
-        start_sel_btn = PushButton(FluentIcon.PLAY, "开始选中", page)
-        start_sel_btn.setToolTip("开始选中任务")
-        start_sel_btn.installEventFilter(
-            ToolTipFilter(start_sel_btn, showDelay=300, position=ToolTipPosition.BOTTOM)
-        )
-        start_sel_btn.hide()
-
-        pause_sel_btn = PushButton(FluentIcon.PAUSE, "暂停选中", page)
-        pause_sel_btn.setToolTip("暂停选中任务")
-        pause_sel_btn.installEventFilter(
-            ToolTipFilter(pause_sel_btn, showDelay=300, position=ToolTipPosition.BOTTOM)
-        )
-        pause_sel_btn.hide()
-
-        del_sel_btn = PushButton(FluentIcon.DELETE, "删除选中", page)
-        del_sel_btn.setToolTip("删除选中任务")
-        del_sel_btn.installEventFilter(
-            ToolTipFilter(del_sel_btn, showDelay=300, position=ToolTipPosition.BOTTOM)
-        )
-        del_sel_btn.hide()
-
         def toggle_batch():
             is_batch = getattr(page, "_is_batch_mode", False)
-            new_state = not is_batch
-            page._is_batch_mode = new_state
-            page.set_selection_mode(new_state)
+            page.set_selection_mode(not is_batch)
 
-            select_all_btn.setVisible(new_state)
-            del_sel_btn.setVisible(new_state)
-            start_sel_btn.setVisible(new_state)
-            pause_sel_btn.setVisible(new_state)
-
-            if new_state:
+        def _on_selection_mode_changed(is_batch: bool):
+            if is_batch:
                 batch_btn.setIcon(FluentIcon.CANCEL)
                 batch_btn.setText("退出批量")
-                batch_btn.setToolTip("退出批量模式")
             else:
                 batch_btn.setIcon(FluentIcon.CHECKBOX)
                 batch_btn.setText("批量操作")
-                batch_btn.setToolTip("进入批量操作模式")
 
         batch_btn.clicked.connect(toggle_batch)
-        select_all_btn.clicked.connect(page.select_all)
-        start_sel_btn.clicked.connect(lambda: self.on_batch_start(page))
-        pause_sel_btn.clicked.connect(lambda: self.on_batch_pause(page))
-        del_sel_btn.clicked.connect(lambda: self.on_batch_delete(page))
+        page.selection_mode_changed.connect(_on_selection_mode_changed)
 
         # 添加到布局 (分组)
         page.action_layout.setSpacing(0)
-
-        # 1. 核心操作
-        page.action_layout.addWidget(new_task_btn)
-
-        # 分隔符
-        page.action_layout.addSpacing(16)
 
         # 2. 全局控制
         page.action_layout.addWidget(start_all)
@@ -385,14 +362,8 @@ class MainWindow(FluentWindow):
         # 分隔
         page.action_layout.addSpacing(16)
 
-        # 3. 批量操作 (靠右)
+        # 3. 批量模式触发器 (靠右)
         page.action_layout.addWidget(batch_btn)
-
-        page.action_layout.addSpacing(8)
-        page.action_layout.addWidget(select_all_btn)
-        page.action_layout.addWidget(start_sel_btn)
-        page.action_layout.addWidget(pause_sel_btn)
-        page.action_layout.addWidget(del_sel_btn)
 
     def init_status_bar(self):
         # FluentWindow 没有原生 statusBar，我们手动添加到底部
@@ -502,13 +473,23 @@ class MainWindow(FluentWindow):
             self.show_selection_dialog(url, smart_detect=True)
 
     def _show_config_window(
-        self, url: str, mode: str = "default", vr_mode: bool = False, smart_detect: bool = False
+        self,
+        url: str,
+        mode: str = "default",
+        vr_mode: bool = False,
+        smart_detect: bool = False,
+        playlist_flat: bool = False,
     ):
         """通用方法：显示非阻塞的任务配置窗口"""
         try:
             # 创建新窗口实例
             window = DownloadConfigWindow(
-                url, self, vr_mode=vr_mode, mode=mode, smart_detect=smart_detect
+                url,
+                self,
+                vr_mode=vr_mode,
+                mode=mode,
+                smart_detect=smart_detect,
+                playlist_flat=playlist_flat,
             )
 
             # 连接信号
@@ -546,8 +527,12 @@ class MainWindow(FluentWindow):
             self._active_sub_windows.remove(window)
             logger.info(f"Closed sub-window. Active windows: {len(self._active_sub_windows)}")
 
-    def show_selection_dialog(self, url: str, smart_detect: bool = False):
-        self._show_config_window(url, mode="default", smart_detect=smart_detect)
+    def show_selection_dialog(
+        self, url: str, smart_detect: bool = False, playlist_flat: bool = False
+    ):
+        self._show_config_window(
+            url, mode="default", smart_detect=smart_detect, playlist_flat=playlist_flat
+        )
 
     def show_vr_selection_dialog(self, url: str, smart_detect: bool = True):
         self._show_config_window(url, mode="vr", vr_mode=True, smart_detect=smart_detect)
@@ -570,235 +555,176 @@ class MainWindow(FluentWindow):
 
     def add_tasks(self, tasks):
         """添加下载任务到统一任务列表"""
-        logger.info(f"[DEBUG] add_tasks called with {len(tasks)} tasks")
-        default_dir = config_manager.get("download_dir")
+        logger.info(f"[DEBUG] Delegating {len(tasks)} tasks to Controller")
+        if self.controller:
+            created_workers = self.controller.handle_add_tasks(tasks)
+            for worker, t_title, t_thumb in created_workers:
+                self.task_page.model.add_task(worker, t_title, str(t_thumb) if t_thumb else "")
+        else:
+            logger.error("AppController not provided to MainWindow!")
 
-        for i, (t_title, t_url, t_opts, t_thumb) in enumerate(tasks):
-            logger.info(f"[DEBUG] Processing task {i + 1}: {t_title[:30]}...")
-            # Inject default download directory if not specified
-            if default_dir and "paths" not in t_opts:
-                outtmpl = t_opts.get("outtmpl")
-                if not (isinstance(outtmpl, str) and os.path.isabs(outtmpl)):
-                    t_opts["paths"] = {"home": str(default_dir)}
+        # 切换到任务列表页
+        logger.info("[DEBUG] Switching to task_page")
+        self.switchTo(self.task_page)
+        logger.info("[DEBUG] Bulk add processing complete")
 
-            logger.info(f"[DEBUG] Creating worker for URL: {t_url}")
-            worker = download_manager.create_worker(t_url, t_opts)
-            logger.info(f"[DEBUG] Worker created: {worker}")
+    def on_open_target_folder(self, row: int):
+        task = self.task_page.model.get_task(row)
+        if not task:
+            return
+        worker = task.get("worker")
+        if not worker:
+            return
 
-            card = DownloadItemWidget(worker, t_title, t_opts)
-            if t_thumb:
-                card.load_thumbnail(str(t_thumb))
+        out_file = getattr(worker, "_final_filepath", "")
+        if out_file and os.path.exists(out_file):
+            import subprocess
 
-            logger.info("[DEBUG] Adding card to task_page")
-            # 添加到统一任务列表（信号由 UnifiedTaskListPage 内部连接）
-            self.task_page.add_card(card)
-            logger.info(f"[DEBUG] Card added, task_page count: {self.task_page.count()}")
-
-            # 初始状态
-            started = download_manager.start_worker(worker)
-            logger.info(f"[DEBUG] Worker started: {started}")
-            if started:
-                card.set_state("running")
+            if os.name == "nt":
+                subprocess.run(["explorer", "/select,", os.path.normpath(out_file)])
             else:
-                card.set_state("queued")
+                os.startfile(os.path.dirname(out_file))
+        else:
+            # Fallback to output folder
+            paths = worker.opts.get("paths", {})
+            home_dir = paths.get("home", config_manager.get("download_dir") or os.getcwd())
+            if os.path.exists(home_dir):
+                os.startfile(home_dir)
 
-            # 切换到任务列表页
-            logger.info("[DEBUG] Switching to task_page")
-            self.switchTo(self.task_page)
-            logger.info(f"[DEBUG] Task {i + 1} processing complete")
+    def on_remove_task(self, row: int):
+        task = self.task_page.model.get_task(row)
+        if not task:
+            return
+        worker = task.get("worker")
+        if not worker:
+            return
 
-    def on_remove_card(self, card: DownloadItemWidget):
         try:
-            # 1. Critical Logs & Config Reading
+            state = worker.effective_state
+
+            is_active = state in ("running", "queued", "paused", "downloading")
+
+            # ── 读取设置页的删除策略 ──
             raw_policy = config_manager.get("deletion_policy")
-            logger.info(f"Triggering delete for card {id(card)}")
-            logger.info(f"Current Config Policy Raw Value: {raw_policy} (Type: {type(raw_policy)})")
+            policy = DeletionPolicy.from_config_str(raw_policy)
 
-            # 2. Force Type Conversion & Normalization
-            policy = str(raw_policy or "alwaysask").lower().strip()
-            logger.info(f"Normalized Policy: '{policy}'")
+            # ── 快速通道：策略为 "仅移除记录" 且非活跃任务 ──
+            if policy == DeletionPolicy.KEEP_FILES and not is_active:
+                if self.controller:
+                    self.controller.handle_remove_task(worker, force_delete_files=False)
+                self.task_page.model.remove_task(row)
+                return
 
-            # 3. Terminate worker immediately (Robust File Deletion)
-            if getattr(card, "worker", None):
-                try:
-                    if hasattr(card.worker, "stop"):
-                        card.worker.stop()
-                    else:
-                        cancel = getattr(card.worker, "cancel", None)
-                        if callable(cancel):
-                            cancel()
+            # ── 快速通道：策略为 "彻底删除" 且非活跃任务 ──
+            if policy == DeletionPolicy.DELETE_FILES and not is_active:
+                if self.controller:
+                    self.controller.handle_remove_task(worker, force_delete_files=True)
+                self.task_page.model.remove_task(row)
+                return
 
-                    # Force kill process tree
-                    force_kill = getattr(card.worker, "force_kill", None)
-                    if callable(force_kill):
-                        force_kill()
+            # ── 中途取消的活跃任务：必须强制清理缓存 ──
+            if is_active:
+                if policy == DeletionPolicy.KEEP_FILES:
+                    # 即使策略是保留文件，中途取消也必须清理 .part/.ytdl 缓存残骸
+                    if self.controller:
+                        self.controller.handle_remove_task(worker, force_delete_files=True)
+                    self.task_page.model.remove_task(row)
+                    return
 
-                    # If it's still running, force terminate QThread
-                    if hasattr(card.worker, "isRunning") and card.worker.isRunning():
-                        if hasattr(card.worker, "terminate"):
-                            card.worker.terminate()
-                        card.worker.wait(200)
-                except Exception as e:
-                    logger.error(f"Error stopping worker: {e}")
+                if policy == DeletionPolicy.DELETE_FILES:
+                    if self.controller:
+                        self.controller.handle_remove_task(worker, force_delete_files=True)
+                    self.task_page.model.remove_task(row)
+                    return
 
-            # 4. Policy helpers (robust matching + legacy fallbacks)
-            def _is_keep(p: str) -> bool:
-                return any(tok in p for tok in ("keep", "keepfiles", "keep_files", "keep-files"))
-
-            def _is_delete(p: str) -> bool:
-                # accept many synonyms
-                return any(
-                    tok in p
-                    for tok in (
-                        "delete",
-                        "deletefiles",
-                        "delete_files",
-                        "delete-files",
-                        "remove",
-                        "removefiles",
-                    )
+                # AlwaysAsk: 提示用户中途取消的双项选择
+                title = "取消下载任务"
+                content = (
+                    "此任务正在下载中。请选择取消方式：\n（未完成的临时缓存文件将会被自动清理）"
                 )
+                box = MessageBox(title, content, self)
+                box.yesButton.setText("🗑️ 移除并删除文件")
+                box.cancelButton.setText("取消")
 
-            def _is_ask(p: str) -> bool:
-                return any(tok in p for tok in ("ask", "alwaysask", "always_ask", "always-ask"))
+                from qfluentwidgets import PushButton
 
-            # Legacy boolean keys fallback: if user enabled old ask flags, prefer ask behavior
-            legacy_ask = bool(config_manager.get("remove_task_ask_delete_source") or False) or bool(
-                config_manager.get("remove_task_ask_delete_cache") or False
-            )
+                keep_btn = PushButton("📋 仅移除记录", box)
+                keep_btn.setFixedHeight(box.yesButton.height())
+                self._delete_dialog_keep_clicked = False
 
-            # 4.a KeepFiles
-            if _is_keep(policy):
-                logger.info("Policy matched: KeepFiles. Removing card only.")
-                self.task_page.remove_card(card)
+                def _on_keep():
+                    self._delete_dialog_keep_clicked = True
+                    box.accept()
+
+                keep_btn.clicked.connect(_on_keep)
+                try:
+                    box.buttonLayout.insertWidget(1, keep_btn)
+                except Exception:
+                    box.buttonGroup.layout().insertWidget(1, keep_btn)
+                if not box.exec():
+                    return
+
+                force_delete = not self._delete_dialog_keep_clicked
+                if self.controller:
+                    self.controller.handle_remove_task(worker, force_delete_files=force_delete)
+                self.task_page.model.remove_task(row)
                 return
 
-            # Collect paths for Delete or Ask
-            paths_to_delete = set()
-            if hasattr(card, "recorded_paths"):
-                paths_to_delete.update(card.recorded_paths)
-            try:
-                current_paths = self._collect_existing_cache_paths([card])
-                paths_to_delete.update(current_paths)
-            except Exception:
-                pass
+            # ── 已完成/已出错任务：迅雷/IDM 风格双按钮弹窗 ──
+            title = task.get("title") or "删除任务"
+            final_path = getattr(worker, "output_path", getattr(worker, "_final_filepath", ""))
+            has_local_file = bool(final_path and os.path.exists(str(final_path)))
 
-            valid_paths = [p for p in paths_to_delete if p and os.path.exists(p)]
-            cache_paths = [p for p in valid_paths if p.endswith(".part") or p.endswith(".ytdl")]
-            source_paths = [p for p in valid_paths if p not in cache_paths]
+            if has_local_file:
+                content = "请选择删除方式："
+                box = MessageBox(title, content, self)
+                box.yesButton.setText("🗑️ 删除记录并删除文件")
+                box.cancelButton.setText("取消")
 
-            # 4.b DeleteFiles (explicit delete preference or legacy config)
-            if _is_delete(policy) and not _is_ask(policy) and not legacy_ask:
-                logger.info("Policy matched: DeleteFiles. Deleting files silently.")
-                if valid_paths:
-                    logger.info(f"Deleting {len(valid_paths)} files: {valid_paths}")
-                    self._delete_files_best_effort(valid_paths, success_title="已删除相关文件")
-                else:
-                    logger.info("No files found to delete.")
-                self.task_page.remove_card(card)
-                return
+                # 插入一个 "仅删除记录" 按钮在 yes 和 cancel 之间
+                from qfluentwidgets import PushButton
 
-            # Fallback: AlwaysAsk (or unknown policy)
-            if _is_ask(policy) or legacy_ask or (not _is_delete(policy) and not _is_keep(policy)):
-                logger.info("Policy matched or falling back to: AlwaysAsk.")
+                keep_btn = PushButton("📋 仅删除记录", box)
+                keep_btn.setFixedHeight(box.yesButton.height())
+                self._delete_dialog_keep_clicked = False
+
+                def _on_keep():
+                    self._delete_dialog_keep_clicked = True
+                    box.accept()
+
+                keep_btn.clicked.connect(_on_keep)
+                try:
+                    box.buttonLayout.insertWidget(1, keep_btn)
+                except Exception:
+                    box.buttonGroup.layout().insertWidget(1, keep_btn)
+
+                if not box.exec():
+                    return
+
+                force_delete = not self._delete_dialog_keep_clicked
             else:
-                # Unknown token combination, but safe fallback to Ask
-                logger.warning(f"Unknown deletion policy: '{policy}', falling back to ASK.")
+                # 没有本地文件，直接确认删除记录
+                content = "确定要从列表中移除此任务记录吗？"
+                box = MessageBox(title, content, self)
+                box.yesButton.setText("删除记录")
+                box.cancelButton.setText("取消")
+                if not box.exec():
+                    return
+                force_delete = False
 
-            title = "删除任务"
-            content = "确定要从列表中移除此任务吗？"
-
-            box = MessageBox(title, content, self)
-            box.yesButton.setText("删除")
-            box.cancelButton.setText("取消")
-
-            delete_cache_cb = None
-            if cache_paths:
-                delete_cache_cb = QCheckBox(f"同时删除 {len(cache_paths)} 个缓存文件", box)
-                delete_cache_cb.setChecked(True)
-                # MessageBox (qfluentwidgets) uses textLayout for content area
-                try:
-                    box.textLayout.addWidget(delete_cache_cb)
-                except Exception:
-                    box.vBoxLayout.addWidget(delete_cache_cb)
-
-            delete_source_cb = None
-            if source_paths:
-                delete_source_cb = QCheckBox(f"同时删除 {len(source_paths)} 个本地文件", box)
-                delete_source_cb.setChecked(False)
-                try:
-                    box.textLayout.addWidget(delete_source_cb)
-                except Exception:
-                    box.vBoxLayout.addWidget(delete_source_cb)
-
-            if not box.exec():
-                logger.info("User cancelled deletion.")
-                return
-
-            final_paths = []
-            if delete_cache_cb and delete_cache_cb.isChecked():
-                final_paths.extend(cache_paths)
-            if delete_source_cb and delete_source_cb.isChecked():
-                final_paths.extend(source_paths)
-
-            if final_paths:
-                self._delete_files_best_effort(final_paths, success_title="已删除选中文件")
-
-            self.task_page.remove_card(card)
-            logger.info("Card removed successfully.")
+            if self.controller:
+                self.controller.handle_remove_task(worker, force_delete_files=force_delete)
+            self.task_page.model.remove_task(row)
 
         except Exception as e:
-            logger.exception(f"Critical error in on_remove_card: {e}")
-            # Last resort: try to remove the card anyway so UI isn't stuck
+            logger.exception(f"Critical error in on_remove_task: {e}")
             try:
-                self.task_page.remove_card(card)
+                self.task_page.model.remove_task(row)
             except Exception:
                 pass
 
-    def _delete_files_best_effort(self, paths: list[str], success_title: str = "已删除文件"):
-        """Try to delete a list of files/dirs, reporting results via InfoBar."""
-        success_count = 0
-        errors = []
-        for path in paths:
-            # Retry loop for file locks
-            deleted = False
-            last_error = None
-            for _ in range(3):
-                try:
-                    if os.path.isfile(path):
-                        os.remove(path)
-                        deleted = True
-                        break
-                    elif os.path.isdir(path):
-                        pass
-                    else:
-                        # Path doesn't exist?
-                        deleted = True  # Treat as success
-                        break
-                except Exception as e:
-                    last_error = e
-                    time.sleep(0.5)
-
-            if deleted:
-                if os.path.basename(path) not in [".", ".."]:  # Filter trivial
-                    success_count += 1
-            elif last_error:
-                errors.append(f"{os.path.basename(path)}: {last_error}")
-
-        if errors:
-            InfoBar.warning(
-                "部分文件删除失败",
-                "\n".join(errors[:3]) + ("\n..." if len(errors) > 3 else ""),
-                duration=5000,
-                parent=self,
-            )
-        elif success_count > 0:
-            InfoBar.success(
-                success_title, f"成功清理了 {success_count} 个文件。", duration=3000, parent=self
-            )
-
     # --- Helper Methods Copied from Old MainWindow ---
-    def _collect_existing_cache_paths(self, cards: Iterable[DownloadItemWidget]) -> list[str]:
+    def _collect_existing_cache_paths(self, cards) -> list[str]:
         paths = []
         for card in cards:
             if not getattr(card, "worker", None):
@@ -851,7 +777,7 @@ class MainWindow(FluentWindow):
                 continue
         return paths
 
-    def _collect_existing_output_paths(self, cards: Iterable[DownloadItemWidget]) -> list[str]:
+    def _collect_existing_output_paths(self, cards) -> list[str]:
         paths = []
         for card in cards:
             if not getattr(card, "worker", None):
@@ -872,81 +798,224 @@ class MainWindow(FluentWindow):
         box = MessageBox(title, f"即将删除 {len(paths)} 个源文件，是否继续？", self)
         return bool(box.exec())
 
-    def on_resume_card(self, card: DownloadItemWidget):
-        # 重启任务逻辑
-        # 需要重新创建 worker
-        new_worker = download_manager.create_worker(card.url, card.opts)
-        # 更新 card 的 worker
-        card._bind_worker(new_worker)
-
-        # Update status text immediately to show feedback
-        card.update_status("正在恢复下载...")
-
-        download_manager.start_worker(new_worker)
-        card.set_state("running")
-
-    def on_batch_start(self, page: Any):
-        cards = page.get_selected_cards()
-        for card in cards:
-            if isinstance(card, DownloadItemWidget):
-                if card.state() in {"paused", "error", "queued"}:
-                    self.on_resume_card(card)
-
-    def on_batch_pause(self, page: Any):
-        cards = page.get_selected_cards()
-        for card in cards:
-            if isinstance(card, DownloadItemWidget):
-                if card.state() == "running":
-                    # Use stop() when available; fall back to cancel() for legacy workers.
-                    try:
-                        if hasattr(card.worker, "stop"):
-                            card.worker.stop()
-                        else:
-                            cancel = getattr(card.worker, "cancel", None)
-                            if callable(cancel):
-                                cancel()
-                    except Exception:
-                        # Best-effort; ignore errors to avoid blocking batch operations
-                        pass
-
-    def on_batch_delete(self, page: Any):
-        cards = page.get_selected_cards()
-        if not cards:
+    def on_pause_resume_task(self, row: int):
+        # 暂停/继续任务逻辑委托给 Controller
+        task_data = self.task_page.model.get_task(row)
+        if not task_data:
             return
 
-        if not MessageBox("批量删除", f"确定要删除选中的 {len(cards)} 个任务吗？", self).exec():
+        worker = task_data.get("worker")
+        if not worker:
             return
 
-        for card in cards:
-            if isinstance(card, DownloadItemWidget):
-                self.on_remove_card(card)
+        if self.controller:
+            new_worker = self.controller.handle_pause_resume_task(worker)
+            if new_worker:
+                task_data["worker"] = new_worker
+                self.task_page.model._bind_worker_signals(new_worker, task_data)
+                idx = self.task_page.model.index(row, 0)
+                self.task_page.model.dataChanged.emit(idx, idx, [Qt.ItemDataRole.UserRole])
+
+    def on_batch_start(self, rows: list[int]):
+        for row in rows:
+            self.on_pause_resume_task(row)
+        self.task_page.set_selection_mode(False)
+
+    def on_batch_pause(self, rows: list[int]):
+        for row in rows:
+            task = self.task_page.model.get_task(row)
+            if task and task.get("worker"):
+                worker = task["worker"]
+                if worker.isRunning():
+                    if hasattr(worker, "pause"):
+                        worker.pause()
+                    else:
+                        if hasattr(worker, "stop"):
+                            worker.stop()
+                        elif hasattr(worker, "cancel"):
+                            worker.cancel()
+
+    def on_batch_delete(self, rows: list[int]):
+        if not rows:
+            return
+
+        raw_policy = config_manager.get("deletion_policy")
+        policy = DeletionPolicy.from_config_str(raw_policy)
+
+        # ── 分类：活跃任务 vs 已完成任务 ──
+        active_workers: list = []  # 需要取消的活跃任务
+        finished_workers: list = []  # 已完成/出错任务
+        rows_to_remove: set[int] = set()
+
+        for row in rows:
+            task = self.task_page.model.get_task(row)
+            if not task:
+                continue
+            worker = task.get("worker")
+            if not worker:
+                continue
+
+            rows_to_remove.add(row)
+
+            state = worker.effective_state
+
+            if state in ("running", "queued", "paused", "downloading"):
+                active_workers.append(worker)
+            else:
+                finished_workers.append(worker)
+
+        if not rows_to_remove:
+            return
+
+        n_active = len(active_workers)
+        n_finished = len(finished_workers)
+        n_total = len(rows_to_remove)
+
+        # 检查已完成任务中有多少有本地文件
+        n_with_files = 0
+        for w in finished_workers:
+            fp = getattr(w, "output_path", getattr(w, "_final_filepath", ""))
+            if fp and os.path.exists(str(fp)):
+                n_with_files += 1
+
+        # ── 快速通道：仅移除记录 + 无活跃任务 ──
+        if policy == DeletionPolicy.KEEP_FILES and n_active == 0:
+            for w in finished_workers:
+                if self.controller:
+                    self.controller.handle_remove_task(w, force_delete_files=False)
+            for row in sorted(list(rows_to_remove), reverse=True):
+                try:
+                    self.task_page.model.remove_task(row)
+                except Exception:
+                    pass
+            self.task_page.set_selection_mode(False)
+            return
+
+        # ── 快速通道：彻底删除 + 无活跃任务 ──
+        if policy == DeletionPolicy.DELETE_FILES and n_active == 0:
+            for w in finished_workers:
+                if self.controller:
+                    self.controller.handle_remove_task(w, force_delete_files=True)
+            for row in sorted(list(rows_to_remove), reverse=True):
+                try:
+                    self.task_page.model.remove_task(row)
+                except Exception:
+                    pass
+            self.task_page.set_selection_mode(False)
+            return
+
+        # ── 构造提示文案 ──
+        desc_parts = []
+        if n_active > 0:
+            desc_parts.append(f"{n_active} 个下载中的任务（将自动取消并清理缓存）")
+        if n_finished > 0:
+            if n_with_files > 0:
+                desc_parts.append(f"{n_finished} 个已完成任务（其中 {n_with_files} 个有本地文件）")
+            else:
+                desc_parts.append(f"{n_finished} 个已完成任务")
+
+        title = f"批量删除 {n_total} 个任务"
+        content = "选中的任务包含：\n" + "\n".join(f"• {p}" for p in desc_parts)
+
+        if n_with_files > 0 or n_active > 0:
+            # 迅雷/IDM 风格双按钮
+            content += "\n\n请选择删除方式："
+            box = MessageBox(title, content, self)
+            if n_with_files > 0:
+                box.yesButton.setText(f"🗑️ 删除记录并删除文件 ({n_with_files} 个)")
+            else:
+                box.yesButton.setText("🗑️ 移除并删除文件")
+            box.cancelButton.setText("取消")
+
+            from qfluentwidgets import PushButton
+
+            keep_btn = PushButton("📋 仅删除记录", box)
+            keep_btn.setFixedHeight(box.yesButton.height())
+            self._batch_delete_keep_clicked = False
+
+            def _on_keep():
+                self._batch_delete_keep_clicked = True
+                box.accept()
+
+            keep_btn.clicked.connect(_on_keep)
+            try:
+                box.buttonLayout.insertWidget(1, keep_btn)
+            except Exception:
+                box.buttonGroup.layout().insertWidget(1, keep_btn)
+
+            if not box.exec():
+                return
+
+            force_delete_finished = not self._batch_delete_keep_clicked
+        else:
+            # 没有本地文件的情况，只需确认
+            box = MessageBox(title, content, self)
+            box.yesButton.setText("确认删除")
+            box.cancelButton.setText("取消")
+            if not box.exec():
+                return
+            force_delete_finished = False
+
+        # ── 执行 ──
+        # 活跃任务/已完成任务：共同遵循用户的双项选择
+        for w in active_workers:
+            try:
+                if self.controller:
+                    self.controller.handle_remove_task(w, force_delete_files=force_delete_finished)
+            except Exception:
+                pass
+
+        # 已完成任务：根据用户选择
+        for w in finished_workers:
+            try:
+                if self.controller:
+                    self.controller.handle_remove_task(w, force_delete_files=force_delete_finished)
+            except Exception:
+                pass
+
+        for row in sorted(list(rows_to_remove), reverse=True):
+            try:
+                self.task_page.model.remove_task(row)
+            except Exception:
+                pass
+
+        self.task_page.set_selection_mode(False)
 
     def on_start_all(self):
-        for card in list(self.task_page._cards):
-            if isinstance(card, DownloadItemWidget) and card.state() in {
-                "paused",
-                "error",
-                "queued",
-            }:
-                self.on_resume_card(card)
+        for i in range(self.task_page.model.rowCount()):
+            task = self.task_page.model.get_task(i)
+            if not task:
+                continue
+
+            worker = task.get("worker")
+            if not worker:
+                continue
+
+            s = worker.effective_state
+            if s in {"paused", "error", "queued"}:
+                self.on_resume_task(i)
 
     def on_pause_all(self):
         download_manager.stop_all()
 
     def on_clear_completed(self):
-        completed_cards = [
-            c
-            for c in list(self.task_page._cards)
-            if isinstance(c, DownloadItemWidget) and c.state() == "completed"
-        ]
-        if not completed_cards:
+        # Gather rows that are completed
+        completed_rows = []
+        for i in range(self.task_page.model.rowCount()):
+            task = self.task_page.model.get_task(i)
+            if not task:
+                continue
+            worker = task.get("worker")
+            if worker and worker.effective_state == "completed":
+                completed_rows.append(i)
+
+        if not completed_rows:
             return
         if MessageBox(
             "清空记录", "确定要清空所有已完成任务记录吗？\n(不会删除本地文件)", self
         ).exec():
-            for card in completed_cards:
-                self.task_page.remove_card(card)
-                card.deleteLater()
+            for row in sorted(completed_rows, reverse=True):
+                self.task_page.model.remove_task(row)
 
     def on_open_download_dir(self):
         # 打开默认下载目录

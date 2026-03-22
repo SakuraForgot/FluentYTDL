@@ -7,6 +7,7 @@ from typing import Any
 from PySide6.QtCore import QThread, Signal
 
 from ..core.config_manager import config_manager
+from ..models.yt_dto import YtMediaDTO
 from ..utils.logger import logger
 from ..utils.translator import translate_error
 from ..youtube.youtube_service import YoutubeServiceOptions, youtube_service
@@ -21,7 +22,6 @@ from .features import (
     ThumbnailFeature,
     VRFeature,
 )
-from .strategy import DownloadMode, get_fallback
 
 
 class DownloadCancelled(Exception):
@@ -31,7 +31,7 @@ class DownloadCancelled(Exception):
 class InfoExtractWorker(QThread):
     """解析工人：后台获取视频元数据 (JSON)，不下载"""
 
-    finished = Signal(dict)
+    finished = Signal(YtMediaDTO)
     error = Signal(dict)
 
     def __init__(
@@ -61,7 +61,8 @@ class InfoExtractWorker(QThread):
                 )
             if self._cancel_event.is_set():
                 return
-            self.finished.emit(info)
+            dto = YtMediaDTO.from_dict(info)
+            self.finished.emit(dto)
         except YtDlpCancelled:
             # Dialog closed; treat as silent cancellation.
             return
@@ -73,7 +74,7 @@ class InfoExtractWorker(QThread):
 class VRInfoExtractWorker(QThread):
     """VR 解析工人：智能处理 VR 视频和播放列表"""
 
-    finished = Signal(dict)
+    finished = Signal(YtMediaDTO)
     error = Signal(dict)
 
     def __init__(self, url: str):
@@ -120,7 +121,8 @@ class VRInfoExtractWorker(QThread):
             if self._cancel_event.is_set():
                 return
 
-            self.finished.emit(info)
+            dto = YtMediaDTO.from_dict(info)
+            self.finished.emit(dto)
 
         except YtDlpCancelled:
             return
@@ -132,7 +134,7 @@ class VRInfoExtractWorker(QThread):
 class EntryDetailWorker(QThread):
     """播放列表条目深解析：获取 formats / 最高质量等信息"""
 
-    finished = Signal(int, dict)
+    finished = Signal(int, YtMediaDTO)
     error = Signal(int, str)
 
     def __init__(
@@ -168,7 +170,9 @@ class EntryDetailWorker(QThread):
 
             if self._cancel_event.is_set():
                 return
-            self.finished.emit(self.row, info)
+
+            dto = YtMediaDTO.from_dict(info)
+            self.finished.emit(self.row, dto)
         except YtDlpCancelled:
             return
         except Exception as exc:
@@ -178,17 +182,20 @@ class EntryDetailWorker(QThread):
 class DownloadWorker(QThread):
     """下载工人：执行实际下载任务
 
-    支持进度回调与取消（Phase 3 先实现取消；暂停在后续阶段做）。
+    支持 threading.Event 红绿灯暂停/继续以及安全取消。
     """
 
     progress = Signal(dict)  # 发送 yt-dlp 的进度字典
     completed = Signal()  # 下载完成（避免与 QThread.finished 冲突）
-    cancelled = Signal()  # 用户暂停/取消
+    cancelled = Signal()  # 用户取消
     error = Signal(dict)  # 发生错误（结构化）
     status_msg = Signal(str)  # 状态文本 (正在合并/正在转换...)
     output_path_ready = Signal(str)  # 最终输出文件路径（尽力解析）
     cookie_error_detected = Signal(str)  # Cookie 错误检测（触发修复流程）
     thumbnail_embed_warning = Signal(str)  # 封面嵌入警告（格式不支持时）
+    paused = Signal()  # 已进入暂停状态
+    resumed = Signal()  # 已从暂停中恢复
+    unified_status = Signal(str, float, str)  # 纯净状态信号：(状态码, 进度, 友好描述)
 
     def __init__(self, url: str, opts: dict[str, Any], cached_info: dict[str, Any] | None = None):
         super().__init__()
@@ -205,7 +212,14 @@ class DownloadWorker(QThread):
         self.dest_paths: set[str] = set()  # 格式选择状态追踪（防止格式自动降级到音频）
         self._original_format: str | None = None
         self._ssl_error_count = 0
-        self._format_warning_shown = False  # 防止重复警告
+        self._format_warning_shown = False
+
+        # ── 红绿灯系统 (threading.Event) ──
+        # _pause_event: 默认 set()=绿灯(放行), clear()=红灯(暂停)
+        # _cancel_event: 默认未触发, set()=取消
+        self._pause_event = threading.Event()
+        self._pause_event.set()  # 初始: 绿灯放行
+        self._cancel_event = threading.Event()
 
         # 初始化功能模块
         self.features = [
@@ -216,6 +230,178 @@ class DownloadWorker(QThread):
             VRFeature(),
         ]
         self.cached_info = cached_info
+
+        # 预加载恢复属性，保证 UI 重建时即刻非空
+        self.v_title = ""
+        self.v_thumbnail = ""
+        if cached_info:
+            self.v_title = cached_info.get("title", "")
+            self.v_thumbnail = cached_info.get("thumbnail", "")
+
+        from ..utils.clean_logger import CleanLogger
+
+        self._clean_logger = CleanLogger(self._on_clean_update)
+
+    def _on_clean_update(self, state: str, pct: float, msg: str) -> None:
+        self._final_state = state
+        self.progress_val = pct
+        self.status_text = msg
+        self.unified_status.emit(state, pct, msg)
+
+    @property
+    def effective_state(self) -> str:
+        """权威状态推断：消除 _final_state 与 QThread 状态的不一致窗口。
+
+        所有 UI 组件和 Filter 都应当读此 property 而非自行组合推断。
+        """
+        if self.isRunning():
+            fs = getattr(self, "_final_state", "downloading")
+            # Worker 线程正在跑但 CleanLogger 已标记暂停
+            if fs == "paused":
+                return "paused"
+            return "running"
+        fs = getattr(self, "_final_state", "queued")
+        if fs in ("completed", "error", "cancelled", "paused"):
+            return fs
+        if self.isFinished():
+            return "completed"
+        return "queued"
+
+    # ── 红绿灯 API (线程安全，可从任意线程调用) ──
+
+    def pause(self) -> None:
+        """暂停下载：红灯亮起，Worker 线程将在下次进度回调时自动阻塞。"""
+        if self._cancel_event.is_set():
+            return
+        self._pause_event.clear()
+
+        # 通知 CleanLogger
+        pct = getattr(self, "progress_val", 0.0)
+        self._clean_logger.force_update("paused", pct, "⏸️ 下载已暂停")
+
+        self.paused.emit()
+        logger.info("红灯 下载已暂停: {}", self.url)
+
+    def resume(self) -> None:
+        """继续下载：绿灯亮起，Worker 线程将从阻塞点恢复执行。"""
+        if self._cancel_event.is_set():
+            return
+        self._pause_event.set()
+
+        # 通知 CleanLogger
+        pct = getattr(self, "progress_val", 0.0)
+        self._clean_logger.force_update("downloading", pct, "▶️ 继续下载...")
+
+        self.resumed.emit()
+        logger.info("绿灯 下载已恢复: {}", self.url)
+
+    def cancel(self) -> None:
+        """取消下载：设置取消标记 + 唤醒可能的暂停阻塞 + 终止子进程。"""
+        self._cancel_event.set()
+        self.is_cancelled = True
+        self._pause_event.set()
+        if self.executor:
+            self.executor.terminate()
+        proc = getattr(self, "_proc_ref", None)
+        if proc is not None:
+            import platform
+
+            try:
+                if platform.system() == "Windows":
+                    import subprocess
+
+                    subprocess.run(
+                        ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
+                        capture_output=True,
+                        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000),
+                    )
+                else:
+                    proc.terminate()
+            except Exception:
+                pass
+        logger.info("下载已取消: {}", self.url)
+
+    @property
+    def is_paused(self) -> bool:
+        """当前是否处于暂停状态。"""
+        return not self._pause_event.is_set() and not self._cancel_event.is_set()
+
+    def _sweep_part_files(self) -> None:
+        """物理清除所有因为取消而残留的残骸文件 (.part, .ytdl 等未完成流)"""
+        import glob
+        import os
+
+        from ..utils.logger import logger
+
+        sweep_list = set()
+
+        # 1. 明确记录的路径
+        if self.output_path:
+            sweep_list.add(self.output_path)
+        sweep_list.update(self.dest_paths)
+
+        # 2. 尝试推断通配符 (衍生各种独立分离流名称)
+        extended_list = set(sweep_list)
+        for p in sweep_list:
+            base_p = p
+            if p.endswith(".part"):
+                base_p = p[:-5]
+            elif p.endswith(".ytdl"):
+                base_p = p[:-5]
+
+            # 剥离最后的扩展名去匹配 .f137.mp4 这种
+            name_without_ext = os.path.splitext(base_p)[0]
+
+            try:
+                extended_list.update(glob.glob(f"{name_without_ext}*.part"))
+                extended_list.update(glob.glob(f"{name_without_ext}*.ytdl"))
+                extended_list.update(glob.glob(f"{name_without_ext}.f*.*"))
+
+                # 扫荡可能没来得及嵌入的独立音频、视频源流 (比如 .f137.mp4, .f140.m4a 经合并后的残余)
+                extended_list.update(glob.glob(f"{name_without_ext}*.mp4"))
+                extended_list.update(glob.glob(f"{name_without_ext}*.mkv"))
+                extended_list.update(glob.glob(f"{name_without_ext}*.m4a"))
+                extended_list.update(glob.glob(f"{name_without_ext}*.webm"))
+
+                # 扫荡外挂字幕和封面图残骸
+                extended_list.update(glob.glob(f"{name_without_ext}*.jpg"))
+                extended_list.update(glob.glob(f"{name_without_ext}*.jpeg"))
+                extended_list.update(glob.glob(f"{name_without_ext}*.webp"))
+                extended_list.update(glob.glob(f"{name_without_ext}*.png"))
+                extended_list.update(glob.glob(f"{name_without_ext}*.vtt"))
+                extended_list.update(glob.glob(f"{name_without_ext}*.srt"))
+                extended_list.update(glob.glob(f"{name_without_ext}*.ass"))
+                extended_list.update(glob.glob(f"{name_without_ext}*.lrc"))
+            except Exception:
+                pass
+
+        # 3. 物理火化
+        import time
+
+        for f in extended_list:
+            if os.path.exists(f):
+                deleted = False
+                last_error = None
+                for _ in range(5):
+                    try:
+                        os.remove(f)
+                        deleted = True
+                        break
+                    except OSError as e:
+                        last_error = e
+                        time.sleep(0.5)
+
+                if deleted:
+                    logger.info("已物理清除残骸: {}", f)
+                else:
+                    logger.warning("清除残骸失败: {} ({})", f, last_error)
+
+    def _wait_if_paused(self) -> None:
+        """红绿灯检查点：如果红灯则阻塞，直到绿灯或取消。"""
+        while not self._pause_event.is_set():
+            self._pause_event.wait(timeout=0.5)
+            if self._cancel_event.is_set():
+                raise DownloadCancelled()
 
     def run(self) -> None:
         self.is_running = True
@@ -289,16 +475,26 @@ class DownloadWorker(QThread):
                 merged["continuedl"] = True  # 继续下载部分文件
 
             # === 调度策略 ===
-            dl_mode_str = config_manager.get("download_mode", "auto")
-            mode = DownloadMode(dl_mode_str)
-            strategy = download_dispatcher.resolve(mode, merged)
+            strategy = download_dispatcher.resolve(merged)
 
             # 回调定义 (复用)
             def on_progress(data: dict[str, Any]) -> None:
-                self.progress.emit(data)
+                # ── 红绿灯检查点 ──
+                self._wait_if_paused()
+                if self._cancel_event.is_set():
+                    raise DownloadCancelled()
+
+                # 为老 UI 绑定原始速度变量，防止 UI 一直卡在下载展示流而不显示后处理文本
+                self.downloaded_bytes = data.get("downloaded_bytes", 0)
+                self.total_bytes = data.get("total_bytes", 0)
+                self.speed_val = data.get("speed", 0)
+                self.eta_val = data.get("eta", 0)
+
+                # 将原生 dict 对象丢给 CleanLogger → unified_status 单通道输出
+                self._clean_logger.handle_progress(data)
 
             def on_status(message: str) -> None:
-                self.status_msg.emit(message)
+                self._clean_logger.handle_status(message)
 
             def on_path(path: str) -> None:
                 self.output_path = path
@@ -306,72 +502,62 @@ class DownloadWorker(QThread):
             def on_file_created(path: str) -> None:
                 self.dest_paths.add(path)
 
-            # === 执行下载 (带自动降级) ===
-            while True:
-                # 用户可见的模式日志
-                label = strategy.label
-                logger.info("🚀 启动下载 | 模式: {} | 策略: {}", strategy.mode.value, label)
-                self.status_msg.emit(f"🚀 使用策略: {label}")
+            # === 执行下载 ===
+            label = strategy.label
+            logger.info("🚀 启动下载 | 策略: {}", label)
 
-                self.executor = DownloadExecutor()
-                try:
-                    # 执行
-                    final_path = self.executor.execute(
-                        self.url,
-                        merged,
-                        strategy,
-                        on_progress=on_progress,
-                        on_status=on_status,
-                        on_path=on_path,
-                        cancel_check=lambda: self.is_cancelled,
-                        on_file_created=on_file_created,
-                        cached_info_dict=self.cached_info,
-                    )
+            # 让 UI 瞬间响应，不再傻等
+            self._clean_logger.force_update("parsing", 0.0, "🔍 正在拉取元数据...")
+            self.status_msg.emit(f"🚀 使用策略: {label}")
 
-                    if final_path:
-                        self.output_path = final_path
-                        self.output_path_ready.emit(final_path)
-                        # Success for circuit breaker
-                        download_dispatcher.report_result(True)
-                        break
+            self.executor = DownloadExecutor()
+            try:
+                # 执行
+                final_path = self.executor.execute(
+                    self.url,
+                    merged,
+                    strategy,
+                    on_progress=on_progress,
+                    on_status=on_status,
+                    on_path=on_path,
+                    cancel_check=lambda: self.is_cancelled,
+                    on_file_created=on_file_created,
+                    cached_info_dict=self.cached_info,
+                )
 
-                except DownloadCancelled:
-                    raise
+                if final_path:
+                    self.output_path = final_path
+                    self.output_path_ready.emit(final_path)
+                    download_dispatcher.report_result(True)
 
-                except Exception as exc:
-                    logger.warning(f"下载失败 (策略={strategy.label}): {exc}")
+            except DownloadCancelled:
+                raise
 
-                    # 报告失败 (触发熔断计数)
-                    download_dispatcher.report_result(False)
+            except Exception as exc:
+                logger.warning(f"下载失败 (策略={strategy.label}): {exc}")
+                download_dispatcher.report_result(False)
 
-                    if self.is_cancelled:
-                        raise DownloadCancelled() from None
+                if self.is_cancelled:
+                    raise DownloadCancelled() from None
 
-                    # 尝试降级
-                    fallback = get_fallback(strategy.mode)
-                    if fallback:
-                        logger.info(f"正在降级策略: {strategy.mode} -> {fallback.mode}")
-                        self.status_msg.emit(f"⚠️ 网络不稳定，自动切换至: {fallback.label}")
-                        strategy = fallback
-
-                        # 简单的指数退避，给网络一点喘息时间
-                        import time
-
-                        time.sleep(1)
-                        continue
-
-                    # 无路可退，抛出异常
-                    raise exc
+                raise exc
 
             # === Feature Pipeline: Post-process ===
             # 执行各模块的后处理逻辑（封面嵌入、字幕合并、VR转码等）
             if not self.is_cancelled:
                 for feature in self.features:
                     feature.on_post_process(context)
+                self._clean_logger.force_update("completed", 100.0, "✅ 下载并处理完成！")
                 self.completed.emit()
 
         except DownloadCancelled:
-            self.status_msg.emit("任务已暂停")
+            self._clean_logger.force_update("cancelled", 0.0, "🗑️ 任务已取消并清理残骸")
+            # 延时 1 秒给 yt-dlp 及其子进程释放文件锁，防止 WinError 32
+            import time
+
+            time.sleep(1.0)
+            self._sweep_part_files()
+            self.status_msg.emit("任务已取消")
             self.cancelled.emit()
         except Exception as exc:
             msg = str(exc)
@@ -449,9 +635,6 @@ class DownloadWorker(QThread):
         subtitleslangs = opts.get("subtitleslangs")
         if isinstance(subtitleslangs, (list, tuple)) and subtitleslangs:
             cmd += ["--sub-langs", ",".join(str(lang) for lang in subtitleslangs)]
-        convertsubtitles = opts.get("convertsubtitles")
-        if isinstance(convertsubtitles, str) and convertsubtitles:
-            cmd += ["--convert-subs", convertsubtitles]
 
         # 封面相关
         if opts.get("writethumbnail"):
@@ -517,7 +700,19 @@ class DownloadWorker(QThread):
             assert proc.stdout is not None
             for raw in proc.stdout:
                 if self.is_cancelled:
-                    proc.terminate()
+                    import platform
+
+                    try:
+                        if platform.system() == "Windows":
+                            subprocess.run(
+                                ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
+                                capture_output=True,
+                                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000),
+                            )
+                        else:
+                            proc.terminate()
+                    except Exception:
+                        pass
                     self.cancelled.emit()
                     return
 
@@ -546,14 +741,5 @@ class DownloadWorker(QThread):
             self.is_running = False
 
     def stop(self) -> None:
-        """外部调用此方法暂停/取消下载"""
-        self.is_cancelled = True
-        if self.executor:
-            self.executor.terminate()
-        # 也终止轻量提取的子进程
-        proc = getattr(self, "_proc_ref", None)
-        if proc is not None:
-            try:
-                proc.terminate()
-            except Exception:
-                pass
+        """向后兼容的别名：调用 cancel() 安全取消下载。"""
+        self.cancel()

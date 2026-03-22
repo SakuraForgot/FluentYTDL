@@ -8,7 +8,7 @@ from .dispatcher import DownloadDispatcher, download_dispatcher
 from .download_manager import DownloadManager, download_manager
 from .executor import DownloadExecutor
 from .resume_manager import ResumeManager
-from .strategy import DownloadMode, DownloadStrategy
+from .strategy import DownloadStrategy
 from .task_queue import TaskQueue
 from .workers import DownloadWorker
 
@@ -18,7 +18,6 @@ __all__ = [
     "DownloadDispatcher",
     "download_dispatcher",
     "DownloadExecutor",
-    "DownloadMode",
     "DownloadStrategy",
     "DownloadWorker",
     "TaskQueue",

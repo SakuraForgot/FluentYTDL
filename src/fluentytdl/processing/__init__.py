@@ -21,7 +21,6 @@ from .sponsorblock import (
 )
 from .subtitle_manager import (
     SubtitleTrack,
-    build_subtitle_opts,
     extract_subtitle_tracks,
     get_subtitle_languages,
 )
@@ -44,7 +43,6 @@ __all__ = [
     "audio_processor",
     "extract_subtitle_tracks",
     "get_subtitle_languages",
-    "build_subtitle_opts",
     "SubtitleTrack",
     "SubtitleService",
     "subtitle_service",

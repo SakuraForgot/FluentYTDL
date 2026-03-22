@@ -7,7 +7,6 @@
 
 from __future__ import annotations
 
-import dataclasses
 import json
 import os
 import re
@@ -26,7 +25,33 @@ from ..youtube.yt_dlp_cli import (
     ydl_opts_to_cli_args,
 )
 from .output_parser import YtDlpOutputParser
-from .strategy import DownloadMode, DownloadStrategy
+from .strategy import DownloadStrategy
+
+# 字幕/封面等附属文件后缀，不应被视为主输出文件
+_AUXILIARY_EXTENSIONS = frozenset(
+    {
+        ".vtt",
+        ".srt",
+        ".ass",
+        ".ssa",
+        ".sub",
+        ".lrc",  # 字幕
+        ".jpg",
+        ".jpeg",
+        ".png",
+        ".webp",  # 封面
+        ".json",
+        ".description",
+        ".txt",  # 元数据
+    }
+)
+
+
+def _is_auxiliary_file(path: str) -> bool:
+    """判断路径是否为附属文件（字幕、封面、元数据等），不应作为主输出路径。"""
+    ext = os.path.splitext(path)[1].lower()
+    return ext in _AUXILIARY_EXTENSIONS
+
 
 # ── 回调协议 ──────────────────────────────────────────────
 
@@ -201,59 +226,7 @@ class DownloadExecutor:
         if exe is None:
             raise RuntimeError("yt-dlp 可执行文件未找到")
 
-        # 动态调整 Native 并发 (仅针对 HLS/DASH 流)
-        # 如果策略允许并发 (concurrent_fragments > 1)，我们尝试根据文件大小优化它
-        # 对于普通 HTTP 下载，native 仅支持单线程，此参数被忽略，所以主要针对 m3u8/mpd
-        if strategy.concurrent_fragments > 1 or strategy.mode == DownloadMode.SPEED:
-            try:
-                # 快速预提取信息 (不下载)
-                # 仅当有缓存信息时才进行动态优化，避免额外的网络请求导致启动延迟
-                if cached_info_dict:
-                    logger.debug(
-                        "[Executor][Native] Using cached info for dynamic concurrency check"
-                    )
-                    info = self._parse_stream_info(cached_info_dict, check_protocol=False)
-
-                    filesize = info.get("filesize") or info.get("filesize_approx") or 0
-
-                    if filesize > 0:
-                        size_mb = filesize / (1024 * 1024)
-                        new_N = 1
-                        if size_mb < 10:
-                            new_N = 1
-                        elif size_mb < 50:
-                            new_N = min(
-                                4,
-                                strategy.concurrent_fragments
-                                if strategy.concurrent_fragments > 1
-                                else 4,
-                            )
-                        else:
-                            # > 50MB
-                            new_N = min(
-                                8,
-                                strategy.concurrent_fragments
-                                if strategy.concurrent_fragments > 1
-                                else 8,
-                            )
-                            # 极速模式特权
-                            if strategy.mode == DownloadMode.SPEED:
-                                new_N = 16 if size_mb > 100 else 8
-
-                        if new_N != strategy.concurrent_fragments:
-                            logger.info(
-                                f"[Executor][Native] Dynamic concurrency: size={size_mb:.2f}MB, N={new_N}"
-                            )
-                            strategy = dataclasses.replace(strategy, concurrent_fragments=new_N)
-                else:
-                    logger.debug(
-                        "[Executor][Native] No cached info, skipping dynamic concurrency check to avoid delay"
-                    )
-
-            except Exception as e:
-                logger.warning(f"[Executor][Native] Dynamic concurrency check failed: {e}")
-
-        # 注入策略参数
+        # 注入策略参数（取消了极端的并发覆写判定机制，直接使用配置的默认值）
         strategy.apply_to_ydl_opts(ydl_opts)
 
         progress_prefix = "FLUENTYTDL|"
@@ -264,7 +237,6 @@ class DownloadExecutor:
             "--no-color",
             "--newline",
             "--progress",
-            "-q",
             "--progress-template",
             (
                 "download:"
@@ -284,10 +256,11 @@ class DownloadExecutor:
         cmd += ydl_opts_to_cli_args(ydl_opts)
         cmd.append(url)
 
-        logger.debug("[Executor][Native] cmd={}", " ".join(cmd))
+        logger.info("[Executor][Native] cmd={}", " ".join(cmd))
 
         env = prepare_yt_dlp_env()
         env["PYTHONIOENCODING"] = "utf-8"
+        work_dir = self._resolve_output_dir(ydl_opts)
 
         self._proc = subprocess.Popen(
             cmd,
@@ -295,7 +268,7 @@ class DownloadExecutor:
             stderr=subprocess.STDOUT,
             text=False,
             env=env,
-            cwd=os.getcwd(),
+            cwd=work_dir,
             **_win_hide_kwargs(),
         )
 
@@ -336,7 +309,7 @@ class DownloadExecutor:
                     dest_paths.add(p)
                     if on_file_created:
                         on_file_created(p)
-                    if not output_path:
+                    if not output_path and not _is_auxiliary_file(p):
                         output_path = p
                         on_path(p)
 
@@ -346,7 +319,7 @@ class DownloadExecutor:
                     dest_paths.add(p)
                     if on_file_created:
                         on_file_created(p)
-                    if not output_path:
+                    if not output_path and not _is_auxiliary_file(p):
                         output_path = p
                         on_path(p)
 
@@ -619,14 +592,25 @@ class DownloadExecutor:
         return os.getcwd()
 
     def _terminate_proc(self) -> None:
-        """终止当前子进程。"""
+        """终止当前子进程并尽可能杀死整个进程树防止锁释放失败。"""
         if self._proc:
+            import platform
+
             try:
-                self._proc.terminate()
+                if platform.system() == "Windows":
+                    import subprocess
+
+                    subprocess.run(
+                        ["taskkill", "/F", "/T", "/PID", str(self._proc.pid)],
+                        capture_output=True,
+                        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000),
+                    )
+                else:
+                    self._proc.terminate()
             except Exception:
                 pass
             try:
-                self._proc.wait(timeout=5)
+                self._proc.wait(timeout=2)
             except Exception:
                 try:
                     self._proc.kill()

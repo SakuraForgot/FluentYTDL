@@ -14,6 +14,7 @@ from fluentytdl.utils.logger import get_logger
 from fluentytdl.utils.paths import find_bundled_executable, is_frozen, locate_runtime_tool
 
 from ..core.config_manager import config_manager
+from ..utils.format_scorer import bcp47_expand_for_sort
 from .yt_dlp_cli import YtDlpCancelled, run_dump_single_json, run_version
 
 LogCallback = Callable[[str, str], None]
@@ -98,6 +99,34 @@ class YoutubeService:
                 pass
         getattr(self._logger, level.lower(), self._logger.info)(message)
 
+    @staticmethod
+    def _is_page_reload_error(message: str) -> bool:
+        text = (message or "").lower()
+        return "the page needs to be reloaded" in text
+
+    def _try_refresh_cookie_for_reload_error(self) -> bool:
+        """For DLE mode, force-refresh cookie once to recover transient session mismatch."""
+        try:
+            from ..auth.auth_service import AuthSourceType, auth_service
+            from ..auth.cookie_sentinel import cookie_sentinel
+
+            if auth_service.current_source != AuthSourceType.DLE:
+                return False
+
+            self._emit_log(
+                "warning",
+                "检测到 'The page needs to be reloaded'，正在自动刷新 DLE Cookie 并重试一次...",
+            )
+            ok, msg = cookie_sentinel.force_refresh_with_uac()
+            if ok:
+                self._emit_log("info", "自动刷新 DLE Cookie 成功，准备重试解析")
+                return True
+            self._emit_log("warning", f"自动刷新 DLE Cookie 失败: {msg}")
+            return False
+        except Exception as e:
+            self._emit_log("warning", f"自动刷新 DLE Cookie 异常: {e}")
+            return False
+
     def build_ydl_options(self, options: YoutubeServiceOptions | None = None) -> dict[str, Any]:
         """Construct yt-dlp options with anti-blocking and auth."""
 
@@ -142,29 +171,20 @@ class YoutubeService:
         }
 
         # 音频偏好语言注入 (Multi-Language Audio Track support)
-        # 例如: lang:orig, lang:en, res, br
+        # 此 format_sort 仅对旧路径（格式字符串，如播放列表批量下载）生效；
+        # 新路径（简易模式直接传 format_id）由 format_selector._get_best_audio_id 单独打分。
         pref_langs = config_manager.get("preferred_audio_languages")
 
-        fallback_langs = []
+        fallback_langs: list[str] = []
         if isinstance(pref_langs, list) and len(pref_langs) > 0:
             for lang in pref_langs:
-                lang = str(lang).strip().lower()
-                if not lang:
+                lang_str = str(lang).strip()
+                if not lang_str:
                     continue
-                # yt-dlp 约定 orig 意味着最佳匹配或原始音轨
-                fallback_langs.append(f"lang:{lang}")
+                # 展开单个偏好为 yt-dlp 认识的 lang: 条目列表（含 BCP-47 别名）
+                fallback_langs.extend(bcp47_expand_for_sort(lang_str))
 
-            # 特殊处理：如果用户选了任何中文分支，添加几个别名降级以防漏网
-            if any("zh" in x for x in fallback_langs):
-                if "lang:zh-hans" in fallback_langs and "lang:zh-cn" not in fallback_langs:
-                    fallback_langs.append("lang:zh-cn")
-                    fallback_langs.append("lang:zh")
-                if "lang:zh-hant" in fallback_langs and "lang:zh-tw" not in fallback_langs:
-                    fallback_langs.append("lang:zh-tw")
-                    if "lang:zh" not in fallback_langs:
-                        fallback_langs.append("lang:zh")
-
-            # 如果列表中完全没有 orig 也没有 en，我们在末尾强制加一个 default兜底
+            # 如果列表中完全没有 orig 也没有 en，在末尾强制加兜底
             if "lang:orig" not in fallback_langs:
                 fallback_langs.append("lang:orig")
             if "lang:en" not in fallback_langs:
@@ -173,8 +193,16 @@ class YoutubeService:
             # 默认兜底
             fallback_langs = ["lang:orig", "lang:en"]
 
+        # 去重保序
+        seen: set[str] = set()
+        deduped: list[str] = []
+        for entry in fallback_langs:
+            if entry not in seen:
+                seen.add(entry)
+                deduped.append(entry)
+
         # 组装最终 Sort 字符串列表
-        ydl_opts["format_sort"] = fallback_langs + ["res", "br", "fps", "acodec"]
+        ydl_opts["format_sort"] = deduped + ["res", "br", "fps", "acodec"]
 
         self._maybe_configure_youtube_js_runtime(ydl_opts)
 
@@ -1128,6 +1156,16 @@ class YoutubeService:
             if isinstance(exc, YtDlpCancelled):
                 raise
             msg = str(exc)
+
+            if self._is_page_reload_error(msg) and self._try_refresh_cookie_for_reload_error():
+                info = run_dump_single_json(
+                    url,
+                    tuned,
+                    extra_args=["--flat-playlist", "--lazy-playlist"],
+                    cancel_event=cancel_event,
+                )
+                return cast(dict[str, Any], info)
+
             if self._should_retry_with_youtubetab_skip_authcheck(msg):
                 retry_opts = self._with_youtubetab_skip_authcheck(tuned)
                 if retry_opts is not tuned:
@@ -1209,6 +1247,21 @@ class YoutubeService:
                 "info",
                 f"🥽 [VR] android_vr 解析完成: {len(formats)} 个格式",
             )
+
+            # 统一注入 android_vr 可用格式 ID，供下游兼容性过滤使用。
+            # 某些历史链路只在 merge 阶段写该字段，导致纯 VR 解析路径缺失元信息。
+            try:
+                android_vr_ids: list[str] = []
+                for f in formats:
+                    if not isinstance(f, dict):
+                        continue
+                    fid = str(f.get("format_id") or "")
+                    if fid:
+                        android_vr_ids.append(fid)
+                if android_vr_ids:
+                    info["__android_vr_format_ids"] = android_vr_ids
+            except Exception:
+                pass
 
             # 标记所有格式为 VR 来源
             info["__fluentytdl_vr_mode"] = True

@@ -37,14 +37,19 @@ class DownloadContext:
         return self.worker.dest_paths
 
     def emit_status(self, msg: str):
-        self.worker.status_msg.emit(msg)
+        if hasattr(self.worker, "_clean_logger"):
+            pct = getattr(self.worker, "progress_val", 99.0)
+            self.worker._clean_logger.force_update("processing", pct, msg)
+        else:
+            self.worker.status_msg.emit(msg)
 
     def emit_warning(self, msg: str):
         logger.warning(msg)
-        self.worker.status_msg.emit(f"⚠️ {msg}")
+        self.emit_status(f"⚠️ {msg}")
 
     def emit_thumbnail_warning(self, msg: str):
         self.worker.thumbnail_embed_warning.emit(msg)
+        self.emit_status(f"⚠️ {msg}")
 
     def find_final_merged_file(self) -> str | None:
         """查找最终合并的输出文件"""
@@ -154,6 +159,11 @@ class SubtitleFeature(DownloadFeature):
 
         from ..processing import subtitle_processor
 
+        # 纠正 output_path：分片文件（如 .f136.mp4）在合并后已被删除，需要找到最终的合并文件
+        final_output = context.find_final_merged_file()
+        if final_output:
+            context.output_path = final_output
+
         try:
             result = subtitle_processor.process(
                 output_path=context.output_path,
@@ -163,43 +173,24 @@ class SubtitleFeature(DownloadFeature):
             if result.success:
                 if result.merged_file:
                     context.emit_status("[字幕处理] ✓ 双语字幕已生成")
+
+                # 若配置了内嵌字幕，由我们手动清理外部残留（因搭配元数据嵌入时 yt-dlp 可能会默认保留外置文件）
+                if opts.get("embedsubtitles"):
+                    cleaned_count = 0
+                    for sub_file in result.processed_files:
+                        try:
+                            if os.path.exists(sub_file):
+                                os.remove(sub_file)
+                                cleaned_count += 1
+                        except OSError as e:
+                            logger.warning("清理外置字幕残留失败: {} - {}", sub_file, e)
+
+                    if cleaned_count > 0:
+                        logger.info("已清理 {} 个内嵌后的外置字幕文件", cleaned_count)
             else:
                 logger.warning("字幕后处理失败: {}", result.message)
-            self._cleanup_subtitle_files(context)
         except Exception as e:
             logger.exception("字幕后处理异常: {}", e)
-
-    def _cleanup_subtitle_files(self, context: DownloadContext) -> None:
-        opts = context.opts
-        if not opts.get("embedsubtitles"):
-            return
-        if config_manager.get("subtitle_write_separate_file", False):
-            return
-
-        paths = []
-        if context.output_path and os.path.exists(context.output_path):
-            paths.append(context.output_path)
-        for p in context.dest_paths:
-            if os.path.exists(p):
-                paths.append(p)
-
-        exts = [".srt", ".ass", ".vtt"]
-        for path in paths:
-            parent = os.path.dirname(path)
-            stem = os.path.splitext(os.path.basename(path))[0]
-            try:
-                if not os.path.exists(parent):
-                    continue
-                for f in os.listdir(parent):
-                    if not f.startswith(stem):
-                        continue
-                    if os.path.splitext(f)[1].lower() in exts:
-                        try:
-                            os.remove(os.path.join(parent, f))
-                        except Exception:
-                            pass
-            except Exception:
-                pass
 
 
 class ThumbnailFeature(DownloadFeature):
@@ -315,31 +306,6 @@ class ThumbnailFeature(DownloadFeature):
 
 
 class VRFeature(DownloadFeature):
-    def on_download_start(self, context: DownloadContext) -> None:
-        opts = context.opts
-        if not opts.get("__fluentytdl_use_android_vr"):
-            return
-
-        logger.info("🥽 VR 模式: 使用 android_vr 客户端下载")
-        opts.pop("__android_vr_format_ids", None)
-
-        ext_args = opts.get("extractor_args", {})
-        if not isinstance(ext_args, dict):
-            ext_args = {}
-        if "youtubepot-bgutilhttp" in ext_args:
-            ext_args.pop("youtubepot-bgutilhttp", None)
-
-        yt_args = ext_args.get("youtube", {})
-        if not isinstance(yt_args, dict):
-            yt_args = {}
-        yt_args["player_client"] = "android_vr"
-        ext_args["youtube"] = yt_args
-        opts["extractor_args"] = ext_args
-
-        if opts.get("cookiefile"):
-            opts.pop("cookiefile", None)
-        opts.pop("cookiesfrombrowser", None)
-
     def on_post_process(self, context: DownloadContext) -> None:
         if not context.opts.get("__fluentytdl_use_android_vr"):
             return

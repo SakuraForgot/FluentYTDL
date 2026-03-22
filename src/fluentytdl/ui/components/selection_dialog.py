@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-import time
-from collections import deque
 from functools import partial
 from typing import Any
 
-from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QColor
+from PySide6.QtCore import QCoreApplication, QEventLoop, QModelIndex, QPoint, Qt, QTimer
+from PySide6.QtGui import QColor, QCursor
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QButtonGroup,
@@ -14,11 +12,11 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QFrame,
     QHBoxLayout,
-    QHeaderView,
     QLabel,
+    QListView,
     QSizePolicy,
+    QStyleOptionViewItem,
     QTableWidget,
-    QTableWidgetItem,
     QVBoxLayout,
     QWidget,
 )
@@ -40,11 +38,17 @@ from qfluentwidgets import (
     ToolTipPosition,
 )
 
-from ...download.workers import EntryDetailWorker, InfoExtractWorker, VRInfoExtractWorker
+from ...download.extract_manager import AsyncExtractManager
+from ...download.workers import InfoExtractWorker, VRInfoExtractWorker
+from ...models.mappers import VideoInfoMapper
+from ...models.video_info import VideoInfo
 from ...processing import subtitle_service
 from ...utils.filesystem import sanitize_filename
 from ...utils.image_loader import ImageLoader
+from ...utils.logger import logger
 from ...youtube.youtube_service import YoutubeServiceOptions, YtDlpAuthOptions
+from ..delegates.playlist_delegate import PlaylistItemDelegate
+from ..models.playlist_model import PlaylistListModel, PlaylistModelRoles
 from .cover_selector import CoverSelectorWidget
 from .format_selector import VideoFormatSelectorWidget
 from .subtitle_selector import SubtitleSelectorWidget
@@ -55,27 +59,127 @@ from .vr_format_selector import VR_PRESETS, VRFormatSelectorWidget
 _SUBTITLE_COMPATIBLE_CONTAINERS = {"mp4", "mkv", "mov", "m4v"}
 
 
+def _normalize_info_payload(info: Any) -> dict[str, Any]:
+    """Normalize extraction payload to a dict for legacy UI code paths."""
+    if isinstance(info, dict):
+        return info
+
+    raw_dict = getattr(info, "raw_dict", None)
+    if isinstance(raw_dict, dict) and raw_dict:
+        return raw_dict
+
+    entries_raw = getattr(info, "entries", [])
+    entries: list[dict[str, Any]] = []
+    if isinstance(entries_raw, list):
+        for entry in entries_raw:
+            if isinstance(entry, dict):
+                entries.append(entry)
+                continue
+            entry_raw = getattr(entry, "raw_dict", None)
+            if isinstance(entry_raw, dict) and entry_raw:
+                entries.append(entry_raw)
+                continue
+            entries.append(
+                {
+                    "id": str(getattr(entry, "id", "") or ""),
+                    "title": str(getattr(entry, "title", "") or ""),
+                    "uploader": str(getattr(entry, "uploader", "") or ""),
+                    "duration": int(getattr(entry, "duration", 0) or 0),
+                    "thumbnail": str(getattr(entry, "thumbnail", "") or ""),
+                    "webpage_url": str(getattr(entry, "webpage_url", "") or ""),
+                }
+            )
+
+    formats_raw = getattr(info, "formats", [])
+    formats: list[dict[str, Any]] = []
+    if isinstance(formats_raw, list):
+        for fmt in formats_raw:
+            if isinstance(fmt, dict):
+                formats.append(fmt)
+                continue
+            formats.append(
+                {
+                    "format_id": str(getattr(fmt, "format_id", "") or ""),
+                    "ext": str(getattr(fmt, "ext", "") or ""),
+                    "vcodec": str(getattr(fmt, "vcodec", "none") or "none"),
+                    "acodec": str(getattr(fmt, "acodec", "none") or "none"),
+                    "filesize": int(getattr(fmt, "filesize", 0) or 0),
+                    "fps": float(getattr(fmt, "fps", 0.0) or 0.0),
+                    "height": int(getattr(fmt, "height", 0) or 0),
+                    "width": int(getattr(fmt, "width", 0) or 0),
+                    "url": str(getattr(fmt, "url", "") or ""),
+                    "format_note": str(getattr(fmt, "format_note", "") or ""),
+                    "resolution": str(getattr(fmt, "resolution", "") or ""),
+                    "vbr": float(getattr(fmt, "vbr", 0.0) or 0.0),
+                    "abr": float(getattr(fmt, "abr", 0.0) or 0.0),
+                    "tbr": float(getattr(fmt, "tbr", 0.0) or 0.0),
+                    "container": str(getattr(fmt, "container", "") or ""),
+                    "protocol": str(getattr(fmt, "protocol", "") or ""),
+                    "video_ext": str(getattr(fmt, "video_ext", "") or ""),
+                    "audio_ext": str(getattr(fmt, "audio_ext", "") or ""),
+                }
+            )
+
+    is_playlist = bool(getattr(info, "is_playlist", False) or entries)
+    normalized: dict[str, Any] = {
+        "id": str(getattr(info, "id", "") or ""),
+        "title": str(getattr(info, "title", "") or ""),
+        "uploader": str(getattr(info, "uploader", "") or ""),
+        "duration": int(getattr(info, "duration", 0) or 0),
+        "thumbnail": str(getattr(info, "thumbnail", "") or ""),
+        "is_live": bool(getattr(info, "is_live", False)),
+        "view_count": int(getattr(info, "view_count", 0) or 0),
+        "like_count": int(getattr(info, "like_count", 0) or 0),
+        "channel": str(getattr(info, "channel", "") or ""),
+        "channel_id": str(getattr(info, "channel_id", "") or ""),
+        "upload_date": str(getattr(info, "upload_date", "") or ""),
+        "webpage_url": str(getattr(info, "webpage_url", "") or ""),
+        "formats": formats,
+        "entries": entries,
+        "subtitles": {},
+    }
+    if is_playlist:
+        normalized["_type"] = "playlist"
+    vr_mode = getattr(info, "vr_mode", None)
+    if vr_mode is not None:
+        normalized["__fluentytdl_vr_mode"] = bool(vr_mode)
+    return normalized
+
+
 def _ensure_subtitle_compatible_container(opts: dict[str, Any]) -> None:
     """
     确保容器格式兼容字幕嵌入。
 
     只有当 embedsubtitles=True 时才需要检查：
-    - MP4/MKV/MOV 等已经支持字幕嵌入 → 保持不变
-    - WebM 不支持 SRT/ASS → 改用 MKV
+    - 多语言字幕 (subtitleslangs > 1) + mp4 → 升级 mkv
+      （mp4 mov_text 只能为实嵌入单轨，多轨在大多数播放器中被静默丢弃）
+    - WebM 不支持 SRT/ASS 字幕嵌入 → 改用 MKV
     - 未指定容器（原盘模式）→ 默认 MKV
+    - MP4 + 单字幕 → 保持（FFmpeg mov_text 单轨可用）
+    - MKV/MOV 等 → 保持
+
+    此函数在 subtitle_service.apply() 之后调用，此时 subtitleslangs 已写入 opts，
+    是容器决策的最终修正点，可安全覆盖 get_selection_result 的预设値。
     """
     if not opts.get("embedsubtitles"):
         return
 
     fmt = (opts.get("merge_output_format") or "").lower()
+
+    # 多语言字幕嵌入：mp4 mov_text 多轨支持差，必须升级 mkv
+    sub_langs = opts.get("subtitleslangs") or []
+    if isinstance(sub_langs, list) and len(sub_langs) > 1 and (fmt == "mp4" or not fmt):
+        opts["merge_output_format"] = "mkv"
+        return
+
     if fmt in _SUBTITLE_COMPATIBLE_CONTAINERS:
-        # MP4/MKV 等已支持，不覆盖用户选择
+        # 单字幕 mp4/mkv/mov 等，已支持，保持
         return
     elif fmt == "webm":
         # WebM 不支持 SRT/ASS 字幕嵌入
         opts["merge_output_format"] = "mkv"
     elif not fmt:
-        # 未指定容器格式（原盘/默认），使用 MKV 确保兼容
+        # 未指定容器（原盘/默认），使用 MKV 确保兼容
         opts["merge_output_format"] = "mkv"
     # 其他格式保持不变，由用户自行负责
 
@@ -92,6 +196,7 @@ def _get_table_selection_qss() -> str:
     return f"""
 QTableWidget {{
     background-color: transparent;
+    selection-background-color: transparent;
     outline: none;
     border: none;
 }}
@@ -393,13 +498,66 @@ class PlaylistActionWidget(QWidget):
         layout.addLayout(top)
         layout.addWidget(self.infoLabel, 0, Qt.AlignmentFlag.AlignHCenter)
 
-    def set_loading(self, loading: bool, text: str | None = None) -> None:
+    def set_loading(
+        self, loading: bool, btn_text: str | None = None, info_text: str | None = None
+    ) -> None:
         self.loadingRing.setVisible(bool(loading))
-        if text is not None:
-            self.qualityButton.setText(str(text))
+        if btn_text is not None:
+            self.qualityButton.setText(str(btn_text))
+        if info_text is not None:
+            self.infoLabel.setText(str(info_text))
 
 
-def _infer_entry_url(entry: dict[str, Any]) -> str:
+class _PlaylistModelRowProxy:
+    """
+    Drop-in replacement for PlaylistActionWidget that writes directly into
+    PlaylistListModel instead of QWidgets.
+
+    Used by _auto_apply_row_preset so that zero lines of that method need
+    to change: it still calls aw.set_loading() / aw.qualityButton.setText() /
+    aw.infoLabel.setText(), but all of those now update the model and trigger
+    a repaint of the delegate-rendered row.
+    """
+
+    def __init__(self, row: int, model: PlaylistListModel) -> None:
+        self._row = row
+        self._model = model
+
+        outer = self
+
+        class _QualityButtonProxy:
+            def setText(self_, text: str) -> None:
+                pass  # Delegate ignore button text changes outside set_loading
+
+            def setToolTip(self_, _t: str) -> None:
+                pass
+
+        class _InfoLabelProxy:
+            def setText(self_, text: str) -> None:
+                idx = outer._model.index(outer._row, 0)
+                task = outer._model.get_task(idx)
+                if task is not None:
+                    task.custom_options.format = str(text)
+                    outer._model.dataChanged.emit(idx, idx, [PlaylistModelRoles.TaskObjectRole])
+
+        self.qualityButton = _QualityButtonProxy()
+        self.infoLabel = _InfoLabelProxy()
+
+    def set_loading(
+        self, loading: bool, btn_text: str | None = None, info_text: str | None = None
+    ) -> None:
+        idx = self._model.index(self._row, 0)
+        task = self._model.get_task(idx)
+        if task is None:
+            return
+        task.is_parsing = bool(loading)
+        if info_text is not None:
+            task.custom_options.format = str(info_text)
+        self._model.dataChanged.emit(idx, idx, [PlaylistModelRoles.TaskObjectRole])
+
+
+def _infer_entry_url(entry: Any) -> str:
+    entry_dict = _normalize_info_payload(entry)
     # Prefer webpage_url / original_url over url.
     # When yt-dlp -J is combined with -S lang:xx, the top-level "url" field may
     # become the HLS manifest URL of the *sorted-best* format rather than the
@@ -407,25 +565,26 @@ def _infer_entry_url(entry: dict[str, Any]) -> str:
     # worker causes the [generic] extractor to kick in, which does not support
     # format selection and fails with "Requested format is not available".
     for key in ("webpage_url", "original_url"):
-        val = str(entry.get(key) or "").strip()
+        val = str(entry_dict.get(key) or "").strip()
         if val.startswith("http://") or val.startswith("https://"):
             return val
 
-    url = str(entry.get("url") or "").strip()
+    url = str(entry_dict.get("url") or "").strip()
     if url.startswith("http://") or url.startswith("https://"):
         return url
-    vid = str(entry.get("id") or url).strip()
+    vid = str(entry_dict.get("id") or url).strip()
     if vid:
         return f"https://www.youtube.com/watch?v={vid}"
     return url
 
 
-def _infer_entry_thumbnail(entry: dict[str, Any]) -> str:
+def _infer_entry_thumbnail(entry: Any) -> str:
+    entry_dict = _normalize_info_payload(entry)
     """推断视频条目的缩略图 URL，优先使用中等质量以加速加载"""
-    thumb = str(entry.get("thumbnail") or "").strip()
+    thumb = str(entry_dict.get("thumbnail") or "").strip()
 
     # 尝试从 thumbnails 列表中找到合适尺寸的缩略图
-    thumbs = entry.get("thumbnails")
+    thumbs = entry_dict.get("thumbnails")
     if isinstance(thumbs, list) and thumbs:
         # 优先选择中等质量（~320x180），避免加载过大的图片
         preferred_ids = {"mqdefault", "medium", "default", "sddefault", "hqdefault"}
@@ -468,8 +627,9 @@ def _infer_entry_thumbnail(entry: dict[str, Any]) -> str:
     return ""
 
 
-def _clean_video_formats(info: dict[str, Any]) -> list[dict[str, Any]]:
-    formats = info.get("formats") or []
+def _clean_video_formats(info: Any) -> list[dict[str, Any]]:
+    info_dict = _normalize_info_payload(info)
+    formats = info_dict.get("formats") or []
     if not isinstance(formats, list):
         return []
 
@@ -515,8 +675,9 @@ def _clean_video_formats(info: dict[str, Any]) -> list[dict[str, Any]]:
     return out
 
 
-def _clean_audio_formats(info: dict[str, Any]) -> list[dict[str, Any]]:
-    formats = info.get("formats") or []
+def _clean_audio_formats(info: Any) -> list[dict[str, Any]]:
+    info_dict = _normalize_info_payload(info)
+    formats = info_dict.get("formats") or []
     if not isinstance(formats, list):
         return []
 
@@ -586,7 +747,7 @@ def _choose_lossless_merge_container(video_ext: str | None, audio_ext: str | Non
 
 
 class PlaylistFormatDialog(MessageBoxBase):
-    """用于播放列表单项的“高级格式选择”弹窗 (复用各类 SelectorWidget)"""
+    """用于播放列表单项的"高级格式选择"弹窗 (复用各类 SelectorWidget)"""
 
     def __init__(
         self, info: dict[str, Any], parent=None, *, vr_mode: bool = False, mode: str = "default"
@@ -651,6 +812,7 @@ class SelectionDialog(MessageBoxBase):
         self._vr_mode = vr_mode or (mode == "vr")
         self._mode = mode  # default, vr, subtitle, cover
         self.video_info: dict[str, Any] | None = None
+        self.video_info_dto: VideoInfo | None = None
         self._is_playlist = False
         self.download_tasks: list[dict[str, Any]] = []
         try:
@@ -687,12 +849,14 @@ class SelectionDialog(MessageBoxBase):
         self._single_selected_audio_id: str | None = None
         self._single_selected_muxed_id: str | None = None
 
-        # playlist UI state
+        # playlist UI state – MV architecture (QListView + model + delegate)
         self._playlist_rows: list[dict[str, Any]] = []
-        self._table: QTableWidget | None = None
-        self._thumb_label_by_row: dict[int, QLabel] = {}
-        self._preview_widget_by_row: dict[int, PlaylistPreviewWidget] = {}
-        self._action_widget_by_row: dict[int, PlaylistActionWidget] = {}
+        self._list_view: QListView | None = None
+        self._playlist_model: PlaylistListModel | None = None
+        self._playlist_delegate: PlaylistItemDelegate | None = None
+        self._extract_manager: AsyncExtractManager | None = None
+        # _action_widget_by_row now stores _PlaylistModelRowProxy objects
+        self._action_widget_by_row: dict[int, Any] = {}
         self._thumb_cache: dict[str, Any] = {}
         self._thumb_url_to_rows: dict[str, set[int]] = {}
         self._thumb_requested: set[str] = set()
@@ -700,14 +864,22 @@ class SelectionDialog(MessageBoxBase):
         self._thumb_inflight: int = 0  # 当前正在下载的数量
         self._thumb_max_concurrent: int = 12  # 最大并发数（图片较小可以更高）
 
-        self._detail_queue: deque[int] = deque()
-        self._detail_inflight_row: int | None = None
         self._detail_loaded: set[int] = set()
-        self._last_interaction = time.monotonic()
 
-        self._idle_timer = QTimer(self)
-        self._idle_timer.setInterval(2000)
-        self._idle_timer.timeout.connect(self._on_idle_tick)
+        # 分块构建状态（解决大列表一次性构建阻塞主线程导致白屏）
+        self._build_chunk_entries: list[dict] = []
+        self._build_chunk_offset: int = 0
+        self._build_chunk_size: int = 30
+        self._build_is_chunking: bool = False
+
+        # 后台渐进爬取状态（解决非可视区行永不入队加载的问题）
+        self._bg_crawl_index: int = 0
+        self._bg_crawl_timer: QTimer | None = None
+        self._bg_crawl_active: bool = False
+
+        # 缩略图重试状态
+        self._thumb_retry_count: dict[str, int] = {}
+        self._thumb_max_retries: int = 2
 
         # 缩略图延迟加载定时器（等待表格布局完成）
         self._thumb_init_timer = QTimer(self)
@@ -749,7 +921,7 @@ class SelectionDialog(MessageBoxBase):
         self.viewLayout.addWidget(self.contentWidget)
         self.contentWidget.hide()
 
-        # 失败重试区（默认隐藏）：用于“需要 Cookies / 不是机器人验证”场景
+        # 失败重试区（默认隐藏）：用于"需要 Cookies / 不是机器人验证"场景
         self.retryWidget = QWidget(self)
         self.retryLayout = QVBoxLayout(self.retryWidget)
         self.retryLayout.setContentsMargins(0, 0, 0, 0)
@@ -784,7 +956,6 @@ class SelectionDialog(MessageBoxBase):
         # Close/cancel should stop background parsing to avoid crashes and wasted work.
         self._is_closing = False
         self.worker: InfoExtractWorker | VRInfoExtractWorker | None = None
-        self._detail_worker: EntryDetailWorker | None = None
 
         # 启动解析线程
         self.start_extraction()
@@ -883,15 +1054,11 @@ class SelectionDialog(MessageBoxBase):
             return
         self._is_closing = True
 
-        try:
-            self._idle_timer.stop()
-        except Exception:
-            pass
+        # 取消分块构建
+        self._build_is_chunking = False
 
-        try:
-            self._detail_queue.clear()
-        except Exception:
-            pass
+        # 取消后台渐进爬取
+        self._stop_background_crawl()
 
         try:
             if self.worker is not None:
@@ -900,8 +1067,8 @@ class SelectionDialog(MessageBoxBase):
             pass
 
         try:
-            if self._detail_worker is not None:
-                self._detail_worker.cancel()
+            if self._extract_manager is not None:
+                self._extract_manager.cancel_all()
         except Exception:
             pass
 
@@ -936,33 +1103,82 @@ class SelectionDialog(MessageBoxBase):
         self.contentWidget.hide()
         self.titleLabel.hide()
 
-    def on_parse_success(self, info: dict[str, Any]) -> None:
+    def on_parse_success(self, info: Any) -> None:
         if self._is_closing:
             return
-        self.video_info = info
-        self.loadingWidget.hide()
+
+        info_dict = _normalize_info_payload(info)
+        if not info_dict:
+            self.on_parse_error(
+                {
+                    "title": "解析失败",
+                    "content": "返回了无法识别的视频信息类型",
+                    "raw_error": f"unexpected payload type: {type(info)!r}",
+                }
+            )
+            return
+
+        self.video_info = info_dict
+        parsed_is_playlist = str(info_dict.get("_type") or "").lower() == "playlist" or bool(
+            info_dict.get("entries")
+        )
+        source_type = (
+            "playlist_entry" if parsed_is_playlist else ("vr_single" if self._vr_mode else "single")
+        )
+        try:
+            self.video_info_dto = VideoInfoMapper.from_raw(info_dict, source_type=source_type)
+        except Exception:
+            self.video_info_dto = None
+
+        # Cancel any previous extract_manager before rebuilding to prevent
+        # stale worker callbacks from firing on a newly-constructed model.
+        if self._extract_manager is not None:
+            try:
+                self._extract_manager.cancel_all()
+            except Exception:
+                pass
+            self._extract_manager = None
+
         self.retryWidget.hide()
         if self._error_label is not None:
             self._error_label.deleteLater()
             self._error_label = None
-        # Rebuild content each time (retry can be triggered)
+
+        self._is_playlist = str(info_dict.get("_type") or "").lower() == "playlist" or bool(
+            info_dict.get("entries")
+        )
+
+        # Step 1 – Resize the window while the spinner is still visible.
+        # This expands the window BEFORE any content rebuild, so the OS never
+        # shows a white gap that Qt hasn't painted yet.
+        self._apply_dialog_size_for_mode()
+        if self._is_playlist:
+            self.loadingTitleLabel.setText("正在构建列表…")
+
+        # Step 2 – Flush pending paint events so the resize paints the spinner
+        # at the new window size before we start any heavy layout work.
+        QCoreApplication.processEvents(QEventLoop.ProcessEventsFlag.ExcludeUserInputEvents)
+
+        # Step 3 – Build content. The window is already at its final size and
+        # fully painted; no blank frames appear here.
         self._clear_content_layout()
 
-        self._is_playlist = str(info.get("_type") or "").lower() == "playlist" or bool(
-            info.get("entries")
-        )
-        self._apply_dialog_size_for_mode()
         if self._is_playlist:
             self.titleLabel.show()
             self.yesButton.setEnabled(False)
-            self.setup_playlist_ui(info)
+            self.setup_playlist_ui(info_dict)
         else:
-            # 单视频：不占用额外纵向空间显示“解析成功”，用顶部信息区承载
+            # 单视频：不占用额外纵向空间显示"解析成功"，用顶部信息区承载
             self.titleLabel.hide()
             self.yesButton.setEnabled(True)
-            self.setup_content_ui(info)
+            self.setup_content_ui(info_dict)
 
+        # Step 4 – Swap views: content on, spinner off.
         self.contentWidget.show()
+        self.loadingWidget.hide()
+
+        # For playlists: viewport scan and background crawl are triggered
+        # by _on_build_chunks_complete() after all chunks finish.
 
     def _clear_content_layout(self) -> None:
         def _clear_layout(layout) -> None:
@@ -1014,6 +1230,13 @@ class SelectionDialog(MessageBoxBase):
                 self.worker.cancel()
         except Exception:
             pass
+        # Also cancel any ongoing per-entry metadata extraction.
+        if self._extract_manager is not None:
+            try:
+                self._extract_manager.cancel_all()
+            except Exception:
+                pass
+            self._extract_manager = None
 
         # Build options based on user choice
         idx = self.cookies_combo.currentIndex()
@@ -1036,6 +1259,7 @@ class SelectionDialog(MessageBoxBase):
         # Reset UI state
         self.yesButton.setDisabled(True)
         self.video_info = None
+        self.video_info_dto = None
         self._set_loading_ui("正在解析链接...", show_ring=True)
 
         if self._error_label is not None:
@@ -1271,74 +1495,117 @@ class SelectionDialog(MessageBoxBase):
         self.contentLayout.addLayout(toolbar)
 
         # table
-        table = QTableWidget(self.contentWidget)
-        self._table = table
-        table.setStyleSheet(_get_table_selection_qss())
-        table.setColumnCount(3)
-        table.setHorizontalHeaderLabels(["预览", "信息", "操作"])
-        table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        table.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
-        table.verticalHeader().setVisible(False)
-        table.horizontalHeader().setVisible(False)
-        table.setAlternatingRowColors(False)
-        table.setShowGrid(False)
-        table.verticalScrollBar().valueChanged.connect(self._on_table_scrolled)
+        # ── QListView (virtual rendering, no widget-per-row) ──────────────────
+        list_view = QListView(self.contentWidget)
+        list_view.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
+        list_view.setMouseTracking(True)
+        list_view.setUniformItemSizes(True)  # optimisation: all rows same height
+        # 修复C: Batched 布局——将布局工作分摊到多个事件循环，避免 endInsertRows 全列表同步布局
+        list_view.setLayoutMode(QListView.LayoutMode.Batched)
+        list_view.setBatchSize(50)
+        list_view.setStyleSheet(
+            "QListView { border: none; background: transparent; outline: none; }"
+        )
+        # ▶ 抗闪烁修复：像素级滚动 + 强制滚动条
+        list_view.setVerticalScrollMode(QListView.ScrollMode.ScrollPerPixel)
+        list_view.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
+        list_view.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        list_view.viewport().setAutoFillBackground(False)
+        # WA_OpaquePaintEvent=True 作用于 viewport：告知 Qt 本控件自行覆盖所有像素，
+        # 无需在每次局部重绘前先画父控件背景，消除 dataChanged 触发的两步渲染闪烁。
+        # delegate.paint() 里的 fillRect(rect, palette.window()) 保证每次都覆盖全行矩形。
+        list_view.viewport().setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent, True)
 
-        try:
-            header = table.horizontalHeader()
-            header.setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
-            header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-            header.setSectionResizeMode(2, QHeaderView.ResizeMode.Fixed)
-            table.setColumnWidth(0, 190)
-            table.setColumnWidth(2, 170)
-        except Exception:
-            pass
+        playlist_model = PlaylistListModel(list_view)
+        playlist_delegate = PlaylistItemDelegate(list_view)
+        list_view.setModel(playlist_model)
+        list_view.setItemDelegate(playlist_delegate)
 
-        self.contentLayout.addWidget(table)
+        # 修复B: 滚动事件节流——50ms 合并，避免每像素触发重入队 + dataChanged 轰炸
+        self._scroll_throttle_timer = QTimer(self)
+        self._scroll_throttle_timer.setSingleShot(True)
+        self._scroll_throttle_timer.setInterval(50)
+        self._scroll_throttle_timer.timeout.connect(self._on_scroll_throttled)
+        list_view.verticalScrollBar().valueChanged.connect(self._on_scroll_value_changed)
+        list_view.clicked.connect(self._on_list_item_clicked)
 
-        # wire actions
+        self._list_view = list_view
+        self._playlist_model = playlist_model
+        self._playlist_delegate = playlist_delegate
+
+        # AsyncExtractManager: 3 concurrent workers, FIFO queue
+        self._extract_manager = AsyncExtractManager(max_concurrent=3, parent=self)
+
+        self.contentLayout.addWidget(list_view)
+
+        # wire toolbar actions
         self.selectAllBtn.clicked.connect(self._select_all)
         self.unselectAllBtn.clicked.connect(self._unselect_all)
         self.invertSelectBtn.clicked.connect(self._invert_select)
         self.applyPresetBtn.clicked.connect(self._apply_preset_to_selected)
 
-        # fill rows
+        # fill model in chunks (first chunk is synchronous for immediate feedback)
         self._build_playlist_rows(info)
-        self._refresh_progress_label()
-        self._update_download_btn_state()
-
-        # kick off progressive detail fill
-        self._idle_timer.start()
-        # Ensure visible rows are queued immediately
-        QTimer.singleShot(100, self._enqueue_detail_for_visible_rows)
-        self._maybe_start_next_detail()
-
-        # 延迟加载缩略图（等待表格布局完成）
-        self._thumb_init_timer.start()
-
-        self._ensure_download_dir_bar()
+        # Note: _refresh_progress_label, _update_download_btn_state,
+        # _enqueue_all_for_extraction, _thumb_init_timer, _ensure_download_dir_bar
+        # are deferred to _on_build_chunks_complete() after all chunks finish.
 
     def _build_playlist_rows(self, info: dict[str, Any]) -> None:
+        """Populate _playlist_rows (business data) and PlaylistListModel (render data).
+
+        No QWidget is created per row – the delegate renders everything via QPainter.
+        Data objects (VideoTask) are lightweight stubs that get enriched when
+        AsyncExtractManager finishes fetching each entry's detailed info.
+
+        Uses chunked construction to avoid blocking the event loop: processes
+        _build_chunk_size entries per chunk, yielding via QTimer.singleShot(0)
+        between chunks to keep the UI responsive for large playlists (200+).
+        """
         entries = info.get("entries") or []
         if not isinstance(entries, list):
             entries = []
 
         self._playlist_rows = []
-        self._thumb_label_by_row = {}
         self._thumb_url_to_rows = {}
         self._thumb_requested = set()
-        self._preview_widget_by_row = {}
+        self._thumb_pending = []
+        self._thumb_inflight = 0
+        self._detail_loaded = set()
         self._action_widget_by_row = {}
+        self._thumb_retry_count = {}
 
-        table = self._table
-        if table is None:
+        model = self._playlist_model
+        if model is None:
             return
 
-        table.blockSignals(True)
-        table.setRowCount(len(entries))
+        model.clear()
 
-        for row, e in enumerate(entries):
+        # Store entries for chunked processing
+        self._build_chunk_entries = entries
+        self._build_chunk_offset = 0
+        self._build_is_chunking = True
+
+        # Process first chunk synchronously for immediate visual feedback
+        self._process_next_build_chunk()
+
+    def _process_next_build_chunk(self) -> None:
+        """Process up to _build_chunk_size entries, then schedule the next chunk."""
+        if self._is_closing or not self._build_is_chunking:
+            return
+        model = self._playlist_model
+        if model is None:
+            return
+
+        from ...models.video_task import VideoTask
+
+        entries = self._build_chunk_entries
+        offset = self._build_chunk_offset
+        end = min(offset + self._build_chunk_size, len(entries))
+
+        tasks: list[VideoTask] = []
+
+        for row in range(offset, end):
+            e = entries[row]
             if not isinstance(e, dict):
                 e = {}
 
@@ -1378,58 +1645,87 @@ class SelectionDialog(MessageBoxBase):
                 }
             )
 
-            # preview column: checkbox + thumbnail
-            preview = PlaylistPreviewWidget(table)
-            preview.checkbox.toggled.connect(partial(self._on_playlist_row_checked, row))
-            table.setCellWidget(row, 0, preview)
-            self._preview_widget_by_row[row] = preview
-
-            self._thumb_label_by_row[row] = preview.thumb_label
             if thumb:
                 self._thumb_url_to_rows.setdefault(thumb, set()).add(row)
 
-            # info column: title + meta
-            meta_parts = [duration]
-            if uploader and uploader != "-":
-                meta_parts.append(uploader)
-            if upload_date and upload_date != "-":
-                meta_parts.append(upload_date)
-            meta_parts.append(f"#{playlist_index}")
-            meta = " · ".join(meta_parts)
-            info_widget = PlaylistInfoWidget(title, meta, table)
-            table.setCellWidget(row, 1, info_widget)
+            # Lightweight VideoTask stub – enriched later by AsyncExtractManager.
+            # is_parsing=False so the row shows "待加载" until it enters the queue.
+            task = VideoTask(
+                url=url,
+                title=title,
+                uploader=uploader,
+                duration_str=duration,
+                upload_date=upload_date,
+                thumbnail_url=thumb,
+                is_parsing=False,
+                selected=False,
+            )
+            tasks.append(task)
 
-            # action column: quality/status
-            action = PlaylistActionWidget(table)
-            action.qualityButton.clicked.connect(partial(self._on_playlist_quality_clicked, row))
-            action.set_loading(True, "待加载")
-            action.infoLabel.setText("")
-            table.setCellWidget(row, 2, action)
-            self._action_widget_by_row[row] = action
+            # Proxy acts as the PlaylistActionWidget so _auto_apply_row_preset
+            # writes straight into the model without any code changes.
+            proxy = _PlaylistModelRowProxy(row, model)
+            self._action_widget_by_row[row] = proxy
 
-            table.setRowHeight(row, 92)
+        # Batch insert this chunk
+        model.addTasks(tasks)
 
-        table.blockSignals(False)
+        self._build_chunk_offset = end
+
+        if end < len(entries):
+            # Yield event loop, then continue with next chunk
+            QTimer.singleShot(0, self._process_next_build_chunk)
+        else:
+            # All chunks done
+            self._build_is_chunking = False
+            self._build_chunk_entries = []  # release reference
+            self._on_build_chunks_complete()
+
+    def _on_build_chunks_complete(self) -> None:
+        """Called when all playlist rows have been built across all chunks."""
+        if self._is_closing:
+            return
+        self._refresh_progress_label()
+        self._update_download_btn_state()
+
+        # 延迟加载缩略图（等待列表布局完成）
+        self._thumb_init_timer.start()
+
+        self._ensure_download_dir_bar()
+
+        # Trigger viewport priority scan after layout settles
+        QTimer.singleShot(50, self._initial_viewport_scan)
+
+        # Start background crawl to progressively enqueue all rows
+        QTimer.singleShot(200, self._start_background_crawl)
 
     def _on_playlist_row_checked(self, row: int, checked: bool) -> None:
+        # Legacy callback for QCheckBox widgets (no longer wired in MV mode).
+        # Kept for safety in case of future hybrid paths.
         if not (0 <= row < len(self._playlist_rows)):
             return
         self._playlist_rows[row]["selected"] = bool(checked)
         self._playlist_rows[row]["status"] = "已选择" if checked else "未选择"
-
         self._update_download_btn_state()
-        self._last_interaction = time.monotonic()
 
     def _on_playlist_quality_clicked(self, row: int) -> None:
-        self._last_interaction = time.monotonic()
         if not (0 <= row < len(self._playlist_rows)):
             return
         if row not in self._detail_loaded:
+            # Re-enqueue with high priority so it runs next
             aw = self._action_widget_by_row.get(row)
             if aw is not None:
                 aw.set_loading(True, "获取中...")
-            self._enqueue_detail_rows([row], priority=True)
-            self._maybe_start_next_detail()
+            if self._extract_manager is not None:
+                url = str(self._playlist_rows[row].get("url") or "")
+                if url:
+                    self._extract_manager.enqueue(
+                        str(row),
+                        url,
+                        self._current_options,
+                        self._vr_mode,
+                        high_priority=True,
+                    )
         else:
             self._open_row_format_picker(row)
 
@@ -1500,19 +1796,20 @@ class SelectionDialog(MessageBoxBase):
         if row not in self._detail_loaded:
             if mode == 2:
                 # 音频模式允许不等详情，先给占位
-                aw.set_loading(False)
-                aw.qualityButton.setText("音频(自动)")
-                aw.infoLabel.setText("待解析大小")
+                aw.set_loading(False, btn_text="⚡ 自动选定", info_text="纯音频模式 (待解析)")
                 return
-            aw.set_loading(True, "待加载")
-            aw.infoLabel.setText("")
+            # Row not yet extracted – leave is_parsing unchanged so the delegate
+            # correctly shows "解析中…" for queued rows and "待加载" for others.
+            # The correct format text will be applied once extraction finishes.
             return
 
         # NEW: Handle advanced custom selection
         if data.get("custom_selection_data"):
-            aw.set_loading(False)
-            aw.qualityButton.setText(str(data.get("custom_summary") or "已自定义"))
-            aw.infoLabel.setText("使用自定义配置")
+            aw.set_loading(
+                False,
+                btn_text="🎛 自定义选定",
+                info_text=str(data.get("custom_summary") or "已使用自定义配置"),
+            )
             return
 
         audio_fmts: list[dict[str, Any]] = data.get("audio_formats") or []
@@ -1572,24 +1869,25 @@ class SelectionDialog(MessageBoxBase):
 
         if mode == 2:
             # 仅音频：只展示音频信息
-            aw.set_loading(False)
-            aw.qualityButton.setText(
-                str(
-                    data.get("audio_override_text")
-                    if bool(data.get("audio_manual_override"))
-                    else (data.get("audio_best_text") or "音频(自动)")
-                )
+            is_manual = bool(data.get("audio_manual_override"))
+            audio_text = str(
+                data.get("audio_override_text")
+                if is_manual
+                else (data.get("audio_best_text") or "音频(自动)")
             )
+            btn_state = "🎛 自定义选定" if is_manual else "⚡ 自动选定"
+
             if chosen_audio is not None:
-                aw.infoLabel.setText(
-                    _format_info_line("", chosen_audio.get("filesize"), chosen_audio.get("ext"))
+                info_text = f"{audio_text} — " + _format_info_line(
+                    "", chosen_audio.get("filesize"), chosen_audio.get("ext")
                 )
             else:
-                aw.infoLabel.setText("-")
+                info_text = audio_text
+
+            aw.set_loading(False, btn_text=btn_state, info_text=info_text)
             return
 
         if bool(data.get("manual_override")):
-            aw.set_loading(False)
             chosen = str(data.get("override_text") or "")
 
             if mode == 0:
@@ -1599,7 +1897,6 @@ class SelectionDialog(MessageBoxBase):
                     if bool(data.get("audio_manual_override"))
                     else (data.get("audio_best_text") or "音频-")
                 )
-                aw.qualityButton.setText(f"{chosen or '视频已选'} + {audio_brief}")
                 chosen_fmt = None
                 override_id = str(data.get("override_format_id") or "")
                 fmts: list[dict[str, Any]] = data.get("video_formats") or []
@@ -1608,25 +1905,32 @@ class SelectionDialog(MessageBoxBase):
                         chosen_fmt = f
                         break
                 v_line = _format_info_line(
-                    "视频 ", (chosen_fmt or {}).get("filesize"), (chosen_fmt or {}).get("ext")
+                    f"{chosen or '视频'}",
+                    (chosen_fmt or {}).get("filesize"),
+                    (chosen_fmt or {}).get("ext"),
                 )
                 a_line = _format_info_line(
-                    "音频 ", (chosen_audio or {}).get("filesize"), (chosen_audio or {}).get("ext")
+                    f"🎧 {audio_brief}",
+                    (chosen_audio or {}).get("filesize"),
+                    (chosen_audio or {}).get("ext"),
                 )
-                aw.infoLabel.setText(v_line + "\n" + a_line)
+                aw.set_loading(False, btn_text="🎛 自定义选定", info_text=v_line + "\n" + a_line)
                 return
 
             # 仅视频
-            aw.qualityButton.setText(chosen or "已手动选择")
+            v_line = _format_info_line(
+                f"{chosen or '已手动选择'}",
+                (chosen_fmt or {}).get("filesize") if "chosen_fmt" in locals() else None,
+                None,
+            )
+            aw.set_loading(False, btn_text="🎛 自定义选定", info_text=v_line)
             return
 
         # VR 模式下的自动选择模拟（用于 UI 显示）
         if self._vr_mode:
             fmts = data.get("video_formats") or []
             if not fmts:
-                aw.set_loading(False)
-                aw.qualityButton.setText("无可用格式")
-                aw.infoLabel.setText("")
+                aw.set_loading(False, btn_text="❌ 无可用格式", info_text="解析失败或无 VR 流")
                 return
 
             # 获取当前预设 ID
@@ -1669,21 +1973,17 @@ class SelectionDialog(MessageBoxBase):
             data["override_text"] = best.get("text")
             data["manual_override"] = False
 
-            aw.set_loading(False)
-            aw.qualityButton.setText(str(data["override_text"] or ""))
-
             # 显示详细信息
             raw = best.get("_raw") or {}
             sz = _format_size(raw.get("filesize") or raw.get("filesize_approx"))
             ext = raw.get("ext")
-            aw.infoLabel.setText(f"{sz} · {ext}")
+            format_desc = str(data["override_text"] or "")
+            aw.set_loading(False, btn_text="⚡ 自动选定", info_text=f"{format_desc}\n{sz} · {ext}")
             return
 
         fmts: list[dict[str, Any]] = data.get("video_formats") or []
         if not fmts:
-            aw.set_loading(False)
-            aw.qualityButton.setText("无可用格式")
-            aw.infoLabel.setText("")
+            aw.set_loading(False, btn_text="❌ 无可用格式", info_text="解析失败或无视频流")
             return
 
         preset_height = self._current_playlist_preset_height()
@@ -1692,17 +1992,17 @@ class SelectionDialog(MessageBoxBase):
         else:
             candidates = [f for f in fmts if int(f.get("height") or 0) == preset_height]
             if not candidates:
-                aw.set_loading(False)
-                aw.qualityButton.setText("无匹配(点选)")
                 if mode == 0:
                     a_line = _format_info_line(
-                        "音频 ",
+                        "🎧 ",
                         (chosen_audio or {}).get("filesize"),
                         (chosen_audio or {}).get("ext"),
                     )
-                    aw.infoLabel.setText("可手动选择\n" + a_line)
+                    info_text = "未匹配到指定分辨率，点左侧配置\n" + a_line
                 else:
-                    aw.infoLabel.setText("可手动选择")
+                    info_text = "未匹配到指定分辨率，可点左侧手动配置"
+
+                aw.set_loading(False, btn_text="⚠️ 无匹配", info_text=info_text)
                 data["override_format_id"] = None
                 data["override_text"] = None
                 return
@@ -1722,10 +2022,11 @@ class SelectionDialog(MessageBoxBase):
         # keep manual_override as-is; this path is for auto video selection
         data["manual_override"] = False
 
-        aw.set_loading(False)
         if mode == 1:
-            aw.qualityButton.setText(str(data["override_text"] or ""))
-            aw.infoLabel.setText(_format_info_line("", best.get("filesize"), best.get("ext")))
+            info_text = f"{data['override_text']}\n" + _format_info_line(
+                "", best.get("filesize"), best.get("ext")
+            )
+            aw.set_loading(False, btn_text="⚡ 自动选定", info_text=info_text)
             return
 
         audio_brief = (
@@ -1733,12 +2034,16 @@ class SelectionDialog(MessageBoxBase):
             if bool(data.get("audio_manual_override"))
             else (data.get("audio_best_text") or "音频-")
         )
-        aw.qualityButton.setText(f"{data.get('override_text') or ''} + {audio_brief}")
-        v_line = _format_info_line("视频 ", best.get("filesize"), best.get("ext"))
-        a_line = _format_info_line(
-            "音频 ", (chosen_audio or {}).get("filesize"), (chosen_audio or {}).get("ext")
+
+        v_line = _format_info_line(
+            f"{data.get('override_text') or ''} ", best.get("filesize"), best.get("ext")
         )
-        aw.infoLabel.setText(v_line + "\n" + a_line)
+        a_line = _format_info_line(
+            f"🎧 {audio_brief} ",
+            (chosen_audio or {}).get("filesize"),
+            (chosen_audio or {}).get("ext"),
+        )
+        aw.set_loading(False, btn_text="⚡ 自动选定", info_text=v_line + "\n" + a_line)
 
     def _on_playlist_preset_changed(self, _index: int) -> None:
         for r in range(len(self._playlist_rows)):
@@ -1753,84 +2058,182 @@ class SelectionDialog(MessageBoxBase):
             self._auto_apply_row_preset(r)
         self._update_download_btn_state()
 
-    def _on_table_item_changed(self, item: QTableWidgetItem) -> None:
-        if self._table is None:
+    def _set_row_parsing(self, row: int, is_parsing: bool) -> None:
+        """Update a single row's is_parsing flag in the model and emit dataChanged."""
+        if self._playlist_model is None:
             return
-        row = item.row()
-        col = item.column()
-        if col != 0:
-            return
-        checked = item.checkState() == Qt.CheckState.Checked
-        if 0 <= row < len(self._playlist_rows):
-            self._playlist_rows[row]["selected"] = checked
-            self._playlist_rows[row]["status"] = "已选择" if checked else "未选择"
-            status_item = self._table.item(row, 9)
-            if status_item is not None:
-                status_item.setText(self._playlist_rows[row]["status"])
-        self._update_yes_enabled()
-        self._last_interaction = time.monotonic()
+        idx = self._playlist_model.index(row, 0)
+        task = self._playlist_model.get_task(idx)
+        if task is not None and task.is_parsing != is_parsing:
+            task.is_parsing = is_parsing
+            self._playlist_model.dataChanged.emit(idx, idx, [PlaylistModelRoles.TaskObjectRole])
 
-    def _on_table_cell_clicked(self, row: int, col: int) -> None:
-        self._last_interaction = time.monotonic()
-        if col != 8:
+    def _initial_viewport_scan(self) -> None:
+        """Called once after the list view is laid out to prioritize initially visible rows."""
+        logger.info("SelectionDialog _initial_viewport_scan triggered")
+        if not self._is_closing:
+            self._on_list_scrolled(0)
+
+    def _on_scroll_value_changed(self, _value: int) -> None:
+        """修复B: 滚动节流入口——valueChanged 每像素触发，但实际处理合并为 50ms 一次。"""
+        if not self._scroll_throttle_timer.isActive():
+            self._scroll_throttle_timer.start()
+
+    def _on_scroll_throttled(self) -> None:
+        """修复B: 节流定时器到期，执行一次完整的滚动处理。"""
+        self._on_list_scrolled(0)
+
+    def _on_list_scrolled(self, _value: int) -> None:
+        """Scroll handler for the QListView – reprioritize visible rows in AsyncExtractManager."""
+        if self._is_closing or self._extract_manager is None:
             return
+        first, last = self._visible_row_range()
+        pre_first = max(0, first - 3)
+        pre_last = min(len(self._playlist_rows) - 1, last + 6)
+        # Iterate in REVERSE order: each high-priority enqueue inserts at queue
+        # position 0, so iterating last→first ensures pre_first is at position 0
+        # after all insertions (top-to-bottom processing within the viewport).
+        for row in range(pre_last, pre_first - 1, -1):
+            if row not in self._detail_loaded:
+                url = str(self._playlist_rows[row].get("url") or "")
+                if url:
+                    # Mark as actively parsing before it enters the queue so
+                    # the delegate immediately switches from "待加载" to "解析中…"
+                    self._set_row_parsing(row, True)
+                    logger.info(f"Viewport prioritizing row {row}")
+                    self._extract_manager.enqueue(
+                        str(row),
+                        url,
+                        self._current_options,
+                        self._vr_mode,
+                        high_priority=True,
+                    )
+        self._load_thumbs_for_visible_rows()
+
+    # ── Background progressive crawl ──────────────────────────────────────
+    # After the initial viewport scan, progressively enqueue ALL remaining
+    # rows at low (normal) priority so they eventually get extracted even
+    # if the user never scrolls.  Viewport-priority items from
+    # _on_list_scrolled always jump to the front of the queue.
+
+    def _start_background_crawl(self) -> None:
+        """Start a progressive background enqueue of all rows top-to-bottom."""
+        if self._is_closing or self._bg_crawl_timer is not None:
+            return
+        self._bg_crawl_index = 0
+        self._bg_crawl_active = True
+        self._bg_crawl_timer = QTimer(self)
+        self._bg_crawl_timer.setInterval(100)  # 100ms between batches
+        self._bg_crawl_timer.timeout.connect(self._bg_crawl_tick)
+        self._bg_crawl_timer.start()
+
+    def _bg_crawl_tick(self) -> None:
+        """Enqueue a small batch of rows at normal (low) priority."""
+        if self._is_closing or self._extract_manager is None:
+            self._stop_background_crawl()
+            return
+
+        batch = 5  # rows per tick
+        enqueued = 0
+        total = len(self._playlist_rows)
+
+        while self._bg_crawl_index < total and enqueued < batch:
+            row = self._bg_crawl_index
+            self._bg_crawl_index += 1
+
+            if row in self._detail_loaded:
+                continue  # already extracted
+
+            url = str(self._playlist_rows[row].get("url") or "")
+            if not url:
+                continue
+
+            # Mark as parsing so delegate shows "解析中…"
+            self._set_row_parsing(row, True)
+            if row % 10 == 0:
+                logger.debug(f"BG Crawl enqueue row {row}")
+            self._extract_manager.enqueue(
+                str(row),
+                url,
+                self._current_options,
+                self._vr_mode,
+                high_priority=False,
+            )
+            enqueued += 1
+
+        if self._bg_crawl_index >= total:
+            self._stop_background_crawl()
+
+    def _stop_background_crawl(self) -> None:
+        """Stop the background crawl timer."""
+        self._bg_crawl_active = False
+        if self._bg_crawl_timer is not None:
+            self._bg_crawl_timer.stop()
+            self._bg_crawl_timer.deleteLater()
+            self._bg_crawl_timer = None
+
+    def _on_list_item_clicked(self, index: QModelIndex) -> None:
+        """Handle click events on the QListView – dispatch to checkbox or format picker."""
+        if self._playlist_delegate is None or self._list_view is None:
+            return
+        row = index.row()
+        viewport = self._list_view.viewport()
+        pos = viewport.mapFromGlobal(QCursor.pos())
+        option = QStyleOptionViewItem()
+        option.rect = self._list_view.visualRect(index)
+        hit = self._playlist_delegate.hit_test(pos, option)
+        if hit in ("checkbox", "row"):
+            self._toggle_row_selection(row)
+        elif hit == "action_btn":
+            self._on_playlist_quality_clicked(row)
+
+    def _toggle_row_selection(self, row: int) -> None:
+        """Toggle the selected state of a single playlist row."""
         if not (0 <= row < len(self._playlist_rows)):
             return
-        if row not in self._detail_loaded:
-            self._enqueue_detail_rows([row], priority=True)
-            self._maybe_start_next_detail()
-        else:
-            self._open_row_format_picker(row)
+        new_val = not bool(self._playlist_rows[row].get("selected"))
+        self._playlist_rows[row]["selected"] = new_val
+        self._playlist_rows[row]["status"] = "已选择" if new_val else "未选择"
+        if self._playlist_model is not None:
+            idx = self._playlist_model.index(row, 0)
+            task = self._playlist_model.get_task(idx)
+            if task is not None:
+                task.selected = new_val
+                self._playlist_model.dataChanged.emit(idx, idx, [PlaylistModelRoles.TaskObjectRole])
+        self._update_download_btn_state()
 
-    def _on_table_scrolled(self, _value: int) -> None:
-        self._last_interaction = time.monotonic()
-        self._enqueue_detail_for_visible_rows()
-        self._load_thumbs_for_visible_rows()
-        self._maybe_start_next_detail()
+    def _enqueue_all_for_extraction(self) -> None:
+        """Connect extraction signals and handle cover-mode bypass.
+
+        Actual row enqueueing is deferred to the viewport scan so that only
+        visible + nearby rows enter the queue initially.  This prevents all N
+        rows from showing "解析中…" and keeps the parse queue tight.
+        """
+        mgr = self._extract_manager
+        if mgr is None:
+            return
+        mgr.signals.task_finished.connect(self._on_extract_task_finished)
+        mgr.signals.task_error.connect(self._on_extract_task_error)
+        # Cover mode doesn't need yt-dlp detail extraction – bypass immediately.
+        if self._mode == "cover":
+            for row in range(len(self._playlist_rows)):
+                QTimer.singleShot(0, partial(self._process_cover_bypass, row))
 
     def _visible_row_range(self) -> tuple[int, int]:
-        table = self._table
-        if table is None:
+        """Return the (first, last) row indices currently visible in the playlist view."""
+        view = self._list_view
+        model = self._playlist_model
+        if view is None or model is None:
             return (0, -1)
-
-        first = table.rowAt(0)
-        # If the table hasn't been drawn yet, rowAt will return -1.
-        # Default to showing the first 10 rows in this edge case mapping.
+        first_idx = view.indexAt(QPoint(0, 0))
+        first = first_idx.row() if first_idx.isValid() else 0
         if first < 0:
             first = 0
-
-        last = table.rowAt(table.viewport().height() - 1)
+        last_idx = view.indexAt(QPoint(0, view.viewport().height() - 1))
+        last = last_idx.row()
         if last < 0:
-            last = min(table.rowCount() - 1, first + 10)
-
+            last = min(model.rowCount() - 1, first + 8)
         return (first, last)
-
-    def _enqueue_detail_for_visible_rows(self) -> None:
-        first, last = self._visible_row_range()
-        # prefetch slightly ahead and behind
-        first = max(0, first - 3)
-        last = min(len(self._playlist_rows) - 1, last + 6)
-        rows = list(range(first, last + 1))
-        # Remove anything out of view from the high priority front of the queue
-        self._clean_invisible_from_queue()
-        self._enqueue_detail_rows(rows, priority=True)
-        self._maybe_start_next_detail()
-
-    def _clean_invisible_from_queue(self) -> None:
-        """从队列中清理不再处于当前滚动缓冲区的解析项"""
-        first, last = self._visible_row_range()
-        buff_first = max(0, first - 8)
-        buff_last = min(len(self._playlist_rows) - 1, last + 12)
-
-        # We don't drop them completely so they can load on idle,
-        # but we remove them from the front to allow visible items priority.
-        # It's simpler to just clear the queue of anything not in buff range,
-        # since idle tick will re-add them when needed.
-        new_q = deque()
-        for r in self._detail_queue:
-            if buff_first <= r <= buff_last:
-                new_q.append(r)
-        self._detail_queue = new_q
 
     def _on_thumb_init_timeout(self) -> None:
         """延迟加载首批缩略图（等待表格布局完成）"""
@@ -1860,11 +2263,37 @@ class SelectionDialog(MessageBoxBase):
         self._process_thumb_queue()
 
     def _process_thumb_queue(self) -> None:
-        """处理缩略图加载队列，控制并发数"""
+        """处理缩略图加载队列，控制并发数，优先加载可视区域内的缩略图"""
         while self._thumb_pending and self._thumb_inflight < self._thumb_max_concurrent:
-            url = self._thumb_pending.pop(0)
+            best_idx = self._pick_best_thumb_index()
+            url = self._thumb_pending.pop(best_idx)
             self._thumb_inflight += 1
             self.image_loader.load(url, target_size=(150, 84), radius=8)
+
+    def _pick_best_thumb_index(self) -> int:
+        """Find the index in _thumb_pending whose associated row is closest to the viewport."""
+        if not self._thumb_pending:
+            return 0
+
+        first, last = self._visible_row_range()
+        if first > last:
+            return 0  # fallback to FIFO
+
+        viewport_center = (first + last) / 2.0
+        best_idx = 0
+        best_distance = float("inf")
+
+        for i, url in enumerate(self._thumb_pending):
+            rows = self._thumb_url_to_rows.get(url, set())
+            if not rows:
+                continue
+            # Find closest row for this thumbnail URL
+            min_dist = min(abs(r - viewport_center) for r in rows)
+            if min_dist < best_distance:
+                best_distance = min_dist
+                best_idx = i
+
+        return best_idx
 
     def _load_thumbs_for_visible_rows(self) -> None:
         first, last = self._visible_row_range()
@@ -1875,12 +2304,13 @@ class SelectionDialog(MessageBoxBase):
 
     def _apply_thumb_to_row(self, row: int, url: str) -> None:
         pix = self._thumb_cache.get(url)
-        lbl = self._thumb_label_by_row.get(row)
-        if pix is not None and lbl is not None:
-            try:
-                lbl.setPixmap(pix)
-            except Exception:
-                pass
+        if pix is None:
+            return
+        # MV path – update delegate pixel cache; model emits dataChanged for repaint
+        if self._playlist_delegate is not None and self._playlist_model is not None:
+            self._playlist_delegate.set_pixmap(url, pix)
+            idx = self._playlist_model.index(row, 0)
+            self._playlist_model.dataChanged.emit(idx, idx, [PlaylistModelRoles.TaskObjectRole])
 
     def _on_thumb_loaded_with_url(self, url: str, pixmap) -> None:
         # 减少并发计数，触发下一批加载
@@ -1895,13 +2325,37 @@ class SelectionDialog(MessageBoxBase):
         if not u:
             return
         self._thumb_cache[u] = pixmap
-        for row in self._thumb_url_to_rows.get(u, set()):
-            self._apply_thumb_to_row(row, u)
+
+        affected_rows = self._thumb_url_to_rows.get(u, set())
+        if not affected_rows:
+            return
+
+        # Register the pixmap once into the delegate cache
+        if self._playlist_delegate is not None:
+            self._playlist_delegate.set_pixmap(u, pixmap)
+
+        # Emit dataChanged for every affected row so the delegate repaints them
+        if self._playlist_model is not None:
+            for row in affected_rows:
+                idx = self._playlist_model.index(row, 0)
+                self._playlist_model.dataChanged.emit(idx, idx, [PlaylistModelRoles.TaskObjectRole])
 
     def _on_thumb_failed(self, url: str) -> None:
-        """缩略图加载失败时的回调"""
-        # 减少并发计数，继续处理队列
+        """缩略图加载失败时的回调 — 支持自动重试"""
         self._thumb_inflight = max(0, self._thumb_inflight - 1)
+
+        u = str(url or "").strip()
+        if u:
+            count = self._thumb_retry_count.get(u, 0) + 1
+            self._thumb_retry_count[u] = count
+
+            if count <= self._thumb_max_retries:
+                # Re-add to queue at back for retry with delay
+                self._thumb_pending.append(u)
+                QTimer.singleShot(count * 500, self._process_thumb_queue)
+                return
+            # else: give up, leave placeholder
+
         self._process_thumb_queue()
 
     def _select_all(self) -> None:
@@ -1911,42 +2365,46 @@ class SelectionDialog(MessageBoxBase):
         self._set_all_checks(False)
 
     def _invert_select(self) -> None:
-        table = self._table
-        if table is None:
-            return
-        for row in range(len(self._playlist_rows)):
-            w = self._preview_widget_by_row.get(row)
-            if w is None:
-                continue
-            cb = w.checkbox
-            cb.blockSignals(True)
-            cb.setChecked(not cb.isChecked())
-            cb.blockSignals(False)
-            self._playlist_rows[row]["selected"] = cb.isChecked()
-            self._playlist_rows[row]["status"] = "已选择" if cb.isChecked() else "未选择"
+        model = self._playlist_model
+        for row, data in enumerate(self._playlist_rows):
+            new_val = not bool(data.get("selected"))
+            data["selected"] = new_val
+            data["status"] = "已选择" if new_val else "未选择"
+            if model is not None:
+                idx = model.index(row, 0)
+                task = model.get_task(idx)
+                if task is not None:
+                    task.selected = new_val
+        # Batch repaint all rows at once
+        if model is not None and self._playlist_rows:
+            model.dataChanged.emit(
+                model.index(0, 0),
+                model.index(len(self._playlist_rows) - 1, 0),
+                [PlaylistModelRoles.TaskObjectRole],
+            )
         self._update_download_btn_state()
 
     def _set_all_checks(self, checked: bool) -> None:
-        table = self._table
-        if table is None:
-            return
-        for row in range(len(self._playlist_rows)):
-            w = self._preview_widget_by_row.get(row)
-            if w is None:
-                continue
-            cb = w.checkbox
-            cb.blockSignals(True)
-            cb.setChecked(bool(checked))
-            cb.blockSignals(False)
-            self._playlist_rows[row]["selected"] = bool(checked)
-            self._playlist_rows[row]["status"] = "已选择" if checked else "未选择"
+        model = self._playlist_model
+        for row, data in enumerate(self._playlist_rows):
+            data["selected"] = bool(checked)
+            data["status"] = "已选择" if checked else "未选择"
+            if model is not None:
+                idx = model.index(row, 0)
+                task = model.get_task(idx)
+                if task is not None:
+                    task.selected = bool(checked)
+        # Batch repaint
+        if model is not None and self._playlist_rows:
+            model.dataChanged.emit(
+                model.index(0, 0),
+                model.index(len(self._playlist_rows) - 1, 0),
+                [PlaylistModelRoles.TaskObjectRole],
+            )
         self._update_download_btn_state()
 
     def _apply_preset_to_selected(self) -> None:
-        # This clears per-row overrides for selected rows.
-        table = self._table
-        if table is None:
-            return
+        """Clear per-row format overrides for selected rows and re-apply the global preset."""
         for row, data in enumerate(self._playlist_rows):
             if not data.get("selected"):
                 continue
@@ -1956,10 +2414,8 @@ class SelectionDialog(MessageBoxBase):
             data["audio_override_format_id"] = None
             data["audio_override_text"] = None
             data["audio_manual_override"] = False
-            # Clear advanced selection
             data["custom_selection_data"] = None
             data["custom_summary"] = None
-
             self._auto_apply_row_preset(row)
         self._update_download_btn_state()
 
@@ -1997,32 +2453,95 @@ class SelectionDialog(MessageBoxBase):
             except Exception:
                 pass
 
-    def _enqueue_detail_rows(self, rows: list[int], priority: bool) -> None:
-        for r in reversed(rows) if priority else rows:
-            if r < 0 or r >= len(self._playlist_rows):
-                continue
-            if r in self._detail_loaded:
-                continue
-            if self._detail_inflight_row == r:
-                continue
+    def _on_extract_task_finished(self, task_id: str, info: dict[str, Any]) -> None:
+        """Called by AsyncExtractManager when a row's metadata is successfully fetched."""
+        if self._is_closing:
+            return
+        try:
+            row = int(task_id)
+        except (ValueError, TypeError):
+            return
+        if not (0 <= row < len(self._playlist_rows)):
+            return
 
-            # If cover mode bypass is active, we don't need to load info for it.
-            # Handle the row immediately via shortcut.
-            if self._mode == "cover":
-                # We do this asynchronously to avoid freezing the UI thread if many queue up
-                QTimer.singleShot(0, partial(self._process_cover_bypass, r))
-                continue
+        # Backfill thumbnail URL if missing from the flat playlist entry
+        thumb = str(self._playlist_rows[row].get("thumbnail") or "").strip()
+        if not thumb:
+            thumb = _infer_entry_thumbnail(info)
+            if thumb:
+                self._playlist_rows[row]["thumbnail"] = thumb
+                self._thumb_url_to_rows.setdefault(thumb, set()).add(row)
+                # Update the VideoTask in the model with the new thumbnail URL
+                if self._playlist_model is not None:
+                    idx = self._playlist_model.index(row, 0)
+                    task = self._playlist_model.get_task(idx)
+                    if task is not None:
+                        task.thumbnail_url = thumb
+                if thumb in self._thumb_cache:
+                    self._apply_thumb_to_row(row, thumb)
+                else:
+                    # Go through the queue (high priority at front) instead of
+                    # direct load to respect concurrent limits.
+                    self._thumb_requested.add(thumb)
+                    if thumb not in self._thumb_pending:
+                        self._thumb_pending.insert(0, thumb)
+                    self._process_thumb_queue()
+        else:
+            # Thumb URL was already known from the flat playlist entry; apply from
+            # cache if ready, otherwise re-enqueue through the queue.
+            if thumb in self._thumb_cache:
+                self._apply_thumb_to_row(row, thumb)
+            elif thumb not in self._thumb_pending:
+                self._thumb_requested.add(thumb)
+                self._thumb_pending.insert(0, thumb)
+                self._process_thumb_queue()
 
-            if r in self._detail_queue:
-                if priority:
-                    self._detail_queue.remove(r)
-                    self._detail_queue.appendleft(r)
-                continue
+        formats = _clean_video_formats(info)
+        audio_formats = _clean_audio_formats(info)
+        highest = formats[0]["height"] if formats else None
+        self._playlist_rows[row]["detail"] = info
+        self._playlist_rows[row]["video_formats"] = formats
+        self._playlist_rows[row]["audio_formats"] = audio_formats
+        self._playlist_rows[row]["highest_height"] = highest
+        self._detail_loaded.add(row)
 
-            if priority:
-                self._detail_queue.appendleft(r)
-            else:
-                self._detail_queue.append(r)
+        # Update the model's VideoTask: clear parsing flag and store raw_info so
+        # the delegate can distinguish "loaded" from "waiting" (raw_info is None).
+        if self._playlist_model is not None:
+            idx = self._playlist_model.index(row, 0)
+            task = self._playlist_model.get_task(idx)
+            if task is not None:
+                task.is_parsing = False
+                task.raw_info = info
+
+        # Auto-apply global preset → proxy writes button text back into model
+        self._auto_apply_row_preset(row)
+
+        self._refresh_progress_label()
+        self._update_download_btn_state()
+
+    def _on_extract_task_error(self, task_id: str, msg: str) -> None:
+        """Called by AsyncExtractManager when a row's metadata fetch fails."""
+        if self._is_closing:
+            return
+        try:
+            row = int(task_id)
+        except (ValueError, TypeError):
+            return
+        aw = self._action_widget_by_row.get(row)
+        if aw is not None:
+            aw.set_loading(False, "获取失败(点重试)")
+            aw.qualityButton.setToolTip(msg)
+        # Also mark the VideoTask as errored in model
+        if self._playlist_model is not None:
+            idx = self._playlist_model.index(row, 0)
+            task = self._playlist_model.get_task(idx)
+            if task is not None:
+                task.has_error = True
+                task.error_msg = msg
+                task.is_parsing = False
+                self._playlist_model.dataChanged.emit(idx, idx, [PlaylistModelRoles.TaskObjectRole])
+        self._refresh_progress_label()
 
     def _process_cover_bypass(self, row: int) -> None:
         if self._is_closing or row in self._detail_loaded:
@@ -2050,101 +2569,6 @@ class SelectionDialog(MessageBoxBase):
 
         self._refresh_progress_label()
         self._update_download_btn_state()
-
-    def _maybe_start_next_detail(self) -> None:
-        if self._is_closing:
-            return
-        if self._detail_inflight_row is not None:
-            return
-        if not self._detail_queue:
-            return
-        row = self._detail_queue.popleft()
-        if row in self._detail_loaded:
-            return
-        url = str(self._playlist_rows[row].get("url") or "").strip()
-        if not url:
-            return
-
-        self._detail_inflight_row = row
-        aw = self._action_widget_by_row.get(row)
-        if aw is not None:
-            aw.set_loading(True, "获取中...")
-            aw.infoLabel.setText("")
-
-        w = EntryDetailWorker(row, url, self._current_options, vr_mode=self._vr_mode)
-        w.finished.connect(self._on_detail_finished)
-        w.error.connect(self._on_detail_error)
-        w.start()
-        self._detail_worker = w
-
-    def _on_detail_finished(self, row: int, info: dict[str, Any]) -> None:
-        if self._is_closing:
-            return
-        self._detail_inflight_row = None
-        if 0 <= row < len(self._playlist_rows):
-            # backfill thumbnail if missing
-            thumb = str(self._playlist_rows[row].get("thumbnail") or "").strip()
-            if not thumb:
-                thumb = _infer_entry_thumbnail(info)
-                if thumb:
-                    self._playlist_rows[row]["thumbnail"] = thumb
-                    self._thumb_url_to_rows.setdefault(thumb, set()).add(row)
-                    # trigger load ASAP
-                    if thumb in self._thumb_cache:
-                        self._apply_thumb_to_row(row, thumb)
-                    else:
-                        if thumb not in self._thumb_requested:
-                            self._thumb_requested.add(thumb)
-                            self.image_loader.load(thumb, target_size=(150, 84), radius=8)
-
-            formats = _clean_video_formats(info)
-            audio_formats = _clean_audio_formats(info)
-            highest = formats[0]["height"] if formats else None
-            self._playlist_rows[row]["detail"] = info
-            self._playlist_rows[row]["video_formats"] = formats
-            self._playlist_rows[row]["audio_formats"] = audio_formats
-            self._playlist_rows[row]["highest_height"] = highest
-            self._detail_loaded.add(row)
-
-            # auto apply preset + show size (unless manual override)
-            self._auto_apply_row_preset(row)
-
-        self._refresh_progress_label()
-        self._update_download_btn_state()
-        self._maybe_start_next_detail()
-
-    def _on_detail_error(self, row: int, msg: str) -> None:
-        if self._is_closing:
-            return
-        self._detail_inflight_row = None
-        aw = self._action_widget_by_row.get(row)
-        if aw is not None:
-            aw.set_loading(False, "获取失败(点重试)")
-            aw.infoLabel.setText("")
-            aw.qualityButton.setToolTip(msg)
-        self._maybe_start_next_detail()
-
-    def _on_idle_tick(self) -> None:
-        if not self._is_playlist:
-            return
-        # Wait a moment after user stops scrolling/interacting
-        if time.monotonic() - self._last_interaction < 1.0:
-            return
-
-        if self._detail_inflight_row is None and not self._detail_queue:
-            # When completely idle, start filling in details for the rest of the list
-            # We add them with priority=False so they go to the back of the queue
-            # and won't block visible items if the user starts scrolling again
-            added = 0
-            for i in range(len(self._playlist_rows)):
-                if i not in self._detail_loaded and i not in self._detail_queue:
-                    # Enqueue a small batch to not lock up memory with huge lists
-                    self._enqueue_detail_rows([i], priority=False)
-                    added += 1
-                    if added >= 3:
-                        break
-
-        self._maybe_start_next_detail()
 
     def _open_row_format_picker(self, row: int) -> None:
         if not (0 <= row < len(self._playlist_rows)):
@@ -2196,9 +2620,12 @@ class SelectionDialog(MessageBoxBase):
                 return []
 
             info = self.video_info
-            url = _infer_entry_url(info)
-            title = str(info.get("title") or "Unknown")
-            thumb = str(info.get("thumbnail") or "")
+            dto = self.video_info_dto
+            url = dto.source_url if dto and dto.source_url else _infer_entry_url(info)
+            title = dto.title if dto and dto.title else str(info.get("title") or "Unknown")
+            thumb = (
+                dto.thumbnail_url if dto and dto.thumbnail_url else str(info.get("thumbnail") or "")
+            )
 
             ydl_opts: dict[str, Any] = {}
 
@@ -2289,8 +2716,16 @@ class SelectionDialog(MessageBoxBase):
 
                     # ========== VR 格式检测 ==========
                     # 检查选择的格式是否包含 VR 专属格式 ID
-                    vr_only_ids = info.get("__vr_only_format_ids") or []
-                    android_vr_ids = info.get("__android_vr_format_ids") or []
+                    vr_only_ids = (
+                        dto.vr_only_format_ids
+                        if dto is not None
+                        else (info.get("__vr_only_format_ids") or [])
+                    )
+                    android_vr_ids = (
+                        dto.android_vr_format_ids
+                        if dto is not None
+                        else (info.get("__android_vr_format_ids") or [])
+                    )
                     if vr_only_ids:
                         selected_format = sel["format"]
                         # 检查 format 字符串中是否包含任何 VR 专属 ID
@@ -2351,7 +2786,7 @@ class SelectionDialog(MessageBoxBase):
                         embed_override = None
 
                 subtitle_opts = subtitle_service.apply(
-                    video_id=self.video_info.get("id", ""),
+                    video_id=(dto.video_id if dto is not None else self.video_info.get("id", "")),
                     video_info=self.video_info,
                 )
                 ydl_opts.update(subtitle_opts)
@@ -2399,7 +2834,7 @@ class SelectionDialog(MessageBoxBase):
             thumb = str(row_data.get("thumbnail"))
 
             # Base opts
-            row_opts = {}
+            row_opts: dict[str, Any] = {}
 
             # Check for manual overrides (from detail view)
             # ...
@@ -2561,8 +2996,18 @@ class SelectionDialog(MessageBoxBase):
                     box.yesButton.setText("继续下载")
                     box.cancelButton.setText("等待补全")
                     if not box.exec():
-                        self._enqueue_detail_rows(pending[:6], priority=True)
-                        self._maybe_start_next_detail()
+                        # User wants to wait – re-enqueue pending rows with high priority
+                        if self._extract_manager is not None:
+                            for r in pending[:6]:
+                                url = str(self._playlist_rows[r].get("url") or "")
+                                if url:
+                                    self._extract_manager.enqueue(
+                                        str(r),
+                                        url,
+                                        self._current_options,
+                                        self._vr_mode,
+                                        high_priority=True,
+                                    )
                         return
             tasks = self._build_playlist_tasks()
             if not tasks:
@@ -2604,8 +3049,16 @@ class SelectionDialog(MessageBoxBase):
             print("[DEBUG] accept: No format selector, using legacy flow")
 
             if self.video_info is not None:
-                title = str(self.video_info.get("title") or "未命名任务")
-                thumb = str(self.video_info.get("thumbnail") or "").strip() or None
+                title = (
+                    self.video_info_dto.title
+                    if self.video_info_dto is not None and self.video_info_dto.title
+                    else str(self.video_info.get("title") or "未命名任务")
+                )
+                thumb = (
+                    str(self.video_info_dto.thumbnail_url).strip() or None
+                    if self.video_info_dto is not None
+                    else str(self.video_info.get("thumbnail") or "").strip() or None
+                )
             else:
                 title = "未命名任务"
                 thumb = None
@@ -2882,6 +3335,24 @@ class SelectionDialog(MessageBoxBase):
                     continue
                 candidates.append(f)
 
+            # 兼容集合异常时回退：避免被错误的 ID 列表卡成仅 360p。
+            if should_filter:
+                raw_candidates = []
+                for f in formats:
+                    if f.get("vcodec") in (None, "none"):
+                        continue
+                    h = int(f.get("height") or 0)
+                    if h < 360:
+                        continue
+                    raw_candidates.append(f)
+
+                max_filtered_h = max((int(f.get("height") or 0) for f in candidates), default=0)
+                max_raw_h = max((int(f.get("height") or 0) for f in raw_candidates), default=0)
+                if (max_filtered_h <= 360 < max_raw_h) or (
+                    len(candidates) <= 1 and len(raw_candidates) >= 3
+                ):
+                    candidates = raw_candidates
+
             # 2. 排序 (3D > 投影 > 分辨率)
             _STEREO_ORDER = {"stereo_tb": 0, "stereo_sbs": 0, "mono": 1, "unknown": 2}
             _PROJ_ORDER = {"equirectangular": 0, "mesh": 1, "eac": 2, "unknown": 3}
@@ -2963,7 +3434,7 @@ class SelectionDialog(MessageBoxBase):
                 if fps and fps > 30:
                     res_str += f" {int(fps)}fps"
 
-                # 去重：仅保留每个分辨率的一条入口（后续可扩展为“推荐/更多”）
+                # 去重：仅保留每个分辨率的一条入口（后续可扩展为"推荐/更多"）
                 if h not in seen_res:
                     ext = f.get("ext") or "?"
                     self.video_formats.append(
@@ -3054,7 +3525,11 @@ class SelectionDialog(MessageBoxBase):
             # 集成字幕服务
             if self.video_info:
                 subtitle_opts = subtitle_service.apply(
-                    video_id=self.video_info.get("id", ""),
+                    video_id=(
+                        self.video_info_dto.video_id
+                        if self.video_info_dto is not None
+                        else self.video_info.get("id", "")
+                    ),
                     video_info=self.video_info,
                 )
                 opts.update(subtitle_opts)
@@ -3089,7 +3564,11 @@ class SelectionDialog(MessageBoxBase):
         # 集成字幕服务
         if self.video_info:
             subtitle_opts = subtitle_service.apply(
-                video_id=self.video_info.get("id", ""),
+                video_id=(
+                    self.video_info_dto.video_id
+                    if self.video_info_dto is not None
+                    else self.video_info.get("id", "")
+                ),
                 video_info=self.video_info,
             )
             opts.update(subtitle_opts)

@@ -104,12 +104,22 @@ class YtDlpOutputParser:
             return ParsedLine(
                 type="subtitle",
                 path=path,
-                message="正在下载字幕...",
+                message=line,
+            )
+
+        # 2.5 封面下载提示
+        if "Writing video thumbnail" in line and "to:" in line:
+            parts = line.split("to:", 1)
+            path = parts[1].strip() if len(parts) > 1 else None
+            return ParsedLine(
+                type="subtitle",  # 复用 subtitle 类型以复用 executor 中的路径跟踪逻辑
+                path=path,
+                message=line,
             )
 
         # 3. 字幕转换
         if "[FFmpegSubtitlesConvertor]" in line:
-            return ParsedLine(type="status", message="正在转换字幕格式...")
+            return ParsedLine(type="status", message=line)
 
         # 4. 合并/提取音频
         if (

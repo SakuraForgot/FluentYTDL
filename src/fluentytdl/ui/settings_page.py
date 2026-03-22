@@ -656,6 +656,21 @@ class ProbePoolEditorDialog(MessageBox):
         return links
 
 
+class DLEAccountNameDialog(MessageBox):
+    """新增 DLE 账号名称输入对话框（Fluent 风格）。"""
+
+    def __init__(self, parent=None):
+        super().__init__("新增 DLE 账号", "请输入账号名称", parent)
+        self.nameEdit = LineEdit(self.widget)
+        self.nameEdit.setPlaceholderText("例如：A 账号")
+        self.nameEdit.setMinimumWidth(360)
+        self.textLayout.addWidget(self.nameEdit)
+        self.widget.setMinimumWidth(420)
+
+    def get_account_name(self) -> str:
+        return (self.nameEdit.text() or "").strip()
+
+
 class EmbedTypeComboCard(SettingCard):
     """嵌入类型下拉框卡片"""
 
@@ -947,14 +962,18 @@ class SettingsPage(QWidget):
         )
         self.downloadFolderCard.clicked.connect(self._select_download_folder)
 
-        self.downloadModeCard = InlineComboBoxCard(
+        self.concurrentFragmentsCard = InlineComboBoxCard(
             FluentIcon.SPEED_HIGH,
-            "下载模式",
-            "选择下载引擎策略（自动模式会根据网络状况智能切换）",
-            ["🤖 自动智能 (推荐)", "⚡ 极速 (多线程并发)", "🛡️ 稳定 (单线程)", "🔧 最低兼容"],
+            "分片并发数",
+            "设置单个视频的分片下载线程数 (默认: 4)",
+            [str(i) for i in range(1, 9)],
             self.downloadGroup,
         )
-        self.downloadModeCard.comboBox.currentIndexChanged.connect(self._on_download_mode_changed)
+        current_frag = config_manager.get("concurrent_fragments", 4)
+        self.concurrentFragmentsCard.comboBox.setCurrentIndex(max(0, min(7, int(current_frag) - 1)))
+        self.concurrentFragmentsCard.comboBox.currentIndexChanged.connect(
+            self._on_concurrent_fragments_changed
+        )
 
         # Max Concurrent Downloads
         self.maxConcurrentCard = InlineComboBoxCard(
@@ -970,7 +989,7 @@ class SettingsPage(QWidget):
         self.maxConcurrentCard.comboBox.currentIndexChanged.connect(self._on_max_concurrent_changed)
 
         self.downloadGroup.addSettingCard(self.downloadFolderCard)
-        self.downloadGroup.addSettingCard(self.downloadModeCard)
+        self.downloadGroup.addSettingCard(self.concurrentFragmentsCard)
         self.downloadGroup.addSettingCard(self.maxConcurrentCard)
         layout.addWidget(self.downloadGroup)
 
@@ -1054,6 +1073,37 @@ class SettingsPage(QWidget):
         )
         self.dleLoginCard.clicked.connect(self._on_dle_login_clicked)
 
+        # DLE 账号选择
+        self._dle_account_ids: list[str] = []
+        self.dleAccountCard = InlineComboBoxCard(
+            FluentIcon.PEOPLE,
+            "DLE 账号",
+            "选择当前用于登录提取与下载注入的账号",
+            [],
+            self.accountGroup,
+        )
+        self.dleAccountCard.comboBox.currentIndexChanged.connect(self._on_dle_account_changed)
+
+        # 新增 DLE 账号
+        self.dleAddAccountCard = PushSettingCard(
+            "新增账号",
+            FluentIcon.ADD,
+            "DLE 账号管理",
+            "创建新的 DLE 账号隔离存储（独立 profile 与缓存）",
+            self.accountGroup,
+        )
+        self.dleAddAccountCard.clicked.connect(self._on_add_dle_account_clicked)
+
+        # 删除当前 DLE 账号
+        self.dleRemoveAccountCard = PushSettingCard(
+            "删除当前账号",
+            FluentIcon.DELETE,
+            "删除 DLE 账号",
+            "删除当前选中的 DLE 账号（至少保留 1 个）",
+            self.accountGroup,
+        )
+        self.dleRemoveAccountCard.clicked.connect(self._on_remove_dle_account_clicked)
+
         # 手动刷新按钮
         self.refreshCookieCard = PushSettingCard(
             "立即刷新",
@@ -1086,6 +1136,9 @@ class SettingsPage(QWidget):
 
         self.accountGroup.addSettingCard(self.cookieModeCard)
         self.accountGroup.addSettingCard(self.browserCard)
+        self.accountGroup.addSettingCard(self.dleAccountCard)
+        self.accountGroup.addSettingCard(self.dleAddAccountCard)
+        self.accountGroup.addSettingCard(self.dleRemoveAccountCard)
         self.accountGroup.addSettingCard(self.dleLoginCard)
         self.accountGroup.addSettingCard(self.refreshCookieCard)
         self.accountGroup.addSettingCard(self.cookieStatusCard)
@@ -1106,6 +1159,9 @@ class SettingsPage(QWidget):
 
         # Make Cookie dependent cards look like "children" of cookie mode card
         self._indent_setting_card(self.browserCard)
+        self._indent_setting_card(self.dleAccountCard)
+        self._indent_setting_card(self.dleAddAccountCard)
+        self._indent_setting_card(self.dleRemoveAccountCard)
         self._indent_setting_card(self.dleLoginCard)
         self._indent_setting_card(self.refreshCookieCard)
         self._indent_setting_card(self.cookieFileCard)
@@ -1135,6 +1191,16 @@ class SettingsPage(QWidget):
             self.coreGroup,
         )
         self.updateSourceCard.comboBox.currentIndexChanged.connect(self._on_update_source_changed)
+
+        # yt-dlp Update Channel
+        self.ytDlpChannelCard = InlineComboBoxCard(
+            FluentIcon.SYNC,
+            "yt-dlp 更新频道",
+            "选择 yt-dlp 版本的更新分支",
+            ["Stable (稳定版)", "Nightly (每夜版)", "Master (主线源码)"],
+            self.coreGroup,
+        )
+        self.ytDlpChannelCard.comboBox.currentIndexChanged.connect(self._on_ytdlp_channel_changed)
 
         # New Component Cards
         self.ytDlpCard = ComponentSettingCard(
@@ -1187,6 +1253,7 @@ class SettingsPage(QWidget):
 
         self.coreGroup.addSettingCard(self.checkUpdatesOnStartupCard)
         self.coreGroup.addSettingCard(self.updateSourceCard)
+        self.coreGroup.addSettingCard(self.ytDlpChannelCard)
         self.coreGroup.addSettingCard(self.ytDlpCard)
         self.coreGroup.addSettingCard(self.ffmpegCard)
         self.coreGroup.addSettingCard(self.denoCard)
@@ -1378,7 +1445,9 @@ class SettingsPage(QWidget):
             m = layout.contentsMargins()
             layout.setContentsMargins(left, m.top(), m.right(), m.bottom())
         except Exception:
-            pass
+            from ...utils.logger import logger
+
+            logger.warning("Swallowed exception in settings", exc_info=True)
 
     @staticmethod
     def _fix_windows_path(text: str) -> str:
@@ -1610,43 +1679,18 @@ class SettingsPage(QWidget):
             self._on_subtitle_embed_mode_changed
         )
 
-        # 外置字幕格式
-        self.subtitleFormatCard = InlineComboBoxCard(
-            FluentIcon.DOCUMENT,
-            "外置字幕格式",
-            "保存的字幕文件格式（外置文件和嵌入前的转换格式）",
-            ["SRT", "ASS", "VTT"],
-            parent=self.subtitleGroup,
-        )
-        self.subtitleFormatCard.comboBox.currentIndexChanged.connect(
-            self._on_subtitle_format_changed
-        )
-
-        # 保留外置字幕文件开关（仅软/硬嵌入时有意义）
-        self.subtitleKeepSeparateCard = InlineSwitchCard(
-            FluentIcon.SAVE,
-            "保留外置字幕文件",
-            "嵌入字幕后是否同时保留独立的字幕文件（.srt/.ass 等）",
-            parent=self.subtitleGroup,
-        )
-        self.subtitleKeepSeparateCard.checkedChanged.connect(
-            self._on_subtitle_keep_separate_changed
-        )
+        # 原始：外置字幕格式和保留开关已删除
 
         # 添加卡片到组
         self.subtitleGroup.addSettingCard(self.subtitleEnabledCard)
         self.subtitleGroup.addSettingCard(self.subtitleLanguagesCard)
         self.subtitleGroup.addSettingCard(self.subtitleEmbedTypeCard)
         self.subtitleGroup.addSettingCard(self.subtitleEmbedModeCard)
-        self.subtitleGroup.addSettingCard(self.subtitleFormatCard)
-        self.subtitleGroup.addSettingCard(self.subtitleKeepSeparateCard)
 
         # 缩进依赖项
         self._indent_setting_card(self.subtitleLanguagesCard)
         self._indent_setting_card(self.subtitleEmbedTypeCard)
         self._indent_setting_card(self.subtitleEmbedModeCard)
-        self._indent_setting_card(self.subtitleFormatCard)
-        self._indent_setting_card(self.subtitleKeepSeparateCard)
 
         layout.addWidget(self.subtitleGroup)
 
@@ -1740,7 +1784,9 @@ class SettingsPage(QWidget):
                             elif os.path.isdir(fp):
                                 shutil.rmtree(fp)
                         except Exception:
-                            pass
+                            from ...utils.logger import logger
+
+                            logger.warning("Swallowed exception in settings", exc_info=True)
                     InfoBar.success("清理完成", "已删除所有日志文件", parent=self.window())
                 else:
                     InfoBar.info("无需清理", "日志目录不存在", parent=self.window())
@@ -1751,12 +1797,11 @@ class SettingsPage(QWidget):
         # Download paths
         self.downloadFolderCard.setContent(str(config_manager.get("download_dir")))
 
-        # Download mode
-        dl_mode = str(config_manager.get("download_mode") or "auto").lower().strip()
-        dl_mode_map = {"auto": 0, "speed": 1, "stable": 2, "harsh": 3}
-        self.downloadModeCard.comboBox.blockSignals(True)
-        self.downloadModeCard.comboBox.setCurrentIndex(dl_mode_map.get(dl_mode, 0))
-        self.downloadModeCard.comboBox.blockSignals(False)
+        # Concurrent Fragments
+        current_frag = config_manager.get("concurrent_fragments", 4)
+        self.concurrentFragmentsCard.comboBox.blockSignals(True)
+        self.concurrentFragmentsCard.comboBox.setCurrentIndex(max(0, min(7, int(current_frag) - 1)))
+        self.concurrentFragmentsCard.comboBox.blockSignals(False)
 
         # Update Source
         src = str(config_manager.get("update_source") or "github")
@@ -1764,6 +1809,14 @@ class SettingsPage(QWidget):
         self.updateSourceCard.comboBox.blockSignals(True)
         self.updateSourceCard.comboBox.setCurrentIndex(src_idx)
         self.updateSourceCard.comboBox.blockSignals(False)
+
+        # yt-dlp Update Channel
+        channel_map = ["stable", "nightly", "master"]
+        current_ch = str(config_manager.get("ytdlp_channel", "stable")).strip().lower()
+        ch_idx = channel_map.index(current_ch) if current_ch in channel_map else 0
+        self.ytDlpChannelCard.comboBox.blockSignals(True)
+        self.ytDlpChannelCard.comboBox.setCurrentIndex(ch_idx)
+        self.ytDlpChannelCard.comboBox.blockSignals(False)
 
         # Auto update switch
         auto_check = bool(config_manager.get("check_updates_on_startup", True))
@@ -1832,6 +1885,9 @@ class SettingsPage(QWidget):
 
         self.cookieModeCard.comboBox.blockSignals(False)
         self.browserCard.comboBox.blockSignals(False)
+
+        # 加载 DLE 账号列表
+        self._reload_dle_account_combo(select_current=True)
 
         # 触发可见性更新 (Cookie sub-options)
         self._on_cookie_mode_changed(self.cookieModeCard.comboBox.currentIndex())
@@ -1951,18 +2007,7 @@ class SettingsPage(QWidget):
         self.subtitleEmbedModeCard.comboBox.setCurrentIndex(embed_mode_map.get(embed_mode, 0))
         self.subtitleEmbedModeCard.comboBox.blockSignals(False)
 
-        # Subtitle: format
-        subtitle_format = str(config_manager.get("subtitle_format", "srt")).lower()
-        format_map = {"srt": 0, "ass": 1, "vtt": 2}
-        self.subtitleFormatCard.comboBox.blockSignals(True)
-        self.subtitleFormatCard.comboBox.setCurrentIndex(format_map.get(subtitle_format, 0))
-        self.subtitleFormatCard.comboBox.blockSignals(False)
-
-        # Subtitle: keep separate file
-        keep_separate = bool(config_manager.get("subtitle_write_separate_file", False))
-        self.subtitleKeepSeparateCard.switchButton.blockSignals(True)
-        self.subtitleKeepSeparateCard.switchButton.setChecked(keep_separate)
-        self.subtitleKeepSeparateCard.switchButton.blockSignals(False)
+        # 原始格式加载与开关状态加载已删除
 
         # VR Settings
         self.vrEacAutoConvertCard.switchButton.blockSignals(True)
@@ -2303,6 +2348,9 @@ class SettingsPage(QWidget):
             auth_service.set_source(source, auto_refresh=True)
 
             self.browserCard.setVisible(True)
+            self.dleAccountCard.setVisible(False)
+            self.dleAddAccountCard.setVisible(False)
+            self.dleRemoveAccountCard.setVisible(False)
             self.dleLoginCard.setVisible(False)
             self.refreshCookieCard.setVisible(True)
             self.cookieFileCard.setVisible(False)
@@ -2318,7 +2366,12 @@ class SettingsPage(QWidget):
             # DLE 登录获取模式
             auth_service.set_source(AuthSourceType.DLE, auto_refresh=False)
 
+            self._reload_dle_account_combo(select_current=True)
+
             self.browserCard.setVisible(False)
+            self.dleAccountCard.setVisible(True)
+            self.dleAddAccountCard.setVisible(True)
+            self.dleRemoveAccountCard.setVisible(True)
             self.dleLoginCard.setVisible(True)
             self.refreshCookieCard.setVisible(False)
             self.cookieFileCard.setVisible(False)
@@ -2335,6 +2388,9 @@ class SettingsPage(QWidget):
             auth_service.set_source(AuthSourceType.FILE, auto_refresh=False)
 
             self.browserCard.setVisible(False)
+            self.dleAccountCard.setVisible(False)
+            self.dleAddAccountCard.setVisible(False)
+            self.dleRemoveAccountCard.setVisible(False)
             self.dleLoginCard.setVisible(False)
             self.refreshCookieCard.setVisible(False)
             self.cookieFileCard.setVisible(True)
@@ -2463,8 +2519,18 @@ class SettingsPage(QWidget):
 
     def _on_dle_login_clicked(self):
         """DLE 登录按钮点击 - 启动浏览器登录流程"""
+        from ..auth.auth_service import AuthSourceType, auth_service
+
+        # 保证处于 DLE 模式
+        auth_service.set_source(AuthSourceType.DLE, auto_refresh=False)
+
+        account = auth_service.current_dle_account
+        account_name = account.display_name if account else "默认账号"
+
         self.dleLoginCard.button.setEnabled(False)
-        self.dleLoginCard.setContent("正在启动浏览器，请登录 YouTube 账号后等待自动提取...")
+        self.dleLoginCard.setContent(
+            f"正在后台提取登录态（{account_name}），必要时会自动显示登录窗口..."
+        )
 
         # 执行刷新
         self._do_cookie_refresh()
@@ -2478,9 +2544,15 @@ class SettingsPage(QWidget):
 
                 if success:
                     self.dleLoginCard.setContent("✅ 登录成功，Cookie 已提取")
+                    from ..auth.cookie_sentinel import cookie_sentinel
+
+                    current_acc = auth_service.current_dle_account
+                    acc_cookie = current_acc.cached_cookie_path if current_acc else "未知"
                     InfoBar.success(
                         "登录成功",
-                        "YouTube Cookie 已成功提取并保存",
+                        f"YouTube Cookie 已成功提取并保存（{account_name}）\n"
+                        f"账号文件: {acc_cookie}\n"
+                        f"统一文件: {cookie_sentinel.cookie_path}",
                         duration=5000,
                         parent=self,
                     )
@@ -2503,6 +2575,105 @@ class SettingsPage(QWidget):
                 _on_dle_finished,
                 Qt.ConnectionType.QueuedConnection,
             )
+
+    def _reload_dle_account_combo(self, select_current: bool = True) -> None:
+        """刷新 DLE 账号下拉列表"""
+        from ..auth.auth_service import auth_service
+
+        accounts = auth_service.list_dle_accounts(platform="youtube")
+        self._dle_account_ids = [a.account_id for a in accounts]
+
+        combo = self.dleAccountCard.comboBox
+        combo.blockSignals(True)
+        combo.clear()
+
+        for acc in accounts:
+            label = acc.display_name
+            if acc.is_default:
+                label += " (默认)"
+            combo.addItem(label)
+
+        if select_current and self._dle_account_ids:
+            cur = auth_service.current_dle_account_id
+            idx = self._dle_account_ids.index(cur) if cur in self._dle_account_ids else 0
+            combo.setCurrentIndex(idx)
+
+        combo.blockSignals(False)
+
+    def _on_dle_account_changed(self, index: int) -> None:
+        """切换当前 DLE 账号"""
+        from ..auth.auth_service import auth_service
+
+        if index < 0 or index >= len(self._dle_account_ids):
+            return
+
+        account_id = self._dle_account_ids[index]
+        if auth_service.set_current_dle_account(account_id):
+            account = auth_service.current_dle_account
+            name = account.display_name if account else "未知账号"
+            InfoBar.success(
+                "已切换 DLE 账号",
+                f"当前账号: {name}",
+                duration=2500,
+                parent=self,
+            )
+            self._update_cookie_status()
+
+    def _on_add_dle_account_clicked(self) -> None:
+        """新增 DLE 账号"""
+        from ..auth.auth_service import auth_service
+
+        dialog = DLEAccountNameDialog(self)
+        dialog.yesButton.setText("创建")
+        dialog.cancelButton.setText("取消")
+        if not dialog.exec():
+            return
+
+        display_name = dialog.get_account_name()
+        if not display_name:
+            InfoBar.warning("名称为空", "请输入有效账号名称", duration=2500, parent=self)
+            return
+
+        account = auth_service.create_dle_account(display_name=display_name, platform="youtube")
+        auth_service.set_current_dle_account(account.account_id)
+        self._reload_dle_account_combo(select_current=True)
+
+        InfoBar.success(
+            "账号已创建",
+            f"已创建并切换到: {account.display_name}",
+            duration=3000,
+            parent=self,
+        )
+        self._update_cookie_status()
+
+    def _on_remove_dle_account_clicked(self) -> None:
+        """删除当前 DLE 账号"""
+        from qfluentwidgets import MessageBox
+
+        from ..auth.auth_service import auth_service
+
+        account = auth_service.current_dle_account
+        if not account:
+            InfoBar.warning("无可删账号", "当前没有可删除的 DLE 账号", duration=2500, parent=self)
+            return
+
+        box = MessageBox(
+            "删除当前 DLE 账号",
+            f"确定删除账号「{account.display_name}」吗？\n\n至少需要保留 1 个账号。",
+            self,
+        )
+        box.yesButton.setText("删除")
+        box.cancelButton.setText("取消")
+        if not box.exec():
+            return
+
+        if not auth_service.delete_dle_account(account.account_id, remove_storage=False):
+            InfoBar.error("删除失败", "至少需要保留一个账号", duration=3000, parent=self)
+            return
+
+        self._reload_dle_account_combo(select_current=True)
+        InfoBar.success("删除成功", f"已删除: {account.display_name}", duration=3000, parent=self)
+        self._update_cookie_status()
 
     def _on_refresh_cookie_clicked(self):
         """手动刷新 Cookie 按钮点击"""
@@ -3034,7 +3205,34 @@ class SettingsPage(QWidget):
             worker.quit()
             worker.wait(2000)
         except Exception:
-            pass
+            from ...utils.logger import logger
+
+            logger.warning("Swallowed exception in settings", exc_info=True)
+
+    def _on_check_updates_startup_changed(self, checked: bool) -> None:
+        config_manager.set("check_updates_on_startup", checked)
+
+    def _on_update_source_changed(self, index: int) -> None:
+        source_map = {0: "github", 1: "ghproxy"}
+        mode = source_map.get(index, "github")
+        config_manager.set("update_source", mode)
+        InfoBar.success(
+            "设置已更新",
+            f"组件更新源已切换为: {self.updateSourceCard.comboBox.currentText()}",
+            duration=3000,
+            parent=self,
+        )
+
+    def _on_ytdlp_channel_changed(self, index: int) -> None:
+        channel_map = {0: "stable", 1: "nightly", 2: "master"}
+        mode = channel_map.get(index, "stable")
+        config_manager.set("ytdlp_channel", mode)
+        InfoBar.success(
+            "设置已更新",
+            f"yt-dlp 更新频道已切换为: {self.ytDlpChannelCard.comboBox.currentText()} (下次更新时生效)",
+            duration=5000,
+            parent=self,
+        )
 
     def _on_js_runtime_changed(self, index: int) -> None:
         mapping = {0: "auto", 1: "deno", 2: "node", 3: "bun", 4: "quickjs"}
@@ -3054,11 +3252,13 @@ class SettingsPage(QWidget):
         try:
             self.poTokenCard.setValue(val)
         except Exception:
-            pass
+            from ...utils.logger import logger
 
-    def _on_download_mode_changed(self, index: int) -> None:
-        modes = {0: "auto", 1: "speed", 2: "stable", 3: "harsh"}
-        config_manager.set("download_mode", modes.get(index, "auto"))
+            logger.warning("Swallowed exception in settings", exc_info=True)
+
+    def _on_concurrent_fragments_changed(self, index: int) -> None:
+        val = index + 1
+        config_manager.set("concurrent_fragments", val)
 
     def _select_download_folder(self) -> None:
         folder = QFileDialog.getExistingDirectory(self, "选择下载目录")
@@ -3092,7 +3292,9 @@ class SettingsPage(QWidget):
                 self.ytDlpCard.setValue("")
                 self.ytDlpCard.setContent(self._yt_dlp_status_text())
             except Exception:
-                pass
+                from ...utils.logger import logger
+
+                logger.warning("Swallowed exception in settings", exc_info=True)
             return
 
         config_manager.set("yt_dlp_exe_path", path)
@@ -3100,7 +3302,9 @@ class SettingsPage(QWidget):
             self.ytDlpCard.setValue(path)
             self.ytDlpCard.setContent(f"自定义: {path}" if path else self._yt_dlp_status_text())
         except Exception:
-            pass
+            from ...utils.logger import logger
+
+            logger.warning("Swallowed exception in settings", exc_info=True)
 
     def _yt_dlp_status_text(self) -> str:
         cfg = str(config_manager.get("yt_dlp_exe_path") or "").strip()
@@ -3109,7 +3313,9 @@ class SettingsPage(QWidget):
                 if Path(cfg).exists():
                     return "已就绪（手动指定）"
             except Exception:
-                pass
+                from ...utils.logger import logger
+
+                logger.warning("Swallowed exception in settings", exc_info=True)
 
         if is_frozen():
             p = find_bundled_executable(
@@ -3187,13 +3393,17 @@ class SettingsPage(QWidget):
                 self.ffmpegCard.setValue(path)
                 self.ffmpegCard.setContent(f"自定义: {path}")
             except Exception:
-                pass
+                from ...utils.logger import logger
+
+                logger.warning("Swallowed exception in settings", exc_info=True)
         else:
             try:
                 self.ffmpegCard.setValue("")
                 self.ffmpegCard.setContent(self._ffmpeg_status_text())
             except Exception:
-                pass
+                from ...utils.logger import logger
+
+                logger.warning("Swallowed exception in settings", exc_info=True)
 
     def _ffmpeg_status_text(self) -> str:
         custom = str(config_manager.get("ffmpeg_path") or "").strip()
@@ -3202,7 +3412,9 @@ class SettingsPage(QWidget):
                 if Path(custom).exists():
                     return "已就绪（手动指定）"
             except Exception:
-                pass
+                from ...utils.logger import logger
+
+                logger.warning("Swallowed exception in settings", exc_info=True)
 
         # Auto-detect priority: bundled (_internal) > PATH
         bundled = (
@@ -3292,7 +3504,9 @@ class SettingsPage(QWidget):
                     if matches:
                         return "deno", matches[0], "winget"
         except Exception:
-            pass
+            from ...utils.logger import logger
+
+            logger.warning("Swallowed exception in settings", exc_info=True)
 
         node = shutil.which("node") or shutil.which("node.exe")
         if node:
@@ -3366,7 +3580,9 @@ class SettingsPage(QWidget):
                 self.jsRuntimePathCard.setValue("")
                 self.jsRuntimePathCard.setContent(self._js_runtime_status_text())
             except Exception:
-                pass
+                from ...utils.logger import logger
+
+                logger.warning("Swallowed exception in settings", exc_info=True)
             return
 
         config_manager.set("js_runtime_path", path)
@@ -3374,7 +3590,9 @@ class SettingsPage(QWidget):
             self.jsRuntimePathCard.setValue(path)
             self.jsRuntimePathCard.setContent(self._js_runtime_status_text())
         except Exception:
-            pass
+            from ...utils.logger import logger
+
+            logger.warning("Swallowed exception in settings", exc_info=True)
 
     def _check_js_runtime(self) -> None:
         rid, exe, source = self._resolve_js_runtime_exe()
@@ -3396,14 +3614,18 @@ class SettingsPage(QWidget):
                     try:
                         kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW  # type: ignore[attr-defined]
                     except Exception:
-                        pass
+                        from ...utils.logger import logger
+
+                        logger.warning("Swallowed exception in settings", exc_info=True)
                     try:
                         si = subprocess.STARTUPINFO()  # type: ignore[attr-defined]
                         si.dwFlags |= subprocess.STARTF_USESHOWWINDOW  # type: ignore[attr-defined]
                         si.wShowWindow = 0
                         kwargs["startupinfo"] = si
                     except Exception:
-                        pass
+                        from ...utils.logger import logger
+
+                        logger.warning("Swallowed exception in settings", exc_info=True)
 
                 proc = subprocess.run(
                     cmd,
@@ -3540,6 +3762,18 @@ class SettingsPage(QWidget):
 
         self.vrHardwareStatusCard.setTitle(status_text)
         self.vrHardwareStatusCard.setContent(desc)
+        # B2: 无 GPU 时将「强制 GPU」选项置灰，防止用户选择后静默回落 CPU
+        combo = self.vrHwAccelCard.comboBox
+        try:
+            # qfluentwidgets ComboBox 提供 setItemEnabled(index, bool)
+            combo.setItemEnabled(2, has_gpu)  # index 2 = "强制 GPU (快)"
+        except Exception:
+            pass  # 若版本不支持则跳过，不影响主逻辑
+        if not has_gpu and combo.currentIndex() == 2:
+            combo.blockSignals(True)
+            combo.setCurrentIndex(0)
+            combo.blockSignals(False)
+            config_manager.set("vr_hw_accel_mode", "auto")
         # TODO: Update icon if possible, currently SettingCard doesn't support changing icon easily
 
     def _on_vr_eac_auto_convert_changed(self, checked: bool) -> None:
@@ -3554,7 +3788,21 @@ class SettingsPage(QWidget):
 
     def _on_vr_hw_accel_changed(self, index: int) -> None:
         mode_map = {0: "auto", 1: "cpu", 2: "gpu"}
-        config_manager.set("vr_hw_accel_mode", mode_map.get(index, "auto"))
+        mode = mode_map.get(index, "auto")
+        config_manager.set("vr_hw_accel_mode", mode)
+        if mode == "gpu":
+            from ..core.hardware_manager import hardware_manager
+
+            encoders = hardware_manager.get_gpu_encoders()
+            if not encoders:
+                InfoBar.warning(
+                    "未检测到 GPU 编码器",
+                    "当前系统没有可用的硬件编码器（NVENC/QSV/AMF），\n"
+                    "「强制 GPU」将自动回落为 CPU 转码，速度会很慢。\n"
+                    "建议改为「自动 (推荐)」。",
+                    duration=8000,
+                    parent=self,
+                )
 
     def _on_vr_max_resolution_changed(self, index: int) -> None:
         res_map = {0: 2160, 1: 3200, 2: 4320}
@@ -3581,8 +3829,6 @@ class SettingsPage(QWidget):
         self.subtitleLanguagesCard.setVisible(True)
         self.subtitleEmbedTypeCard.setVisible(True)
         self.subtitleEmbedModeCard.setVisible(True)
-        self.subtitleFormatCard.setVisible(True)
 
-        # 仅根据嵌入类型更新「保留外置字幕」可见性，不再依赖总开关
         embed_type = self.subtitleEmbedTypeCard.get_value()
-        self.subtitleKeepSeparateCard.setVisible(embed_type == "soft")
+        self.subtitleEmbedModeCard.setEnabled(embed_type == "soft")

@@ -46,14 +46,6 @@ class SubtitleConfig:
     - ask: 每次下载时询问
     """
 
-    write_separate_file: bool = False
-    """是否同时保存单独的字幕文件（即使嵌入到视频）"""
-
-    # ========== 格式配置 ==========
-
-    format: Literal["srt", "ass", "vtt", "lrc"] = "srt"
-    """字幕格式偏好"""
-
     # ========== 质量与后处理 ==========
 
     quality_check: bool = True
@@ -78,8 +70,6 @@ class SubtitleConfig:
             "enable_auto_captions": self.enable_auto_captions,
             "embed_type": self.embed_type,
             "embed_mode": self.embed_mode,
-            "write_separate_file": self.write_separate_file,
-            "format": self.format,
             "quality_check": self.quality_check,
             "remove_ads": self.remove_ads,
             "fallback_to_english": self.fallback_to_english,
@@ -95,8 +85,6 @@ class SubtitleConfig:
             enable_auto_captions=data.get("enable_auto_captions", True),
             embed_type=data.get("embed_type", "soft"),
             embed_mode=data.get("embed_mode", "always"),
-            write_separate_file=data.get("write_separate_file", True),
-            format=data.get("format", "srt"),
             quality_check=data.get("quality_check", True),
             remove_ads=data.get("remove_ads", False),
             fallback_to_english=data.get("fallback_to_english", True),

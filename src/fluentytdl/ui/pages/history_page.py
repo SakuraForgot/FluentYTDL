@@ -6,12 +6,11 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
-    QLabel,
     QScrollArea,
     QVBoxLayout,
     QWidget,
@@ -19,6 +18,7 @@ from PySide6.QtWidgets import (
 from qfluentwidgets import (
     BodyLabel,
     FluentIcon,
+    IconWidget,
     InfoBar,
     InfoBarPosition,
     MessageBox,
@@ -35,6 +35,8 @@ from ..components.history_item_widget import HistoryItemWidget
 
 class HistoryPage(QWidget):
     """下载历史记录页面"""
+
+    reparse_requested = Signal(str)
 
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
@@ -115,7 +117,7 @@ class HistoryPage(QWidget):
 
         self.scroll_widget = QWidget()
         self.scroll_layout = QVBoxLayout(self.scroll_widget)
-        self.scroll_layout.setContentsMargins(0, 0, 0, 0)
+        self.scroll_layout.setContentsMargins(0, 0, 16, 0)
         self.scroll_layout.setSpacing(6)
         self.scroll_layout.addStretch(1)
 
@@ -128,9 +130,14 @@ class HistoryPage(QWidget):
         empty_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         empty_layout.setSpacing(16)
 
-        self.empty_icon = QLabel(self.empty_placeholder)
-        self.empty_icon.setText("📂")
-        self.empty_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.empty_icon_container = QWidget(self.empty_placeholder)
+        empty_icon_layout = QHBoxLayout(self.empty_icon_container)
+        empty_icon_layout.setContentsMargins(0, 0, 0, 0)
+        empty_icon_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        self.empty_icon = IconWidget(FluentIcon.HISTORY, self.empty_icon_container)
+        self.empty_icon.setFixedSize(64, 64)
+        empty_icon_layout.addWidget(self.empty_icon)
 
         self.empty_title = SubtitleLabel("暂无历史记录", self.empty_placeholder)
         self.empty_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -140,7 +147,7 @@ class HistoryPage(QWidget):
         self.empty_desc.setTextColor(QColor(96, 96, 96), QColor(206, 206, 206))
 
         empty_layout.addStretch(1)
-        empty_layout.addWidget(self.empty_icon)
+        empty_layout.addWidget(self.empty_icon_container)
         empty_layout.addWidget(self.empty_title)
         empty_layout.addWidget(self.empty_desc)
         empty_layout.addStretch(1)
@@ -158,9 +165,6 @@ class HistoryPage(QWidget):
 
         line_color = "rgba(255, 255, 255, 0.08)" if isDarkTheme() else "rgba(0, 0, 0, 0.08)"
         self.line.setStyleSheet(f"color: {line_color};")
-
-        icon_color = "rgba(255, 255, 255, 0.1)" if isDarkTheme() else "rgba(0, 0, 0, 0.1)"
-        self.empty_icon.setStyleSheet(f"font-size: 64px; color: {icon_color};")
 
     # ------ 数据操作 ------
 
@@ -182,6 +186,7 @@ class HistoryPage(QWidget):
         for rec in records:
             card = HistoryItemWidget(rec, self.scroll_widget)
             card.remove_requested.connect(self._on_remove)
+            card.reparse_requested.connect(self.reparse_requested.emit)
             self._cards.append(card)
             # 插入到 stretch 之前
             self.scroll_layout.insertWidget(self.scroll_layout.count() - 1, card)
@@ -193,6 +198,7 @@ class HistoryPage(QWidget):
         """实时添加一条新记录（下载完成时调用）"""
         card = HistoryItemWidget(record, self.scroll_widget)
         card.remove_requested.connect(self._on_remove)
+        card.reparse_requested.connect(self.reparse_requested.emit)
         self._cards.insert(0, card)
         self.scroll_layout.insertWidget(0, card)
         self._update_empty_state()

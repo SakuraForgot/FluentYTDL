@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import json
+import os
 from collections import deque
 from typing import Any
 
-from PySide6.QtCore import QObject, Signal
+from PySide6.QtCore import QObject, Qt, Signal
 
 from ..core.config_manager import config_manager
+from ..storage.db_writer import db_writer
+from ..storage.task_db import task_db
 from .workers import DownloadWorker
 
 
@@ -17,6 +21,48 @@ class DownloadManager(QObject):
         super().__init__()
         self.active_workers: list[DownloadWorker] = []
         self._pending_workers: deque[DownloadWorker] = deque()
+        self.load_unfinished_tasks()
+
+    def load_unfinished_tasks(self) -> None:
+        """从 TaskDB 加载未能完成的会话（崩溃或退出留下的）"""
+        tasks = task_db.get_all_tasks()
+        # tasks 是按照 created_at DESC 排序的，反转以按先后顺序加载
+        for row in reversed(tasks):
+            state = row.get("state", "queued")
+            if state in ("completed", "error"):
+                continue
+
+            # 如果重启前是运行状态，自动降级为暂停，防止重启瞬间并发爆炸
+            if state in ("running", "downloading"):
+                state = "paused"
+                task_db.update_task_status(
+                    row["id"], state, row.get("progress", 0.0), "⏸️ 下载已暂停 (应用重启)"
+                )
+
+            opts = json.loads(row.get("ydl_opts_json", "{}"))
+            cached = {"title": row.get("title", ""), "thumbnail": row.get("thumbnail_url", "")}
+
+            worker = self.create_worker(
+                row["url"], opts, cached_info=cached, restore_db_id=row["id"]
+            )
+
+            # 手工同步 Worker 上下文使其与 DB 呈现一致
+            worker._final_state = state
+            worker.progress_val = row.get("progress", 0.0)
+            worker.status_text = row.get("status_text", "")
+            worker.v_title = row.get("title", "")
+            worker.v_thumbnail = row.get("thumbnail_url", "")
+            worker.output_path = row.get("output_path", "")
+            worker.total_bytes = row.get("file_size", 0)
+
+            if state == "queued":
+                self._pending_workers.append(worker)
+            elif state == "paused":
+                # 对于 paused 状态，调用 pause 会设置红绿灯
+                worker._cancel_event.clear()
+                worker._pause_event.clear()
+
+        # 最后不 pump()，要等 UI 初始化完后再由其他流程触发或用户手动恢复
 
     def _max_concurrent(self) -> int:
         try:
@@ -64,9 +110,52 @@ class DownloadManager(QObject):
         self.task_updated.emit()
 
     def create_worker(
-        self, url: str, opts: dict[str, Any], cached_info: dict[str, Any] | None = None
+        self,
+        url: str,
+        opts: dict[str, Any],
+        cached_info: dict[str, Any] | None = None,
+        restore_db_id: int = 0,
     ) -> DownloadWorker:
         worker = DownloadWorker(url, opts, cached_info=cached_info)
+
+        # 1. 登记入库，建立 Worker 的持久化主键
+        if restore_db_id > 0:
+            worker.db_id = restore_db_id
+        else:
+            db_id = task_db.insert_task(url, opts)
+            worker.db_id = db_id
+            # 只有新创建的才录入缓存元数据，恢复的不用覆盖
+            if cached_info:
+                t_title = cached_info.get("title", "")
+                t_thumb = cached_info.get("thumbnail", "")
+                db_writer.enqueue_metadata(db_id, t_title, str(t_thumb) if t_thumb else "")
+
+        # 3. 建立单写者“过桥”连接 (强制在 QObject 的宿主线程即主线程执行写操作)
+        def _on_unified_status(state: str, pct: float, msg: str):
+            db_writer.enqueue_status(worker.db_id, state, pct, msg)
+
+        def _on_output_ready(path: str):
+            fsize = 0
+            if path and os.path.exists(path):
+                fsize = os.path.getsize(path)
+            if fsize == 0:
+                fsize = getattr(worker, "total_bytes", 0)
+            db_writer.enqueue_result(worker.db_id, path, fsize)
+
+        def _on_completed():
+            path = getattr(worker, "output_path", "")
+            fsize = 0
+            if path and os.path.exists(path):
+                fsize = os.path.getsize(path)
+            if fsize == 0:
+                fsize = getattr(worker, "total_bytes", 0)
+            if path:
+                db_writer.enqueue_result(worker.db_id, path, fsize)
+            self.task_updated.emit()
+
+        worker.unified_status.connect(_on_unified_status, Qt.ConnectionType.QueuedConnection)
+        worker.output_path_ready.connect(_on_output_ready, Qt.ConnectionType.QueuedConnection)
+
         self.active_workers.append(worker)
 
         # When a worker ends, free a slot and pump queued tasks.
@@ -74,7 +163,7 @@ class DownloadManager(QObject):
             worker.finished.connect(lambda: self._on_worker_finished(worker))
         except Exception:
             pass
-        worker.completed.connect(lambda: self.task_updated.emit())
+        worker.completed.connect(_on_completed)
         worker.cancelled.connect(lambda: self.task_updated.emit())
         worker.error.connect(lambda *_: self.task_updated.emit())
         return worker
@@ -140,6 +229,9 @@ class DownloadManager(QObject):
                         pass
             except Exception:
                 all_stopped = False
+
+        # 确保所有待写数据落盘后再退出
+        db_writer.flush_and_stop(timeout=3.0)
 
         return all_stopped
 

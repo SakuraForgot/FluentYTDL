@@ -1,18 +1,21 @@
 from __future__ import annotations
 
+import logging
 import time
 from collections import deque
+from enum import Enum
 from functools import partial
 from typing import Any
 
-from PySide6.QtCore import Qt, QTimer, Signal
-from PySide6.QtGui import QColor
+from PySide6.QtCore import QModelIndex, QPoint, Qt, QThread, QTimer, Signal
+from PySide6.QtGui import QColor, QCursor
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QFileDialog,
     QHBoxLayout,
-    QHeaderView,
     QLabel,
+    QListView,
+    QStyleOptionViewItem,
     QTableWidget,
     QVBoxLayout,
     QWidget,
@@ -33,18 +36,23 @@ from qfluentwidgets import (
 )
 from qframelesswindow import FramelessWindow
 
+from ...download.extract_manager import AsyncExtractManager
 from ...download.workers import EntryDetailWorker, InfoExtractWorker, VRInfoExtractWorker
+from ...models.mappers import VideoInfoMapper
+from ...models.video_info import VideoInfo
+from ...models.video_task import VideoTask
 from ...processing import subtitle_service
 from ...utils.filesystem import sanitize_filename
 from ...utils.image_loader import get_image_loader
 from ...utils.paths import resource_path
 from ...youtube.youtube_service import YoutubeServiceOptions
+from ..delegates.playlist_delegate import PlaylistItemDelegate
+from ..models.playlist_model import PlaylistListModel
+from ..playlist_scheduler import PlaylistScheduler
 from .cover_selector import CoverSelectorWidget
 from .format_selector import VideoFormatSelectorWidget
 from .selection_dialog import (
-    PlaylistActionWidget,
     PlaylistFormatDialog,
-    PlaylistInfoWidget,
     PlaylistPreviewWidget,
     _clean_audio_formats,
     _clean_video_formats,
@@ -52,12 +60,176 @@ from .selection_dialog import (
     _format_duration,
     _format_size,
     _format_upload_date,
-    _get_table_selection_qss,
     _infer_entry_thumbnail,
     _infer_entry_url,
 )
 from .subtitle_selector import SubtitleSelectorWidget
 from .vr_format_selector import VR_PRESETS, VRFormatSelectorWidget
+
+logger = logging.getLogger(__name__)
+
+
+class _PlaylistModelRowProxy:
+    """将原有 ActionWidget 写入路径映射到 PlaylistListModel。"""
+
+    def __init__(self, row: int, model: PlaylistListModel, notify_row_changed) -> None:
+        self._row = row
+        self._model = model
+        self._notify_row_changed = notify_row_changed
+        self._batch_mode = False
+        self._batch_dirty = False
+
+        outer = self
+
+        class _QualityButtonProxy:
+            def setText(self_, text: str) -> None:
+                idx = outer._model.index(outer._row, 0)
+                task = outer._model.get_task(idx)
+                if task is not None:
+                    new_text = str(text)
+                    changed = task.custom_options.format != new_text or task.is_parsing
+                    task.custom_options.format = new_text
+                    task.is_parsing = False
+                    if changed:
+                        if outer._batch_mode:
+                            outer._batch_dirty = True
+                        else:
+                            outer._notify_row_changed(outer._row)
+
+            def setToolTip(self_, _text: str) -> None:
+                pass
+
+        class _InfoLabelProxy:
+            def setText(self_, _text: str) -> None:
+                pass
+
+        self.qualityButton = _QualityButtonProxy()
+        self.infoLabel = _InfoLabelProxy()
+
+    def begin_batch(self) -> None:
+        """Suppress per-property notifications until end_batch()."""
+        self._batch_mode = True
+        self._batch_dirty = False
+
+    def end_batch(self) -> None:
+        """Flush a single notification if any property changed during the batch."""
+        self._batch_mode = False
+        if self._batch_dirty:
+            self._batch_dirty = False
+            self._notify_row_changed(self._row)
+
+    def set_loading(self, loading: bool, text: str | None = None) -> None:
+        idx = self._model.index(self._row, 0)
+        task = self._model.get_task(idx)
+        if task is None:
+            return
+        changed = task.is_parsing != bool(loading)
+        task.is_parsing = bool(loading)
+        if text is not None:
+            new_text = str(text)
+            if task.custom_options.format != new_text:
+                task.custom_options.format = new_text
+                changed = True
+        if changed:
+            if self._batch_mode:
+                self._batch_dirty = True
+            else:
+                self._notify_row_changed(self._row)
+
+
+class WindowState(Enum):
+    LOADING = "loading"
+    CONTENT = "content"
+    ERROR_COOKIE = "error_cookie"
+    ERROR_NETWORK = "error_network"
+    ERROR_GENERIC = "error_generic"
+
+
+def _normalize_info_payload(info: Any) -> dict[str, Any]:
+    """Normalize extraction payload to a dict for legacy UI code paths."""
+    if isinstance(info, dict):
+        return info
+
+    raw_dict = getattr(info, "raw_dict", None)
+    if isinstance(raw_dict, dict) and raw_dict:
+        return raw_dict
+
+    entries_raw = getattr(info, "entries", [])
+    entries: list[dict[str, Any]] = []
+    if isinstance(entries_raw, list):
+        for entry in entries_raw:
+            if isinstance(entry, dict):
+                entries.append(entry)
+                continue
+            entry_raw = getattr(entry, "raw_dict", None)
+            if isinstance(entry_raw, dict) and entry_raw:
+                entries.append(entry_raw)
+                continue
+            entries.append(
+                {
+                    "id": str(getattr(entry, "id", "") or ""),
+                    "title": str(getattr(entry, "title", "") or ""),
+                    "uploader": str(getattr(entry, "uploader", "") or ""),
+                    "duration": int(getattr(entry, "duration", 0) or 0),
+                    "thumbnail": str(getattr(entry, "thumbnail", "") or ""),
+                    "webpage_url": str(getattr(entry, "webpage_url", "") or ""),
+                }
+            )
+
+    formats_raw = getattr(info, "formats", [])
+    formats: list[dict[str, Any]] = []
+    if isinstance(formats_raw, list):
+        for fmt in formats_raw:
+            if isinstance(fmt, dict):
+                formats.append(fmt)
+                continue
+            formats.append(
+                {
+                    "format_id": str(getattr(fmt, "format_id", "") or ""),
+                    "ext": str(getattr(fmt, "ext", "") or ""),
+                    "vcodec": str(getattr(fmt, "vcodec", "none") or "none"),
+                    "acodec": str(getattr(fmt, "acodec", "none") or "none"),
+                    "filesize": int(getattr(fmt, "filesize", 0) or 0),
+                    "fps": float(getattr(fmt, "fps", 0.0) or 0.0),
+                    "height": int(getattr(fmt, "height", 0) or 0),
+                    "width": int(getattr(fmt, "width", 0) or 0),
+                    "url": str(getattr(fmt, "url", "") or ""),
+                    "format_note": str(getattr(fmt, "format_note", "") or ""),
+                    "resolution": str(getattr(fmt, "resolution", "") or ""),
+                    "vbr": float(getattr(fmt, "vbr", 0.0) or 0.0),
+                    "abr": float(getattr(fmt, "abr", 0.0) or 0.0),
+                    "tbr": float(getattr(fmt, "tbr", 0.0) or 0.0),
+                    "container": str(getattr(fmt, "container", "") or ""),
+                    "protocol": str(getattr(fmt, "protocol", "") or ""),
+                    "video_ext": str(getattr(fmt, "video_ext", "") or ""),
+                    "audio_ext": str(getattr(fmt, "audio_ext", "") or ""),
+                }
+            )
+
+    is_playlist = bool(getattr(info, "is_playlist", False) or entries)
+    normalized: dict[str, Any] = {
+        "id": str(getattr(info, "id", "") or ""),
+        "title": str(getattr(info, "title", "") or ""),
+        "uploader": str(getattr(info, "uploader", "") or ""),
+        "duration": int(getattr(info, "duration", 0) or 0),
+        "thumbnail": str(getattr(info, "thumbnail", "") or ""),
+        "is_live": bool(getattr(info, "is_live", False)),
+        "view_count": int(getattr(info, "view_count", 0) or 0),
+        "like_count": int(getattr(info, "like_count", 0) or 0),
+        "channel": str(getattr(info, "channel", "") or ""),
+        "channel_id": str(getattr(info, "channel_id", "") or ""),
+        "upload_date": str(getattr(info, "upload_date", "") or ""),
+        "webpage_url": str(getattr(info, "webpage_url", "") or ""),
+        "formats": formats,
+        "entries": entries,
+        "subtitles": {},
+    }
+    if is_playlist:
+        normalized["_type"] = "playlist"
+    vr_mode = getattr(info, "vr_mode", None)
+    if vr_mode is not None:
+        normalized["__fluentytdl_vr_mode"] = bool(vr_mode)
+    return normalized
 
 
 class DownloadConfigWindow(FramelessWindow):
@@ -79,6 +251,7 @@ class DownloadConfigWindow(FramelessWindow):
         vr_mode: bool = False,
         mode: str = "default",
         smart_detect: bool = False,
+        playlist_flat: bool = False,
     ):
         # parent=None ensures independent window behavior (taskbar icon, not always-on-top of main)
         super().__init__(parent=None)
@@ -88,7 +261,9 @@ class DownloadConfigWindow(FramelessWindow):
         self._vr_mode = vr_mode or (mode == "vr")
         self._mode = mode
         self._smart_detect = smart_detect
+        self._playlist_flat = playlist_flat
         self.video_info: dict[str, Any] | None = None
+        self.video_info_dto: VideoInfo | None = None
         try:
             from ...core.config_manager import config_manager
 
@@ -145,6 +320,7 @@ class DownloadConfigWindow(FramelessWindow):
         # === 状态初始化 ===
         self._is_playlist = False
         self.download_tasks: list[dict[str, Any]] = []
+        self._active_workers: list[QThread] = []
 
         self._subtitle_embed_choice: bool | None = None
         self._subtitle_choice_made = False
@@ -160,26 +336,47 @@ class DownloadConfigWindow(FramelessWindow):
         # playlist UI state
         self._playlist_rows: list[dict[str, Any]] = []
         self._table: QTableWidget | None = None
+        self._list_view: QListView | None = None
+        self._playlist_model: PlaylistListModel | None = None
+        self._playlist_delegate: PlaylistItemDelegate | None = None
+        self._extract_manager: AsyncExtractManager | None = None
         self._thumb_label_by_row: dict[int, QLabel] = {}
         self._preview_widget_by_row: dict[int, PlaylistPreviewWidget] = {}
-        self._action_widget_by_row: dict[int, PlaylistActionWidget] = {}
+        self._action_widget_by_row: dict[int, Any] = {}
         self._thumb_cache: dict[str, Any] = {}
         self._thumb_url_to_rows: dict[str, set[int]] = {}
+        self._thumb_applied_rows: dict[int, str] = {}
         self._thumb_requested: set[str] = set()
         self._thumb_pending: deque[str] = deque()  # O(1) popleft
+        self._thumb_retry_count: dict[str, int] = {}
         self._thumb_inflight: int = 0
-        self._thumb_max_concurrent: int = 12
+        self._thumb_max_concurrent: int = 4
 
-        self._detail_queue: deque[int] = deque()
-        self._detail_inflight_row: int | None = None
-        self._detail_loaded: set[int] = set()
-        self._detail_retry_count: dict[int, int] = {}  # row -> 已重试次数
+        self._build_chunk_entries: list[dict[str, Any]] = []
+        self._build_chunk_offset: int = 0
+        self._build_chunk_size: int = 30
+        self._build_is_chunking: bool = False
+
+        self._scroll_throttle_timer = QTimer(self)
+        self._scroll_throttle_timer.setSingleShot(True)
+        self._scroll_throttle_timer.setInterval(50)
+        self._scroll_throttle_timer.timeout.connect(self._on_scroll_throttled)
+
         self._last_interaction = time.monotonic()
-        self._lazy_paused: bool = False  # 用户手动暂停后台解析
+        self._lazy_paused: bool = (
+            False  # 用户手动暂停后台解析（初始缓存值，实际状态在 scheduler 中）
+        )
+        self._scheduler: PlaylistScheduler | None = None  # 播放列表调度器（build 完成后创建）
 
         self._idle_timer = QTimer(self)
         self._idle_timer.setInterval(2000)
         self._idle_timer.timeout.connect(self._on_idle_tick)
+
+        self._detail_finalize_rows: set[int] = set()
+        self._detail_finalize_timer = QTimer(self)
+        self._detail_finalize_timer.setSingleShot(True)
+        self._detail_finalize_timer.setInterval(80)
+        self._detail_finalize_timer.timeout.connect(self._flush_detail_finalizations)
 
         self._thumb_init_timer = QTimer(self)
         self._thumb_init_timer.setSingleShot(True)
@@ -210,14 +407,14 @@ class DownloadConfigWindow(FramelessWindow):
         self.loadingLayout.addWidget(self.loadingRing, 0, Qt.AlignmentFlag.AlignCenter)
 
         self.loadingLayout.addStretch(1)
-        self.viewLayout.addWidget(self.loadingWidget)
+        self.viewLayout.addWidget(self.loadingWidget, 1)
 
         # 内容容器
         self.contentWidget = QWidget()
         self.contentLayout = QVBoxLayout(self.contentWidget)
         self.contentLayout.setContentsMargins(0, 0, 0, 0)
         self.contentLayout.setSpacing(12)
-        self.viewLayout.addWidget(self.contentWidget)
+        self.viewLayout.addWidget(self.contentWidget, 1)
         self.contentWidget.hide()
 
         # ========== Cookie 预检警告条 ==========
@@ -257,6 +454,13 @@ class DownloadConfigWindow(FramelessWindow):
             dle_panel,
         )
         dle_lay.addWidget(dle_hint)
+        dle_account_row = QWidget(dle_panel)
+        dle_account_h = QHBoxLayout(dle_account_row)
+        dle_account_h.setContentsMargins(0, 0, 0, 0)
+        dle_account_h.setSpacing(8)
+        self._dleAccountCombo = ComboBox(dle_account_row)
+        dle_account_h.addWidget(self._dleAccountCombo, 1)
+        dle_lay.addWidget(dle_account_row)
         self._dleRetryBtn = PrimaryPushButton("登录 YouTube 并重试", dle_panel)
         self._dleRetryBtn.clicked.connect(self._on_dle_retry_clicked)
         dle_lay.addWidget(self._dleRetryBtn)
@@ -317,6 +521,36 @@ class DownloadConfigWindow(FramelessWindow):
         import_lay.addWidget(self._importRetryBtn)
         self._authStack.addWidget(import_panel)
 
+        # --- 面板 4: 组件更新 ---
+        update_panel = QWidget()
+        update_lay = QVBoxLayout(update_panel)
+        update_lay.setContentsMargins(0, 4, 0, 0)
+        update_lay.setSpacing(6)
+        update_hint = CaptionLabel(
+            "当前解析失败可能受限于 YouTube 最新的反爬风控机制（如 poToken）。\n"
+            "建议立即检测并更新 yt-dlp 核心解析组件。",
+            update_panel,
+        )
+        update_lay.addWidget(update_hint)
+        update_row = QWidget(update_panel)
+        update_h = QHBoxLayout(update_row)
+        update_h.setContentsMargins(0, 0, 0, 0)
+        update_h.setSpacing(8)
+        self._updateRetryBtn = PrimaryPushButton("一键检测并更新 yt-dlp", update_row)
+        self._updateRetryBtn.clicked.connect(self._on_update_retry_clicked)
+        update_h.addWidget(self._updateRetryBtn)
+        self._updateStatusLabel = CaptionLabel("", update_row)
+        update_h.addWidget(self._updateStatusLabel)
+
+        self._updateRing = IndeterminateProgressRing(update_row)
+        self._updateRing.setFixedSize(20, 20)
+        self._updateRing.hide()
+        update_h.addWidget(self._updateRing)
+
+        update_h.addStretch(1)
+        update_lay.addWidget(update_row)
+        self._authStack.addWidget(update_panel)
+
         # 绑定分段选择器
         self._authSegment.addItem(
             routeKey="dle", text="🔑 登录", onClick=lambda: self._authStack.setCurrentIndex(0)
@@ -327,7 +561,14 @@ class DownloadConfigWindow(FramelessWindow):
         self._authSegment.addItem(
             routeKey="import", text="📄 导入", onClick=lambda: self._authStack.setCurrentIndex(2)
         )
+        self._authSegment.addItem(
+            routeKey="update", text="⚙️ 更新", onClick=lambda: self._authStack.setCurrentIndex(3)
+        )
         self._authSegment.setCurrentItem("dle")
+
+        # 初始化 DLE 账号列表
+        self._dle_account_ids: list[str] = []
+        self._reload_dle_account_combo()
 
         self.viewLayout.addWidget(self.retryWidget)
         self.retryWidget.hide()
@@ -380,6 +621,14 @@ class DownloadConfigWindow(FramelessWindow):
             | None
         ) = None
 
+        # 绑定全局组件更新信号
+        from ...core.dependency_manager import dependency_manager
+
+        dependency_manager.check_finished.connect(self._on_dep_check_finished)
+        dependency_manager.install_finished.connect(self._on_dep_install_finished)
+        dependency_manager.check_error.connect(self._on_dep_error)
+        dependency_manager.download_error.connect(self._on_dep_error)
+
         # 启动解析
         self.start_extraction()
 
@@ -412,6 +661,27 @@ class DownloadConfigWindow(FramelessWindow):
         self._download_dir_edit = edit
         self.contentLayout.addWidget(wrap)
 
+    def _add_labeled_toggle(
+        self,
+        layout: QHBoxLayout,
+        container: QWidget,
+        text: str,
+        checked: bool,
+    ) -> SwitchButton:
+        wrap = QWidget(container)
+        row = QHBoxLayout(wrap)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(8)
+
+        label = CaptionLabel(text, wrap)
+        toggle = SwitchButton(wrap)
+        toggle.setChecked(checked)
+
+        row.addWidget(label)
+        row.addWidget(toggle)
+        layout.addWidget(wrap)
+        return toggle
+
     def _on_pick_download_dir(self) -> None:
         start_dir = self._download_dir or ""
         folder = QFileDialog.getExistingDirectory(self, "选择下载目录", start_dir)
@@ -443,27 +713,45 @@ class DownloadConfigWindow(FramelessWindow):
         title = CaptionLabel("下载选项", container)
         layout.addWidget(title)
 
-        def _add_toggle(text: str, checked: bool) -> SwitchButton:
-            wrap = QWidget(container)
-            row = QHBoxLayout(wrap)
-            row.setContentsMargins(0, 0, 0, 0)
-            row.setSpacing(8)
-            label = CaptionLabel(text, wrap)
-            toggle = SwitchButton(wrap)
-            toggle.setChecked(checked)
-            row.addWidget(label)
-            row.addWidget(toggle)
-            layout.addWidget(wrap)
-            return toggle
-
         sub_enabled = config_manager.get_subtitle_config().enabled
-        self.subtitle_check = _add_toggle("下载字幕", sub_enabled)
+        self.subtitle_check = self._add_labeled_toggle(layout, container, "下载字幕", sub_enabled)
 
         thumb_enabled = bool(config_manager.get("embed_thumbnail", True))
-        self.cover_check = _add_toggle("下载封面", thumb_enabled)
+        self.cover_check = self._add_labeled_toggle(layout, container, "下载封面", thumb_enabled)
 
         meta_enabled = bool(config_manager.get("embed_metadata", True))
-        self.metadata_check = _add_toggle("下载元数据", meta_enabled)
+        self.metadata_check = self._add_labeled_toggle(
+            layout, container, "下载元数据", meta_enabled
+        )
+
+        layout.addStretch(1)
+        return container
+
+    def _build_playlist_option_switches(self) -> QWidget:
+        from ...core.config_manager import config_manager
+
+        container = QWidget(self.contentWidget)
+        layout = QHBoxLayout(container)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(18)
+
+        title = CaptionLabel("下载选项", container)
+        layout.addWidget(title)
+
+        sub_enabled = config_manager.get_subtitle_config().enabled
+        self.playlist_subtitle_check = self._add_labeled_toggle(
+            layout, container, "下载字幕", sub_enabled
+        )
+
+        thumb_enabled = bool(config_manager.get("embed_thumbnail", True))
+        self.playlist_cover_check = self._add_labeled_toggle(
+            layout, container, "下载封面", thumb_enabled
+        )
+
+        meta_enabled = bool(config_manager.get("embed_metadata", True))
+        self.playlist_metadata_check = self._add_labeled_toggle(
+            layout, container, "下载元数据", meta_enabled
+        )
 
         layout.addStretch(1)
         return container
@@ -483,8 +771,15 @@ class DownloadConfigWindow(FramelessWindow):
                 self.downloadRequested.emit(tasks)
                 self.close()
         except Exception as e:
-            # TODO: Show error
-            print(f"Error getting tasks: {e}")
+            logger.exception("_on_download_clicked 异常")
+            from qfluentwidgets import InfoBar
+
+            InfoBar.error(
+                "构建下载任务失败",
+                str(e),
+                duration=8000,
+                parent=self,
+            )
 
     def _apply_dialog_size_for_mode(self) -> None:
         if self._is_playlist:
@@ -501,8 +796,21 @@ class DownloadConfigWindow(FramelessWindow):
             return
         self._is_closing = True
         try:
+            self._build_is_chunking = False
+            self._thumb_init_timer.stop()
+            self._scroll_throttle_timer.stop()
             self._idle_timer.stop()
-            self._detail_queue.clear()
+            self._thumb_pending.clear()
+            if self._scheduler is not None:
+                self._scheduler.stop_all()
+            if self._extract_manager is not None:
+                self._extract_manager.cancel_all()
+            for w in self._active_workers:
+                if hasattr(w, "cancel"):
+                    w.cancel()
+                w.quit()
+                w.wait(200)
+            self._active_workers.clear()
             if self.worker:
                 self.worker.cancel()
             if self._detail_worker:
@@ -517,15 +825,50 @@ class DownloadConfigWindow(FramelessWindow):
         except Exception:
             pass
 
+        try:
+            from ...core.dependency_manager import dependency_manager
+
+            dependency_manager.check_finished.disconnect(self._on_dep_check_finished)
+            dependency_manager.install_finished.disconnect(self._on_dep_install_finished)
+            dependency_manager.check_error.disconnect(self._on_dep_error)
+            dependency_manager.download_error.disconnect(self._on_dep_error)
+        except Exception:
+            pass
+
+    def _switch_to_state(
+        self, state: WindowState, title: str = "", show_ring: bool = False
+    ) -> None:
+        """Central state machine for the main panel visibility."""
+        self.loadingWidget.setVisible(state == WindowState.LOADING)
+        self.contentWidget.setVisible(state == WindowState.CONTENT)
+        self.retryWidget.setVisible(state == WindowState.ERROR_COOKIE)
+        self.networkDiagWidget.setVisible(state == WindowState.ERROR_NETWORK)
+
+        # Generic error uses viewLayout directly, but we hide others
+        if state in (
+            WindowState.LOADING,
+            WindowState.ERROR_COOKIE,
+            WindowState.ERROR_NETWORK,
+            WindowState.ERROR_GENERIC,
+        ):
+            self.titleLabel.show() if state != WindowState.LOADING else self.titleLabel.hide()
+
+        if state == WindowState.LOADING:
+            self.loadingTitleLabel.setText(title)
+            self.loadingRing.setVisible(show_ring)
+
     def start_extraction(self) -> None:
         self._is_closing = False
+        self.video_info = None
+        self.video_info_dto = None
         try:
             if self.worker:
                 self.worker.cancel()
         except Exception:
             pass
 
-        self._set_loading_ui(
+        self._switch_to_state(
+            WindowState.LOADING,
             "正在使用 VR 模式解析..." if self._vr_mode else "正在解析链接...",
             show_ring=True,
         )
@@ -538,41 +881,6 @@ class DownloadConfigWindow(FramelessWindow):
         w.error.connect(self.on_parse_error)
         self.worker = w
         w.start()
-
-    def _set_loading_ui(self, title: str, *, show_ring: bool) -> None:
-        self.loadingTitleLabel.setText(title)
-        self.loadingRing.setVisible(show_ring)
-        self.loadingWidget.show()
-        self.contentWidget.hide()
-        self.titleLabel.hide()
-
-    def _check_is_vr_content(self, info: dict[str, Any]) -> bool:
-        # 1. 检查 projection 字段
-        proj = str(info.get("projection") or "").lower()
-        if proj in ("equirectangular", "mesh", "360", "vr180"):
-            return True
-
-        # 2. 检查标签
-        tags = [str(t).lower() for t in (info.get("tags") or [])]
-        if any(k in tags for k in ("360 video", "vr video", "360°", "vr180")):
-            return True
-
-        # 3. 检查标题
-        title = str(info.get("title") or "").lower()
-        keywords = (
-            "360 video",
-            "360 movie",
-            "vr 360",
-            "360°",
-            "vr180",
-            "180 vr",
-            "3d 180",
-            "3d 360",
-        )
-        if any(k in title for k in keywords):
-            return True
-
-        return False
 
     def _ask_switch_to_normal(self) -> bool:
         """询问用户是否切换回普通模式"""
@@ -587,13 +895,26 @@ class DownloadConfigWindow(FramelessWindow):
         box.cancelButton.setText("保持 VR 模式")
         return bool(box.exec())
 
-    def on_parse_success(self, info: dict[str, Any]) -> None:
+    def on_parse_success(self, info: Any) -> None:
         if self._is_closing:
+            return
+
+        info_dict = _normalize_info_payload(info)
+        if not info_dict:
+            self.on_parse_error(
+                {
+                    "title": "解析失败",
+                    "content": "返回了无法识别的视频信息类型",
+                    "raw_error": f"unexpected payload type: {type(info)!r}",
+                }
+            )
             return
 
         # === 智能 VR 检测 ===
         if self._smart_detect:
-            is_vr = self._check_is_vr_content(info)
+            from ...core.video_analyzer import check_is_vr_content
+
+            is_vr = check_is_vr_content(info_dict)
 
             # 1. 普通模式 -> VR 模式
             if not self._vr_mode and is_vr:
@@ -609,9 +930,17 @@ class DownloadConfigWindow(FramelessWindow):
                     return
         # ===================
 
-        self.video_info = info
-        self.loadingWidget.hide()
-        self.retryWidget.hide()
+        self.video_info = info_dict
+        parsed_is_playlist = str(info_dict.get("_type") or "").lower() == "playlist" or bool(
+            info_dict.get("entries")
+        )
+        source_type = (
+            "playlist_entry" if parsed_is_playlist else ("vr_single" if self._vr_mode else "single")
+        )
+        try:
+            self.video_info_dto = VideoInfoMapper.from_raw(info_dict, source_type=source_type)
+        except Exception:
+            self.video_info_dto = None
 
         # 解析成功 → 重置连续失败计数
         try:
@@ -625,21 +954,21 @@ class DownloadConfigWindow(FramelessWindow):
             self._error_label = None
 
         self._clear_content_layout()
-        self._is_playlist = str(info.get("_type") or "").lower() == "playlist" or bool(
-            info.get("entries")
+        self._is_playlist = str(info_dict.get("_type") or "").lower() == "playlist" or bool(
+            info_dict.get("entries")
         )
         self._apply_dialog_size_for_mode()
 
         if self._is_playlist:
             self.titleLabel.show()
             self.yesButton.setEnabled(False)
-            self.setup_playlist_ui(info)
+            self.setup_playlist_ui(info_dict)
         else:
             self.titleLabel.hide()
             self.yesButton.setEnabled(True)
-            self.setup_content_ui(info)
+            self.setup_content_ui(info_dict)
 
-        self.contentWidget.show()
+        self._switch_to_state(WindowState.CONTENT)
 
     def _clear_content_layout(self) -> None:
         def _clear_layout(layout) -> None:
@@ -693,9 +1022,36 @@ class DownloadConfigWindow(FramelessWindow):
         except Exception:
             pass  # 预检失败不影响正常流程
 
+    def _cookie_warning_stylesheet(self) -> str:
+        """返回主题感知的 Cookie 警告条样式"""
+        try:
+            from qfluentwidgets import isDarkTheme
+
+            color = "#f0c040" if isDarkTheme() else "#b8860b"
+        except Exception:
+            color = "#b8860b"
+        return (
+            f"QLabel {{ background: rgba(255, 193, 7, 0.15); padding: 8px; "
+            f"border-radius: 6px; color: {color}; }}"
+        )
+
+    def _clear_error_augment_widgets(self) -> None:
+        """清理上次 on_parse_error 注入到 retryLayout 的临时提示 label"""
+        for attr in ("_alt_label", "_pot_label"):
+            w = getattr(self, attr, None)
+            if w is not None:
+                try:
+                    w.setParent(None)
+                    w.deleteLater()
+                except Exception:
+                    pass
+                setattr(self, attr, None)
+
     def on_parse_error(self, err_data: dict) -> None:
         if self._is_closing:
             return
+        self._clear_error_augment_widgets()
+        self._cookieWarningLabel.setStyleSheet(self._cookie_warning_stylesheet())
         self.loadingWidget.hide()
         self.titleLabel.setText("解析失败")
         self.titleLabel.show()
@@ -724,51 +1080,42 @@ class DownloadConfigWindow(FramelessWindow):
             pass
         self.viewLayout.addWidget(self._error_label)
 
+        suggests_component_update = bool(err_data.get("suggests_component_update", False))
+
         # === 根据分类决定显示哪个面板 ===
         if category == ErrorCategory.COOKIE:
-            self.retryWidget.show()
-            self.networkDiagWidget.hide()
-            # 记录失败 + 渐进式引导
+            self._switch_to_state(WindowState.ERROR_COOKIE)
+            if suggests_component_update:
+                self._authSegment.setCurrentItem("update")
+            else:
+                self._authSegment.setCurrentItem("dle")
+
+            # 记录失败 + 从 auth 层获取辅助诊断提示
             try:
                 from ...auth.cookie_probe_throttle import cookie_probe_throttle
 
                 cookie_probe_throttle.record_download_failure("cookie")
-                if cookie_probe_throttle.should_suggest_alternative:
-                    alt_label = CaptionLabel(
-                        f"⚠️ 已连续 {cookie_probe_throttle.consecutive_failures} 次 Cookie 失败，"
-                        "建议切换到「🔑 登录」模式 或 使用 Firefox 浏览器提取",
-                        self,
-                    )
-                    alt_label.setWordWrap(True)
-                    alt_label.setStyleSheet(
+                augment = cookie_probe_throttle.get_cookie_failure_augment_info()
+
+                if augment.get("alternative_hint"):
+                    self._alt_label = CaptionLabel(augment["alternative_hint"], self)
+                    self._alt_label.setWordWrap(True)
+                    self._alt_label.setStyleSheet(
                         "QLabel { color: #e65100; font-weight: bold; padding: 4px 0; }"
                     )
-                    self.retryLayout.insertWidget(0, alt_label)
-            except Exception:
-                pass
-            # POT 服务状态提示
-            try:
-                from ...core.config_manager import config_manager
+                    self.retryLayout.insertWidget(0, self._alt_label)
 
-                if config_manager.get("pot_provider_enabled", True):
-                    from ...youtube.pot_manager import pot_manager
-
-                    if not pot_manager.is_running():
-                        pot_label = CaptionLabel(
-                            "⚠️ POT Provider 服务未运行 — 这可能是触发机器人检测的主要原因。"
-                            "请前往「设置 → 组件」检查 POT Provider 是否已安装。",
-                            self,
-                        )
-                        pot_label.setWordWrap(True)
-                        pot_label.setStyleSheet(
-                            "QLabel { color: #c62828; font-weight: bold; padding: 4px 0; }"
-                        )
-                        self.retryLayout.insertWidget(0, pot_label)
+                if augment.get("pot_warning"):
+                    self._pot_label = CaptionLabel(augment["pot_warning"], self)
+                    self._pot_label.setWordWrap(True)
+                    self._pot_label.setStyleSheet(
+                        "QLabel { color: #c62828; font-weight: bold; padding: 4px 0; }"
+                    )
+                    self.retryLayout.insertWidget(0, self._pot_label)
             except Exception:
                 pass
         elif category == ErrorCategory.NETWORK:
-            self.retryWidget.hide()
-            self.networkDiagWidget.show()
+            self._switch_to_state(WindowState.ERROR_NETWORK)
             self._netProbeResult.setText("")
             try:
                 from ...auth.cookie_probe_throttle import cookie_probe_throttle
@@ -778,9 +1125,8 @@ class DownloadConfigWindow(FramelessWindow):
                 pass
         elif category == ErrorCategory.AMBIGUOUS:
             # 403 模糊情况 → 异步探测后决定
-            self.retryWidget.hide()
-            self.networkDiagWidget.hide()
-            self._run_connectivity_probe(friendly_title, raw_error)
+            self._switch_to_state(WindowState.ERROR_GENERIC)
+            self._run_connectivity_probe(friendly_title, raw_error, suggests_component_update)
             try:
                 from ...auth.cookie_probe_throttle import cookie_probe_throttle
 
@@ -873,7 +1219,9 @@ class DownloadConfigWindow(FramelessWindow):
         self._probe_worker.finished.connect(_on_done, Qt.ConnectionType.QueuedConnection)
         self._probe_worker.start()
 
-    def _run_connectivity_probe(self, friendly_title: str, raw_error: str) -> None:
+    def _run_connectivity_probe(
+        self, friendly_title: str, raw_error: str, suggests_component_update: bool = False
+    ) -> None:
         """
         403 模糊错误 → 异步探测 YouTube 连通性后决定显示哪个面板。
         探测期间显示加载提示。
@@ -904,9 +1252,13 @@ class DownloadConfigWindow(FramelessWindow):
                     self._error_label.setText(
                         "需要验证 (Cookie 缺失或失效)\n\n"
                         "网络连通正常，YouTube 拒绝了请求。\n"
-                        "这通常表示 Cookie 已失效或未配置，请在下方重新获取。"
+                        "这是通常表示 Cookie 已失效，或者您可能需要更新 yt-dlp 组件。"
                     )
                 self.retryWidget.show()
+                if suggests_component_update:
+                    self._authSegment.setCurrentItem("update")
+                else:
+                    self._authSegment.setCurrentItem("dle")
                 self.networkDiagWidget.hide()
             else:
                 # 网络不通 → 网络问题
@@ -939,7 +1291,7 @@ class DownloadConfigWindow(FramelessWindow):
         # 不传 cookies_from_browser，由 auth_service 的 cookie file 提供
         self._current_options = None
 
-        self._set_loading_ui("正在重试解析...", show_ring=True)
+        self._switch_to_state(WindowState.LOADING, "正在重试解析...", show_ring=True)
 
         if self._vr_mode:
             w = VRInfoExtractWorker(self.url)
@@ -956,9 +1308,21 @@ class DownloadConfigWindow(FramelessWindow):
         from ...auth.auth_service import AuthSourceType, auth_service
         from ...auth.cookie_sentinel import cookie_sentinel
 
+        self._reload_dle_account_combo()
+
+        # 先按下拉框切换当前 DLE 账号
+        idx = self._dleAccountCombo.currentIndex()
+        if 0 <= idx < len(self._dle_account_ids):
+            auth_service.set_current_dle_account(self._dle_account_ids[idx])
+
+        account = auth_service.current_dle_account
+        account_name = account.display_name if account else "默认账号"
+
         self._dleRetryBtn.setEnabled(False)
         self._dleRetryBtn.setText("正在启动浏览器...")
-        self._dleStatusLabel.setText("请在浏览器中登录 YouTube 账号")
+        self._dleStatusLabel.setText(
+            f"正在后台提取 {account_name} 登录态，若提取失败将自动显示登录窗口..."
+        )
 
         # 切换到 DLE 模式
         auth_service.set_source(AuthSourceType.DLE, auto_refresh=False)
@@ -983,7 +1347,18 @@ class DownloadConfigWindow(FramelessWindow):
             self._dleRetryBtn.setEnabled(True)
             self._dleRetryBtn.setText("登录 YouTube 并重试")
             if success:
-                self._dleStatusLabel.setText("✅ 登录成功，正在重新解析...")
+                try:
+                    from ...auth.cookie_sentinel import cookie_sentinel
+
+                    cur_acc = auth_service.current_dle_account
+                    acc_cookie = cur_acc.cached_cookie_path if cur_acc else "未知"
+                    self._dleStatusLabel.setText(
+                        f"✅ {account_name} 登录成功，正在重新解析...\n"
+                        f"账号文件: {acc_cookie}\n"
+                        f"统一文件: {cookie_sentinel.cookie_path}"
+                    )
+                except Exception:
+                    self._dleStatusLabel.setText(f"✅ {account_name} 登录成功，正在重新解析...")
                 self._retry_parse_with_auth()
             else:
                 clean = msg
@@ -993,6 +1368,31 @@ class DownloadConfigWindow(FramelessWindow):
 
         self._dle_worker.finished.connect(_on_done, Qt.ConnectionType.QueuedConnection)
         self._dle_worker.start()
+
+    def _reload_dle_account_combo(self) -> None:
+        """刷新 DLE 账号下拉列表"""
+        try:
+            from ...auth.auth_service import auth_service
+
+            accounts = auth_service.list_dle_accounts(platform="youtube")
+            self._dle_account_ids = [a.account_id for a in accounts]
+
+            self._dleAccountCombo.blockSignals(True)
+            self._dleAccountCombo.clear()
+            for acc in accounts:
+                label = acc.display_name
+                if acc.is_default:
+                    label += " (默认)"
+                self._dleAccountCombo.addItem(label)
+
+            cur = auth_service.current_dle_account_id
+            if cur in self._dle_account_ids:
+                self._dleAccountCombo.setCurrentIndex(self._dle_account_ids.index(cur))
+            elif self._dle_account_ids:
+                self._dleAccountCombo.setCurrentIndex(0)
+            self._dleAccountCombo.blockSignals(False)
+        except Exception:
+            pass
 
     def _on_extract_retry_clicked(self) -> None:
         """浏览器提取模式重试"""
@@ -1067,12 +1467,52 @@ class DownloadConfigWindow(FramelessWindow):
             return
 
         # 设置为文件模式
-        auth_service.set_source(AuthSourceType.FILE, auto_refresh=False)
-        auth_service._current_file_path = file_path
+        auth_service.set_source(AuthSourceType.FILE, file_path=file_path, auto_refresh=False)
+
+    def _on_update_retry_clicked(self) -> None:
+        """一键检测并更新 yt-dlp"""
+        self._updateRetryBtn.setEnabled(False)
+        self._updateRing.show()
+        self._updateStatusLabel.setText("正在检查更新...")
+
+        from ...core.dependency_manager import dependency_manager
+
+        dependency_manager.check_update("yt-dlp")
+
+    def _on_dep_check_finished(self, component: str, data: dict) -> None:
+        if component != "yt-dlp" or getattr(self, "_is_closing", True):
+            return
+        # check update_available
+        if data.get("update_available", False) or data.get("local_version") == "未安装":
+            self._updateStatusLabel.setText("发现新版本，正在后台下载安装...")
+            from ...core.dependency_manager import dependency_manager
+
+            dependency_manager.install_component("yt-dlp")
+        else:
+            self._updateRetryBtn.setEnabled(True)
+            self._updateRing.hide()
+            self._updateStatusLabel.setText(
+                "✅ 当前已是最新版本或配置未变更，建议尝试更换代理节点。"
+            )
+
+    def _on_dep_install_finished(self, component: str) -> None:
+        if component != "yt-dlp" or getattr(self, "_is_closing", True):
+            return
+        self._updateRetryBtn.setEnabled(True)
+        self._updateRing.hide()
+        self._updateStatusLabel.setText("✅ 组件更新完成！正在自动重试...")
+        QTimer.singleShot(1000, self._retry_parse_with_auth)
+
+    def _on_dep_error(self, component: str, msg: str) -> None:
+        if component != "yt-dlp" or getattr(self, "_is_closing", True):
+            return
+        self._updateRetryBtn.setEnabled(True)
+        self._updateRing.hide()
+        self._updateStatusLabel.setText(f"❌ 更新异常: {msg}")
 
         from ...core.config_manager import config_manager
 
-        config_manager.set("cookie_file_path", file_path)
+        config_manager.set("cookie_file_path", "")
 
         self._retry_parse_with_auth()
 
@@ -1218,35 +1658,10 @@ class DownloadConfigWindow(FramelessWindow):
             )
         self.preset_combo.currentIndexChanged.connect(self._on_playlist_preset_changed)
 
-        # === 额外下载选项 (播放列表) ===
-        from qfluentwidgets import CheckBox
-
-        from ...core.config_manager import config_manager
-
-        # 字幕开关
-        sub_enabled = config_manager.get_subtitle_config().enabled
-        self.playlist_subtitle_check = CheckBox("下载字幕", self.contentWidget)
-        self.playlist_subtitle_check.setChecked(sub_enabled)
-
-        # 封面开关
-        thumb_enabled = bool(config_manager.get("embed_thumbnail", True))
-        self.playlist_cover_check = CheckBox("下载封面", self.contentWidget)
-        self.playlist_cover_check.setChecked(thumb_enabled)
-
-        # 元数据开关
-        meta_enabled = bool(config_manager.get("embed_metadata", True))
-        self.playlist_metadata_check = CheckBox("下载元数据", self.contentWidget)
-        self.playlist_metadata_check.setChecked(meta_enabled)
-
         # Add widgets to toolbar in a single row
         toolbar.addWidget(self.selectAllBtn)
         toolbar.addWidget(self.unselectAllBtn)
         toolbar.addWidget(self.invertSelectBtn)
-
-        toolbar.addSpacing(16)
-        toolbar.addWidget(self.playlist_subtitle_check)
-        toolbar.addWidget(self.playlist_cover_check)
-        toolbar.addWidget(self.playlist_metadata_check)
 
         toolbar.addSpacing(16)
         toolbar.addWidget(self.type_combo)
@@ -1254,52 +1669,44 @@ class DownloadConfigWindow(FramelessWindow):
         toolbar.addWidget(self.applyPresetBtn)
 
         if self._mode in ("subtitle", "cover"):
-            self.playlist_subtitle_check.hide()
-            self.playlist_cover_check.hide()
-            self.playlist_metadata_check.hide()
             self.type_combo.hide()
             self.preset_combo.hide()
             self.applyPresetBtn.hide()
 
-        # 暂停 / 继续后台解析
-        from qfluentwidgets import SwitchButton as _SwitchBtn
-
-        self.lazyPauseBtn = _SwitchBtn(self.contentWidget)
-        self.lazyPauseBtn.setText("暂停解析")
-        self.lazyPauseBtn.setChecked(False)
-        self.lazyPauseBtn.checkedChanged.connect(self._on_lazy_pause_changed)
-        toolbar.addSpacing(12)
-        toolbar.addWidget(self.lazyPauseBtn)
-
         toolbar.addStretch(1)
         self.contentLayout.addLayout(toolbar)
 
-        # table
-        table = QTableWidget(self.contentWidget)
-        self._table = table
-        table.setStyleSheet(_get_table_selection_qss())
-        table.setColumnCount(3)
-        table.setHorizontalHeaderLabels(["预览", "信息", "操作"])
-        table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        table.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
-        table.verticalHeader().setVisible(False)
-        table.horizontalHeader().setVisible(False)
-        table.setAlternatingRowColors(False)
-        table.setShowGrid(False)
-        table.verticalScrollBar().valueChanged.connect(self._on_table_scrolled)
+        list_view = QListView(self.contentWidget)
+        list_view.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
+        list_view.setMouseTracking(False)
+        list_view.setUniformItemSizes(True)
+        list_view.setLayoutMode(QListView.LayoutMode.Batched)
+        list_view.setBatchSize(50)
+        list_view.setVerticalScrollMode(QListView.ScrollMode.ScrollPerPixel)
+        list_view.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
+        list_view.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        list_view.viewport().setAutoFillBackground(True)
+        list_view.viewport().setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent, False)
+        list_view.setStyleSheet(
+            "QListView { border: none; background: palette(window); outline: none; }"
+        )
 
-        try:
-            header = table.horizontalHeader()
-            header.setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
-            header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-            header.setSectionResizeMode(2, QHeaderView.ResizeMode.Fixed)
-            table.setColumnWidth(0, 190)
-            table.setColumnWidth(2, 170)
-        except Exception:
-            pass
+        playlist_model = PlaylistListModel(list_view)
+        playlist_delegate = PlaylistItemDelegate(list_view)
+        list_view.setModel(playlist_model)
+        list_view.setItemDelegate(playlist_delegate)
+        list_view.verticalScrollBar().valueChanged.connect(self._on_scroll_value_changed)
+        list_view.clicked.connect(self._on_list_item_clicked)
 
-        self.contentLayout.addWidget(table)
+        self._list_view = list_view
+        self._playlist_model = playlist_model
+        self._playlist_delegate = playlist_delegate
+        self._extract_manager = AsyncExtractManager(max_concurrent=2, parent=self)
+
+        self.contentLayout.addWidget(list_view)
+
+        self.playlist_options_container = self._build_playlist_option_switches()
+        self.contentLayout.addWidget(self.playlist_options_container)
 
         # wire actions
         self.selectAllBtn.clicked.connect(self._select_all)
@@ -1307,25 +1714,8 @@ class DownloadConfigWindow(FramelessWindow):
         self.invertSelectBtn.clicked.connect(self._invert_select)
         self.applyPresetBtn.clicked.connect(self._apply_preset_to_selected)
 
-        # cell click for format picker
-        table.cellClicked.connect(self._on_table_cell_clicked)
-
-        # fill rows
+        # fill rows in chunks
         self._build_playlist_rows(info)
-        self._refresh_progress_label()
-        self._update_download_btn_state()
-
-        # kick off progressive detail fill
-        # 使用 0ms 延迟等 Qt 完成布局后取真实可见行
-        self._idle_timer.start()
-        from PySide6.QtCore import QTimer as _QT
-
-        _QT.singleShot(0, self._enqueue_visible_as_initial)
-
-        # 延迟加载缩略图
-        self._thumb_init_timer.start()
-
-        self._ensure_download_dir_bar()
 
     def _build_playlist_rows(self, info: dict[str, Any]) -> None:
         entries = info.get("entries") or []
@@ -1333,31 +1723,52 @@ class DownloadConfigWindow(FramelessWindow):
             entries = []
 
         self._playlist_rows = []
-        self._thumb_label_by_row = {}
         self._thumb_url_to_rows = {}
+        self._thumb_applied_rows = {}
         self._thumb_requested = set()
-        self._preview_widget_by_row = {}
+        self._thumb_pending.clear()
+        self._thumb_inflight = 0
+        self._thumb_retry_count = {}
         self._action_widget_by_row = {}
 
-        table = self._table
-        if table is None:
+        model = self._playlist_model
+        if model is None:
             return
 
-        table.blockSignals(True)
-        table.setRowCount(len(entries))
+        model.clear()
+        self._build_chunk_entries = entries
+        self._build_chunk_offset = 0
+        self._build_is_chunking = True
+        self._process_next_build_chunk()
 
-        for row, e in enumerate(entries):
-            if not isinstance(e, dict):
-                e = {}
+    def _process_next_build_chunk(self) -> None:
+        if self._is_closing or not self._build_is_chunking:
+            return
 
-            url = _infer_entry_url(e)
-            title = str(e.get("title") or "-")
-            uploader = str(e.get("uploader") or e.get("channel") or e.get("uploader_id") or "-")
-            duration = _format_duration(e.get("duration"))
-            upload_date = _format_upload_date(e.get("upload_date"))
-            playlist_index = str(e.get("playlist_index") or (row + 1))
-            vid = str(e.get("id") or "-")
-            thumb = _infer_entry_thumbnail(e)
+        model = self._playlist_model
+        if model is None:
+            return
+
+        entries = self._build_chunk_entries
+        offset = self._build_chunk_offset
+        end = min(offset + self._build_chunk_size, len(entries))
+
+        tasks: list[VideoTask] = []
+        for row in range(offset, end):
+            entry = entries[row]
+            if not isinstance(entry, dict):
+                entry = {}
+
+            url = _infer_entry_url(entry)
+            title = str(entry.get("title") or "-")
+            uploader = str(
+                entry.get("uploader") or entry.get("channel") or entry.get("uploader_id") or "-"
+            )
+            duration = _format_duration(entry.get("duration"))
+            upload_date = _format_upload_date(entry.get("upload_date"))
+            playlist_index = str(entry.get("playlist_index") or (row + 1))
+            vid = str(entry.get("id") or "-")
+            thumb = _infer_entry_thumbnail(entry)
 
             self._playlist_rows.append(
                 {
@@ -1388,78 +1799,97 @@ class DownloadConfigWindow(FramelessWindow):
                 }
             )
 
-            # preview column: checkbox + thumbnail
-            preview = PlaylistPreviewWidget(table)
-            preview.checkbox.toggled.connect(partial(self._on_playlist_row_checked, row))
-            table.setCellWidget(row, 0, preview)
-            self._preview_widget_by_row[row] = preview
-
-            self._thumb_label_by_row[row] = preview.thumb_label
             if thumb:
                 self._thumb_url_to_rows.setdefault(thumb, set()).add(row)
 
-            # info column: title + meta
-            meta_parts = [duration]
-            if uploader and uploader != "-":
-                meta_parts.append(uploader)
-            if upload_date and upload_date != "-":
-                meta_parts.append(upload_date)
-            meta_parts.append(f"#{playlist_index}")
-            meta = " · ".join(meta_parts)
-            info_widget = PlaylistInfoWidget(title, meta, table)
-            table.setCellWidget(row, 1, info_widget)
+            task = VideoTask(url=url)
+            task.id = vid
+            task.title = title
+            task.uploader = uploader
+            task.duration_str = duration
+            task.upload_date = upload_date
+            task.thumbnail_url = thumb
+            task.thumbnail.status = "idle"
+            task.is_parsing = False
+            tasks.append(task)
 
-            # action column: quality/status
-            action = PlaylistActionWidget(table)
-            action.qualityButton.clicked.connect(partial(self._on_playlist_quality_clicked, row))
-            action.set_loading(True, "待加载")
-            action.infoLabel.setText("")
-            table.setCellWidget(row, 2, action)
-            self._action_widget_by_row[row] = action
+            self._action_widget_by_row[row] = _PlaylistModelRowProxy(
+                row, model, self._update_playlist_row_view
+            )
 
-            table.setRowHeight(row, 92)
+        model.addTasks(tasks)
+        self._build_chunk_offset = end
 
-        table.blockSignals(False)
+        if end < len(entries):
+            QTimer.singleShot(0, self._process_next_build_chunk)
+        else:
+            self._build_is_chunking = False
+            self._build_chunk_entries = []
+            self._on_build_chunks_complete()
+
+    def _on_build_chunks_complete(self) -> None:
+        if self._is_closing:
+            return
+
+        self._refresh_progress_label()
+        self._update_download_btn_state()
+        self._setup_scheduler()
+        self._thumb_init_timer.start()
+        self._ensure_download_dir_bar()
+        QTimer.singleShot(50, self._initial_viewport_scan)
+        QTimer.singleShot(200, lambda: self._scheduler.start_crawl() if self._scheduler else None)
+
+    def _setup_scheduler(self) -> None:
+        """创建 PlaylistScheduler，接管所有详情抓取调度逻辑。"""
+        mgr = self._extract_manager
+        if mgr is None:
+            return
+
+        def _get_url(row: int) -> str | None:
+            if 0 <= row < len(self._playlist_rows):
+                return str(self._playlist_rows[row].get("url") or "").strip() or None
+            return None
+
+        scheduler = PlaylistScheduler(
+            extract_manager=mgr,
+            get_row_url=_get_url,
+            total_rows=lambda: len(self._playlist_rows),
+            options=self._current_options,
+            vr_mode=self._vr_mode,
+            exec_limit=3,
+            parent=self,
+        )
+        scheduler.detail_finished.connect(self._on_scheduler_detail_finished)
+        scheduler.detail_error.connect(self._on_scheduler_detail_error)
+        scheduler.row_started.connect(self._schedule_deferred_parsing_indicator)
+        scheduler.lazy_paused = self._lazy_paused
+        self._scheduler = scheduler
+
+        # 封面模式走旁路，不做实际抓取
+        if self._mode == "cover":
+            for row in range(len(self._playlist_rows)):
+                QTimer.singleShot(0, partial(self._process_cover_bypass, row))
 
     def _on_playlist_row_checked(self, row: int, checked: bool) -> None:
+        # Legacy callback for old widget path; retained for safety.
         if not (0 <= row < len(self._playlist_rows)):
             return
         self._playlist_rows[row]["selected"] = bool(checked)
         self._playlist_rows[row]["status"] = "已选择" if checked else "未选择"
         self._update_download_btn_state()
-        self._last_interaction = time.monotonic()
 
     def _on_playlist_quality_clicked(self, row: int) -> None:
-        self._last_interaction = time.monotonic()
         if not (0 <= row < len(self._playlist_rows)):
             return
-        if row not in self._detail_loaded:
+        if self._scheduler is None:
+            return
+        if not self._scheduler.is_loaded(row):
             aw = self._action_widget_by_row.get(row)
             if aw is not None:
                 aw.set_loading(True, "获取中...")
-            self._enqueue_detail_rows([row], priority=True)
-            self._maybe_start_next_detail()
+            self._scheduler.enqueue_foreground(row)
         else:
             self._open_row_format_picker(row)
-
-    def _on_table_cell_clicked(self, row: int, col: int) -> None:
-        self._last_interaction = time.monotonic()
-        if col != 2:  # In SelectionDialog it was 8? No, col 2 is action in my setup.
-            # Wait, SelectionDialog _on_table_cell_clicked checked for col != 8?
-            # SelectionDialog setColumnCount(3), so col indices are 0, 1, 2.
-            # Maybe SelectionDialog had a different column count or I misread.
-            # Ah, I see: `if col != 8: return` in SelectionDialog.
-            # But here I set 3 columns.
-            # Let's assume action column is 2.
-            # But wait, action widget has a button, button click is handled by `_on_playlist_quality_clicked`.
-            # `cellClicked` is for clicking the cell background.
-            # If the user clicks the cell (not the button), we might want to trigger something.
-            # For now, let's just ignore cell clicks if button handles it.
-            pass
-        # However, let's replicate logic if needed.
-        # If I want to trigger picker on cell click too:
-        if col == 2:
-            self._on_playlist_quality_clicked(row)
 
     def _current_playlist_preset_height(self) -> int | None:
         preset_text = (
@@ -1502,6 +1932,16 @@ class DownloadConfigWindow(FramelessWindow):
         if aw is None:
             return
 
+        # Batch all property writes so only one dataChanged is emitted at the end
+        aw.begin_batch()
+        try:
+            self._auto_apply_row_preset_inner(row, data, aw)
+        finally:
+            aw.end_batch()
+
+    def _auto_apply_row_preset_inner(
+        self, row: int, data: dict, aw: _PlaylistModelRowProxy
+    ) -> None:
         if self._mode == "subtitle":
             aw.set_loading(False)
             if data.get("custom_summary"):
@@ -1541,7 +1981,7 @@ class DownloadConfigWindow(FramelessWindow):
                 return f"{prefix}{ext}"
             return f"{prefix}-"
 
-        if row not in self._detail_loaded:
+        if not (self._scheduler and self._scheduler.is_loaded(row)):
             if mode == 2:
                 aw.set_loading(False)
                 aw.qualityButton.setText("音频(自动)")
@@ -1778,55 +2218,138 @@ class DownloadConfigWindow(FramelessWindow):
             self._auto_apply_row_preset(r)
         self._update_download_btn_state()
 
-    def _on_table_scrolled(self, _value: int) -> None:
-        self._last_interaction = time.monotonic()
-        self._reprioritize_detail_queue()  # 重锤定：可见区插队首
+    def _set_row_parsing(self, row: int, is_parsing: bool) -> None:
+        if self._playlist_model is None:
+            return
+        idx = self._playlist_model.index(row, 0)
+        task = self._playlist_model.get_task(idx)
+        if task is not None and task.is_parsing != is_parsing:
+            task.is_parsing = is_parsing
+            self._schedule_playlist_row_update(row)
+
+    def _schedule_deferred_parsing_indicator(self, row: int) -> None:
+        """Show '解析中…' only if the extraction hasn't completed within 800ms.
+
+        Increased from 300ms to 800ms so that typical fast extractions (400-600ms)
+        skip the intermediate '解析中' state entirely, eliminating the visible
+        triple-flash (待加载 → 解析中 → 格式).
+        """
+
+        def _apply():
+            if self._is_closing or self._playlist_model is None:
+                return  # Window already closed
+            # 已完成（成功或失败）则跳过，避免 "待加载 → 解析中 → 格式" 三段式闪烁
+            if self._scheduler and (
+                self._scheduler.is_loaded(row) or self._scheduler.is_failed(row)
+            ):
+                return
+            self._set_row_parsing(row, True)
+
+        QTimer.singleShot(800, _apply)
+
+    def _schedule_playlist_row_update(self, row: int) -> None:
+        if self._playlist_model is None:
+            return
+        self._playlist_model.mark_row_dirty(row)
+
+    def _update_playlist_row_view(self, row: int) -> None:
+        view = self._list_view
+        model = self._playlist_model
+        if view is None or model is None:
+            return
+        if not (0 <= row < model.rowCount()):
+            return
+        view.update(model.index(row, 0))
+
+    def _enqueue_detail_finalization(self, row: int) -> None:
+        if self._is_closing:
+            return
+        if not (0 <= row < len(self._playlist_rows)):
+            return
+        self._detail_finalize_rows.add(row)
+        if not self._detail_finalize_timer.isActive():
+            self._detail_finalize_timer.start()
+
+    def _flush_detail_finalizations(self) -> None:
+        if self._is_closing:
+            self._detail_finalize_rows.clear()
+            return
+        if not self._detail_finalize_rows:
+            return
+
+        rows = sorted(self._detail_finalize_rows)
+        self._detail_finalize_rows.clear()
+
+        for row in rows:
+            self._auto_apply_row_preset(row)
+
+        self._refresh_progress_label()
+        self._update_download_btn_state()
+
+    def _schedule_playlist_rows_update(self, rows: list[int] | set[int] | range) -> None:
+        for row in rows:
+            self._schedule_playlist_row_update(int(row))
+
+    def _initial_viewport_scan(self) -> None:
+        if not self._is_closing:
+            self._on_list_scrolled(0)
+
+    def _on_scroll_value_changed(self, _value: int) -> None:
+        if not self._scroll_throttle_timer.isActive():
+            self._scroll_throttle_timer.start()
+
+    def _on_scroll_throttled(self) -> None:
+        self._on_list_scrolled(0)
+
+    def _on_list_scrolled(self, _value: int) -> None:
+        if self._is_closing or self._scheduler is None:
+            return
+        first, last = self._visible_row_range()
+        self._scheduler.set_viewport(first, last)
         self._load_thumbs_for_visible_rows()
-        self._maybe_start_next_detail()
+
+    def _on_list_item_clicked(self, index: QModelIndex) -> None:
+        if self._playlist_delegate is None or self._list_view is None:
+            return
+        row = index.row()
+        viewport = self._list_view.viewport()
+        pos = viewport.mapFromGlobal(QCursor.pos())
+        option = QStyleOptionViewItem()
+        option.rect = self._list_view.visualRect(index)
+        hit = self._playlist_delegate.hit_test(pos, option)
+        if hit in ("checkbox", "row"):
+            self._toggle_row_selection(row)
+        elif hit == "action_btn":
+            self._on_playlist_quality_clicked(row)
+
+    def _toggle_row_selection(self, row: int) -> None:
+        if not (0 <= row < len(self._playlist_rows)):
+            return
+        new_val = not bool(self._playlist_rows[row].get("selected"))
+        self._playlist_rows[row]["selected"] = new_val
+        self._playlist_rows[row]["status"] = "已选择" if new_val else "未选择"
+        if self._playlist_model is not None:
+            idx = self._playlist_model.index(row, 0)
+            task = self._playlist_model.get_task(idx)
+            if task is not None:
+                task.selected = new_val
+                self._schedule_playlist_row_update(row)
+        self._update_download_btn_state()
 
     def _visible_row_range(self) -> tuple[int, int]:
-        table = self._table
-        if table is None:
+        view = self._list_view
+        model = self._playlist_model
+        if view is None or model is None:
             return (0, -1)
-        first = table.rowAt(0)
+        first_idx = view.indexAt(QPoint(0, 0))
+        first = first_idx.row() if first_idx.isValid() else 0
         if first < 0:
             first = 0
-        last = table.rowAt(table.viewport().height() - 1)
+        last_idx = view.indexAt(QPoint(0, view.viewport().height() - 1))
+        last = last_idx.row()
         if last < 0:
-            last = min(table.rowCount() - 1, first + 12)
+            last = min(model.rowCount() - 1, first + 8)
         return (first, last)
-
-    def _enqueue_visible_as_initial(self) -> None:
-        """0ms 延迟后获取真实可见行并优先入队"""
-        first, last = self._visible_row_range()
-        rows = list(range(first, min(last + 4, len(self._playlist_rows))))
-        self._enqueue_detail_rows(rows, priority=True)
-        self._maybe_start_next_detail()
-
-    def _reprioritize_detail_queue(self) -> None:
-        """滚动后重锤定：可见区未加载行插队首，其余保留在尾"""
-        first, last = self._visible_row_range()
-        # 可见区 + 向下缓冲 5 行
-        visible = list(range(max(0, first - 2), min(len(self._playlist_rows), last + 6)))
-        # 保留当前队列中不属于可见区的行
-        rest = [r for r in self._detail_queue if r not in visible]
-
-        self._detail_queue.clear()
-        # 可见区行按顶到底预加到队首（反序 appendleft 丽正序出队）
-        for r in reversed(visible):
-            if r not in self._detail_loaded and r != self._detail_inflight_row:
-                self._detail_queue.appendleft(r)
-        # 其余行追加到尾部
-        for r in rest:
-            if r not in self._detail_loaded and r != self._detail_inflight_row:
-                self._detail_queue.append(r)
-
-    def _enqueue_detail_for_visible_rows(self) -> None:
-        first, last = self._visible_row_range()
-        first = max(0, first - 3)
-        last = min(len(self._playlist_rows) - 1, last + 6)
-        rows = list(range(first, last + 1))
-        self._enqueue_detail_rows(rows, priority=False)
 
     def _on_thumb_init_timeout(self) -> None:
         if self._is_closing or not self._is_playlist:
@@ -1845,15 +2368,43 @@ class DownloadConfigWindow(FramelessWindow):
                 continue
             if url in self._thumb_requested:
                 continue
-            self._thumb_pending.append(url)  # deque.append
+            self._thumb_pending.append(url)
             self._thumb_requested.add(url)
         self._process_thumb_queue()
 
     def _process_thumb_queue(self) -> None:
         while self._thumb_pending and self._thumb_inflight < self._thumb_max_concurrent:
-            url = self._thumb_pending.popleft()  # O(1) - deque
+            best_idx = self._pick_best_thumb_index()
+            try:
+                url = self._thumb_pending[best_idx]
+                del self._thumb_pending[best_idx]
+            except Exception:
+                url = self._thumb_pending.popleft()
             self._thumb_inflight += 1
             self.image_loader.load(url, target_size=(150, 84), radius=8)
+
+    def _pick_best_thumb_index(self) -> int:
+        if not self._thumb_pending:
+            return 0
+
+        first, last = self._visible_row_range()
+        if first > last:
+            return 0
+
+        viewport_center = (first + last) / 2.0
+        best_idx = 0
+        best_distance = float("inf")
+
+        for idx, url in enumerate(self._thumb_pending):
+            rows = self._thumb_url_to_rows.get(url, set())
+            if not rows:
+                continue
+            min_dist = min(abs(row - viewport_center) for row in rows)
+            if min_dist < best_distance:
+                best_distance = min_dist
+                best_idx = idx
+
+        return best_idx
 
     def _load_thumbs_for_visible_rows(self) -> None:
         first, last = self._visible_row_range()
@@ -1863,12 +2414,14 @@ class DownloadConfigWindow(FramelessWindow):
 
     def _apply_thumb_to_row(self, row: int, url: str) -> None:
         pix = self._thumb_cache.get(url)
-        lbl = self._thumb_label_by_row.get(row)
-        if pix is not None and lbl is not None:
-            try:
-                lbl.setPixmap(pix)
-            except Exception:
-                pass
+        if pix is None:
+            return
+        if self._thumb_applied_rows.get(row) == url:
+            return
+        if self._playlist_delegate is not None and self._playlist_model is not None:
+            self._playlist_delegate.set_pixmap(url, pix)
+            self._thumb_applied_rows[row] = url
+            self._update_playlist_row_view(row)
 
     def _on_thumb_loaded_with_url(self, url: str, pixmap) -> None:
         self._thumb_inflight = max(0, self._thumb_inflight - 1)
@@ -1882,8 +2435,18 @@ class DownloadConfigWindow(FramelessWindow):
         if not u:
             return
         self._thumb_cache[u] = pixmap
-        for row in self._thumb_url_to_rows.get(u, set()):
-            self._apply_thumb_to_row(row, u)
+        affected_rows = self._thumb_url_to_rows.get(u, set())
+        if not affected_rows:
+            return
+        if self._playlist_delegate is not None:
+            self._playlist_delegate.set_pixmap(u, pixmap)
+        if self._playlist_model is not None:
+            first_visible, last_visible = self._visible_row_range()
+            for row in affected_rows:
+                self._thumb_applied_rows[row] = u
+                if row < first_visible or row > last_visible:
+                    continue
+                self._update_playlist_row_view(row)
 
     def _on_thumb_loaded(self, pixmap) -> None:
         # Legacy callback for single video thumb
@@ -1892,6 +2455,15 @@ class DownloadConfigWindow(FramelessWindow):
 
     def _on_thumb_failed(self, url: str) -> None:
         self._thumb_inflight = max(0, self._thumb_inflight - 1)
+        failed_url = str(url or "").strip()
+        if failed_url:
+            retries = self._thumb_retry_count.get(failed_url, 0)
+            if retries < 2 and failed_url in self._thumb_url_to_rows:
+                self._thumb_retry_count[failed_url] = retries + 1
+                self._thumb_requested.discard(failed_url)
+                self._thumb_pending.appendleft(failed_url)
+                QTimer.singleShot((retries + 1) * 400, self._process_thumb_queue)
+                return
         self._process_thumb_queue()
 
     def _select_all(self) -> None:
@@ -1901,41 +2473,34 @@ class DownloadConfigWindow(FramelessWindow):
         self._set_all_checks(False)
 
     def _invert_select(self) -> None:
-        table = self._table
-        if table is None:
-            return
         for row in range(len(self._playlist_rows)):
-            w = self._preview_widget_by_row.get(row)
-            if w is None:
-                continue
-            cb = w.checkbox
-            cb.blockSignals(True)
-            cb.setChecked(not cb.isChecked())
-            cb.blockSignals(False)
-            self._playlist_rows[row]["selected"] = cb.isChecked()
-            self._playlist_rows[row]["status"] = "已选择" if cb.isChecked() else "未选择"
+            self._playlist_rows[row]["selected"] = not bool(
+                self._playlist_rows[row].get("selected")
+            )
+            self._playlist_rows[row]["status"] = (
+                "已选择" if self._playlist_rows[row]["selected"] else "未选择"
+            )
+            if self._playlist_model is not None:
+                idx = self._playlist_model.index(row, 0)
+                task = self._playlist_model.get_task(idx)
+                if task is not None:
+                    task.selected = bool(self._playlist_rows[row]["selected"])
+        self._schedule_playlist_rows_update(range(len(self._playlist_rows)))
         self._update_download_btn_state()
 
     def _set_all_checks(self, checked: bool) -> None:
-        table = self._table
-        if table is None:
-            return
         for row in range(len(self._playlist_rows)):
-            w = self._preview_widget_by_row.get(row)
-            if w is None:
-                continue
-            cb = w.checkbox
-            cb.blockSignals(True)
-            cb.setChecked(bool(checked))
-            cb.blockSignals(False)
             self._playlist_rows[row]["selected"] = bool(checked)
             self._playlist_rows[row]["status"] = "已选择" if checked else "未选择"
+            if self._playlist_model is not None:
+                idx = self._playlist_model.index(row, 0)
+                task = self._playlist_model.get_task(idx)
+                if task is not None:
+                    task.selected = bool(checked)
+        self._schedule_playlist_rows_update(range(len(self._playlist_rows)))
         self._update_download_btn_state()
 
     def _apply_preset_to_selected(self) -> None:
-        table = self._table
-        if table is None:
-            return
         for row, data in enumerate(self._playlist_rows):
             if not data.get("selected"):
                 continue
@@ -1961,7 +2526,13 @@ class DownloadConfigWindow(FramelessWindow):
             self.yesButton.setText("下载")
             return
         selected_rows = [i for i, r in enumerate(self._playlist_rows) if r.get("selected")]
-        pending = [i for i in selected_rows if i not in self._detail_loaded]
+        pending = [
+            i
+            for i in selected_rows
+            if self._scheduler is not None
+            and not self._scheduler.is_loaded(i)
+            and not self._scheduler.is_failed(i)
+        ]
         if pending:
             self.yesButton.setText(f"下载（剩余 {len(pending)} 个解析中...）")
         else:
@@ -1970,7 +2541,7 @@ class DownloadConfigWindow(FramelessWindow):
     def _refresh_progress_label(self) -> None:
         if hasattr(self, "progressLabel"):
             total = len(self._playlist_rows)
-            done = len(self._detail_loaded)
+            done = self._scheduler.done_count() if self._scheduler is not None else 0
             self.progressLabel.setText(f"详情补全：{done}/{total}")
             try:
                 if hasattr(self, "progressRing"):
@@ -1978,130 +2549,149 @@ class DownloadConfigWindow(FramelessWindow):
             except Exception:
                 pass
 
-    def _enqueue_detail_rows(self, rows: list[int], priority: bool) -> None:
-        for r in rows:
-            if r < 0 or r >= len(self._playlist_rows):
-                continue
-            if r in self._detail_loaded:
-                continue
-            if self._detail_inflight_row == r:
-                continue
-            if r in self._detail_queue:
-                continue
-            if priority:
-                self._detail_queue.appendleft(r)
-            else:
-                self._detail_queue.append(r)
-
-    def _maybe_start_next_detail(self) -> None:
-        if self._lazy_paused:
-            return
+    def _on_scheduler_detail_finished(self, row: int, info: Any) -> None:
+        """PlaylistScheduler.detail_finished → 更新 UI 层数据。"""
         if self._is_closing:
             return
-        if self._detail_inflight_row is not None:
-            return
-        if not self._detail_queue:
-            return
-        row = self._detail_queue.popleft()
-        if row in self._detail_loaded:
-            return
-        url = str(self._playlist_rows[row].get("url") or "").strip()
-        if not url:
+        if not (0 <= row < len(self._playlist_rows)):
             return
 
-        self._detail_inflight_row = row
-        aw = self._action_widget_by_row.get(row)
-        if aw is not None:
-            aw.set_loading(True, "获取中...")
-            aw.infoLabel.setText("")
+        info_dict = _normalize_info_payload(info)
 
-        w = EntryDetailWorker(row, url, self._current_options, vr_mode=self._vr_mode)
-        w.finished.connect(self._on_detail_finished)
-        w.error.connect(self._on_detail_error)
-        w.start()
-        self._detail_worker = w
+        row_data = self._playlist_rows[row]
+        thumb = str(row_data.get("thumbnail") or "").strip()
+        if not thumb:
+            thumb = _infer_entry_thumbnail(info_dict)
+            if thumb:
+                row_data["thumbnail"] = thumb
+                self._thumb_url_to_rows.setdefault(thumb, set()).add(row)
+        if thumb:
+            if thumb in self._thumb_cache:
+                # 应用已缓存的缩略图；后续由 _auto_apply_row_preset 合并成单次重绘
+                pix = self._thumb_cache.get(thumb)
+                if pix is not None and self._playlist_delegate is not None:
+                    self._playlist_delegate.set_pixmap(thumb, pix)
+                    self._thumb_applied_rows[row] = thumb
+            elif thumb not in self._thumb_requested:
+                self._thumb_pending.appendleft(thumb)
+                self._thumb_requested.add(thumb)
+                self._process_thumb_queue()
 
-    def _on_detail_finished(self, row: int, info: dict[str, Any]) -> None:
+        formats = _clean_video_formats(info_dict)
+        audio_formats = _clean_audio_formats(info_dict)
+        highest = formats[0]["height"] if formats else None
+
+        row_data["detail"] = info_dict
+        row_data["video_formats"] = formats
+        row_data["audio_formats"] = audio_formats
+        row_data["highest_height"] = highest
+        row_data["status"] = "已选择" if row_data.get("selected") else "未选择"
+
+        if self._playlist_model is not None:
+            idx = self._playlist_model.index(row, 0)
+            task = self._playlist_model.get_task(idx)
+            if task is not None:
+                task.thumbnail_url = thumb
+                task.raw_info = info_dict
+                task.video_formats = formats
+                task.audio_formats = audio_formats
+                task.has_error = False
+                task.error_msg = ""
+                task.is_parsing = False
+                raw_date = _format_upload_date(info_dict.get("upload_date"))
+                if raw_date and raw_date != "-":
+                    task.upload_date = raw_date
+                    row_data["upload_date"] = raw_date
+                # 不在此处调度重绘；_auto_apply_row_preset 会合并成单次 dataChanged
+
+        self._enqueue_detail_finalization(row)
+
+    def _on_scheduler_detail_error(self, row: int, msg: str) -> None:
+        """PlaylistScheduler.detail_error → 标记错误并更新 UI。"""
         if self._is_closing:
             return
-        self._detail_inflight_row = None
-        if 0 <= row < len(self._playlist_rows):
-            thumb = str(self._playlist_rows[row].get("thumbnail") or "").strip()
-            if not thumb:
-                thumb = _infer_entry_thumbnail(info)
-                if thumb:
-                    self._playlist_rows[row]["thumbnail"] = thumb
-                    self._thumb_url_to_rows.setdefault(thumb, set()).add(row)
-                    if thumb in self._thumb_cache:
-                        self._apply_thumb_to_row(row, thumb)
-                    else:
-                        if thumb not in self._thumb_requested:
-                            self._thumb_requested.add(thumb)
-                            self.image_loader.load(thumb, target_size=(150, 84), radius=8)
+        if not (0 <= row < len(self._playlist_rows)):
+            return
 
-            formats = _clean_video_formats(info)
-            audio_formats = _clean_audio_formats(info)
-            highest = formats[0]["height"] if formats else None
-            self._playlist_rows[row]["detail"] = info
-            self._playlist_rows[row]["video_formats"] = formats
-            self._playlist_rows[row]["audio_formats"] = audio_formats
-            self._playlist_rows[row]["highest_height"] = highest
-            self._detail_loaded.add(row)
-            self._auto_apply_row_preset(row)
+        if self._playlist_model is not None:
+            idx = self._playlist_model.index(row, 0)
+            task = self._playlist_model.get_task(idx)
+            if task is not None:
+                task.has_error = True
+                task.error_msg = msg
+                task.is_parsing = False
+                self._schedule_playlist_row_update(row)
 
         self._refresh_progress_label()
         self._update_download_btn_state()
-        self._maybe_start_next_detail()
 
-    def _on_detail_error(self, row: int, msg: str) -> None:
+    def _process_cover_bypass(self, row: int) -> None:
         if self._is_closing:
             return
-        self._detail_inflight_row = None
-        retries = self._detail_retry_count.get(row, 0)
-        if retries < 1:
-            # 自动重试一次，插入队首
-            self._detail_retry_count[row] = retries + 1
-            self._detail_queue.appendleft(row)
-        else:
-            aw = self._action_widget_by_row.get(row)
-            if aw is not None:
-                aw.set_loading(False, "解析失败(点重试)")
-                aw.infoLabel.setText("")
-                aw.qualityButton.setToolTip(msg)
-        self._maybe_start_next_detail()
+        if self._scheduler and self._scheduler.is_loaded(row):
+            return
+        if not (0 <= row < len(self._playlist_rows)):
+            return
+
+        data = self._playlist_rows[row]
+        info = {
+            "id": data.get("id"),
+            "url": data.get("url"),
+            "title": data.get("title"),
+            "thumbnail": data.get("thumbnail"),
+            "uploader": data.get("uploader"),
+            "duration": data.get("duration"),
+        }
+
+        data["detail"] = info
+        data["video_formats"] = []
+        data["audio_formats"] = []
+        data["highest_height"] = None
+        if self._scheduler is not None:
+            self._scheduler.mark_row_loaded(row)
+
+        if self._playlist_model is not None:
+            idx = self._playlist_model.index(row, 0)
+            task = self._playlist_model.get_task(idx)
+            if task is not None:
+                task.raw_info = info
+                task.video_formats = []
+                task.audio_formats = []
+                task.has_error = False
+                task.error_msg = ""
+                task.is_parsing = False
+                # Do NOT schedule here; _auto_apply_row_preset handles it.
+
+        self._enqueue_detail_finalization(row)
 
     def _on_idle_tick(self) -> None:
         if not self._is_playlist:
             return
-        if self._lazy_paused:
+        if self._scheduler is None or self._scheduler.lazy_paused:
             return
         if time.monotonic() - self._last_interaction < 2.0:
             return
-        if self._detail_inflight_row is None and not self._detail_queue:
-            # 一次入队最多 3 个未加载行，加速后台补全
-            count = 0
-            for i in range(len(self._playlist_rows)):
-                if i not in self._detail_loaded:
-                    self._detail_queue.append(i)
-                    count += 1
-                    if count >= 3:
-                        break
-        self._maybe_start_next_detail()
+        if not self._scheduler.is_crawl_active:
+            self._scheduler.start_crawl()
 
     def _on_lazy_pause_changed(self, checked: bool) -> None:
         """用户手动暂停/恢复后台详情解析"""
         self._lazy_paused = checked
         if hasattr(self, "lazyPauseBtn"):
             self.lazyPauseBtn.setText("已暂停" if checked else "暂停解析")
-        if not checked:
-            # 恢复：立即重锚点并继续
-            self._reprioritize_detail_queue()
-            self._maybe_start_next_detail()
+        if self._scheduler is None:
+            return
+        self._scheduler.lazy_paused = checked
+        if checked:
+            self._scheduler.stop_crawl()
+        else:
+            self._initial_viewport_scan()
+            self._scheduler.start_crawl()
 
     def _open_row_format_picker(self, row: int) -> None:
         if not (0 <= row < len(self._playlist_rows)):
             return
-        if row not in self._detail_loaded:
+        if not (self._scheduler and self._scheduler.is_loaded(row)):
             return
         data = self._playlist_rows[row]
         info = data.get("detail")
@@ -2132,9 +2722,12 @@ class DownloadConfigWindow(FramelessWindow):
                 return []
 
             info = self.video_info
-            url = _infer_entry_url(info)
-            title = str(info.get("title") or "Unknown")
-            thumb = str(info.get("thumbnail") or "")
+            dto = self.video_info_dto
+            url = dto.source_url if dto and dto.source_url else _infer_entry_url(info)
+            title = dto.title if dto and dto.title else str(info.get("title") or "Unknown")
+            thumb = (
+                dto.thumbnail_url if dto and dto.thumbnail_url else str(info.get("thumbnail") or "")
+            )
 
             ydl_opts: dict[str, Any] = {}
 
@@ -2190,10 +2783,24 @@ class DownloadConfigWindow(FramelessWindow):
                 if sel and sel.get("format"):
                     ydl_opts["format"] = sel["format"]
                     ydl_opts.update(sel.get("extra_opts") or {})
+                    try:
+                        ydl_opts["__fluentytdl_format_note"] = (
+                            self.selector_widget.get_summary_text()
+                        )
+                    except Exception:
+                        pass
 
                     # ========== VR 格式检测 ==========
-                    vr_only_ids = info.get("__vr_only_format_ids") or []
-                    android_vr_ids = info.get("__android_vr_format_ids") or []
+                    vr_only_ids = (
+                        dto.vr_only_format_ids
+                        if dto is not None
+                        else (info.get("__vr_only_format_ids") or [])
+                    )
+                    android_vr_ids = (
+                        dto.android_vr_format_ids
+                        if dto is not None
+                        else (info.get("__android_vr_format_ids") or [])
+                    )
                     if vr_only_ids:
                         selected_format = sel["format"]
                         for vr_id in vr_only_ids:
@@ -2206,8 +2813,10 @@ class DownloadConfigWindow(FramelessWindow):
                         ydl_opts["__fluentytdl_use_android_vr"] = True
                 else:
                     ydl_opts["format"] = "bestvideo+bestaudio/best"
+                    ydl_opts["__fluentytdl_format_note"] = "最佳画质"
             else:
                 ydl_opts["format"] = "bestvideo+bestaudio/best"
+                ydl_opts["__fluentytdl_format_note"] = "最佳画质"
 
             # Apply checkbox overrides if available (Default Mode)
             sub_config_override = None
@@ -2245,7 +2854,7 @@ class DownloadConfigWindow(FramelessWindow):
                         embed_override = None
 
                 subtitle_opts = subtitle_service.apply(
-                    video_id=self.video_info.get("id", ""),
+                    video_id=(dto.video_id if dto is not None else self.video_info.get("id", "")),
                     video_info=self.video_info,
                     user_config=sub_config_override,
                 )
@@ -2396,14 +3005,23 @@ class DownloadConfigWindow(FramelessWindow):
                 if sel and sel.get("format"):
                     row_opts["format"] = sel["format"]
                     row_opts.update(sel.get("extra_opts") or {})
+                    if row_data.get("custom_summary"):
+                        row_opts["__fluentytdl_format_note"] = row_data["custom_summary"]
 
             elif self._vr_mode:
                 # VR Auto/Simple
+                preset_title = (
+                    self.preset_combo.currentText()
+                    if getattr(self, "preset_combo", None)
+                    else "VR 模式"
+                )
                 if bool(row_data.get("manual_override")) and row_data.get("override_format_id"):
                     row_opts["format"] = f"{row_data['override_format_id']}+bestaudio/best"
+                    row_opts["__fluentytdl_format_note"] = row_data.get("override_text") or "自定义"
                 else:
                     row_opts["format"] = vr_preset_fmt or "bestvideo+bestaudio/best"
                     row_opts.update(vr_preset_args)
+                    row_opts["__fluentytdl_format_note"] = preset_title
 
             else:
                 # Standard Playlist Logic
@@ -2414,8 +3032,12 @@ class DownloadConfigWindow(FramelessWindow):
                 mode = int(self.type_combo.currentIndex()) if self.type_combo else 0
 
                 if mode == 2:  # Audio only
+                    row_opts["__fluentytdl_format_note"] = "纯音频"
                     if aud_manual_fid:
                         row_opts["format"] = aud_manual_fid
+                        row_opts["__fluentytdl_format_note"] = (
+                            row_data.get("audio_override_text") or "自定义音频"
+                        )
                     elif aud_fid:
                         row_opts["format"] = aud_fid
                     else:
@@ -2425,17 +3047,25 @@ class DownloadConfigWindow(FramelessWindow):
                 elif mode == 1:  # Video only
                     if ov_fid:
                         row_opts["format"] = ov_fid
+                        row_opts["__fluentytdl_format_note"] = (
+                            row_data.get("override_text") or "自定义视频"
+                        )
                     else:
                         h = self._current_playlist_preset_height()
                         if h:
                             row_opts["format"] = f"bv*[height<={h}]+ba/b[height<={h}]"
+                            row_opts["__fluentytdl_format_note"] = f"{h}p"
                         else:
                             row_opts["format"] = "bestvideo+bestaudio/best"
+                            row_opts["__fluentytdl_format_note"] = "最佳画质"
 
                 else:  # AV Muxed
                     if ov_fid:
                         target_audio = (
                             aud_manual_fid if row_data.get("audio_manual_override") else aud_fid
+                        )
+                        row_opts["__fluentytdl_format_note"] = (
+                            row_data.get("override_text") or "自定义"
                         )
                         if target_audio:
                             row_opts["format"] = f"{ov_fid}+{target_audio}"
@@ -2447,8 +3077,10 @@ class DownloadConfigWindow(FramelessWindow):
                         if h:
                             row_opts["format"] = f"bv*[height<={h}]+ba/b[height<={h}]"
                             row_opts["merge_output_format"] = "mkv"
+                            row_opts["__fluentytdl_format_note"] = f"{h}p"
                         else:
                             row_opts["format"] = "bestvideo+bestaudio/best"
+                            row_opts["__fluentytdl_format_note"] = "最佳画质"
 
             # === Apply Common Overrides (Sub/Cover/Meta) ===
 

@@ -1,0 +1,302 @@
+﻿I001 [*] Import block is un-sorted or un-formatted
+  --> src\fluentytdl\ui\components\download_config_window.py:1:1
+   |
+ 1 | / from __future__ import annotations
+ 2 | |
+ 3 | | import time
+ 4 | | from collections import deque
+ 5 | | from enum import Enum
+ 6 | | from functools import partial
+ 7 | | from typing import Any
+ 8 | |
+ 9 | | from PySide6.QtCore import QModelIndex, QPoint, Qt, QThread, QTimer, Signal
+10 | | import logging
+   | |______________^
+11 |
+12 |   logger = logging.getLogger(__name__)
+   |
+help: Organize imports
+
+E402 Module level import not at top of file
+  --> src\fluentytdl\ui\components\download_config_window.py:13:1
+   |
+12 | logger = logging.getLogger(__name__)
+13 | from PySide6.QtGui import QColor, QCursor
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+14 | from PySide6.QtWidgets import (
+15 |     QAbstractItemView,
+   |
+
+E402 Module level import not at top of file
+  --> src\fluentytdl\ui\components\download_config_window.py:14:1
+   |
+12 |   logger = logging.getLogger(__name__)
+13 |   from PySide6.QtGui import QColor, QCursor
+14 | / from PySide6.QtWidgets import (
+15 | |     QAbstractItemView,
+16 | |     QFileDialog,
+17 | |     QHBoxLayout,
+18 | |     QLabel,
+19 | |     QListView,
+20 | |     QStyleOptionViewItem,
+21 | |     QTableWidget,
+22 | |     QVBoxLayout,
+23 | |     QWidget,
+24 | | )
+   | |_^
+25 |   from qfluentwidgets import (
+26 |       CaptionLabel,
+   |
+
+E402 Module level import not at top of file
+  --> src\fluentytdl\ui\components\download_config_window.py:25:1
+   |
+23 |       QWidget,
+24 |   )
+25 | / from qfluentwidgets import (
+26 | |     CaptionLabel,
+27 | |     CardWidget,
+28 | |     ComboBox,
+29 | |     ImageLabel,
+30 | |     IndeterminateProgressRing,
+31 | |     LineEdit,
+32 | |     MessageBox,
+33 | |     PrimaryPushButton,
+34 | |     PushButton,
+35 | |     SegmentedWidget,
+36 | |     SubtitleLabel,
+37 | |     SwitchButton,
+38 | | )
+   | |_^
+39 |   from qframelesswindow import FramelessWindow
+   |
+
+E402 Module level import not at top of file
+  --> src\fluentytdl\ui\components\download_config_window.py:39:1
+   |
+37 |     SwitchButton,
+38 | )
+39 | from qframelesswindow import FramelessWindow
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+40 |
+41 | from ...download.extract_manager import AsyncExtractManager
+   |
+
+E402 Module level import not at top of file
+  --> src\fluentytdl\ui\components\download_config_window.py:41:1
+   |
+39 | from qframelesswindow import FramelessWindow
+40 |
+41 | from ...download.extract_manager import AsyncExtractManager
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+42 | from ...download.workers import EntryDetailWorker, InfoExtractWorker, VRInfoExtractWorker
+43 | from ...models.mappers import VideoInfoMapper
+   |
+
+E402 Module level import not at top of file
+  --> src\fluentytdl\ui\components\download_config_window.py:42:1
+   |
+41 | from ...download.extract_manager import AsyncExtractManager
+42 | from ...download.workers import EntryDetailWorker, InfoExtractWorker, VRInfoExtractWorker
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+43 | from ...models.mappers import VideoInfoMapper
+44 | from ...models.video_info import VideoInfo
+   |
+
+E402 Module level import not at top of file
+  --> src\fluentytdl\ui\components\download_config_window.py:43:1
+   |
+41 | from ...download.extract_manager import AsyncExtractManager
+42 | from ...download.workers import EntryDetailWorker, InfoExtractWorker, VRInfoExtractWorker
+43 | from ...models.mappers import VideoInfoMapper
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+44 | from ...models.video_info import VideoInfo
+45 | from ...models.video_task import VideoTask
+   |
+
+E402 Module level import not at top of file
+  --> src\fluentytdl\ui\components\download_config_window.py:44:1
+   |
+42 | from ...download.workers import EntryDetailWorker, InfoExtractWorker, VRInfoExtractWorker
+43 | from ...models.mappers import VideoInfoMapper
+44 | from ...models.video_info import VideoInfo
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+45 | from ...models.video_task import VideoTask
+46 | from ...processing import subtitle_service
+   |
+
+E402 Module level import not at top of file
+  --> src\fluentytdl\ui\components\download_config_window.py:45:1
+   |
+43 | from ...models.mappers import VideoInfoMapper
+44 | from ...models.video_info import VideoInfo
+45 | from ...models.video_task import VideoTask
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+46 | from ...processing import subtitle_service
+47 | from ...utils.filesystem import sanitize_filename
+   |
+
+E402 Module level import not at top of file
+  --> src\fluentytdl\ui\components\download_config_window.py:46:1
+   |
+44 | from ...models.video_info import VideoInfo
+45 | from ...models.video_task import VideoTask
+46 | from ...processing import subtitle_service
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+47 | from ...utils.filesystem import sanitize_filename
+48 | from ...utils.image_loader import get_image_loader
+   |
+
+E402 Module level import not at top of file
+  --> src\fluentytdl\ui\components\download_config_window.py:47:1
+   |
+45 | from ...models.video_task import VideoTask
+46 | from ...processing import subtitle_service
+47 | from ...utils.filesystem import sanitize_filename
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+48 | from ...utils.image_loader import get_image_loader
+49 | from ...utils.paths import resource_path
+   |
+
+E402 Module level import not at top of file
+  --> src\fluentytdl\ui\components\download_config_window.py:48:1
+   |
+46 | from ...processing import subtitle_service
+47 | from ...utils.filesystem import sanitize_filename
+48 | from ...utils.image_loader import get_image_loader
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+49 | from ...utils.paths import resource_path
+50 | from ...youtube.youtube_service import YoutubeServiceOptions
+   |
+
+E402 Module level import not at top of file
+  --> src\fluentytdl\ui\components\download_config_window.py:49:1
+   |
+47 | from ...utils.filesystem import sanitize_filename
+48 | from ...utils.image_loader import get_image_loader
+49 | from ...utils.paths import resource_path
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+50 | from ...youtube.youtube_service import YoutubeServiceOptions
+51 | from ..delegates.playlist_delegate import PlaylistItemDelegate
+   |
+
+E402 Module level import not at top of file
+  --> src\fluentytdl\ui\components\download_config_window.py:50:1
+   |
+48 | from ...utils.image_loader import get_image_loader
+49 | from ...utils.paths import resource_path
+50 | from ...youtube.youtube_service import YoutubeServiceOptions
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+51 | from ..delegates.playlist_delegate import PlaylistItemDelegate
+52 | from ..models.playlist_model import PlaylistListModel
+   |
+
+E402 Module level import not at top of file
+  --> src\fluentytdl\ui\components\download_config_window.py:51:1
+   |
+49 | from ...utils.paths import resource_path
+50 | from ...youtube.youtube_service import YoutubeServiceOptions
+51 | from ..delegates.playlist_delegate import PlaylistItemDelegate
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+52 | from ..models.playlist_model import PlaylistListModel
+53 | from ..playlist_scheduler import PlaylistScheduler
+   |
+
+E402 Module level import not at top of file
+  --> src\fluentytdl\ui\components\download_config_window.py:52:1
+   |
+50 | from ...youtube.youtube_service import YoutubeServiceOptions
+51 | from ..delegates.playlist_delegate import PlaylistItemDelegate
+52 | from ..models.playlist_model import PlaylistListModel
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+53 | from ..playlist_scheduler import PlaylistScheduler
+54 | from .cover_selector import CoverSelectorWidget
+   |
+
+E402 Module level import not at top of file
+  --> src\fluentytdl\ui\components\download_config_window.py:53:1
+   |
+51 | from ..delegates.playlist_delegate import PlaylistItemDelegate
+52 | from ..models.playlist_model import PlaylistListModel
+53 | from ..playlist_scheduler import PlaylistScheduler
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+54 | from .cover_selector import CoverSelectorWidget
+55 | from .format_selector import VideoFormatSelectorWidget
+   |
+
+E402 Module level import not at top of file
+  --> src\fluentytdl\ui\components\download_config_window.py:54:1
+   |
+52 | from ..models.playlist_model import PlaylistListModel
+53 | from ..playlist_scheduler import PlaylistScheduler
+54 | from .cover_selector import CoverSelectorWidget
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+55 | from .format_selector import VideoFormatSelectorWidget
+56 | from .selection_dialog import (
+   |
+
+E402 Module level import not at top of file
+  --> src\fluentytdl\ui\components\download_config_window.py:55:1
+   |
+53 | from ..playlist_scheduler import PlaylistScheduler
+54 | from .cover_selector import CoverSelectorWidget
+55 | from .format_selector import VideoFormatSelectorWidget
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+56 | from .selection_dialog import (
+57 |     PlaylistFormatDialog,
+   |
+
+E402 Module level import not at top of file
+  --> src\fluentytdl\ui\components\download_config_window.py:56:1
+   |
+54 |   from .cover_selector import CoverSelectorWidget
+55 |   from .format_selector import VideoFormatSelectorWidget
+56 | / from .selection_dialog import (
+57 | |     PlaylistFormatDialog,
+58 | |     PlaylistPreviewWidget,
+59 | |     _clean_audio_formats,
+60 | |     _clean_video_formats,
+61 | |     _ensure_subtitle_compatible_container,
+62 | |     _format_duration,
+63 | |     _format_size,
+64 | |     _format_upload_date,
+65 | |     _infer_entry_thumbnail,
+66 | |     _infer_entry_url,
+67 | | )
+   | |_^
+68 |   from .subtitle_selector import SubtitleSelectorWidget
+69 |   from .vr_format_selector import VR_PRESETS, VRFormatSelectorWidget
+   |
+
+E402 Module level import not at top of file
+  --> src\fluentytdl\ui\components\download_config_window.py:68:1
+   |
+66 |     _infer_entry_url,
+67 | )
+68 | from .subtitle_selector import SubtitleSelectorWidget
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+69 | from .vr_format_selector import VR_PRESETS, VRFormatSelectorWidget
+   |
+
+E402 Module level import not at top of file
+  --> src\fluentytdl\ui\components\download_config_window.py:69:1
+   |
+67 | )
+68 | from .subtitle_selector import SubtitleSelectorWidget
+69 | from .vr_format_selector import VR_PRESETS, VRFormatSelectorWidget
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+
+F401 [*] `collections.abc.Iterable` imported but unused
+ --> src\fluentytdl\ui\reimagined_main_window.py:4:29
+  |
+3 | import os
+4 | from collections.abc import Iterable
+  |                             ^^^^^^^^
+5 | from enum import Enum
+6 | from typing import Any
+  |
+help: Remove unused import: `collections.abc.Iterable`
+
+Found 24 errors.
+[*] 2 fixable with the `--fix` option.

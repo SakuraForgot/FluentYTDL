@@ -12,10 +12,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 from qfluentwidgets import (
-    BodyLabel,
     CaptionLabel,
     CheckBox,
-    ComboBox,
     TableWidget,
 )
 
@@ -98,15 +96,6 @@ class SubtitleSelectorWidget(QFrame):
         self.embedCheck.hide()  # 默认隐藏
         optRow.addWidget(self.embedCheck)
 
-        # 格式选择
-        optRow.addWidget(BodyLabel("格式转换:", self))
-        self.formatCombo = ComboBox(self)
-        self.formatCombo.addItems(["原始格式", "SRT", "ASS", "VTT", "LRC"])
-        self.formatCombo.setCurrentIndex(0)  # Default Original
-        self.formatCombo.setFixedWidth(120)
-        self.formatCombo.currentTextChanged.connect(self.selectionChanged)
-        optRow.addWidget(self.formatCombo)
-
         layout.addLayout(optRow)
 
     def _load_subtitles(self):
@@ -117,12 +106,10 @@ class SubtitleSelectorWidget(QFrame):
         if not self._tracks:
             self.table.hide()
             self.noSubtitleLabel.show()
-            self.formatCombo.setEnabled(False)
             return
 
         self.table.show()
         self.noSubtitleLabel.hide()
-        self.formatCombo.setEnabled(True)
 
         # 排序：手动 > 自动，然后按语言优先级
         priority = ["zh-Hans", "zh-Hant", "zh", "en", "ja", "ko"]
@@ -232,12 +219,5 @@ class SubtitleSelectorWidget(QFrame):
         # Embed (usually for video mode)
         if self.embedCheck.isChecked() and self.embedCheck.isVisible():
             opts["embedsubtitles"] = True
-
-        # Format conversion
-        fmt_text = self.formatCombo.currentText()
-        if fmt_text != "原始格式":
-            # 使用 convertsubtitles (--convert-subs) 而不是 subtitlesformat (--sub-format)
-            # 这样可以下载最佳格式然后转换为目标格式
-            opts["convertsubtitles"] = fmt_text.lower()
 
         return opts

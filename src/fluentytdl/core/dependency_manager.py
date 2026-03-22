@@ -3,15 +3,11 @@ from __future__ import annotations
 import json
 import os
 import re
-import shutil
 import ssl
 import subprocess
 import sys
-import tempfile
-import time
 import urllib.error
 import urllib.request
-import zipfile
 from pathlib import Path
 
 from PySide6.QtCore import QObject, QThread, Signal
@@ -163,7 +159,21 @@ class DependencyManager(QObject):
         final_url = self.get_mirror_url(url)
         target_exe = self.get_exe_path(component_key)
 
-        worker = DownloaderWorker(component_key, final_url, target_exe)
+        expected_version = self.components[component_key].latest_version or "unknown"
+        expected_channel = (
+            str(config_manager.get("ytdlp_channel", "stable")).strip()
+            if component_key == "yt-dlp"
+            else ""
+        )
+
+        worker = DownloaderWorker(
+            component_key,
+            final_url,
+            target_exe,
+            expected_version=expected_version,
+            expected_channel=expected_channel,
+            parent=self,
+        )
         worker.progress_signal.connect(self.download_progress)
         worker.finished_signal.connect(self._on_install_finished)
         worker.error_signal.connect(self.download_error)
@@ -174,7 +184,9 @@ class DependencyManager(QObject):
     def _on_install_finished(self, key):
         self._just_installed.add(key)
         self.install_finished.emit(key)
-        self._workers.pop(f"install_{key}", None)
+        worker = self._workers.pop(f"install_{key}", None)
+        if worker:
+            worker.deleteLater()
 
     def _build_opener(self) -> urllib.request.OpenerDirector:
         """
@@ -263,7 +275,9 @@ class UpdateCheckerWorker(QThread):
             latest_ver, url = self._get_remote_version(self.key)
 
             update_available = False
-            if latest_ver and latest_ver != "unknown":
+            if current_ver == "channel_switched":
+                update_available = True
+            elif latest_ver and latest_ver != "unknown":
                 c_tuple = self._parse_version_tuple(current_ver)
                 l_tuple = self._parse_version_tuple(latest_ver)
 
@@ -274,6 +288,14 @@ class UpdateCheckerWorker(QThread):
                     l_padded = l_tuple + (0,) * (max_len - len(l_tuple))
                     # 仅当远程版本严格大于本地时才提示更新
                     update_available = l_padded > c_padded
+
+                    # 跨渠道切换时，无论数字版本号大小比较结果，一律强制触发更新 (例如 nightly 换 master 可能版本变小)
+                    actual_ch = current_ver.split("(")[-1].strip(")") if "(" in current_ver else ""
+                    latest_ch = latest_ver.split("(")[-1].strip(")") if "(" in latest_ver else ""
+                    if self.key == "yt-dlp" and actual_ch and latest_ch and actual_ch != latest_ch:
+                        update_available = True
+                    elif c_padded == l_padded and current_ver != latest_ver:
+                        update_available = True
                 else:
                     # 无法解析则 fallback 到字符串比较
                     c_norm = current_ver.lstrip("vn")
@@ -295,6 +317,8 @@ class UpdateCheckerWorker(QThread):
     def _get_local_version(self, key: str, path: Path) -> str:
         if not path.exists():
             return "unknown"
+
+        # Manifest check for yt-dlp channel switches is now embedded into the returned version string.
 
         try:
             # Run --version
@@ -322,7 +346,17 @@ class UpdateCheckerWorker(QThread):
             out = proc.stdout.strip()
             if key == "yt-dlp":
                 # yt-dlp output is just the date/version: "2023.11.16"
-                return out.splitlines()[0]
+                version_str = out.splitlines()[0]
+                actual_channel = "stable"
+                manifest_path = path.parent / "manifest.json"
+                if manifest_path.exists():
+                    try:
+                        with open(manifest_path, encoding="utf-8") as f:
+                            data = json.load(f)
+                            actual_channel = str(data.get("channel", "stable")).strip()
+                    except Exception:
+                        pass
+                return f"{version_str} ({actual_channel})"
             elif key == "deno":
                 # deno 1.38.0 (release, x86_64-pc-windows-msvc) ...
                 m = re.search(r"deno (\d+\.\d+\.\d+)", out)
@@ -375,8 +409,16 @@ class UpdateCheckerWorker(QThread):
         # Using GitHub API via urllib
 
         url = ""
+        channel_label = ""
         if key == "yt-dlp":
-            url = "https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest"
+            channel = str(config_manager.get("ytdlp_channel", "stable")).strip()
+            channel_label = channel
+            if channel == "nightly":
+                url = "https://api.github.com/repos/yt-dlp/yt-dlp-nightly-builds/releases/latest"
+            elif channel == "master":
+                url = "https://api.github.com/repos/yt-dlp/yt-dlp-master-builds/releases/latest"
+            else:
+                url = "https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest"
         elif key == "deno":
             url = "https://api.github.com/repos/denoland/deno/releases/latest"
         elif key == "ffmpeg":
@@ -407,7 +449,7 @@ class UpdateCheckerWorker(QThread):
                 if asset["name"] == "yt-dlp.exe":
                     dl_url = asset["browser_download_url"]
                     break
-            return tag, dl_url
+            return f"{tag} ({channel_label})", dl_url
 
         elif key == "deno":
             tag = data.get("tag_name", "vunknown").lstrip("v")
@@ -506,267 +548,130 @@ class UpdateCheckerWorker(QThread):
         return "unknown", ""
 
 
-class DownloaderWorker(QThread):
+class DownloaderWorker(QObject):
     progress_signal = Signal(str, int)
     finished_signal = Signal(str)
     error_signal = Signal(str, str)
 
-    def __init__(self, key: str, url: str, target_exe: Path):
+    def __init__(
+        self,
+        key: str,
+        url: str,
+        target_exe: Path,
+        expected_version: str = "",
+        expected_channel: str = "",
+        parent=None,
+    ):
         super().__init__()
+        if parent:
+            self.setParent(parent)
         self.key = key
         self.url = url
         self.target_exe = target_exe
+        self.expected_version = expected_version
+        self.expected_channel = expected_channel
         self.extra_exes: list[str] = []
 
-        # Inject extra_exes if available
         if dependency_manager.components.get(key):
             self.extra_exes = dependency_manager.components[key].extra_exes
 
-    def run(self):
-        tmp_path: str | None = None
-        try:
-            logger.info(f"Downloading {self.key} from {self.url}")
-            # 1. Download to temp file
-            opener = dependency_manager._build_opener()
-            req = urllib.request.Request(
-                self.url, headers={"User-Agent": "FluentYTDL/DependencyManager"}
-            )
+        from PySide6.QtCore import QProcess
 
-            with opener.open(req, timeout=30) as r:
-                total_length_str = r.headers.get("content-length")
-                total_length = int(total_length_str) if total_length_str else 0
+        self.process = QProcess(self)
+        self.process.readyReadStandardOutput.connect(self._on_ready_read)
+        self.process.finished.connect(self._on_finished)
+        self.process.errorOccurred.connect(self._on_error)
 
-                # Create a temp file
-                fd, tmp_path = tempfile.mkstemp()
-                os.close(fd)
+        self._buffer = ""
+        self._is_finished_emitted = False
+        self._error_emitted = False
 
-                last_emit_time = 0
-                last_emit_percent = -1
+    def start(self):
+        from .config_manager import config_manager
 
-                with open(tmp_path, "wb") as f:
-                    downloaded = 0
-                    while True:
-                        chunk = r.read(8192)
-                        if not chunk:
-                            break
-                        f.write(chunk)
-                        downloaded += len(chunk)
-                        if total_length > 0:
-                            percent = int(downloaded * 100 / total_length)
-                            current_time = time.time()
-                            # Throttle: emit only if percent changed AND (>= 1% diff OR > 100ms passed)
-                            if percent != last_emit_percent:
-                                if (
-                                    (percent - last_emit_percent >= 1)
-                                    or (current_time - last_emit_time > 0.1)
-                                    or percent == 100
-                                ):
-                                    self.progress_signal.emit(self.key, percent)
-                                    last_emit_percent = percent
-                                    last_emit_time = current_time
+        proxy_url = config_manager.get("proxy_url")
+        proxy_mode = config_manager.get("proxy_mode")
 
-            # 2. Extract or Move
-            # Kill processes first? Ideally UI should ensure nothing is running.
+        config = {
+            "key": self.key,
+            "url": self.url,
+            "target_exe": str(self.target_exe),
+            "expected_version": self.expected_version,
+            "expected_channel": self.expected_channel,
+            "extra_exes": self.extra_exes,
+            "proxy_url": proxy_url,
+            "proxy_mode": proxy_mode,
+        }
 
-            # Prepare final dir
-            dest_dir = self.target_exe.parent
-            dest_dir.mkdir(parents=True, exist_ok=True)
+        import json
 
-            if self.url.endswith(".zip"):
-                self._handle_zip(tmp_path, dest_dir)
-                # zip handling doesn't move the temp file, so we need to delete it
-                if os.path.exists(tmp_path):
-                    os.remove(tmp_path)
-            else:
-                self._handle_exe(tmp_path)
-                # _handle_exe uses shutil.move, which moves the file, so no need to delete
-                # But if it exists (move failed), clean it up
-                if os.path.exists(tmp_path):
-                    os.remove(tmp_path)
+        from ..utils.paths import is_frozen
 
-            self.finished_signal.emit(self.key)
+        args = []
+        if not is_frozen():
+            exe = sys.executable
+            main_py = str(Path(__file__).resolve().parents[3] / "main.py")
+            args = [main_py, "--update-worker"]
+        else:
+            exe = sys.executable
+            args = ["--update-worker"]
 
-        except Exception as e:
-            logger.error(f"Install failed for {self.key}: {e}")
-            self.error_signal.emit(self.key, str(e))
-            if tmp_path and os.path.exists(tmp_path):
-                try:
-                    os.remove(tmp_path)
-                except Exception:
-                    pass
-
-    def _handle_exe(self, tmp_path):
-        self._safe_install(tmp_path, self.target_exe)
-
-    def _handle_zip(self, zip_path, dest_dir):
-        # Extract specific file from zip
-        with zipfile.ZipFile(zip_path, "r") as z:
-            # Prepare list of files to extract: main exe + extra exes
-            targets = [(self.target_exe.name, self.target_exe)]
-
-            for extra in self.extra_exes:
-                targets.append((extra, dest_dir / extra))
-
-            for target_name, target_path in targets:
-                found_member = None
-
-                # 1. Try exact match or path ending with target_name
-                for name in z.namelist():
-                    if name.endswith(f"/{target_name}") or name == target_name:
-                        found_member = name
-                        break
-
-                # 2. Heuristic search (case insensitive)
-                if not found_member:
-                    for name in z.namelist():
-                        if name.lower().endswith(target_name.lower()):
-                            found_member = name
-                            break
-
-                if not found_member:
-                    # Only raise error for the main executable
-                    if target_name == self.target_exe.name:
-                        raise FileNotFoundError(
-                            f"Could not find {target_name} inside the downloaded archive."
-                        )
-                    else:
-                        logger.warning(
-                            f"Could not find extra component {target_name} in archive. Skipping."
-                        )
-                        continue
-
-                # Extract to a temporary file first
-                with z.open(found_member) as source:
-                    # Create a temp file for the extracted exe
-                    fd, extracted_tmp_path = tempfile.mkstemp()
-                    os.close(fd)
-
-                    try:
-                        with open(extracted_tmp_path, "wb") as target:
-                            shutil.copyfileobj(source, target)
-
-                        # Install securely
-                        self._safe_install(extracted_tmp_path, target_path)
-                    finally:
-                        if os.path.exists(extracted_tmp_path):
-                            try:
-                                os.remove(extracted_tmp_path)
-                            except Exception:
-                                pass
-
-    def _safe_install(self, source_path: str | Path, target_path: Path):
-        """
-        Safely install a file, handling existing files and potential locks.
-        """
-        source_path = Path(source_path)
-
-        # 1. If target doesn't exist, just move
-        if not target_path.exists():
-            shutil.move(source_path, target_path)
+        self.process.start(exe, args)
+        if not self.process.waitForStarted():
+            self._emit_error(f"Failed to start update worker process: {self.process.errorString()}")
             return
 
-        # 2. Try to kill processes locking the file
-        self._kill_locking_processes(target_path)
+        config_data = json.dumps(config).encode("utf-8")
+        self.process.write(config_data)
+        self.process.closeWriteChannel()
 
-        # 3. Try to replace with retries
-        old_file = target_path.with_suffix(".exe.old")
+    def _emit_error(self, message):
+        if not self._error_emitted:
+            self.error_signal.emit(self.key, message)
+            self._error_emitted = True
 
-        # Clean up previous .old if exists
-        if old_file.exists():
-            try:
-                os.remove(old_file)
-            except Exception as e:
-                logger.warning(f"Could not remove existing backup {old_file}: {e}")
+    def _on_ready_read(self):
+        data = self.process.readAllStandardOutput().data().decode("utf-8", errors="replace")
+        self._buffer += data
+        lines = self._buffer.split("\n")
+        self._buffer = lines[-1]
 
-        max_retries = 3
-        for i in range(max_retries):
-            try:
-                # Try to rename current to .old
-                target_path.replace(old_file)
-                break
-            except OSError as e:
-                if i == max_retries - 1:
-                    logger.error(
-                        f"Failed to replace {target_path} after {max_retries} attempts: {e}"
-                    )
-                    # Last ditch effort: try to move source to target directly (will fail if locked)
-                    # But maybe replace failed due to permission on old_file?
-                    pass
-                else:
-                    logger.warning(
-                        f"Replace attempt {i + 1} failed for {target_path}: {e}. Retrying..."
-                    )
-                    time.sleep(1)
-                    # Try killing processes again
-                    self._kill_locking_processes(target_path)
+        import json
 
-        # 4. Move new file to target
-        try:
-            shutil.move(source_path, target_path)
-        except OSError as e:
-            # If move failed, try to restore old file if we successfully renamed it
-            if old_file.exists() and not target_path.exists():
-                try:
-                    old_file.replace(target_path)
-                except Exception:
-                    pass
-            raise OSError(
-                f"Failed to install new file to {target_path}. Please ensure the file is not in use. Error: {e}"
-            ) from e
-
-        # 5. Cleanup .old (best effort)
-        if old_file.exists():
-            try:
-                os.remove(old_file)
-            except Exception:
-                pass
-
-    def _kill_locking_processes(self, file_path: Path):
-        """
-        Kill processes that have the file open.
-        """
-        if not HAS_PSUTIL:
-            # Fallback: try to kill by name if it matches known components
-            name = file_path.name.lower()
-            try:
-                subprocess.run(
-                    ["taskkill", "/F", "/IM", name],
-                    capture_output=True,
-                    creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
-                )
-            except Exception:
-                pass
-            return
-
-        file_path_str = str(file_path.resolve()).lower()
-        import psutil as psutil_mod
-
-        for proc in psutil_mod.process_iter(["pid", "name", "open_files"]):
-            try:
-                # Check open files
-                open_files = proc.info.get("open_files")
-                if open_files:
-                    for f in open_files:
-                        if f.path and str(Path(f.path).resolve()).lower() == file_path_str:
-                            logger.info(
-                                f"Killing process {proc.info['name']} ({proc.info['pid']}) locking {file_path}"
-                            )
-                            proc.kill()
-                            break
-
-                # Also check if the process executable itself is the file
-                try:
-                    exe = proc.exe()
-                    if exe and str(Path(exe).resolve()).lower() == file_path_str:
-                        logger.info(
-                            f"Killing process {proc.info['name']} ({proc.info['pid']}) running from {file_path}"
-                        )
-                        proc.kill()
-                except (psutil_mod.AccessDenied, psutil_mod.NoSuchProcess):
-                    pass
-
-            except (psutil_mod.NoSuchProcess, psutil_mod.AccessDenied):
+        for line in lines[:-1]:
+            line = line.strip()
+            if not line:
                 continue
+            try:
+                msg = json.loads(line)
+                msg_type = msg.get("type")
+                if msg_type == "progress":
+                    self.progress_signal.emit(self.key, msg.get("percent", 0))
+                elif msg_type == "error":
+                    self._emit_error(msg.get("msg", "Unknown error in worker"))
+                elif msg_type == "done":
+                    # Let _on_finished handle the signal to ensure process has fully exited
+                    pass
+            except json.JSONDecodeError:
+                from ..utils.logger import logger
+
+                logger.debug(f"Worker stdout: {line}")
+
+    def _on_finished(self, exitCode, exitStatus):
+        from PySide6.QtCore import QProcess
+
+        if exitStatus == QProcess.ExitStatus.CrashExit:
+            self._emit_error("Update worker process crashed")
+        elif exitCode != 0:
+            err = self.process.readAllStandardError().data().decode("utf-8", errors="replace")
+            self._emit_error(f"Update worker exited with code {exitCode}. Stderr: {err}")
+        else:
+            if not self._is_finished_emitted and not self._error_emitted:
+                self.finished_signal.emit(self.key)
+                self._is_finished_emitted = True
+
+    def _on_error(self, error):
+        self._emit_error(f"Worker process error: {error}")
 
 
 # Global instance

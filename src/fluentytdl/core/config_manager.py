@@ -4,12 +4,16 @@ import json
 from pathlib import Path
 from typing import Any
 
+from PySide6.QtCore import QObject, Signal
+
 from ..models.subtitle_config import SubtitleConfig
 from ..utils.paths import config_path, legacy_config_path
 
 
-class ConfigManager:
+class ConfigManager(QObject):
     """配置管理单例（JSON 持久化）。"""
+
+    configChanged = Signal(str, object)
 
     _instance: ConfigManager | None = None
 
@@ -97,9 +101,8 @@ class ConfigManager:
         "subtitle_enabled": False,  # 是否启用字幕下载（全局开关）
         "subtitle_default_languages": ["zh-Hans", "en"],  # 默认字幕语言优先级
         "subtitle_enable_auto_captions": True,  # 是否启用自动生成字幕
+        "subtitle_embed_type": "soft",  # 嵌入类型: soft/external
         "subtitle_embed_mode": "always",  # 嵌入模式: always/never/ask
-        "subtitle_write_separate_file": False,  # 是否同时保存单独文件（嵌入模式下默认不保留）
-        "subtitle_format": "srt",  # 字幕格式偏好
         "subtitle_quality_check": True,  # 是否启用字幕质量检查
         "subtitle_remove_ads": False,  # 是否自动移除字幕广告
         "subtitle_fallback_to_english": True,  # 是否回退到英语
@@ -108,31 +111,11 @@ class ConfigManager:
         # preferred_audio_languages: 首选音轨语言（多选优先级，对于多音轨视频）
         # 'orig': 优先原音/默认, 'zh-Hans': 中文, 'en': 英文, 'ja': 日语等
         "preferred_audio_languages": ["orig", "zh-Hans", "en"],
-        # 风控探测设置
-        "auto_risk_probe": False,  # 是否在后台自动探测风控状态
-        "probe_link_pool": [
-            "https://www.youtube.com/watch?v=543xUxalGYY",  # age-restricted
-            "https://www.youtube.com/watch?v=0k5wrt_6v3c",  # age-restricted
-            "https://www.youtube.com/watch?v=l_aB3_iR3XQ",  # age-restricted
-            "https://www.youtube.com/watch?v=N_H0gJ15mfs",  # typical warning
-            "https://www.youtube.com/watch?v=q6EoRBvdVPQ",  # vevo
-            "https://www.youtube.com/watch?v=YQHsXMglC9A",  # adele
-            "https://www.youtube.com/watch?v=fJ9rUzIMcZQ",  # queen
-            "https://www.youtube.com/watch?v=kJQP7kiw5Fk",  # despacito
-            "https://www.youtube.com/watch?v=JGwWNGJdvx8",  # ed sheeran
-            "https://www.youtube.com/watch?v=RgKAFK5djSk",  # wiz khalifa
-            "https://www.youtube.com/watch?v=60ItHLz5WEA",  # alan walker
-            "https://www.youtube.com/watch?v=CevxZvSJLk8",  # katy perry
-            "https://www.youtube.com/watch?v=V1bFr2SWP1I",  # maroon 5
-            "https://www.youtube.com/watch?v=09R8_2nJtjg",  # maroon 5 sugar
-            "https://www.youtube.com/watch?v=PT2_F-1esPk",  # the chainsmokers
-            "https://www.youtube.com/watch?v=OPf0YbXqDm0",  # mark ronson
-            "https://www.youtube.com/watch?v=7WTqi14s4Zk",  # major lazer
-            "https://www.youtube.com/watch?v=uelHwf8o7_U",  # eminem
-            "https://www.youtube.com/watch?v=hT_nvWreIhg",  # onerepublic
-            "https://www.youtube.com/watch?v=34Na4j8HLjc",  # the weeknd
-        ],
-        "probe_link_history": {},  # {url: timestamp_selected}
+        # 认证模式
+        "auth_mode": "oauth2",  # 或者 "cookie"
+        "oauth2_status": False,  # 是否已经成功完成过 oauth2 授权
+        # === 下载分片与并发 ===
+        "concurrent_fragments": 4,  # [新增] 全局分片并发数控制参数
         # Theme Mode
         "theme_mode": "Auto",  # Light / Dark / Auto
     }
@@ -140,8 +123,14 @@ class ConfigManager:
     def __new__(cls) -> ConfigManager:
         if cls._instance is None:
             cls._instance = super().__new__(cls)
-            cls._instance._init()
         return cls._instance
+
+    def __init__(self) -> None:
+        if getattr(self, "_initialized", False):
+            return
+        super().__init__()
+        self._initialized = True
+        self._init()
 
     def _init(self) -> None:
         # Dev: repo root config.json; Frozen: user-writable Documents/FluentYTDL/config.json
@@ -228,6 +217,7 @@ class ConfigManager:
     def set(self, key: str, value: Any) -> None:
         self.config[key] = value
         self.save()
+        self.configChanged.emit(key, value)
 
     def get_subtitle_config(self) -> SubtitleConfig:
         """获取字幕配置对象"""
@@ -237,8 +227,6 @@ class ConfigManager:
             enable_auto_captions=self.config.get("subtitle_enable_auto_captions", True),
             embed_type=self.config.get("subtitle_embed_type", "soft"),
             embed_mode=self.config.get("subtitle_embed_mode", "always"),
-            write_separate_file=self.config.get("subtitle_write_separate_file", False),
-            format=self.config.get("subtitle_format", "srt"),
             quality_check=self.config.get("subtitle_quality_check", True),
             remove_ads=self.config.get("subtitle_remove_ads", False),
             fallback_to_english=self.config.get("subtitle_fallback_to_english", True),
@@ -252,8 +240,6 @@ class ConfigManager:
         self.config["subtitle_enable_auto_captions"] = config.enable_auto_captions
         self.config["subtitle_embed_type"] = config.embed_type
         self.config["subtitle_embed_mode"] = config.embed_mode
-        self.config["subtitle_write_separate_file"] = config.write_separate_file
-        self.config["subtitle_format"] = config.format
         self.config["subtitle_quality_check"] = config.quality_check
         self.config["subtitle_remove_ads"] = config.remove_ads
         self.config["subtitle_fallback_to_english"] = config.fallback_to_english

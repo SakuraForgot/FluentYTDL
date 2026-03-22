@@ -41,10 +41,13 @@ class SectionDownloadCard(QFrame):
 
     selectionChanged = Signal()
 
-    def __init__(self, info: dict[str, Any], parent: QWidget | None = None):
+    def __init__(self, info: Any, parent: QWidget | None = None):
         super().__init__(parent)
         self.info = info
-        self._duration = info.get("duration", 0) or 0
+        if hasattr(info, "duration"):
+            self._duration = info.duration or 0
+        else:
+            self._duration = info.get("duration", 0) or 0
         self._time_range: TimeRange | None = None
 
         self._init_ui()

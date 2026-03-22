@@ -179,7 +179,12 @@ class CookieSentinel:
             logger.debug("[CookieSentinel] Cookie 文件缺少来源元数据")
             return False, None
 
-        if actual_source != expected_source:
+        # DLE 多账号场景下，source 可能写成 dle:<account_id>，此时视为与 dle 一致
+        normalized_actual = actual_source
+        if isinstance(actual_source, str) and actual_source.startswith("dle:"):
+            normalized_actual = "dle"
+
+        if normalized_actual != expected_source:
             logger.debug(
                 f"[CookieSentinel] Cookie 来源不匹配: 现有={actual_source}, 期望={expected_source}"
             )
@@ -301,8 +306,15 @@ class CookieSentinel:
 
                 # DLE 模式是交互式流程（需用户登录），不能在启动时自动触发
                 if current_source == AuthSourceType.DLE:
-                    cache_file = auth_service.cache_dir / "cached_dle_youtube.txt"
-                    if cache_file.exists():
+                    cache_file = auth_service.get_cookie_file_for_ytdlp(
+                        platform="youtube", force_refresh=False
+                    )
+                    if cache_file and Path(cache_file).exists():
+                        account = auth_service.current_dle_account
+                        source_tag = (
+                            f"dle:{account.account_id}" if account and account.account_id else "dle"
+                        )
+
                         logger.info("[CookieSentinel] DLE 模式：使用已缓存的 Cookie 文件")
                         import shutil
 
@@ -312,7 +324,7 @@ class CookieSentinel:
                         # 复用 auth_service._update_status_from_file 验证 Cookie 有效性
                         # 这会更新 auth_service.last_status，供 UI 层的 check_cookie_status 直接使用
                         auth_service._update_status_from_file(str(cache_file))
-                        self._save_meta("dle", auth_service.last_status.cookie_count)
+                        self._save_meta(source_tag, auth_service.last_status.cookie_count)
 
                         if auth_service.last_status.valid:
                             logger.info("[CookieSentinel] DLE Cookie 有效")
@@ -433,7 +445,14 @@ class CookieSentinel:
 
             if success:
                 # 提取成功，保存元数据，清除回退状态
-                self._save_meta(current_source.value, auth_service.last_status.cookie_count)
+                source_id = current_source.value
+                if current_source == AuthSourceType.DLE:
+                    account = auth_service.current_dle_account
+                    source_id = (
+                        f"dle:{account.account_id}" if account and account.account_id else "dle"
+                    )
+
+                self._save_meta(source_id, auth_service.last_status.cookie_count)
                 self._using_fallback = False
                 self._fallback_warning = None
                 msg = f"✅ Cookie 已更新（{auth_service.current_source_display}）"
@@ -561,6 +580,14 @@ class CookieSentinel:
             "dle": "登录获取 (DLE)",
             "file": "手动导入",
         }
+
+        if source_id.startswith("dle:"):
+            account_id = source_id.split(":", 1)[1]
+            account = auth_service.current_dle_account
+            if account and account.account_id == account_id:
+                return f"登录获取 (DLE - {account.display_name})"
+            return f"登录获取 (DLE - {account_id[:8]})"
+
         return display_names.get(source_id, source_id)
 
     # ==================== 内部方法 ====================

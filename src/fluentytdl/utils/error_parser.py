@@ -19,6 +19,7 @@ class ErrorDefinition:
     description: str
     action: str
     category: ErrorCategory = ErrorCategory.OTHER
+    suggests_component_update: bool = False
 
 
 # 常见错误特征和对应的中文提示方案
@@ -30,11 +31,15 @@ YTDLP_ERRORS = [
             "Sign in to confirm youre not a bot",
             "Sign in to confirm",
             "This video is only available to registered users",
+            "Only images are available for download",
+            "Error solving n challenge",
+            "poToken",
         ],
-        title="需要验证 (Cookie 缺失或失效)",
-        description="YouTube 限制了对此视频的访问，必须进行身份验证。如果您的 IP 刚被检测为异常扫描，此限制通常需要等待 24-48 小时自动解除。",
-        action="建议操作：\n1. 导入最新鲜的浏览器 Cookie。\n2. 若导入后依然报错，说明当前 IP 节点已被严重拉黑，建议立即更换代理节点或等待 24 小时后再试。",
+        title="人机验证或需要更新组件",
+        description="YouTube 检测到异常的大量请求，或您的下载组件已无法通过最新的反爬虫检测（如 poToken 挑战）。",
+        action="建议操作：\n1. 【强烈推荐】在当前界面点击「一键检查并更新 yt-dlp」以获取最新的反爬修复补丁。\n2. 在「设置 > 账户」中获取或刷新您的浏览器 Cookie。\n3. 当前 IP 节点可能受限，尝试更换代理节点。",
         category=ErrorCategory.COOKIE,
+        suggests_component_update=True,
     ),
     ErrorDefinition(
         keywords=["Members only content"],
@@ -123,9 +128,10 @@ YTDLP_ERRORS = [
     ErrorDefinition(
         keywords=["HTTP Error 403"],
         title="访问被拒绝 (403)",
-        description="YouTube 拒绝了此请求。这可能是 Cookie 过期，也可能是网络节点被临时封锁（解封通常需等待 24 小时）。",
-        action="正在自动诊断原因，请稍候...",
+        description="YouTube 拒绝了此请求。这可能是组件反爬逻辑过期，也可能是网络节点被临时封锁（解封通常需等待 24 小时）。",
+        action="可以尝试一键更新 yt-dlp 组件，或更换网络节点。",
         category=ErrorCategory.AMBIGUOUS,
+        suggests_component_update=True,
     ),
     # ==================== 其他类 ====================
     ErrorDefinition(
@@ -181,12 +187,12 @@ def classify_error(error_msg: str) -> ErrorCategory:
     return ErrorCategory.OTHER
 
 
-def parse_ytdlp_error(error_msg: str) -> tuple[str, str]:
+def parse_ytdlp_error(error_msg: str) -> tuple[str, str, bool]:
     """
-    解析 yt-dlp 或 ffmpeg 的原始错误日志，返回对用户友好的 (标题, 描述) 元组。
+    解析 yt-dlp 或 ffmpeg 的原始错误日志，返回对用户友好的 (标题, 描述, 是否建议更新组件) 元组。
     """
     if not error_msg:
-        return "未知错误", "解析过程中发生未知错误。"
+        return "未知错误", "解析过程中发生未知错误。", False
 
     # 清理掉换行，方便匹配
     clean_msg = " ".join(error_msg.splitlines())
@@ -196,7 +202,7 @@ def parse_ytdlp_error(error_msg: str) -> tuple[str, str]:
             # 忽略大小写匹配
             if keyword.lower() in clean_msg.lower():
                 detail = f"{err_def.description}\n\n建议操作：{err_def.action}"
-                return err_def.title, detail
+                return err_def.title, detail, err_def.suggests_component_update
 
     # 兜底：未知错误，尽量提取 ERROR: 后面的内容
     match = re.search(r"ERROR:\s*(.*?)(?:\n|$)", error_msg, flags=re.IGNORECASE)
@@ -208,13 +214,14 @@ def parse_ytdlp_error(error_msg: str) -> tuple[str, str]:
         return (
             "解析失败",
             f"系统遇到无法识别的错误：\n{extracted}\n\n建议尝试更新核心组件，或检查链接是否有效。",
+            False,
         )
 
     # 如果连 ERROR 关键字都没找到，直接返回前 100 个字符
     fallback = error_msg.strip()
     if len(fallback) > 100:
         fallback = fallback[:97] + "..."
-    return "解析或下载失败", f"原始信息：\n{fallback}"
+    return "解析或下载失败", f"原始信息：\n{fallback}", False
 
 
 def probe_youtube_connectivity(timeout: float = 5.0) -> bool:

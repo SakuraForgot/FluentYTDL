@@ -168,9 +168,6 @@ class SingleLanguageStrategy(SubtitleStrategy):
             "writeautomaticsub": self.enable_auto,
             "subtitleslangs": [self.language],
         }
-        # 始终应用用户选择的字幕格式（影响外置文件格式和嵌入前的转换）
-        if config.format in ["srt", "ass", "vtt"]:
-            opts["convertsubtitles"] = config.format
         opts.update(embed_opts)
         return opts
 
@@ -211,9 +208,6 @@ class MultiLanguageStrategy(SubtitleStrategy):
             "writeautomaticsub": config.enable_auto_captions,
             "subtitleslangs": selected,
         }
-        # 始终应用用户选择的字幕格式（影响外置文件格式和嵌入前的转换）
-        if config.format in ["srt", "ass", "vtt"]:
-            opts["convertsubtitles"] = config.format
         opts.update(embed_opts)
         return opts
 
@@ -272,9 +266,6 @@ class SmartStrategy(SubtitleStrategy):
             "writeautomaticsub": config.enable_auto_captions,
             "subtitleslangs": selected,
         }
-        # 始终应用用户选择的字幕格式（影响外置文件格式和嵌入前的转换）
-        if config.format in ["srt", "ass", "vtt"]:
-            opts["convertsubtitles"] = config.format
         opts.update(embed_opts)
         return opts
 

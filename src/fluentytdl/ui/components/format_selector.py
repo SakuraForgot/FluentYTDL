@@ -28,6 +28,7 @@ from qfluentwidgets import (
 )
 
 from ...core.config_manager import config_manager
+from ...utils.format_scorer import ScoringContext, decide_merge_container, score_audio_format
 from .badges import QualityCellWidget
 
 
@@ -45,6 +46,7 @@ def _get_table_selection_qss() -> str:
     return f"""
 QTableWidget {{
     background-color: transparent;
+    selection-background-color: transparent;
     outline: none;
     border: none;
 }}
@@ -506,114 +508,93 @@ class VideoFormatSelectorWidget(QWidget):
             else:
                 self._selected_video_id = None
 
-    def _get_best_audio_id(self, audio_rows: list[dict]) -> str | None:
-        """自动推断最优的音频流 (基于用户设定的语言偏好序列)"""
+    def _get_best_audio_id(
+        self, audio_rows: list[dict], ctx: ScoringContext | None = None
+    ) -> str | None:
+        """
+        自动推断最优的音频流。
+
+        若传入 ctx，直接使用其 preferred_audio_langs；否则从 config_manager 读取。
+        评分委托给 format_scorer.score_audio_format，使用等差间距 + BCP-47 别名匹配，
+        彻底修复了旧版 10**i 指数间距在第 8 个偏好后 multiplier 归零的精度崩塌问题。
+        """
         if not audio_rows:
             return None
 
-        pref_langs = config_manager.get("preferred_audio_languages")
-        if not isinstance(pref_langs, list):
-            pref_langs = ["orig", "zh-Hans", "en"]
+        if ctx is None:
+            pref_langs = config_manager.get("preferred_audio_languages")
+            if not isinstance(pref_langs, list) or not pref_langs:
+                pref_langs = ["orig", "zh-Hans", "en"]
+            ctx = ScoringContext(preferred_audio_langs=pref_langs)
 
-        # Normalize user preferences
-        normalized_prefs = [str(x).strip().lower() for x in pref_langs if str(x).strip()]
-
-        # Helper to score an audio row based on user preference sequence
-        def _score_audio(r: dict) -> int:
-            lang = str(r.get("language") or "").strip().lower()
-            track_type = str(r.get("audio_track_type") or "").strip().lower()
-
-            is_orig = track_type == "original" or lang == "orig" or lang == "original"
-
-            # Baseline score is its bitrate
-            br = int(r.get("abr") or 0)
-
-            # Check match against the preference list
-            # Highest priority gets the largest multiplier
-            max_score = 10000000
-            for i, pref in enumerate(normalized_prefs):
-                multiplier = max_score // (10**i)
-
-                if pref == "orig" and is_orig:
-                    return multiplier + br
-
-                if pref == lang:
-                    return multiplier + br
-
-                # 模糊匹配：如果偏好写的是 zh-hans，但轨道给的是 zh，也应该命中
-                if "zh" in pref and "zh" in lang:
-                    return multiplier + br
-
-            # 没有任何匹配项的情况，看看有没有基础的 orig 或者 en 加分
-            if is_orig:
-                return 1000 + br
-            if lang == "en":
-                return 100 + br
-
-            return br
-
-        best_audio = max(audio_rows, key=_score_audio)
+        best_audio = max(audio_rows, key=lambda r: score_audio_format(r, ctx))
         return best_audio["format_id"]
 
     def _pick_best_video(self, video_rows: list[dict], intent: dict) -> str | None:
-        """根据预设意图从分离视频流中挑选最优项"""
+        """
+        根据预设意图从分离视频流中挑选最优项。
+
+        修复：容器偏好改为「硬约束先过滤，无结果再降级」，替代原先 +500 分的软偏好
+        （+500 在 1080p vs 720p 差异下完全被 h*10000 淹没，实际无效）。
+        """
         if not video_rows:
             return None
 
         max_height = intent.get("max_height")
         prefer_ext = intent.get("prefer_ext")
 
-        # 门槛过滤
-        candidates = video_rows
+        # 1. 分辨率上限过滤
+        pool = video_rows
         if max_height is not None:
-            candidates = [r for r in candidates if int(r.get("height") or 0) <= max_height]
-
-        if not candidates:
+            pool = [r for r in pool if int(r.get("height") or 0) <= max_height]
+        if not pool:
             return None
 
-        def _score_video(r: dict) -> int:
-            score = 0
-            h = int(r.get("height") or 0)
-            # 分辨率分（权重最高）
-            score += h * 10000
-            # 码率分
-            br = int(r.get("vbr") or r.get("tbr") or 0)
-            score += br
-            # 容器偏好分
-            if prefer_ext and str(r.get("ext") or "").lower() == prefer_ext:
-                score += 500
-            return score
+        # 2. 容器硬约束过滤（简易模式 + 有容器偏好时）：先尝试目标容器
+        if prefer_ext:
+            preferred_pool = [r for r in pool if str(r.get("ext") or "").lower() == prefer_ext]
+            if preferred_pool:
+                pool = preferred_pool
+            # 若目标容器无流，保留全集并由容器决策函数处理结果格式
 
-        best = max(candidates, key=_score_video)
+        # 3. 在约束后的候选集内按分辨率+码率排序
+        best = max(
+            pool,
+            key=lambda r: (
+                int(r.get("height") or 0),
+                int(r.get("vbr") or r.get("tbr") or 0),
+            ),
+        )
         return best["format_id"]
 
     def _pick_best_muxed(self, muxed_rows: list[dict], intent: dict) -> str | None:
-        """当没有分离流时，从整合流中挑选最优项"""
+        """
+        当没有分离流时，从整合流中挑选最优项（容器硬约束策略同 _pick_best_video）。
+        """
         if not muxed_rows:
             return None
 
         max_height = intent.get("max_height")
         prefer_ext = intent.get("prefer_ext")
 
-        candidates = muxed_rows
+        pool = muxed_rows
         if max_height is not None:
-            candidates = [r for r in candidates if int(r.get("height") or 0) <= max_height]
+            pool = [r for r in pool if int(r.get("height") or 0) <= max_height]
+        if not pool:
+            pool = muxed_rows  # 分辨率门槛无结果时回退全集
 
-        if not candidates:
-            # 如果门槛过滤后为空，退而使用全部整合流中分辨率最低的
-            candidates = muxed_rows
+        if prefer_ext:
+            preferred_pool = [r for r in pool if str(r.get("ext") or "").lower() == prefer_ext]
+            if preferred_pool:
+                pool = preferred_pool
 
-        def _score_muxed(r: dict) -> int:
-            score = 0
-            h = int(r.get("height") or 0)
-            score += h * 10000
-            br = int(r.get("vbr") or r.get("tbr") or 0)
-            score += br
-            if prefer_ext and str(r.get("ext") or "").lower() == prefer_ext:
-                score += 500
-            return score
-
-        best = max(candidates, key=_score_muxed)
+        best = max(
+            pool,
+            key=lambda r: (
+                int(r.get("height") or 0),
+                int(r.get("vbr") or r.get("tbr") or 0),
+            ),
+        )
         return best["format_id"]
 
     def _refresh_table(self):
@@ -831,7 +812,6 @@ class VideoFormatSelectorWidget(QWidget):
 
     def get_selection_result(self) -> dict:
         """Returns {format: str, extra_opts: dict} or {} if invalid."""
-        # Fix: Use self._current_mode instead of accessing routeKey() on items directly
         if getattr(self, "_current_mode", "simple") == "simple":
             sel = self.simple_widget.get_current_selection()
             if not sel:
@@ -843,9 +823,33 @@ class VideoFormatSelectorWidget(QWidget):
             audio_rows = [r for r in rows if r.get("kind") == "audio"]
             muxed_rows = [r for r in rows if r.get("kind") == "muxed"]
 
+            # ── 构建打分上下文（整合用户设置 + 预设意图 + 字幕配置）──────────
+            pref_langs = config_manager.get("preferred_audio_languages")
+            if not isinstance(pref_langs, list) or not pref_langs:
+                pref_langs = ["orig", "zh-Hans", "en"]
+
+            # 从字幕配置预填充字幕信息（决策时序：此处在 subtitle_service.apply 之前）
+            # 最终容器修正由 _ensure_subtitle_compatible_container 兜底，ctx 值仅作预判
+            sub_config = config_manager.get_subtitle_config()
+            sub_enabled = (
+                sub_config.enabled
+                and sub_config.embed_type == "soft"
+                and sub_config.embed_mode != "never"
+            )
+            sub_lang_count = len(sub_config.default_languages) if sub_enabled else 0
+
+            ctx = ScoringContext(
+                is_simple_mode=True,
+                max_height=intent.get("max_height"),
+                prefer_ext=intent.get("prefer_ext"),
+                preferred_audio_langs=pref_langs,
+                embed_subtitles=sub_enabled,
+                subtitle_lang_count=sub_lang_count,
+            )
+
             # --- 纯音频模式 ---
             if intent.get("type") == "audio_only":
-                best_aud = self._get_best_audio_id(audio_rows) if audio_rows else None
+                best_aud = self._get_best_audio_id(audio_rows, ctx) if audio_rows else None
                 extra: dict = {
                     "extract_audio": True,
                     "audio_format": intent.get("post_audio_format", "mp3"),
@@ -855,21 +859,20 @@ class VideoFormatSelectorWidget(QWidget):
 
             # --- 含视频模式：用打分引擎挑选最优视频+音频 ---
             best_vid = self._pick_best_video(video_rows, intent)
-            best_aud = self._get_best_audio_id(audio_rows) if audio_rows else None
+            best_aud = self._get_best_audio_id(audio_rows, ctx) if audio_rows else None
 
             extra_opts: dict = {}
 
             if best_vid and best_aud:
-                # 正常组装：视频+音频
+                # 正常组装：视频+音频，容器由统一决策函数确定
                 vid_ext = next(
                     (r.get("ext") for r in video_rows if r["format_id"] == best_vid), "mp4"
                 )
                 aud_ext = next(
                     (r.get("ext") for r in audio_rows if r["format_id"] == best_aud), "m4a"
                 )
-                merge_fmt = _choose_lossless_merge_container(vid_ext, aud_ext)
-                if merge_fmt:
-                    extra_opts["merge_output_format"] = merge_fmt
+                merge_fmt = decide_merge_container(vid_ext, aud_ext, ctx)
+                extra_opts["merge_output_format"] = merge_fmt
                 return {"format": f"{best_vid}+{best_aud}", "extra_opts": extra_opts}
 
             elif best_vid:
@@ -888,7 +891,7 @@ class VideoFormatSelectorWidget(QWidget):
             # 兜底
             return {"format": "best", "extra_opts": extra_opts}
         else:
-            # Advanced
+            # Advanced 模式：用户手动选定 format_id，容器仍用无损推断
             v = self._selected_video_id
             a = self._selected_audio_id
             m = self._selected_muxed_id
@@ -898,7 +901,6 @@ class VideoFormatSelectorWidget(QWidget):
                 opts["format"] = m
             elif v and a:
                 opts["format"] = f"{v}+{a}"
-                # Find ext to decide container
                 vext = next((r["ext"] for r in self._rows if r["format_id"] == v), "mp4")
                 aext = next((r["ext"] for r in self._rows if r["format_id"] == a), "m4a")
                 merge = _choose_lossless_merge_container(vext, aext)

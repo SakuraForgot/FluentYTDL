@@ -1,0 +1,588 @@
+[
+  {
+    "cell": null,
+    "code": "E402",
+    "end_location": {
+      "column": 23,
+      "row": 270
+    },
+    "filename": "E:\\YouTube\\FluentYTDL\\main.py",
+    "fix": null,
+    "location": {
+      "column": 1,
+      "row": 270
+    },
+    "message": "Module level import not at top of file",
+    "noqa_row": 270,
+    "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+  },
+  {
+    "cell": null,
+    "code": "E402",
+    "end_location": {
+      "column": 10,
+      "row": 114
+    },
+    "filename": "E:\\YouTube\\FluentYTDL\\scripts\\build.py",
+    "fix": null,
+    "location": {
+      "column": 1,
+      "row": 114
+    },
+    "message": "Module level import not at top of file",
+    "noqa_row": 114,
+    "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+  },
+  {
+    "cell": null,
+    "code": "B007",
+    "end_location": {
+      "column": 14,
+      "row": 72
+    },
+    "filename": "E:\\YouTube\\FluentYTDL\\src\\fluentytdl\\core\\controller.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "_i",
+          "end_location": {
+            "column": 14,
+            "row": 72
+          },
+          "location": {
+            "column": 13,
+            "row": 72
+          }
+        }
+      ],
+      "message": "Rename unused `i` to `_i`"
+    },
+    "location": {
+      "column": 13,
+      "row": 72
+    },
+    "message": "Loop control variable `i` not used within loop body",
+    "noqa_row": 72,
+    "url": "https://docs.astral.sh/ruff/rules/unused-loop-control-variable"
+  },
+  {
+    "cell": null,
+    "code": "UP008",
+    "end_location": {
+      "column": 51,
+      "row": 27
+    },
+    "filename": "E:\\YouTube\\FluentYTDL\\src\\fluentytdl\\storage\\task_db.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "",
+          "end_location": {
+            "column": 50,
+            "row": 27
+          },
+          "location": {
+            "column": 39,
+            "row": 27
+          }
+        }
+      ],
+      "message": "Remove `super()` parameters"
+    },
+    "location": {
+      "column": 38,
+      "row": 27
+    },
+    "message": "Use `super()` instead of `super(__class__, self)`",
+    "noqa_row": 27,
+    "url": "https://docs.astral.sh/ruff/rules/super-call-with-parameters"
+  },
+  {
+    "cell": null,
+    "code": "F821",
+    "end_location": {
+      "column": 43,
+      "row": 320
+    },
+    "filename": "E:\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\components\\download_config_window.py",
+    "fix": null,
+    "location": {
+      "column": 36,
+      "row": 320
+    },
+    "message": "Undefined name `QThread`",
+    "noqa_row": 320,
+    "url": "https://docs.astral.sh/ruff/rules/undefined-name"
+  },
+  {
+    "cell": null,
+    "code": "F821",
+    "end_location": {
+      "column": 19,
+      "row": 771
+    },
+    "filename": "E:\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\components\\download_config_window.py",
+    "fix": null,
+    "location": {
+      "column": 13,
+      "row": 771
+    },
+    "message": "Undefined name `logger`",
+    "noqa_row": 771,
+    "url": "https://docs.astral.sh/ruff/rules/undefined-name"
+  },
+  {
+    "cell": null,
+    "code": "F821",
+    "end_location": {
+      "column": 57,
+      "row": 1512
+    },
+    "filename": "E:\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\components\\download_config_window.py",
+    "fix": null,
+    "location": {
+      "column": 48,
+      "row": 1512
+    },
+    "message": "Undefined name `file_path`",
+    "noqa_row": 1512,
+    "url": "https://docs.astral.sh/ruff/rules/undefined-name"
+  },
+  {
+    "cell": null,
+    "code": "F821",
+    "end_location": {
+      "column": 45,
+      "row": 415
+    },
+    "filename": "E:\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\components\\legacy_playlist_widgets.py",
+    "fix": null,
+    "location": {
+      "column": 35,
+      "row": 415
+    },
+    "message": "Undefined name `YtMediaDTO`",
+    "noqa_row": 415,
+    "url": "https://docs.astral.sh/ruff/rules/undefined-name"
+  },
+  {
+    "cell": null,
+    "code": "F821",
+    "end_location": {
+      "column": 15,
+      "row": 2072
+    },
+    "filename": "E:\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\components\\selection_dialog.py",
+    "fix": null,
+    "location": {
+      "column": 9,
+      "row": 2072
+    },
+    "message": "Undefined name `logger`",
+    "noqa_row": 2072,
+    "url": "https://docs.astral.sh/ruff/rules/undefined-name"
+  },
+  {
+    "cell": null,
+    "code": "F821",
+    "end_location": {
+      "column": 27,
+      "row": 2102
+    },
+    "filename": "E:\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\components\\selection_dialog.py",
+    "fix": null,
+    "location": {
+      "column": 21,
+      "row": 2102
+    },
+    "message": "Undefined name `logger`",
+    "noqa_row": 2102,
+    "url": "https://docs.astral.sh/ruff/rules/undefined-name"
+  },
+  {
+    "cell": null,
+    "code": "F821",
+    "end_location": {
+      "column": 23,
+      "row": 2153
+    },
+    "filename": "E:\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\components\\selection_dialog.py",
+    "fix": null,
+    "location": {
+      "column": 17,
+      "row": 2153
+    },
+    "message": "Undefined name `logger`",
+    "noqa_row": 2153,
+    "url": "https://docs.astral.sh/ruff/rules/undefined-name"
+  },
+  {
+    "cell": null,
+    "code": "F841",
+    "end_location": {
+      "column": 15,
+      "row": 127
+    },
+    "filename": "E:\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\delegates\\download_item_delegate.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "",
+          "end_location": {
+            "column": 18,
+            "row": 127
+          },
+          "location": {
+            "column": 9,
+            "row": 127
+          }
+        }
+      ],
+      "message": "Remove assignment to unused variable `v_prog`"
+    },
+    "location": {
+      "column": 9,
+      "row": 127
+    },
+    "message": "Local variable `v_prog` is assigned to but never used",
+    "noqa_row": 127,
+    "url": "https://docs.astral.sh/ruff/rules/unused-variable"
+  },
+  {
+    "cell": null,
+    "code": "F841",
+    "end_location": {
+      "column": 19,
+      "row": 128
+    },
+    "filename": "E:\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\delegates\\download_item_delegate.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "",
+          "end_location": {
+            "column": 22,
+            "row": 128
+          },
+          "location": {
+            "column": 9,
+            "row": 128
+          }
+        }
+      ],
+      "message": "Remove assignment to unused variable `v_size_str`"
+    },
+    "location": {
+      "column": 9,
+      "row": 128
+    },
+    "message": "Local variable `v_size_str` is assigned to but never used",
+    "noqa_row": 128,
+    "url": "https://docs.astral.sh/ruff/rules/unused-variable"
+  },
+  {
+    "cell": null,
+    "code": "F841",
+    "end_location": {
+      "column": 20,
+      "row": 129
+    },
+    "filename": "E:\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\delegates\\download_item_delegate.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "",
+          "end_location": {
+            "column": 23,
+            "row": 129
+          },
+          "location": {
+            "column": 9,
+            "row": 129
+          }
+        }
+      ],
+      "message": "Remove assignment to unused variable `v_speed_str`"
+    },
+    "location": {
+      "column": 9,
+      "row": 129
+    },
+    "message": "Local variable `v_speed_str` is assigned to but never used",
+    "noqa_row": 129,
+    "url": "https://docs.astral.sh/ruff/rules/unused-variable"
+  },
+  {
+    "cell": null,
+    "code": "F841",
+    "end_location": {
+      "column": 15,
+      "row": 131
+    },
+    "filename": "E:\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\delegates\\download_item_delegate.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "",
+          "end_location": {
+            "column": 18,
+            "row": 131
+          },
+          "location": {
+            "column": 9,
+            "row": 131
+          }
+        }
+      ],
+      "message": "Remove assignment to unused variable `a_prog`"
+    },
+    "location": {
+      "column": 9,
+      "row": 131
+    },
+    "message": "Local variable `a_prog` is assigned to but never used",
+    "noqa_row": 131,
+    "url": "https://docs.astral.sh/ruff/rules/unused-variable"
+  },
+  {
+    "cell": null,
+    "code": "F841",
+    "end_location": {
+      "column": 19,
+      "row": 132
+    },
+    "filename": "E:\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\delegates\\download_item_delegate.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "",
+          "end_location": {
+            "column": 22,
+            "row": 132
+          },
+          "location": {
+            "column": 9,
+            "row": 132
+          }
+        }
+      ],
+      "message": "Remove assignment to unused variable `a_size_str`"
+    },
+    "location": {
+      "column": 9,
+      "row": 132
+    },
+    "message": "Local variable `a_size_str` is assigned to but never used",
+    "noqa_row": 132,
+    "url": "https://docs.astral.sh/ruff/rules/unused-variable"
+  },
+  {
+    "cell": null,
+    "code": "F841",
+    "end_location": {
+      "column": 20,
+      "row": 133
+    },
+    "filename": "E:\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\delegates\\download_item_delegate.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "",
+          "end_location": {
+            "column": 23,
+            "row": 133
+          },
+          "location": {
+            "column": 9,
+            "row": 133
+          }
+        }
+      ],
+      "message": "Remove assignment to unused variable `a_speed_str`"
+    },
+    "location": {
+      "column": 9,
+      "row": 133
+    },
+    "message": "Local variable `a_speed_str` is assigned to but never used",
+    "noqa_row": 133,
+    "url": "https://docs.astral.sh/ruff/rules/unused-variable"
+  },
+  {
+    "cell": null,
+    "code": "B008",
+    "end_location": {
+      "column": 59,
+      "row": 38
+    },
+    "filename": "E:\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\models\\download_list_model.py",
+    "fix": null,
+    "location": {
+      "column": 46,
+      "row": 38
+    },
+    "message": "Do not perform function call `QModelIndex` in argument defaults; instead, perform the call within the function, or read the default from a module-level singleton variable",
+    "noqa_row": 38,
+    "url": "https://docs.astral.sh/ruff/rules/function-call-in-default-argument"
+  },
+  {
+    "cell": null,
+    "code": "B008",
+    "end_location": {
+      "column": 59,
+      "row": 39
+    },
+    "filename": "E:\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\models\\history_model.py",
+    "fix": null,
+    "location": {
+      "column": 46,
+      "row": 39
+    },
+    "message": "Do not perform function call `QModelIndex` in argument defaults; instead, perform the call within the function, or read the default from a module-level singleton variable",
+    "noqa_row": 39,
+    "url": "https://docs.astral.sh/ruff/rules/function-call-in-default-argument"
+  },
+  {
+    "cell": null,
+    "code": "B008",
+    "end_location": {
+      "column": 59,
+      "row": 39
+    },
+    "filename": "E:\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\models\\playlist_model.py",
+    "fix": null,
+    "location": {
+      "column": 46,
+      "row": 39
+    },
+    "message": "Do not perform function call `QModelIndex` in argument defaults; instead, perform the call within the function, or read the default from a module-level singleton variable",
+    "noqa_row": 39,
+    "url": "https://docs.astral.sh/ruff/rules/function-call-in-default-argument"
+  },
+  {
+    "cell": null,
+    "code": "F821",
+    "end_location": {
+      "column": 79,
+      "row": 728
+    },
+    "filename": "E:\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\reimagined_main_window.py",
+    "fix": null,
+    "location": {
+      "column": 61,
+      "row": 728
+    },
+    "message": "Undefined name `DownloadItemWidget`",
+    "noqa_row": 728,
+    "url": "https://docs.astral.sh/ruff/rules/undefined-name"
+  },
+  {
+    "cell": null,
+    "code": "F821",
+    "end_location": {
+      "column": 80,
+      "row": 781
+    },
+    "filename": "E:\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\reimagined_main_window.py",
+    "fix": null,
+    "location": {
+      "column": 62,
+      "row": 781
+    },
+    "message": "Undefined name `DownloadItemWidget`",
+    "noqa_row": 781,
+    "url": "https://docs.astral.sh/ruff/rules/undefined-name"
+  },
+  {
+    "cell": null,
+    "code": "F821",
+    "end_location": {
+      "column": 57,
+      "row": 138
+    },
+    "filename": "E:\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\unified_task_list_page.py",
+    "fix": null,
+    "location": {
+      "column": 50,
+      "row": 138
+    },
+    "message": "Undefined name `QPixmap`",
+    "noqa_row": 138,
+    "url": "https://docs.astral.sh/ruff/rules/undefined-name"
+  },
+  {
+    "cell": null,
+    "code": "F821",
+    "end_location": {
+      "column": 61,
+      "row": 348
+    },
+    "filename": "E:\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\unified_task_list_page.py",
+    "fix": null,
+    "location": {
+      "column": 58,
+      "row": 348
+    },
+    "message": "Undefined name `Any`",
+    "noqa_row": 348,
+    "url": "https://docs.astral.sh/ruff/rules/undefined-name"
+  },
+  {
+    "cell": null,
+    "code": "F841",
+    "end_location": {
+      "column": 14,
+      "row": 60
+    },
+    "filename": "E:\\YouTube\\FluentYTDL\\src\\fluentytdl\\utils\\clean_logger.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "",
+          "end_location": {
+            "column": 1,
+            "row": 61
+          },
+          "location": {
+            "column": 1,
+            "row": 60
+          }
+        }
+      ],
+      "message": "Remove assignment to unused variable `state`"
+    },
+    "location": {
+      "column": 9,
+      "row": 60
+    },
+    "message": "Local variable `state` is assigned to but never used",
+    "noqa_row": 60,
+    "url": "https://docs.astral.sh/ruff/rules/unused-variable"
+  },
+  {
+    "cell": null,
+    "code": "E741",
+    "end_location": {
+      "column": 6,
+      "row": 38
+    },
+    "filename": "E:\\YouTube\\FluentYTDL\\src\\fluentytdl\\utils\\format_scorer.py",
+    "fix": null,
+    "location": {
+      "column": 5,
+      "row": 38
+    },
+    "message": "Ambiguous variable name: `l`",
+    "noqa_row": 38,
+    "url": "https://docs.astral.sh/ruff/rules/ambiguous-variable-name"
+  }
+]

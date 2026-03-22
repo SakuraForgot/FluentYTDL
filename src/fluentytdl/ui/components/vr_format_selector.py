@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QHeaderView,
+    QStackedWidget,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -133,6 +134,7 @@ def _get_table_selection_qss() -> str:
     return f"""
 QTableWidget {{
     background-color: transparent;
+    selection-background-color: transparent;
     outline: none;
     border: none;
 }}
@@ -199,6 +201,8 @@ def _choose_lossless_merge_container(video_ext: str | None, audio_ext: str | Non
 class VRPresetWidget(QWidget):
     """VR 简易模式：场景化预设卡片列表"""
 
+    presetSelected = Signal()
+
     def __init__(self, parent=None):
         super().__init__(parent)
 
@@ -218,6 +222,7 @@ class VRPresetWidget(QWidget):
         self.v_layout.setContentsMargins(10, 10, 10, 10)
 
         self.btn_group = QButtonGroup(self)
+        self.btn_group.buttonClicked.connect(self.presetSelected)
         self.radios: list[RadioButton] = []
 
         for i, (pid, title, desc, fmt, args) in enumerate(VR_PRESETS):
@@ -293,7 +298,8 @@ class VRFormatTableWidget(QWidget):
         self.mode_combo = ComboBox(self)
         self.mode_combo.addItems(
             [
-                "\u7ec4\u5408 (\u89c6\u9891 + \u97f3\u9891)",
+                "\u97f3\u89c6\u9891\uff08\u53ef\u7ec4\u88c5\uff09",
+                "\u97f3\u89c6\u9891\uff08\u6574\u5408\u6d41\uff09",
                 "\u4ec5\u89c6\u9891",
                 "\u4ec5\u97f3\u9891",
             ]
@@ -301,6 +307,11 @@ class VRFormatTableWidget(QWidget):
         self.mode_combo.setCurrentIndex(0)
         self.mode_combo.currentIndexChanged.connect(self._on_mode_changed)
         layout.addWidget(self.mode_combo)
+
+        self.hint_label = CaptionLabel(
+            "提示：可组装模式仅显示分离流，分别点选“视频”和“音频”即可组装。", self
+        )
+        layout.addWidget(self.hint_label)
 
         # VR 过滤器
         filter_row = QHBoxLayout()
@@ -428,6 +439,20 @@ class VRFormatTableWidget(QWidget):
 
         layout.addWidget(self.split_container)
 
+        # Single Container (for video-only / audio-only modes)
+        self.single_table = QTableWidget(self)
+        self.single_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.single_table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self.single_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.single_table.verticalHeader().setVisible(False)
+        self.single_table.setStyleSheet(_get_table_selection_qss())
+        self.single_table.setShowGrid(False)
+        self.single_table.setAlternatingRowColors(True)
+        self.single_table.setWordWrap(False)
+        self.single_table.itemSelectionChanged.connect(self._on_single_selected)
+        self.single_table.hide()
+        layout.addWidget(self.single_table)
+
         # 选择摘要
         self.summary_label = CaptionLabel("", self)
         layout.addWidget(self.summary_label)
@@ -435,8 +460,11 @@ class VRFormatTableWidget(QWidget):
         # 内部状态
         self._video_rows: list[dict[str, Any]] = []
         self._audio_rows: list[dict[str, Any]] = []
+        self._muxed_rows: list[dict[str, Any]] = []
         self._selected_video_id: str | None = None
         self._selected_audio_id: str | None = None
+        self._selected_muxed_id: str | None = None
+        self._single_rows: list[dict[str, Any]] = []
 
         # 保存原始格式列表引用（过滤器刷新时用）
         self._all_video_fmts: list[dict[str, Any]] = []
@@ -448,6 +476,8 @@ class VRFormatTableWidget(QWidget):
     def _on_filter_changed(self, _state: int = 0) -> None:
         """过滤器勾选变化时重新填充视频表"""
         self._fill_video_table(self._all_video_fmts)
+        self._refresh_mode_tables()
+        self._update_label()
 
     # ── 填充表格 ──
 
@@ -458,44 +488,93 @@ class VRFormatTableWidget(QWidget):
         compatible_ids = set(info.get("__android_vr_format_ids") or [])
         should_filter = bool(compatible_ids)
 
-        # 视频流（有 vcodec 且不是 none）
-        video_fmts: list[dict[str, Any]] = []
-        for f in formats:
-            if not isinstance(f, dict):
-                continue
-            fid = str(f.get("format_id") or "")
-            if should_filter and fid not in compatible_ids:
-                continue
-            if f.get("vcodec") in (None, "none"):
-                continue
-            h = int(f.get("height") or 0)
-            if h < 360:
-                continue
-            video_fmts.append(f)
+        def _collect_video_rows(
+            use_compat_filter: bool,
+        ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+            videos: list[dict[str, Any]] = []
+            muxed: list[dict[str, Any]] = []
+            for f in formats:
+                if not isinstance(f, dict):
+                    continue
+                fid = str(f.get("format_id") or "")
+                if use_compat_filter and fid not in compatible_ids:
+                    continue
+                if f.get("vcodec") in (None, "none"):
+                    continue
+                if f.get("acodec") not in (None, "none"):
+                    muxed.append(f)
+                h = int(f.get("height") or 0)
+                if h < 360:
+                    continue
+                videos.append(f)
+            return videos, muxed
+
+        def _collect_audio_rows(use_compat_filter: bool) -> list[dict[str, Any]]:
+            audios: list[dict[str, Any]] = []
+            for f in formats:
+                if not isinstance(f, dict):
+                    continue
+                fid = str(f.get("format_id") or "")
+                if use_compat_filter and fid not in compatible_ids:
+                    continue
+                if f.get("vcodec") != "none":
+                    continue
+                if f.get("acodec") in (None, "none"):
+                    continue
+                abr_raw = f.get("abr") or f.get("tbr") or 0
+                try:
+                    abr = int(float(abr_raw) or 0)
+                except Exception:
+                    abr = 0
+                if abr <= 0:
+                    continue
+                audios.append({**f, "_abr": abr})
+            return audios
+
+        # 先按兼容集合过滤；若结果异常收窄（典型症状：只剩 360p / 音频为空），自动回退。
+        video_fmts, muxed_fmts = _collect_video_rows(should_filter)
+        audio_fmts = _collect_audio_rows(should_filter)
+
+        if should_filter:
+            raw_video_fmts, raw_muxed_fmts = _collect_video_rows(False)
+            raw_audio_fmts = _collect_audio_rows(False)
+
+            max_filtered_h = max((int(f.get("height") or 0) for f in video_fmts), default=0)
+            max_raw_h = max((int(f.get("height") or 0) for f in raw_video_fmts), default=0)
+
+            collapsed_to_360 = max_filtered_h <= 360 < max_raw_h
+            audio_lost = (not audio_fmts) and bool(raw_audio_fmts)
+            too_few_video = len(video_fmts) <= 1 and len(raw_video_fmts) >= 3
+
+            if collapsed_to_360 or audio_lost or too_few_video:
+                video_fmts = raw_video_fmts
+                muxed_fmts = raw_muxed_fmts
+                audio_fmts = raw_audio_fmts
 
         self._all_video_fmts = video_fmts
         self._fill_video_table(video_fmts)
 
+        # 整合流（用于“音视频（整合流）”模式）
+        self._muxed_rows = []
+        for f in muxed_fmts:
+            h = int(f.get("height") or 0)
+            if h < 144:
+                continue
+            self._muxed_rows.append(
+                {
+                    "format_id": str(f.get("format_id") or ""),
+                    "height": h,
+                    "ext": str(f.get("ext") or "?"),
+                    "fps": f.get("fps"),
+                    "filesize": f.get("filesize") or f.get("filesize_approx"),
+                    "vcodec": str(f.get("vcodec") or "none"),
+                    "acodec": str(f.get("acodec") or "none"),
+                    "dynamic_range": f.get("dynamic_range"),
+                }
+            )
+        self._muxed_rows.sort(key=lambda x: int(x.get("height") or 0), reverse=True)
+
         # 音频流
-        audio_fmts: list[dict[str, Any]] = []
-        for f in formats:
-            if not isinstance(f, dict):
-                continue
-            fid = str(f.get("format_id") or "")
-            if should_filter and fid not in compatible_ids:
-                continue
-            if f.get("vcodec") != "none":
-                continue
-            if f.get("acodec") in (None, "none"):
-                continue
-            abr_raw = f.get("abr") or f.get("tbr") or 0
-            try:
-                abr = int(float(abr_raw) or 0)
-            except Exception:
-                abr = 0
-            if abr <= 0:
-                continue
-            audio_fmts.append({**f, "_abr": abr})
         audio_fmts.sort(key=lambda x: x["_abr"], reverse=True)
 
         self.audio_table.setRowCount(len(audio_fmts))
@@ -541,11 +620,31 @@ class VRFormatTableWidget(QWidget):
             self.audio_table.setItem(i, 2, item)
             self.audio_table.setCellWidget(i, 2, d_w)
 
-            self._audio_rows.append({"format_id": fid, "abr": abr, "ext": ext})
+            self._audio_rows.append(
+                {
+                    "format_id": fid,
+                    "abr": abr,
+                    "ext": ext,
+                    "filesize": f.get("filesize") or f.get("filesize_approx"),
+                    "acodec": str(f.get("acodec") or "none"),
+                    "dynamic_range": f.get("dynamic_range"),
+                    "vcodec": str(f.get("vcodec") or "none"),
+                }
+            )
 
         # 默认选中第一行音频
         if self._audio_rows:
-            self.audio_table.selectRow(0)
+            preferred = self._selected_audio_id
+            selected_row = 0
+            if preferred:
+                for idx, row in enumerate(self._audio_rows):
+                    if str(row.get("format_id") or "") == preferred:
+                        selected_row = idx
+                        break
+            self.audio_table.selectRow(selected_row)
+
+        self._refresh_mode_tables()
+        self._update_label()
 
     def _fill_video_table(self, video_fmts: list[dict[str, Any]]) -> None:
         """根据过滤器和投影排序填充视频表"""
@@ -677,22 +776,271 @@ class VRFormatTableWidget(QWidget):
             self.video_table.setItem(i, 4, item)
             self.video_table.setCellWidget(i, 4, d_w)
 
-            self._video_rows.append({"format_id": fid, "height": h, "ext": ext})
+            self._video_rows.append(
+                {
+                    "format_id": fid,
+                    "height": h,
+                    "ext": ext,
+                    "fps": f.get("fps"),
+                    "filesize": f.get("filesize") or f.get("filesize_approx"),
+                    "vcodec": str(f.get("vcodec") or "none"),
+                    "acodec": str(f.get("acodec") or "none"),
+                    "dynamic_range": f.get("dynamic_range"),
+                    "__vr_projection": f.get("__vr_projection"),
+                    "__vr_stereo_mode": f.get("__vr_stereo_mode"),
+                }
+            )
 
-        # 自动选中第一行
+        # 自动选中行（尽量保留用户上次选择）
         if self._video_rows:
-            self.video_table.selectRow(0)
+            preferred = self._selected_video_id
+            selected_row = 0
+            if preferred:
+                for idx, row in enumerate(self._video_rows):
+                    if str(row.get("format_id") or "") == preferred:
+                        selected_row = idx
+                        break
+            self.video_table.selectRow(selected_row)
 
     # ── 事件 ──
 
     def _on_mode_changed(self, index: int) -> None:
-        # 0=组合, 1=仅视频, 2=仅音频
-        self.video_label.setVisible(index != 2)
-        self.video_table.setVisible(index != 2)
-        self.audio_label.setVisible(index != 1)
-        self.audio_table.setVisible(index != 1)
-        self._update_summary()
+        # 0=可组装, 1=整合流, 2=仅视频, 3=仅音频
+        self._refresh_mode_tables()
+        self._update_label()
         self.selectionChanged.emit()
+
+    def _refresh_mode_tables(self) -> None:
+        mode = self.mode_combo.currentIndex()
+        self.hint_label.setVisible(mode == 0)
+
+        if mode == 0:
+            self.split_container.show()
+            self.single_table.hide()
+            return
+
+        self.split_container.hide()
+        self.single_table.show()
+
+        if mode == 1:
+            # 音视频（整合流）
+            rows = list(self._muxed_rows)
+            if not self._selected_muxed_id and rows:
+                self._selected_muxed_id = str(rows[0].get("format_id") or "") or None
+            selected_id = self._selected_muxed_id
+            self._populate_single_table(rows, selected_id, content_kind="muxed")
+        elif mode == 2:
+            # 仅视频
+            rows = list(self._video_rows)
+            if not self._selected_video_id and rows:
+                self._selected_video_id = str(rows[0].get("format_id") or "") or None
+            selected_id = self._selected_video_id
+            self._populate_single_table(rows, selected_id, content_kind="video")
+        else:
+            # 仅音频
+            rows = list(self._audio_rows)
+            if not self._selected_audio_id and rows:
+                self._selected_audio_id = str(rows[0].get("format_id") or "") or None
+            selected_id = self._selected_audio_id
+            self._populate_single_table(rows, selected_id, content_kind="audio")
+
+    def _populate_single_table(
+        self,
+        rows: list[dict[str, Any]],
+        selected_id: str | None,
+        *,
+        content_kind: str,
+    ) -> None:
+        self._single_rows = rows
+
+        self.single_table.clearContents()
+        self.single_table.setRowCount(len(rows))
+        is_video_like = content_kind in {"video"}
+        if is_video_like:
+            self.single_table.setColumnCount(5)
+            self.single_table.setHorizontalHeaderLabels(["类型", "质量", "立体", "投影", "详情"])
+        else:
+            self.single_table.setColumnCount(3)
+            self.single_table.setHorizontalHeaderLabels(["类型", "质量", "详情"])
+        try:
+            self.single_table.verticalHeader().setDefaultSectionSize(42)
+            if is_video_like:
+                self.single_table.horizontalHeader().setSectionResizeMode(
+                    0, QHeaderView.ResizeMode.Fixed
+                )
+                self.single_table.horizontalHeader().setSectionResizeMode(
+                    1, QHeaderView.ResizeMode.Fixed
+                )
+                self.single_table.horizontalHeader().setSectionResizeMode(
+                    2, QHeaderView.ResizeMode.Fixed
+                )
+                self.single_table.horizontalHeader().setSectionResizeMode(
+                    3, QHeaderView.ResizeMode.Fixed
+                )
+                self.single_table.horizontalHeader().setSectionResizeMode(
+                    4, QHeaderView.ResizeMode.Stretch
+                )
+                self.single_table.setColumnWidth(0, 60)
+                self.single_table.setColumnWidth(1, 130)
+                self.single_table.setColumnWidth(2, 100)
+                self.single_table.setColumnWidth(3, 80)
+            else:
+                self.single_table.horizontalHeader().setSectionResizeMode(
+                    0, QHeaderView.ResizeMode.Fixed
+                )
+                self.single_table.horizontalHeader().setSectionResizeMode(
+                    1, QHeaderView.ResizeMode.Fixed
+                )
+                self.single_table.horizontalHeader().setSectionResizeMode(
+                    2, QHeaderView.ResizeMode.Stretch
+                )
+                self.single_table.setColumnWidth(0, 60)
+                self.single_table.setColumnWidth(1, 130)
+        except Exception:
+            pass
+
+        selected_row = -1
+        for i, row in enumerate(rows):
+            fid = str(row.get("format_id") or "")
+
+            # Col 0: Type icon
+            icon_container = QWidget()
+            icon_container.setStyleSheet("background: transparent;")
+            icon_layout = QHBoxLayout(icon_container)
+            icon_layout.setContentsMargins(0, 0, 0, 0)
+            icon_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            icon = FluentIcon.MUSIC if content_kind == "audio" else FluentIcon.VIDEO
+            iw = IconWidget(icon)
+            iw.setFixedSize(16, 16)
+            icon_layout.addWidget(iw)
+            self.single_table.setItem(i, 0, QTableWidgetItem(""))
+            self.single_table.setCellWidget(i, 0, icon_container)
+
+            # Col 1: Quality
+            if content_kind in {"video", "muxed"}:
+                quality_text = f"{int(row.get('height') or 0)}p"
+                try:
+                    fps = row.get("fps")
+                    if fps and float(fps) > 30:
+                        quality_text += f" {int(float(fps))}fps"
+                except Exception:
+                    pass
+            else:
+                quality_text = f"{int(row.get('abr') or 0)}kbps"
+
+            q_badges: list[tuple[str, str]] = []
+            if row.get("dynamic_range") and "HDR" in str(row.get("dynamic_range")):
+                q_badges.append(("HDR", "blue"))
+            self.single_table.setCellWidget(
+                i,
+                1,
+                QualityCellWidget(
+                    q_badges,
+                    quality_text,
+                    parent=self.single_table,
+                    alignment=Qt.AlignmentFlag.AlignCenter,
+                ),
+            )
+
+            # Col 2: Details
+            ext = str(row.get("ext") or "?")
+            sz = _format_size(row.get("filesize"))
+            fid = str(row.get("format_id") or "?")
+            if content_kind == "audio":
+                acodec_short = str(row.get("acodec") or "?")[:12]
+                detail_text = f"{ext} • {acodec_short} • {sz} • {fid}"
+            elif content_kind == "video":
+                vcodec_short = str(row.get("vcodec") or "?")[:12]
+                detail_text = f"{ext} • {vcodec_short} • {sz} • {fid}"
+            else:
+                detail_text = f"{ext} • {sz} • {fid}"
+            detail_tags: list[tuple[str, str]] = []
+            if content_kind in {"video", "muxed"}:
+                vc = str(row.get("vcodec") or "none").lower()
+                if "av01" in vc:
+                    detail_tags.append(("AV1", "blue"))
+                elif "vp9" in vc:
+                    detail_tags.append(("VP9", "green"))
+                elif "avc1" in vc or "h264" in vc:
+                    detail_tags.append(("H.264", "gray"))
+            if content_kind in {"audio", "muxed"}:
+                ac = str(row.get("acodec") or "none").lower()
+                if "opus" in ac:
+                    detail_tags.append(("Opus", "green"))
+                elif "mp4a" in ac or "aac" in ac:
+                    detail_tags.append(("AAC", "gray"))
+
+            if is_video_like:
+                stereo = str(row.get("__vr_stereo_mode") or "unknown")
+                stereo_badge: list[tuple[str, str]] = []
+                if stereo.startswith("stereo"):
+                    label = "3D TB" if stereo == "stereo_tb" else "3D SBS"
+                    stereo_badge.append((label, "blue"))
+                elif stereo == "mono":
+                    stereo_badge.append(("2D", "gray"))
+                else:
+                    stereo_badge.append(("?", "gray"))
+                self.single_table.setCellWidget(
+                    i,
+                    2,
+                    QualityCellWidget(
+                        stereo_badge,
+                        "",
+                        parent=self.single_table,
+                        alignment=Qt.AlignmentFlag.AlignCenter,
+                    ),
+                )
+
+                proj = str(row.get("__vr_projection") or "unknown")
+                proj_badge: list[tuple[str, str]] = []
+                if proj == "equirectangular":
+                    proj_badge.append(("Equi", "green"))
+                elif proj == "mesh":
+                    proj_badge.append(("Mesh", "orange"))
+                elif proj == "eac":
+                    proj_badge.append(("EAC", "red"))
+                else:
+                    proj_badge.append(("?", "gray"))
+                self.single_table.setCellWidget(
+                    i,
+                    3,
+                    QualityCellWidget(
+                        proj_badge,
+                        "",
+                        parent=self.single_table,
+                        alignment=Qt.AlignmentFlag.AlignCenter,
+                    ),
+                )
+
+                self.single_table.setItem(i, 4, QTableWidgetItem(""))
+                self.single_table.setCellWidget(
+                    i,
+                    4,
+                    QualityCellWidget(
+                        detail_tags,
+                        detail_text,
+                        parent=self.single_table,
+                        alignment=Qt.AlignmentFlag.AlignCenter,
+                    ),
+                )
+            else:
+                self.single_table.setItem(i, 2, QTableWidgetItem(""))
+                self.single_table.setCellWidget(
+                    i,
+                    2,
+                    QualityCellWidget(
+                        detail_tags,
+                        detail_text,
+                        parent=self.single_table,
+                        alignment=Qt.AlignmentFlag.AlignCenter,
+                    ),
+                )
+
+            if selected_id and fid == selected_id:
+                selected_row = i
+
+        if rows:
+            self.single_table.selectRow(selected_row if selected_row >= 0 else 0)
 
     def _on_video_selected(self) -> None:
         rows = self.video_table.selectionModel().selectedRows()
@@ -700,7 +1048,7 @@ class VRFormatTableWidget(QWidget):
             r = rows[0].row()
             if 0 <= r < len(self._video_rows):
                 self._selected_video_id = self._video_rows[r]["format_id"]
-        self._update_summary()
+        self._update_label()
         self.selectionChanged.emit()
 
     def _on_audio_selected(self) -> None:
@@ -709,37 +1057,76 @@ class VRFormatTableWidget(QWidget):
             r = rows[0].row()
             if 0 <= r < len(self._audio_rows):
                 self._selected_audio_id = self._audio_rows[r]["format_id"]
-        self._update_summary()
+        self._update_label()
         self.selectionChanged.emit()
 
-    def _update_summary(self) -> None:
+    def _on_single_selected(self) -> None:
         mode = self.mode_combo.currentIndex()
-        parts = []
-        if mode != 2 and self._selected_video_id:
-            parts.append(f"\u89c6\u9891: {self._selected_video_id}")
-        if mode != 1 and self._selected_audio_id:
-            parts.append(f"\u97f3\u9891: {self._selected_audio_id}")
-        self.summary_label.setText(
-            "  |  ".join(parts) if parts else "\u8bf7\u9009\u62e9\u683c\u5f0f"
-        )
+        rows = self.single_table.selectionModel().selectedRows()
+        if not rows:
+            return
+        r = rows[0].row()
+        if not (0 <= r < len(self._single_rows)):
+            return
+
+        fid = str(self._single_rows[r].get("format_id") or "")
+        if not fid:
+            return
+
+        if mode == 1:
+            self._selected_muxed_id = fid
+        elif mode == 2:
+            self._selected_video_id = fid
+        elif mode == 3:
+            self._selected_audio_id = fid
+
+        self._update_label()
+        self.selectionChanged.emit()
+
+    def _update_label(self) -> None:
+        mode = self.mode_combo.currentIndex()
+        label = self.summary_label
+
+        if mode == 1:
+            label.setText("已选：整合流" if self._selected_muxed_id else "请选择：整合流")
+        elif mode == 2:
+            label.setText("已选：视频流" if self._selected_video_id else "请选择：视频流")
+        elif mode == 3:
+            label.setText("已选：音频流" if self._selected_audio_id else "请选择：音频流")
+        else:
+            if self._selected_video_id and self._selected_audio_id:
+                label.setText("已选：视频流 + 音频流")
+            elif self._selected_video_id:
+                label.setText("已选：视频流（将自动匹配最佳音频）")
+            elif self._selected_audio_id:
+                label.setText("已选：音频流（请再选择一个视频流）")
+            else:
+                label.setText("未选择")
 
     # ── 公开接口 ──
 
     def get_selection_result(self) -> dict[str, Any]:
         mode = self.mode_combo.currentIndex()
 
-        if mode == 2:
+        if mode == 3:
             # 仅音频
             aid = self._selected_audio_id
             return {
                 "format": str(aid) if aid else "bestaudio/best",
                 "extra_opts": {},
             }
-        elif mode == 1:
+        elif mode == 2:
             # 仅视频
             vid = self._selected_video_id
             return {
                 "format": str(vid) if vid else "bestvideo/best",
+                "extra_opts": {},
+            }
+        elif mode == 1:
+            # 整合流
+            muxed = self._selected_muxed_id
+            return {
+                "format": str(muxed) if muxed else "best",
                 "extra_opts": {},
             }
         else:
@@ -795,23 +1182,21 @@ class VRFormatSelectorWidget(QWidget):
         self.mode_seg.currentItemChanged.connect(self._on_mode_switch)
         layout.addWidget(self.mode_seg)
 
+        self.stack = QStackedWidget(self)
+        layout.addWidget(self.stack)
+
         # 简易模式
         self.preset_widget = VRPresetWidget(self)
-        layout.addWidget(self.preset_widget)
+        self.preset_widget.presetSelected.connect(self.selectionChanged)
+        self.stack.addWidget(self.preset_widget)
 
         # 专业模式
         self.pro_widget = VRFormatTableWidget(info, self)
         self.pro_widget.selectionChanged.connect(self.selectionChanged)
-        self.pro_widget.hide()
-        layout.addWidget(self.pro_widget)
+        self.stack.addWidget(self.pro_widget)
 
     def _on_mode_switch(self, key: str) -> None:
-        if key == "simple":
-            self.preset_widget.show()
-            self.pro_widget.hide()
-        else:
-            self.preset_widget.hide()
-            self.pro_widget.show()
+        self.stack.setCurrentIndex(0 if key == "simple" else 1)
         self.selectionChanged.emit()
 
     def get_selection_result(self) -> dict[str, Any]:

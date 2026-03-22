@@ -174,58 +174,6 @@ def get_subtitle_languages(info: dict[str, Any]) -> list[dict[str, Any]]:
     return sorted(seen.values(), key=sort_key)
 
 
-def build_subtitle_opts(
-    languages: list[str],
-    embed: bool = True,
-    convert_to: str | None = "srt",
-    write_sub: bool = False,
-) -> dict[str, Any]:
-    """
-    构建字幕下载的 yt-dlp 选项
-
-    Args:
-        languages: 语言代码列表 ["zh-Hans", "en"]
-        embed: 是否嵌入到视频
-        convert_to: 转换格式 (srt, ass, vtt)
-        write_sub: 是否写入单独文件
-
-    Returns:
-        yt-dlp 选项字典
-    """
-    opts: dict[str, Any] = {}
-
-    if not languages:
-        return opts
-
-    # 设置字幕语言
-    opts["subtitleslangs"] = languages
-    opts["writesubtitles"] = True
-
-    # 也下载自动字幕
-    opts["writeautomaticsub"] = True
-
-    # 嵌入字幕
-    if embed:
-        opts["embedsubtitles"] = True
-        # 需要添加后处理器
-        if "postprocessors" not in opts:
-            opts["postprocessors"] = []
-        opts["postprocessors"].append({"key": "FFmpegEmbedSubtitle"})
-
-    # 格式转换
-    if convert_to and convert_to in SUBTITLE_FORMATS:
-        opts["convertsubtitles"] = convert_to
-
-    # 写入单独文件
-    if write_sub:
-        opts["writesubtitles"] = True
-    elif not embed:
-        # 如果既不嵌入也不写文件，则不处理
-        return {}
-
-    return opts
-
-
 def convert_subtitle(
     input_path: str | Path,
     output_format: str,

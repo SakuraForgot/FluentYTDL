@@ -1,6 +1,6 @@
 [project]
 name = "FluentYTDL"
-version = "2.0.5"
+version = "3.0.0"
 description = "Professional YouTube downloader (Stage 1: core architecture)"
 requires-python = ">=3.10"
 dependencies = [
@@ -68,4 +68,27 @@ dev = [
   "ruff>=0.12",
   "pyright>=1.1",
   "pyinstaller>=5.9",
+]
+
+[tool.fluentytdl.build]
+# 是否默认检查开发环境污染
+strict_env_check = true
+# 幽灵依赖黑名单（若环境中存在这些库则拒绝打包）
+env_blacklist = ["torch", "pandas", "numpy", "jupyter", "scipy", "tensorflow"]
+# 默认关闭 UPX 压缩以防杀软误报
+enable_upx = false
+# 动态排除的 PySide6 臃肿组件
+qt_excludes = [
+    "PySide6.QtQml",
+    "PySide6.QtQuick",
+    "PySide6.QtQuickWidgets",
+    "PySide6.QtPdf",
+    "PySide6.QtPdfWidgets",
+    "PySide6.Qt3DCore",
+    "PySide6.Qt3DRender",
+    "PySide6.QtWebEngine",
+    "PySide6.QtWebEngineWidgets",
+    "PySide6.QtMultimedia",
+    "PySide6.QtBluetooth",
+    "PySide6.QtPositioning"
 ]

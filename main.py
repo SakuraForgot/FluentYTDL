@@ -37,6 +37,12 @@ def main() -> None:
     if str(src_dir) not in sys.path:
         sys.path.insert(0, str(src_dir))
 
+    IS_UPDATE_WORKER = "--update-worker" in sys.argv
+    if IS_UPDATE_WORKER:
+        from fluentytdl.core.updater_worker import run_worker
+
+        sys.exit(run_worker())
+
     # === 1. 修改缩放策略 (关键) ===
     # 如觉得太小，可改为 1.5；或删除本行让 Qt/系统自动接管。
     os.environ["QT_SCALE_FACTOR"] = "1.0"
@@ -175,11 +181,13 @@ def main() -> None:
             self.setFixedSize(350, 200)
 
     def launch_main_window():
+        from fluentytdl.core.controller import app_controller
         from fluentytdl.ui.reimagined_main_window import MainWindow
 
         # 恢复应用退出机制
         app.setQuitOnLastWindowClosed(True)
-        window = MainWindow()
+        # DI 注入 AppController
+        window = MainWindow(app_controller)
         window.show()
         app._main_window = window  # type: ignore[attr-defined]  # 保持引用防回收
 
@@ -260,4 +268,7 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    import multiprocessing
+
+    multiprocessing.freeze_support()
     main()

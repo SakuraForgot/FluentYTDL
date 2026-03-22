@@ -173,7 +173,8 @@ class ImageLoader(QObject):
         allow_webp: bool = False,
     ) -> None:
         """开始加载图片。"""
-        url_str = str(url_str or "").strip()
+        original_req_url = str(url_str or "").strip()
+        url_str = original_req_url
         if not url_str:
             return
 
@@ -214,7 +215,9 @@ class ImageLoader(QObject):
         except Exception:
             pass
 
-        reply.finished.connect(lambda: self._on_finished(reply, target_size, radius, url_str))
+        reply.finished.connect(
+            lambda: self._on_finished(reply, target_size, radius, original_req_url)
+        )
 
     def _on_finished(
         self,

@@ -11,6 +11,7 @@ from .auth_service import (
     AuthService,
     AuthSourceType,
     AuthStatus,
+    DLEAccount,
     auth_service,
     is_admin,
 )
@@ -24,6 +25,7 @@ __all__ = [
     "AuthSourceType",
     "AuthStatus",
     "AuthProfile",
+    "DLEAccount",
     "BROWSER_SOURCES",
     "ADMIN_REQUIRED_BROWSERS",
     "is_admin",

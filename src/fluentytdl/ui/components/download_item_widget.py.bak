@@ -60,9 +60,8 @@ class DownloadItemWidget(CardWidget):
         self.hLayout.setContentsMargins(12, 12, 12, 12)
         self.hLayout.setSpacing(16)
 
-        # 0. 批量选择复选框
+        # 0. 批量选择复选框 (常驻显示)
         self.selectBox = QCheckBox(self)
-        self.selectBox.setVisible(False)
         self.selectBox.toggled.connect(self.selection_changed)
         self.hLayout.addWidget(self.selectBox)
 
@@ -200,17 +199,15 @@ class DownloadItemWidget(CardWidget):
             self.actionBtn.setToolTip("已完成")
             self.actionBtn.setEnabled(False)
 
-    def set_selection_mode(self, enabled: bool) -> None:
-        self.selectBox.setVisible(bool(enabled))
-        if not enabled:
-            try:
-                self.selectBox.setChecked(False)
-            except Exception:
-                pass
+    def set_checked(self, checked: bool) -> None:
+        try:
+            self.selectBox.setChecked(checked)
+        except Exception:
+            pass
 
     def is_selected(self) -> bool:
         try:
-            return bool(self.selectBox.isVisible() and self.selectBox.isChecked())
+            return bool(self.selectBox.isChecked())
         except Exception:
             return False
 

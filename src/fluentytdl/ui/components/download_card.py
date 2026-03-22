@@ -444,6 +444,19 @@ class DownloadItemCard(CardWidget):
         if d.get("status") == "downloading":
             self.set_state("running")
             stream_label = _infer_stream_label(d)
+
+            # 轻量提取通道（字幕/封面）可能只提供百分比。
+            pct_raw = d.get("__fluentytdl_percent")
+            if pct_raw is not None:
+                try:
+                    pct = int(float(pct_raw))
+                except Exception:
+                    pct = 0
+                pct = max(0, min(100, pct))
+                self.progressBar.setValue(pct)
+                self.statusLabel.setText(f"{stream_label} 提取中 {pct}%")
+                return
+
             total = d.get("total_bytes") or d.get("total_bytes_estimate")
             downloaded = d.get("downloaded_bytes") or 0
             speed = d.get("speed") or 0

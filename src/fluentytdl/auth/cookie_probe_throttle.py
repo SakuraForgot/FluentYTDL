@@ -194,6 +194,45 @@ class CookieProbeThrottle:
         """是否应建议切换到 DLE/Firefox（连续 ≥ 3 次失败）"""
         return self.consecutive_failures >= 3
 
+    # ──────────────── UI 辅助：诊断提示信息 ────────────────
+
+    def get_cookie_failure_augment_info(self) -> dict:
+        """
+        为 Cookie 错误面板提供辅助诊断提示信息。
+
+        将原来散布在 on_parse_error 里的业务判断集中在此，使 UI 仅需
+        消费数据，不再包含业务逻辑。
+
+        Returns:
+            {
+              "alternative_hint": str | None,  # 切换 DLE/Firefox 的提示文字
+              "pot_warning": str | None,        # POT Provider 未运行的警告文字
+            }
+        """
+        result: dict = {"alternative_hint": None, "pot_warning": None}
+
+        if self.should_suggest_alternative:
+            result["alternative_hint"] = (
+                f"⚠️ 已连续 {self.consecutive_failures} 次 Cookie 失败，"
+                "建议切换到「🔑 登录」模式 或 使用 Firefox 浏览器提取"
+            )
+
+        try:
+            from ..core.config_manager import config_manager
+
+            if config_manager.get("pot_provider_enabled", True):
+                from ..youtube.pot_manager import pot_manager
+
+                if not pot_manager.is_running():
+                    result["pot_warning"] = (
+                        "⚠️ POT Provider 服务未运行 — 这可能是触发机器人检测的主要原因。"
+                        "请前往「设置 → 组件」检查 POT Provider 是否已安装。"
+                    )
+        except Exception:
+            logger.debug("[ProbeThrottle] 无法检查 POT Provider 状态", exc_info=True)
+
+        return result
+
 
 # 全局单例
 cookie_probe_throttle = CookieProbeThrottle()
