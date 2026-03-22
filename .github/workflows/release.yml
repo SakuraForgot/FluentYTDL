@@ -248,7 +248,7 @@ jobs:
       - name: "🔐 生成 SHA256 校验文件"
         shell: pwsh
         run: |
-          python -c "from scripts.build import Builder; import os; Builder(version=os.environ.get('PACKAGE_VERSION')).generate_checksums()"
+          python -c "from scripts.build import Builder; import os; Builder(override_version=os.environ.get('PACKAGE_VERSION')).generate_checksums()"
 
       - name: "✅ 校验构建产物"
         shell: pwsh
