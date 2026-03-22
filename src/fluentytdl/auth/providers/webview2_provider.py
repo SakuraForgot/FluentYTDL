@@ -95,8 +95,14 @@ def _webview_subprocess(
     """在独立子进程中运行 pywebview 登录窗口。"""
     try:
         import webview
-    except ImportError:
-        cookie_queue.put({"error": "pywebview 未安装，请执行: pip install pywebview"})
+    except Exception as exc:
+        import traceback
+        tb = traceback.format_exc()
+        error_msg = f"pywebview 加载失败: {exc}\n{tb}"
+        try:
+            cookie_queue.put({"error": error_msg})
+        except Exception:
+            pass
         return
 
     window_kwargs = {

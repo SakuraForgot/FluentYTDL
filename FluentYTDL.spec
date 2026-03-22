@@ -1,13 +1,18 @@
 # -*- mode: python ; coding: utf-8 -*-
 from PyInstaller.utils.hooks import collect_submodules
 from PyInstaller.utils.hooks import copy_metadata
+from PyInstaller.utils.hooks import collect_data_files
 
 datas = [('E:\\YouTube\\FluentYTDL\\docs', 'docs'), ('E:\\YouTube\\FluentYTDL\\assets\\logo.ico', 'assets'), ('E:\\YouTube\\FluentYTDL\\assets\\logo.png', 'assets'), ('E:\\YouTube\\FluentYTDL\\src\\fluentytdl\\yt_dlp_plugins_ext', 'fluentytdl/yt_dlp_plugins_ext')]
-hiddenimports = ['webview']
+hiddenimports = ['webview', 'clr', 'pythonnet', 'clr_loader']
 datas += copy_metadata('rookiepy')
 hiddenimports += collect_submodules('fluentytdl')
 hiddenimports += collect_submodules('rookiepy')
 hiddenimports += collect_submodules('webview')
+hiddenimports += collect_submodules('clr_loader')
+datas += collect_data_files('pythonnet')
+datas += collect_data_files('clr_loader')
+datas += collect_data_files('webview')
 
 
 a = Analysis(

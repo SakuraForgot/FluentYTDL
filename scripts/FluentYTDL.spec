@@ -6,7 +6,7 @@ FluentYTDL 声明式 PyInstaller 蓝图
 
 import os
 import sys
-from PyInstaller.utils.hooks import collect_submodules, copy_metadata
+from PyInstaller.utils.hooks import collect_submodules, copy_metadata, collect_data_files, collect_dynamic_libs
 
 # 将 src 目录插入系统路径，以便 collect_submodules 能正确扫描内部模块
 try:
@@ -36,11 +36,17 @@ datas = [
 ]
 
 # 自动收集子模块和元数据
-hiddenimports = ['mutagen', 'webview']
+hiddenimports = ['mutagen', 'webview', 'clr', 'pythonnet', 'clr_loader']
 hiddenimports += collect_submodules('fluentytdl')
 hiddenimports += collect_submodules('rookiepy')
 hiddenimports += collect_submodules('webview')
+hiddenimports += collect_submodules('clr_loader')
 datas += copy_metadata('rookiepy')
+
+# pythonnet / clr 需要的运行时 DLL 和数据文件
+datas += collect_data_files('pythonnet')
+datas += collect_data_files('clr_loader')
+datas += collect_data_files('webview')
 
 # ----------------------------------------------------------------------------
 # 3. 核心 Analysis 阶段
