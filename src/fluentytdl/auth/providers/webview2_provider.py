@@ -93,25 +93,59 @@ def _webview_subprocess(
     reveal_after_seconds: int,
 ) -> None:
     """在独立子进程中运行 pywebview 登录窗口。"""
-    try:
-        import webview
-    except Exception as exc:
-        import traceback
-        import sys
-        import os
-        tb = traceback.format_exc()
-        path_info = f"sys.path:\n" + "\n".join(sys.path)
-        env_keys = "os.environ keys:\n" + ", ".join(os.environ.keys())
-        exec_info = f"sys.executable: {sys.executable}"
-        error_msg = f"pywebview 加载失败: {exc}\n{tb}\n\nEnv Debug:\n{exec_info}\n{path_info}\n{env_keys}"
+    import datetime as _dt
+
+    # ── 建立文件级日志（PyInstaller console=False 时 stdout=None，print 全丢）──
+    _log_path = os.path.join(cache_dir, "webview_subprocess.log")
+    os.makedirs(cache_dir, exist_ok=True)
+
+    def _log(msg: str) -> None:
+        ts = _dt.datetime.now().strftime("%H:%M:%S.%f")[:-3]
+        line = f"[{ts}] {msg}\n"
         try:
-            cookie_queue.put({"error": error_msg})
-            cookie_queue.close()
-            cookie_queue.join_thread()
+            with open(_log_path, "a", encoding="utf-8") as f:
+                f.write(line)
+                f.flush()
         except Exception:
             pass
+
+    def _send_and_close(data: dict) -> None:
+        """向父进程发数据，刷新管道，延迟销毁窗口。"""
+        try:
+            cookie_queue.put(data)
+            cookie_queue.close()
+            cookie_queue.join_thread()
+        except Exception as e:
+            _log(f"⚠️ queue 发送失败: {e}")
+
+    def _schedule_destroy(win_ref) -> None:
+        """延迟 1s 销毁窗口，让管道数据先抵达父进程。"""
+        import threading
+        def _do():
+            time.sleep(1)
+            try:
+                win_ref.destroy()
+            except Exception:
+                pass
+        threading.Thread(target=_do, daemon=True).start()
+
+    _log(f"=== 子进程启动 === PID={os.getpid()}")
+    _log(f"login_url={login_url}, cache_dir={cache_dir}, timeout={timeout}")
+    _log(f"start_hidden={start_hidden}, reveal_after={reveal_after_seconds}")
+
+    # ── 导入 pywebview ──
+    try:
+        import webview
+        _log(f"import webview 成功: {webview.__version__ if hasattr(webview, '__version__') else '?'}")
+    except Exception as exc:
+        import traceback
+        tb = traceback.format_exc()
+        error_msg = f"pywebview 加载失败: {exc}\n{tb}"
+        _log(error_msg)
+        _send_and_close({"error": error_msg})
         return
 
+    # ── 创建窗口 ──
     window_kwargs = {
         "title": "FluentYTDL - YouTube 安全登录",
         "url": login_url,
@@ -125,136 +159,109 @@ def _webview_subprocess(
 
     try:
         window = webview.create_window(**window_kwargs)
+        _log("create_window 成功")
     except TypeError:
-        # 兼容不支持 hidden 参数的 pywebview 版本
         window_kwargs.pop("hidden", None)
         window = webview.create_window(**window_kwargs)
+        _log("create_window 成功 (fallback, 无 hidden)")
 
+    # ── 后台轮询线程 ──
     def _background_poll(win):
-        """webview.start(func=...) 在独立线程中运行的后台轮询。"""
-        print("[WebView2-子进程] 🚀 启动后台 Cookie 监视线程...")
-        time.sleep(3)
-
-        start_time = time.time()
-        revealed = not start_hidden
-
-        while time.time() - start_time < timeout:
-            elapsed = int(time.time() - start_time)
-            time.sleep(POLL_INTERVAL)
-
-            if start_hidden and (not revealed) and elapsed >= reveal_after_seconds:
-                try:
-                    win.show()
-                    revealed = True
-                    print("[WebView2-子进程] 🔔 后台提取未命中，已自动显示登录窗口")
-                except Exception as e:
-                    print(f"[WebView2-子进程] ⚠️ 显示窗口失败: {e}")
-
-            # ---- 步骤 1: 检查当前 URL ----
-            try:
-                current_url = win.get_current_url() or ""
-            except Exception as e:
-                print(f"[WebView2-子进程] ⚠️ 获取 URL 失败: {e}")
-                break
-
-            if "youtube.com" not in current_url:
-                print(
-                    f"[WebView2-子进程] [{elapsed}s] 等待跳回 YouTube... (当前: {current_url[:50]})"
-                )
-                continue
-
-            # ---- 步骤 2: 在 YouTube 域采集 Cookie ----
-            try:
-                yt_cookies = win.get_cookies() or []
-            except Exception as e:
-                print(f"[WebView2-子进程] ⚠️ 获取 YouTube Cookie 失败: {e}")
-                continue
-
-            yt_names = _get_cookie_names(yt_cookies)
-            print(
-                f"[WebView2-子进程] [{elapsed}s] YouTube 域拿到 {len(yt_cookies)} 个 Cookie: {list(yt_names)[:8]}..."
-            )
-
-            if not LOGIN_INDICATOR_YT & yt_names:
-                print(f"[WebView2-子进程] [{elapsed}s] 尚未检测到 LOGIN_INFO，继续等待...")
-                continue
-
-            print("[WebView2-子进程] 🎯 检测到 LOGIN_INFO! 用户已完成登录。")
-
-            # ---- 步骤 3: 导航到 Google 采集 .google.com 域 Cookie ----
-            print("[WebView2-子进程] 📡 切换到 accounts.google.com 采集核心凭证...")
-            google_cookies = []
-            try:
-                win.load_url(GOOGLE_ACCOUNT_URL)
-                time.sleep(3)
-                google_cookies = win.get_cookies() or []
-                google_names = _get_cookie_names(google_cookies)
-                print(
-                    f"[WebView2-子进程] Google 域拿到 {len(google_cookies)} 个 Cookie: {list(google_names)[:8]}..."
-                )
-            except Exception as e:
-                print(f"[WebView2-子进程] ⚠️ 获取 Google Cookie 失败: {e}")
-
-            # ---- 步骤 4: 合并 + 格式化 + 回传 ----
-            all_raw = list(yt_cookies) + list(google_cookies)
-            all_names = _get_cookie_names(all_raw)
-            has_core = LOGIN_INDICATOR_GOOGLE & all_names
-
-            if has_core:
-                print(f"[WebView2-子进程] 🎉 成功拦截到核心凭证! 匹配: {has_core}")
-            else:
-                print(
-                    f"[WebView2-子进程] ⚠️ 未拦截到 SAPISID/__Secure-1PSID，仍尝试回传 (总计 {len(all_raw)} 个)"
-                )
-
-            formatted = _format_cookies(all_raw)
-
-            # ★ 先把数据送入队列
-            if formatted:
-                cookie_queue.put({"cookies": formatted})
-                print(f"[WebView2-子进程] ✅ 已通过 Queue 回传 {len(formatted)} 个格式化 Cookie")
-            else:
-                cookie_queue.put({"error": "Cookie 格式化失败：提取到空列表"})
-
-            # ★ 强制刷新队列的内部 feeder 线程，确保数据已写入底层管道
-            try:
-                cookie_queue.close()
-                cookie_queue.join_thread()
-            except Exception:
-                pass
-
-            # ★ 延迟销毁窗口：给管道 1 秒的缓冲时间后再关闭 webview 消息循环
-            # 必须调用 win.destroy() 才能让 webview.start() 解除阻塞并退出子进程
-            import threading
-            def _delayed_destroy():
-                time.sleep(1)
-                try:
-                    win.destroy()
-                except Exception:
-                    pass
-            threading.Thread(target=_delayed_destroy, daemon=True).start()
-            return
-
-        # 超时
-        print(f"[WebView2-子进程] ⏳ 提取超时 ({timeout}s)!")
         try:
-            cookie_queue.put_nowait({"error": f"登录超时 ({timeout}s)，未检测到有效的登录 Cookie"})
-            cookie_queue.close()
-            cookie_queue.join_thread()
-        except Exception:
-            pass
-        import threading
-        def _delayed_destroy_timeout():
-            time.sleep(1)
+            _log("🚀 _background_poll 线程已启动")
+            time.sleep(3)
+
+            start_time = time.time()
+            revealed = not start_hidden
+
+            while time.time() - start_time < timeout:
+                elapsed = int(time.time() - start_time)
+                time.sleep(POLL_INTERVAL)
+
+                if start_hidden and (not revealed) and elapsed >= reveal_after_seconds:
+                    try:
+                        win.show()
+                        revealed = True
+                        _log("🔔 已自动显示登录窗口")
+                    except Exception as e:
+                        _log(f"⚠️ show() 失败: {e}")
+
+                # 步骤 1: 检查 URL
+                try:
+                    current_url = win.get_current_url() or ""
+                except Exception as e:
+                    _log(f"⚠️ get_current_url 失败: {e}")
+                    break
+
+                if "youtube.com" not in current_url:
+                    _log(f"[{elapsed}s] 等待跳回 YouTube... (当前: {current_url[:80]})")
+                    continue
+
+                # 步骤 2: YouTube 域 Cookie
+                try:
+                    yt_cookies = win.get_cookies() or []
+                except Exception as e:
+                    _log(f"⚠️ get_cookies 失败: {e}")
+                    continue
+
+                yt_names = _get_cookie_names(yt_cookies)
+                _log(f"[{elapsed}s] YouTube 域 {len(yt_cookies)} 个 Cookie, names={list(yt_names)[:10]}")
+
+                if not LOGIN_INDICATOR_YT & yt_names:
+                    _log(f"[{elapsed}s] 尚未检测到 LOGIN_INFO")
+                    continue
+
+                _log("🎯 检测到 LOGIN_INFO! 用户已完成登录。")
+
+                # 步骤 3: Google 域 Cookie
+                _log("📡 导航到 accounts.google.com ...")
+                google_cookies = []
+                try:
+                    win.load_url(GOOGLE_ACCOUNT_URL)
+                    time.sleep(3)
+                    google_cookies = win.get_cookies() or []
+                    google_names = _get_cookie_names(google_cookies)
+                    _log(f"Google 域 {len(google_cookies)} 个 Cookie, names={list(google_names)[:10]}")
+                except Exception as e:
+                    _log(f"⚠️ 获取 Google Cookie 失败: {e}")
+
+                # 步骤 4: 合并+格式化+回传
+                all_raw = list(yt_cookies) + list(google_cookies)
+                all_names = _get_cookie_names(all_raw)
+                has_core = LOGIN_INDICATOR_GOOGLE & all_names
+                _log(f"合并后共 {len(all_raw)} 个, core匹配={has_core}")
+
+                formatted = _format_cookies(all_raw)
+                _log(f"格式化后 {len(formatted)} 个 Cookie")
+
+                if formatted:
+                    _send_and_close({"cookies": formatted})
+                    _log(f"✅ 已回传 {len(formatted)} 个 Cookie 到父进程")
+                else:
+                    _send_and_close({"error": "Cookie 格式化失败：提取到空列表"})
+                    _log("❌ 格式化后为空")
+
+                _schedule_destroy(win)
+                return
+
+            # 超时
+            _log(f"⏳ 提取超时 ({timeout}s)")
+            _send_and_close({"error": f"登录超时 ({timeout}s)，未检测到有效的登录 Cookie"})
+            _schedule_destroy(win)
+
+        except Exception as exc:
+            import traceback
+            tb = traceback.format_exc()
+            _log(f"💥 _background_poll 未捕获异常: {exc}\n{tb}")
             try:
-                win.destroy()
+                _send_and_close({"error": f"子进程内部异常: {exc}\n{tb}"})
             except Exception:
                 pass
-        threading.Thread(target=_delayed_destroy_timeout, daemon=True).start()
-        return
+            _schedule_destroy(win)
 
+    # ── 窗口关闭事件 ──
     def _on_closed():
-        print("[WebView2-子进程] 🚪 用户关闭了登录窗口")
+        _log("🚪 用户关闭了登录窗口")
         try:
             cookie_queue.put_nowait({"error": "用户关闭了登录窗口"})
             cookie_queue.close()
@@ -264,12 +271,14 @@ def _webview_subprocess(
 
     window.events.closed += _on_closed
 
+    _log("调用 webview.start() ...")
     webview.start(
         func=_background_poll,
         args=(window,),
         private_mode=False,
         storage_path=cache_dir,
     )
+    _log("webview.start() 已返回（子进程即将退出）")
 
 
 def _format_cookies(raw_cookies: list) -> list[dict[str, Any]]:
