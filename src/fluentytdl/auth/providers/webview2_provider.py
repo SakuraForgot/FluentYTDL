@@ -209,21 +209,30 @@ def _webview_subprocess(
 
             formatted = _format_cookies(all_raw)
 
-            # ★ 确保队列彻底刷新到底层管道，避免因后续崩溃或死锁导致父进程假死
+            # ★ 先把数据送入队列
             if formatted:
                 cookie_queue.put({"cookies": formatted})
                 print(f"[WebView2-子进程] ✅ 已通过 Queue 回传 {len(formatted)} 个格式化 Cookie")
             else:
                 cookie_queue.put({"error": "Cookie 格式化失败：提取到空列表"})
 
+            # ★ 强制刷新队列的内部 feeder 线程，确保数据已写入底层管道
             try:
                 cookie_queue.close()
                 cookie_queue.join_thread()
             except Exception:
                 pass
-            
-            # 不在后台线程调用高危的 win.destroy()，防止死锁阻止管线通信。
-            # 直接由父进程收到数据后的 finally 块里的 p.terminate() 暴力接管销毁。
+
+            # ★ 延迟销毁窗口：给管道 1 秒的缓冲时间后再关闭 webview 消息循环
+            # 必须调用 win.destroy() 才能让 webview.start() 解除阻塞并退出子进程
+            import threading
+            def _delayed_destroy():
+                time.sleep(1)
+                try:
+                    win.destroy()
+                except Exception:
+                    pass
+            threading.Thread(target=_delayed_destroy, daemon=True).start()
             return
 
         # 超时
@@ -234,6 +243,14 @@ def _webview_subprocess(
             cookie_queue.join_thread()
         except Exception:
             pass
+        import threading
+        def _delayed_destroy_timeout():
+            time.sleep(1)
+            try:
+                win.destroy()
+            except Exception:
+                pass
+        threading.Thread(target=_delayed_destroy_timeout, daemon=True).start()
         return
 
     def _on_closed():
