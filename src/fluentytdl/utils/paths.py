@@ -83,7 +83,8 @@ def get_clean_env(base_env: dict[str, str] | None = None) -> dict[str, str]:
         paths = env["PATH"].split(os.pathsep)
         clean_paths = []
         for p in paths:
-            if not p: continue
+            if not p:
+                continue
             try:
                 # 忽略匹配的 _MEIPASS 路径
                 if meipass and os.path.normpath(p).upper() == os.path.normpath(meipass).upper():

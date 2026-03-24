@@ -13,7 +13,6 @@ POT (Proof of Origin Token) Provider Manager
 from __future__ import annotations
 
 import atexit
-import os
 import socket
 import subprocess
 import sys
