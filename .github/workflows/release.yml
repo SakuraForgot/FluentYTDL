@@ -72,7 +72,7 @@ jobs:
           fetch-depth: 0  # 获取完整历史用于版本信息
 
       - name: "🐍 设置 Python ${{ env.PYTHON_VERSION }}"
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: 'pip'
