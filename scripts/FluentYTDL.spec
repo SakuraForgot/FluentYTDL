@@ -41,6 +41,14 @@ hiddenimports += collect_submodules('fluentytdl')
 hiddenimports += collect_submodules('rookiepy')
 hiddenimports += collect_submodules('webview')
 hiddenimports += collect_submodules('clr_loader')
+
+# QFluentWidgets 及其底层无边框窗体库
+# - qfluentwidgets._rc.resource 包含 qInitResources()，注册 QSS / 图标等 Qt 资源
+# - qframelesswindow 提供 DWM 阴影 / 透明效果（Win32 API）
+# 缺少这些会导致菜单下拉框出现透明边框（阴影渲染失败）
+hiddenimports += collect_submodules('qfluentwidgets')
+hiddenimports += collect_submodules('qframelesswindow')
+
 datas += copy_metadata('rookiepy')
 
 # pythonnet / clr 需要的运行时 DLL 和数据文件
