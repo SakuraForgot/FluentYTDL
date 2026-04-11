@@ -287,7 +287,7 @@ jobs:
       # 7. 上传 Artifacts (用于调试)
       # ========================================
       - name: "📤 上传构建产物"
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: FluentYTDL-v${{ steps.version.outputs.VERSION }}-builds
           path: release/*
