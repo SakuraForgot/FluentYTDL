@@ -675,7 +675,16 @@ class ComponentUpdateManager(QObject):
 
         creationflags = 0
         if sys.platform == "win32":
-            creationflags = subprocess.DETACHED_PROCESS | subprocess.CREATE_NO_WINDOW
+            # 只用 DETACHED_PROCESS：updater.exe 是 GUI subsystem（scripts/updater.spec
+            # 的 console=False），本来就不要控制台，detach 掉是为了不继承父进程的控制台、
+            # 不进父进程的 Ctrl+C 进程组。
+            #
+            # **不要再 `| CREATE_NO_WINDOW`。** 那两个标志在 MSDN 里是互斥的：
+            # DETACHED_PROCESS 在场时 CREATE_NO_WINDOW 被忽略，写上去只会误导后来人
+            # 把这对组合抄到会 spawn 控制台程序的地方 —— 抄过去就会弹窗，因为
+            # detached 的进程没有控制台可继承，它的控制台子进程只能自己 AllocConsole。
+            # updater.py 的 HELPER_CREATIONFLAGS 那段注释记录了这个真实 bug。
+            creationflags = subprocess.DETACHED_PROCESS
 
         try:
             # 保持 list 形态。（`updater.py` 里给 cmd.exe 拼命令行时必须用单个

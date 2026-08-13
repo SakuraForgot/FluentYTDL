@@ -64,6 +64,22 @@ SURVIVAL_GRACE = 15.0
 WATCH_POLL_INTERVAL = 0.5
 STALE_READY_MAX_AGE = 300.0  # 5 分钟外的 READY 文件一律视为陈旧
 
+# 延时 cmd helper 的 creationflags。**只能是 CREATE_NO_WINDOW，不许再 `|
+# DETACHED_PROCESS`。** MSDN 明说这两个标志互斥：DETACHED_PROCESS（以及
+# CREATE_NEW_CONSOLE）在场时 CREATE_NO_WINDOW 直接被忽略。被忽略之后，detached
+# 的 cmd.exe 手里没有任何控制台可继承，于是它的控制台子进程（我们那个当 sleep
+# 用的 `ping`）自己去 AllocConsole —— Windows 11 默认终端把这个新控制台渲染成
+# 一个可见窗口，标题就是子进程的命令行（`ping  -n 4 127.0.0.1`）。用户在更新过程
+# 中看到的就是它。CREATE_NO_WINDOW 单独用时控制台窗口是隐藏的，实测无弹窗。
+#
+# 去掉 DETACHED_PROCESS 不影响 helper 活过 updater 退出：Popen 不建立 job
+# 关联，子进程本来就不随父进程终止。已在无控制台的 GUI 父进程（pythonw，等价于
+# console=False 的 updater.exe）下实测：父进程退出 7 秒后 helper 仍写出了标记。
+#
+# getattr 兜底：本模块被 tests/test_updater.py 按路径 importlib 加载，
+# subprocess.CREATE_NO_WINDOW 在非 Windows 上不存在，导入期取属性会 AttributeError。
+HELPER_CREATIONFLAGS = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+
 
 # ─── ctypes 结构体 ────────────────────────────────────────
 #
@@ -450,7 +466,7 @@ def self_delete(exe_path: Path) -> None:
     # `\"`，cmd.exe 不认，带空格的路径（`C:\Program Files\...`）会被解析错。
     subprocess.Popen(
         f"cmd /c {cmd}",
-        creationflags=subprocess.CREATE_NO_WINDOW | subprocess.DETACHED_PROCESS,
+        creationflags=HELPER_CREATIONFLAGS,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
@@ -1240,7 +1256,7 @@ def _spawn_updater_swap_helper(target: Path, staged: Path) -> None:
         # 那边用的是 shell=True + 字符串。）
         subprocess.Popen(
             f"cmd /c {cmd}",
-            creationflags=subprocess.CREATE_NO_WINDOW | subprocess.DETACHED_PROCESS,
+            creationflags=HELPER_CREATIONFLAGS,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )

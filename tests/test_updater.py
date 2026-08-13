@@ -2,6 +2,7 @@
 
 import importlib.util
 import os
+import subprocess
 import sys
 import zipfile
 from pathlib import Path
@@ -29,6 +30,48 @@ wait_for_process = _updater_mod.wait_for_process
 PROTECTED_NAMES = _updater_mod.PROTECTED_NAMES
 READY_TIMEOUT = _updater_mod.READY_TIMEOUT
 SURVIVAL_GRACE = _updater_mod.SURVIVAL_GRACE
+HELPER_CREATIONFLAGS = _updater_mod.HELPER_CREATIONFLAGS
+_spawn_updater_swap_helper = _updater_mod._spawn_updater_swap_helper
+
+
+class TestHelperCreationFlags:
+    """回归护栏：延时 cmd helper 不许再带 DETACHED_PROCESS。
+
+    带上它会让 CREATE_NO_WINDOW 被忽略（MSDN），detached 的 cmd.exe 没有控制台可
+    继承，于是它那个当 sleep 用的 `ping` 子进程自己 AllocConsole —— 用户在更新过程
+    中会看到一个标题为 `ping  -n 4 127.0.0.1` 的终端窗口。
+    """
+
+    @pytest.mark.skipif(sys.platform != "win32", reason="Windows-only flags")
+    def test_flags_are_exactly_create_no_window(self):
+        assert HELPER_CREATIONFLAGS == subprocess.CREATE_NO_WINDOW
+        assert not HELPER_CREATIONFLAGS & subprocess.DETACHED_PROCESS
+        assert not HELPER_CREATIONFLAGS & subprocess.CREATE_NEW_CONSOLE
+
+    def test_flags_importable_off_windows(self):
+        """非 Windows 上导入期不能炸（本模块是按路径 importlib 加载的）。"""
+        assert isinstance(HELPER_CREATIONFLAGS, int)
+
+    @pytest.mark.skipif(sys.platform != "win32", reason="helper 是 Windows 专用路径")
+    @pytest.mark.parametrize("site", ["self_delete", "swap_helper"])
+    def test_spawn_sites_use_the_constant(self, tmp_path, monkeypatch, site):
+        """两个 spawn 点实际下发的 creationflags 必须就是那个常量。"""
+        captured = {}
+
+        def fake_popen(cmd, **kwargs):
+            captured["cmd"] = cmd
+            captured["creationflags"] = kwargs.get("creationflags")
+            return None
+
+        monkeypatch.setattr(_updater_mod.subprocess, "Popen", fake_popen)
+
+        if site == "self_delete":
+            self_delete(tmp_path / "fake.exe")
+        else:
+            _spawn_updater_swap_helper(tmp_path / "updater.exe", tmp_path / "updater.exe.new")
+
+        assert captured["creationflags"] == HELPER_CREATIONFLAGS
+        assert "ping -n" in captured["cmd"]  # 确认命中的确实是延时 helper
 
 
 class TestWaitForProcess:
