@@ -1,6 +1,6 @@
 [project]
 name = "FluentYTDL"
-version = "3.6.7"
+version = "3.6.8"
 description = "Windows desktop downloader for YouTube and X, powered by yt-dlp and FFmpeg"
 requires-python = ">=3.10"
 dependencies = [

@@ -440,7 +440,7 @@ wheels = [
 
 [[package]]
 name = "fluentytdl"
-version = "3.6.7"
+version = "3.6.8"
 source = { editable = "." }
 dependencies = [
     { name = "loguru" },
