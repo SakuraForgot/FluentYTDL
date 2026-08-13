@@ -12,7 +12,7 @@
 
 ; --- 版本定义 (可通过命令行覆盖) ---
 #ifndef MyAppVersion
-  #define MyAppVersion "3.6.8"
+  #define MyAppVersion "3.6.9"
 #endif
 
 #ifndef SourceDir
