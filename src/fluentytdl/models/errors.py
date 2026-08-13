@@ -1,70 +1,12 @@
-from dataclasses import dataclass
-from enum import IntEnum
-from typing import Literal
+"""错误相关的模型。
 
+诊断结果模型（``Diagnosis`` / ``DiagnosticEvent`` / ``RetryPolicy``）已迁移到
+:mod:`fluentytdl.diagnostics.models`，那里用稳定的字符串错误码取代了旧的
+``ErrorCode`` IntEnum —— 17 个数字枚举无法表达"会员专属 / 年龄限制 / 私人视频"
+这类需要不同处置方式的细分场景。
 
-class ErrorCode(IntEnum):
-    """全局统一错误码"""
-
-    SUCCESS = 0
-    GENERAL = 1
-    LOGIN_REQUIRED = 2
-    FORMAT_UNAVAILABLE = 3
-    HTTP_ERROR = 4
-    NETWORK_ERROR = 5
-    GEO_RESTRICTED = 6
-    EXTRACTOR_ERROR = 7
-    POTOKEN_FAILURE = 8
-    RATE_LIMITED = 9
-    COOKIE_EXPIRED = 10
-    DISK_FULL = 11
-    VIDEO_REMOVED = 12
-    LIVE_STREAM = 13
-    URL_INVALID = 14
-    FILE_SYSTEM_ERROR = 15
-    DOWNLOAD_INTERRUPTED = 16
-    UNKNOWN = 99
-
-
-@dataclass
-class DiagnosedError:
-    """标准化错误诊断对象"""
-
-    code: ErrorCode
-    severity: Literal["fatal", "recoverable", "warning"]
-    user_title: str  # 用户看到的简短标题
-    user_message: str  # 详细解释与建议
-    fix_action: str | None  # 关联 UI 的修复动作（如 relogin, switch_proxy 等）
-    technical_detail: str  # 原始错误日志，用于记录
-    snapshot_path: str = ""  # 错误现场日志路径（暂留）
-    recovery_hint: str = ""  # UI 上按钮的提示词（如“点此重新登录”）
-
-    def to_dict(self) -> dict:
-        """支持序列化以便通过 Signal 传递"""
-        return {
-            "code": self.code.value,
-            "severity": self.severity,
-            "user_title": self.user_title,
-            "user_message": self.user_message,
-            "fix_action": self.fix_action,
-            "technical_detail": self.technical_detail,
-            "snapshot_path": self.snapshot_path,
-            "recovery_hint": self.recovery_hint,
-        }
-
-    @classmethod
-    def from_dict(cls, data: dict) -> "DiagnosedError":
-        """反序列化"""
-        return cls(
-            code=ErrorCode(data.get("code", 99)),
-            severity=data.get("severity", "fatal"),
-            user_title=data.get("user_title", "未知错误"),
-            user_message=data.get("user_message", "解析错误详情失败"),
-            fix_action=data.get("fix_action"),
-            technical_detail=data.get("technical_detail", ""),
-            snapshot_path=data.get("snapshot_path", ""),
-            recovery_hint=data.get("recovery_hint", ""),
-        )
+本模块现在只保留子进程异常本身。
+"""
 
 
 class YtDlpExecutionError(Exception):

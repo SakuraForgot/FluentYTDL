@@ -282,8 +282,6 @@ class DownloadManager(QObject):
         for worker in pending_list:
             if not worker.isRunning() and not worker.isFinished():
                 worker._final_state = "quality_guard"
-                from ..storage.db_writer_thread import db_writer
-
                 db_writer.enqueue_status(
                     worker.db_id, "quality_guard", 0.0, "风控防御：质量异常过多，排队任务已挂起"
                 )

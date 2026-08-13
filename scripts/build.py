@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import io
 import json
 import os
@@ -191,6 +192,92 @@ def generate_version_info(
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(content, encoding="utf-8")
     return output_path
+
+
+# ============================================================================
+# 发布物内容校验
+#
+# 两个独立的问题，故意分成两个函数（不要再合并回去）：
+#   assert_dist_clean()        —— dist 里有没有**运行期垃圾**？黑名单，三个发布
+#                                 目标（full.7z / app-core / setup.exe）全都调。
+#   classify_app_core_items()  —— app-core 该收哪些？白名单，只有 app-core 调。
+#
+# full.7z 合法地包含 bin/ 与 updater.exe，套不了 app-core 的白名单；但它同样
+# 不允许夹带 config.json 或 bin/cookies_*.txt —— 后者进了公开发布包等于泄漏
+# 用户的真实 YouTube 会话。
+#
+# 都是模块级纯函数（不进 Builder），便于 tests/test_build_app_core.py 用
+# importlib 按路径加载后直接调用。
+# ============================================================================
+
+
+def classify_app_core_items(
+    names: list[str],
+    include: list[str],
+    exclude: list[str],
+) -> tuple[list[str], list[str], list[str]]:
+    """把 dist 顶层条目分成 (keep, drop, unknown) 三类。
+
+    白名单语义：**只有** include 里的条目会进 app-core 归档。
+    exclude 是"已知且故意不收"的显式登记，存在的唯一目的是让 unknown
+    真正只剩下意料之外的东西。
+
+    unknown 非空即构建期硬失败 —— 白名单最大的风险是"以后新增的合法发布物
+    被静默丢掉"，这条断言把它变成一盏红灯。
+    """
+    inc, exc = set(include), set(exclude)
+    keep: list[str] = []
+    drop: list[str] = []
+    unknown: list[str] = []
+    for name in sorted(names):
+        if name in inc:
+            keep.append(name)
+        elif name in exc:
+            drop.append(name)
+        else:
+            unknown.append(name)
+    return keep, drop, unknown
+
+
+def assert_dist_clean(dist_dir: Path, forbidden: list[str]) -> None:
+    """dist 目录里若出现运行期产物就中止构建。
+
+    成因：任何人在打包前从 dist/ 直接启动过程序，那台机器的 config.json /
+    logs/ / state/tasks/tasks.db 就会留在 dist 里，随后被打进发布归档。
+    后果有两层 —— updater 应用归档时会用开发者的 config 覆盖用户的，
+    而 bin/cookies_*.txt、bin/dle_user/ 里是**真实凭据**。
+
+    匹配规则（故意不做无条件递归）：
+      * 含 `*` 的条目按 glob 处理（`**/` 开头则递归）
+      * 其余按**相对 dist 根的精确路径**匹配，因此 "config.json" 与
+        "bin/dle_user" 都能直接写
+
+    不递归匹配裸名字是刻意的：`_internal/` 里有几千个第三方包的资源文件，
+    随便一个叫 config.json 的包数据就会把整条发布链误判成"被污染"。
+    运行期产物落在哪些相对路径是完全可枚举的，精确匹配才不会误伤。
+    需要递归时在配置里显式写 `**/name`。
+    """
+    if not dist_dir.exists():
+        return
+
+    hits: list[str] = []
+    for rel in forbidden:
+        pattern = rel.replace("\\", "/")
+        if "*" in pattern:
+            if next(dist_dir.glob(pattern), None) is not None:
+                hits.append(rel)
+        elif (dist_dir / pattern).exists():
+            hits.append(rel)
+
+    if hits:
+        raise RuntimeError(
+            "发布目录被运行期产物污染，构建中止：\n"
+            + "\n".join(f"  ✗ {dist_dir.name}/{h}" for h in hits)
+            + "\n\n这些文件会被打进发布归档 —— 用户的配置会被开发者的覆盖，"
+            "\nbin/ 下的 cookies 与登录 profile 则是真实凭据，绝不能进公开发布包。"
+            f"\n\n修复：删掉 {dist_dir} 后重新构建（不要只删这几个文件，"
+            "\n      dist 已经被运行过一次，可能还有其他残留）。"
+        )
 
 
 # ============================================================================
@@ -651,30 +738,83 @@ class Builder:
         print(f"✓ 生成构建溯源清单: {out.name} (commit={info['git_commit']})")
         return out
 
+    def _assert_dist_clean(self, source_dir: Path) -> None:
+        """三个发布目标共用的污染检查入口。
+
+        额外拦一道"配置没解析出来" —— 空黑名单会让这道防线静默失效，
+        那比没有防线更糟（构建照样绿灯，脏归档照样发出去）。
+        """
+        forbidden = self.config.get("dist_forbidden") or []
+        if not forbidden:
+            raise ValueError(
+                "pyproject.toml 的 [tool.fluentytdl.build].dist_forbidden 为空或未解析成功。\n"
+                "  该数组必须写成**单行** —— _load_config() 在无 tomllib 的环境\n"
+                "  （Python 3.10）会退化到只认 `key = [...]` 的行解析器。"
+            )
+        assert_dist_clean(source_dir, forbidden)
+
+    #: 便携标记的内容。**写成人类可读的说明而不是零字节文件** —— 空文件在用户眼里
+    #: 就是垃圾，随手删掉之后数据落点会从 exe 同级悄悄跳到 %LOCALAPPDATA%，
+    #: 而"我的任务和设置怎么都没了"正是这一轮要根除的那个投诉。
+    PORTABLE_MARKER_TEXT = (
+        "FluentYTDL 便携模式标记\n"
+        "\n"
+        "这个文件的存在让 FluentYTDL 把配置、任务数据库和日志写在\n"
+        "FluentYTDL.exe 所在的这个目录里（便携使用，整个文件夹拷走即迁移）。\n"
+        "\n"
+        "删除这个文件会让数据落点改为 %LOCALAPPDATA%\\FluentYTDL —— 已有数据\n"
+        "会在下次启动时被自动搬过去（只复制，旧文件保留），但请不要在\n"
+        "没有备份的情况下随手删它。\n"
+    )
+
     def create_7z(self, source_dir: Path, output_name: str) -> Path:
+        self._assert_dist_clean(source_dir)
         RELEASE_DIR.mkdir(exist_ok=True)
         output_path = RELEASE_DIR / f"{output_name}.7z"
         if output_path.exists():
             output_path.unlink()
 
-        sevenzip = shutil.which("7z") or shutil.which("7za")
-        if sevenzip:
-            subprocess.run(
-                [sevenzip, "a", "-t7z", "-mx=9", "-mmt=on", str(output_path), "."],
-                check=True,
-                cwd=source_dir,
-            )
-        else:
-            import importlib
+        # 便携标记只进这一个归档，**绝不落进 source_dir**（= `dist/FluentYTDL/`）。
+        # dist/ 是 create_app_core_7z() 与 build_setup() 的共同取材地：标记一旦写进去，
+        # app-core 和 setup.exe 会跟着带上它（安装版于是把数据写进 Program Files，
+        # 正是 P0-1 的成因），而开发者从 dist/ 直接运行也会污染 dist/。
+        # `dist_forbidden` 里列着 portable.txt，所以哪天真写进去了，上面那行
+        # `_assert_dist_clean()` 会直接把构建打断 —— 这条注释不是唯一的防线。
+        # 把 ~500MB 的树复制到临时目录再打包太贵，所以走"先打包、再追加一个文件"。
+        import tempfile
 
-            py7zr = importlib.import_module("py7zr")
-            with py7zr.SevenZipFile(output_path, "w") as archive:
-                archive.writeall(source_dir, arcname=".")
+        with tempfile.TemporaryDirectory(prefix="fluentytdl_portable_") as tmp_dir:
+            marker = Path(tmp_dir) / "portable.txt"
+            marker.write_text(self.PORTABLE_MARKER_TEXT, encoding="utf-8")
 
-        print(f"📦 压缩包: {output_path.name}")
+            sevenzip = shutil.which("7z") or shutil.which("7za")
+            if sevenzip:
+                subprocess.run(
+                    [sevenzip, "a", "-t7z", "-mx=9", "-mmt=on", str(output_path), "."],
+                    check=True,
+                    cwd=source_dir,
+                )
+                # 第二次 `a` 是追加：路径给绝对路径时 7z 会剥掉目录部分，
+                # 文件正好落在归档根 —— 与 exe 同级，这是 paths.py 找它的地方。
+                subprocess.run(
+                    [sevenzip, "a", "-t7z", "-mx=9", str(output_path), str(marker)],
+                    check=True,
+                )
+            else:
+                import importlib
+
+                py7zr = importlib.import_module("py7zr")
+                # 必须在**同一个 "w" 会话**里写：py7zr 的 "w" 是截断重写，
+                # 二次打开会把上面 writeall 的结果整棵覆盖掉。
+                with py7zr.SevenZipFile(output_path, "w") as archive:
+                    archive.writeall(source_dir, arcname=".")
+                    archive.write(marker, arcname="portable.txt")
+
+        print(f"📦 压缩包: {output_path.name} (含 portable.txt)")
         return output_path
 
     def build_setup(self, source_dir: Path) -> Path:
+        self._assert_dist_clean(source_dir)
         iss_file = INSTALLER_DIR / "FluentYTDL.iss"
         if not iss_file.exists():
             raise FileNotFoundError(
@@ -816,7 +956,41 @@ class Builder:
                 "updater.exe 是自动更新功能的必要组件，请确保 scripts/updater.spec 已提交到仓库。"
             )
 
+        # 前置检查：py7zr 是 updater 解压 app-core 归档的唯一手段。
+        # updater.spec 里也有一道同样的断言（collect_submodules 返回 [] 时 SystemExit），
+        # 这里再拦一次是为了让 `--target all` 在几秒内失败，而不是先花几分钟
+        # 打完主程序再倒在 updater 这一步。
+        # 检查当前解释器：PyInstaller 是用 sys.executable 以子进程方式调起的，
+        # 收集 hiddenimports 时看到的就是这个环境。
+        if importlib.util.find_spec("py7zr") is None:
+            raise ModuleNotFoundError(
+                "构建 updater.exe 需要 py7zr，当前环境未安装。\n"
+                "  修复: uv sync --extra build\n"
+                '  或:   pip install "py7zr==1.1.3"\n'
+                "版本须与 pyproject.toml 的 build extra 及 release.yml 的 "
+                "PY7ZR_VERSION 严格一致。"
+            )
+
         print("🔨 构建 updater.exe ...")
+
+        # PE 版本资源。复用主程序那套 generate_version_info()，只换字符串字段。
+        # 版本号与主程序同源（self.version）—— 这不只是为了好看：
+        # component_update_manager::launch_pending_updater() 会读安装目录里
+        # updater.exe 的这份资源做能力探测，决定能不能传 --data-dir /
+        # --origin-user-sid（旧 updater 见到未知参数会 SystemExit(2)）。
+        # 版本号缺失 → 一律当旧版 → 看门狗永远退化成 survival 模式。
+        updater_version_file = ROOT / "build" / "updater_version_info.txt"
+        generate_version_info(
+            self.version,
+            updater_version_file,
+            description="FluentYTDL 更新程序",
+            internal_name="FluentYTDLUpdater",
+            original_filename="updater.exe",
+        )
+
+        env = os.environ.copy()
+        env["FLUENTYTDL_UPDATER_VERSION_FILE"] = str(updater_version_file)
+
         cmd = [
             sys.executable,
             "-m",
@@ -828,7 +1002,7 @@ class Builder:
             str(ROOT / "dist"),
             str(spec_file),
         ]
-        subprocess.run(cmd, check=True, cwd=ROOT)
+        subprocess.run(cmd, env=env, check=True, cwd=ROOT)
 
         updater_exe = ROOT / "dist" / "updater.exe"
         if not updater_exe.exists():
@@ -842,33 +1016,89 @@ class Builder:
             shutil.copy2(updater_exe, dest)
             print(f"✓ updater.exe 已复制到 {dest}")
 
+            # 同一份产物再复制成 updater.exe.new —— updater 自更新的投递载体。
+            #
+            # updater.exe 被 app_core_exclude 明确排除（用户机器上它正在运行，
+            # 覆写不了），所以修在 updater 里的东西没法通过 app-core 送出去 ——
+            # 已安装用户手上的 updater 会永远是旧的那个。`.new` 是绕开这个死锁的
+            # 唯一通道：它对旧 updater 只是归档里一个普通文件，搬进安装目录即完成
+            # 投递；替换由新版 main.py（§3）或提权 updater 的退出后 helper（Step 8）
+            # 完成。两端细节见 core/updater.py::_self_update_updater()。
+            #
+            # 排在 create_app_core_7z() / create_7z() / build_setup() 之前是硬要求，
+            # 而 run_all() 里 build_updater() 恰好是第一个打包动作 —— 顺序天然成立。
+            # 注意 full.7z 与 setup.exe 也会带上这个文件：无害（它们本来就带
+            # updater.exe），且能让便携版第一次启动就顺手做一次自更新演练。
+            dest_new = copy_to / "updater.exe.new"
+            shutil.copy2(updater_exe, dest_new)
+            print(f"✓ updater.exe.new 已复制到 {dest_new}（app-core 自更新载体）")
+
         print(f"✓ updater.exe 构建完成: {updater_exe}")
         return updater_exe
 
     def create_app_core_7z(self, source_dir: Path) -> Path:
-        """创建 app-core 归档（仅主程序，不含 bin/ 工具）。"""
+        """创建 app-core 归档（仅主程序，不含 bin/ 工具）。
+
+        白名单打包。updater.py::_move_extracted_files() 会对归档里出现过的
+        每一个顶层条目先 rmtree/unlink 再 move —— 所以"归档里有什么"直接决定
+        "用户安装目录里什么会被删"。归档干净是用户数据安全的第一道保证，
+        而且是唯一根治的那道（updater 侧的 PROTECTED_NAMES 只是纵深防御）。
+        """
+        self._assert_dist_clean(source_dir)
+
+        include = self.config.get("app_core_include") or []
+        exclude = self.config.get("app_core_exclude") or []
+        if not include:
+            raise ValueError(
+                "pyproject.toml 的 [tool.fluentytdl.build].app_core_include 为空或未解析成功。\n"
+                "  该数组必须写成**单行**（见 _assert_dist_clean 里的同款说明）。"
+            )
+
+        names = [item.name for item in source_dir.iterdir()]
+        keep, drop, unknown = classify_app_core_items(names, include, exclude)
+
+        if unknown:
+            raise RuntimeError(
+                "app-core 白名单遇到未登记的顶层条目，构建中止：\n"
+                + "\n".join(f"  ? {n}" for n in unknown)
+                + "\n\n二选一：\n"
+                "  · 它是运行期残留 → 删掉 dist/ 重新构建\n"
+                "  · 它是新增的合法发布物 → 加进 pyproject.toml 的\n"
+                "    [tool.fluentytdl.build].app_core_include（要随更新分发）\n"
+                "    或 app_core_exclude（不随更新分发）"
+            )
+
+        # 白名单里声明了却不存在 → 大概率是 spec 的 datas 改了名字而这里忘了跟。
+        # updater.exe.new 例外：它由 build_updater() 产出，单独跑 create_app_core_7z
+        # 时（或 build_updater 被跳过时）允许缺失。
+        missing = [n for n in include if n not in names and n != "updater.exe.new"]
+        if missing:
+            raise FileNotFoundError(
+                "app_core_include 声明的条目在 dist 中不存在：\n"
+                + "\n".join(f"  ✗ {n}" for n in missing)
+                + f"\n\ndist 目录: {source_dir}\n"
+                "若发布物已改名/移除，请同步更新 pyproject.toml 的 app_core_include。"
+            )
+        if "updater.exe.new" in include and "updater.exe.new" not in names:
+            print("  ⚠ updater.exe.new 不在 dist 中，本次归档不含 updater 自更新投递")
+
         RELEASE_DIR.mkdir(exist_ok=True)
         output_name = f"FluentYTDL-{self._full_version}-{self.arch}-app-core"
         output_path = RELEASE_DIR / f"{output_name}.7z"
         if output_path.exists():
             output_path.unlink()
 
-        # 创建临时目录，只包含 app-core 文件
+        print(f"  app-core 收录 {len(keep)} 项，排除 {len(drop)} 项 ({', '.join(drop)})")
+
+        # 创建临时目录，只包含 app-core 白名单内的文件
         import tempfile
 
         with tempfile.TemporaryDirectory(prefix="fluentytdl_appcore_") as tmp_dir:
             tmp_path = Path(tmp_dir)
 
-            # 复制主程序文件（排除 bin/ 和 updater.exe）
-            # updater.exe 不包含在 app-core 归档中，因为 updater.exe 正在运行时
-            # 无法被覆写（onefile 模式进程锁定 exe）。updater.exe 的更新通过
-            # 延迟替换机制处理（见 main.py _cleanup_update_residuals）
-            for item in source_dir.iterdir():
-                if item.name == "bin":
-                    continue  # 排除 bin/ 工具目录
-                if item.name == "updater.exe":
-                    continue  # 排除 updater.exe（运行时锁死）
-                dest = tmp_path / item.name
+            for name in keep:
+                item = source_dir / name
+                dest = tmp_path / name
                 if item.is_dir():
                     shutil.copytree(item, dest, dirs_exist_ok=True)
                 else:

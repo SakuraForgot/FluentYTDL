@@ -182,7 +182,13 @@ class BgUtilHTTPPTP(BgUtilPTPBase):
             )
 
         po_token = response_json["poToken"]
-        self.logger.trace("Generated POT: {}...", po_token[:16] if po_token else "empty")
+        # 本地修补（上游 1.3.0 缺陷）：这里原本是 loguru 风格的
+        # `trace("Generated POT: {}...", po_token[:16])`，但 yt-dlp 的
+        # YoutubeIEContentProviderLogger.trace() 只接受一个位置参数，于是
+        # 每次成功铸出 Token 都在 return 前一行抛 TypeError —— 服务端一切正常，
+        # Token 却永远交不到 yt-dlp 手里，POT 静默失效。改为 f-string。
+        # 同时只记长度不记内容，符合项目「日志中不得出现 token」的约束。
+        self.logger.trace(f"Generated POT: len={len(po_token) if po_token else 0}")
         return PoTokenResponse(po_token=po_token)
 
 

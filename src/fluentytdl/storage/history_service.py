@@ -14,6 +14,7 @@ from dataclasses import asdict, dataclass
 from typing import Any
 
 from ..utils.logger import logger
+from ..utils.validators import UrlValidator
 from .task_db import task_db
 
 # ---------------------------------------------------------------------------
@@ -67,12 +68,9 @@ class HistoryGroup:
         return any(r.file_exists for r in self.records)
 
 
-_YT_ID_RE = re.compile(r"(?:v=|youtu\.be/|/shorts/)([A-Za-z0-9_-]{11})")
-
-
 def extract_video_id(url: str) -> str:
-    m = _YT_ID_RE.search(url or "")
-    return m.group(1) if m else ""
+    """保留此模块级函数名（历史记录去重在用），实现统一到 utils 层的那一份。"""
+    return UrlValidator.extract_video_id(url)
 
 
 # 无效回调注册：因为现在是实时的 TaskDB，UI 层不再依赖此回调试图新增逻辑

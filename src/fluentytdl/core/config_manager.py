@@ -73,6 +73,17 @@ class ConfigManager(QObject):
         # Default OFF to avoid surprising behavior changes.
         "playlist_skip_authcheck": False,
         "playlist_extract_concurrency": 2,
+        # 解析结果的进程内 TTL 缓存（不落盘）。覆盖弹窗解析、播放列表 flat 列举、
+        # 频道标签页，以及播放列表逐条深解析；下载路径永不读取
+        # （必须拿新鲜签名 URL，否则 403）。
+        # 设置页「解析结果保留时间」直接写 parse_cache_ttl_seconds，0 表示不保留。
+        "parse_cache_enabled": True,
+        "parse_cache_ttl_seconds": 1800,
+        # 一次性迁移标记：旧版本把保留时间写死成 300 且无 UI 入口，见 _load()。
+        "parse_cache_ttl_migrated": True,
+        # 播放列表逐条深解析（entry_detail）的独立容量。它与弹窗结果分桶存放，
+        # 调大只会占更多内存，不会挤掉弹窗/列表缓存。
+        "parse_cache_entry_max": 64,
         # Dependency update source
         # github: official github api/releases
         # ghproxy: use ghproxy mirror
@@ -252,6 +263,9 @@ class ConfigManager(QObject):
                 pm = "off"
             merged["proxy_mode"] = pm
 
+            # Migration: parse cache retention default 5 min -> 30 min.
+            self._migrate_parse_cache_ttl(data, merged)
+
             # Normalize tool paths: if a user keeps an old absolute path that no longer
             # exists (common after packaging/moving folders), fall back to auto-detect.
             for key in ("ffmpeg_path", "yt_dlp_exe_path", "js_runtime_path"):
@@ -265,6 +279,24 @@ class ConfigManager(QObject):
             return merged
         except Exception:
             return self.DEFAULT_CONFIG.copy()
+
+    @staticmethod
+    def _migrate_parse_cache_ttl(data: dict[str, Any], merged: dict[str, Any]) -> None:
+        """解析结果保留时间：旧默认 300s（5 分钟）抬到 1800s（半小时）。
+
+        `save()` 写的是整份合并后的配置，所以任何存过盘的旧安装都带着 300。而这个键
+        在设置页「解析结果保留时间」上线之前**没有任何 UI 入口**，磁盘上的 300 只可能
+        是旧默认值，不可能是用户的选择，抬上去不会覆盖任何人的决定。
+
+        标记位保证只跑一次：设置页上线后用户真挑了「5 分钟」，下次启动不能被悄悄改回
+        半小时。比较刻意用 `== 300` 而不是 `int(...)`——`_load()` 整段外面套着 except，
+        这里抛一次异常会把用户的整份配置回退成默认值，代价远大于收益。
+        """
+        if data.get("parse_cache_ttl_migrated"):
+            return
+        if data.get("parse_cache_ttl_seconds") == 300:
+            merged["parse_cache_ttl_seconds"] = 1800
+        merged["parse_cache_ttl_migrated"] = True
 
     def save(self) -> None:
         try:

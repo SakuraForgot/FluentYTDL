@@ -25,6 +25,7 @@ from qfluentwidgets import (
     NavigationItemPosition,
     SplashScreen,
     SubtitleLabel,
+    SystemThemeListener,
     ToolTipFilter,
     ToolTipPosition,
     TransparentToolButton,
@@ -181,6 +182,11 @@ class MainWindow(FluentWindow):
         self.setWindowTitle(title)
 
         self.resize(1150, 780)
+        # 锁定最小宽度，防止两个 bug 导致的自动变宽：
+        # 1. 切换到英文时文本变宽触发的布局最小宽度增长
+        # 2. NavigationPanel 展开/收起动画触发的 setFixedWidth 棘轮效应
+        # 用户仍可手动拖拽边缘把窗口拉宽，只阻止自动增长
+        self.setMinimumWidth(1150)
 
         # 居中
         desktop = QApplication.screens()[0].availableGeometry()
@@ -215,6 +221,13 @@ class MainWindow(FluentWindow):
         # === 系统组件 ===
         self.init_system_tray()
         self.init_clipboard_monitor()
+
+        # === 系统主题跟随 ===
+        # Theme.AUTO 只在启动时解析一次系统主题，之后系统深浅色切换不会
+        # 触发 themeChanged。监听器补上这一环：它在系统主题变化时重发
+        # themeChanged，所有已连接 qconfig.themeChanged 的组件随之刷新。
+        self.themeListener = SystemThemeListener(self)
+        self.themeListener.start()
 
         # 启动动画
         self.splashScreen = SplashScreen(self.windowIcon(), self)
@@ -259,6 +272,7 @@ class MainWindow(FluentWindow):
         from ..core.component_update_manager import component_update_manager
 
         component_update_manager.app_update_available.connect(self._on_app_update_available)
+        component_update_manager.apply_requested.connect(self._on_update_apply_requested)
 
         # === 首次启动检测 ===
         QTimer.singleShot(1000, self.check_first_run)
@@ -299,6 +313,19 @@ class MainWindow(FluentWindow):
             duration=10000,
             parent=self,
         )
+
+    def _on_update_apply_requested(self) -> None:
+        """后端已批准更新，执行优雅退出。
+
+        `updater.exe` 不在这里启动 —— 它由 `main.py` 在 `app.exec()` 返回之后拉起，
+        这样 `quit_app()` 里那些可能耗时数秒的收尾（worker shutdown、db_writer 落盘）
+        必然在 updater 开始替换文件之前完成。
+
+        用 singleShot 把退出挪出信号发射栈：此刻我们还在
+        `request_app_core_update()` 的 emit 里，不能在这里同步跑完整个 shutdown。
+        """
+        logger.info("[MainWindow] 收到更新申请，开始优雅退出")
+        QTimer.singleShot(0, self.quit_app)
 
     def init_navigation(self):
         # 减小侧边栏展开时的宽度，避免留白过多
@@ -517,10 +544,24 @@ class MainWindow(FluentWindow):
             self.hide()
             event.ignore()
         else:
+            self._stop_theme_listener()
             download_manager.shutdown(grace_ms=2000)
             super().closeEvent(event)
 
+    def _stop_theme_listener(self):
+        """停止系统主题监听线程，避免退出时留下悬挂线程。"""
+        listener = getattr(self, "themeListener", None)
+        if listener is None:
+            return
+        try:
+            listener.terminate()
+            listener.deleteLater()
+        except Exception:
+            pass
+        self.themeListener = None
+
     def quit_app(self):
+        self._stop_theme_listener()
         download_manager.shutdown(grace_ms=2000)
         QApplication.quit()
 
@@ -589,6 +630,7 @@ class MainWindow(FluentWindow):
         smart_detect: bool = False,
         playlist_flat: bool = False,
         target_tab: str | None = None,
+        preloaded_info: dict | None = None,
     ):
         """通用方法：显示非阻塞的任务配置窗口"""
         try:
@@ -601,6 +643,7 @@ class MainWindow(FluentWindow):
                 smart_detect=smart_detect,
                 playlist_flat=playlist_flat,
                 target_tab=target_tab,
+                preloaded_info=preloaded_info,
             )
 
             # 连接信号
@@ -644,6 +687,7 @@ class MainWindow(FluentWindow):
         smart_detect: bool = False,
         playlist_flat: bool = False,
         target_tab: str | None = None,
+        preloaded_info: dict | None = None,
     ):
         self._remember_recent_target_url(url)
         self._show_config_window(
@@ -652,11 +696,23 @@ class MainWindow(FluentWindow):
             smart_detect=smart_detect,
             playlist_flat=playlist_flat,
             target_tab=target_tab,
+            preloaded_info=preloaded_info,
         )
 
-    def show_vr_selection_dialog(self, url: str, smart_detect: bool = True):
+    def show_vr_selection_dialog(
+        self,
+        url: str,
+        smart_detect: bool = True,
+        preloaded_info: dict | None = None,
+    ):
         self._remember_recent_target_url(url)
-        self._show_config_window(url, mode="vr", vr_mode=True, smart_detect=smart_detect)
+        self._show_config_window(
+            url,
+            mode="vr",
+            vr_mode=True,
+            smart_detect=smart_detect,
+            preloaded_info=preloaded_info,
+        )
 
     def _show_channel_dialog(self, url: str, target_tab: str = "all") -> None:
         """频道解析入口：规范化 URL 后，走播放列表 flat 解析路径，传递 target_tab。"""
@@ -668,15 +724,19 @@ class MainWindow(FluentWindow):
             normalized, smart_detect=False, playlist_flat=True, target_tab=target_tab
         )
 
-    def handle_vr_switch_request(self, url: str):
-        """响应智能检测的 VR 切换请求"""
-        logger.info(f"Switching to VR mode for URL: {url}")
-        self.show_vr_selection_dialog(url, smart_detect=True)
+    def handle_vr_switch_request(self, url: str, preloaded_info: dict | None = None):
+        """响应智能检测的 VR 切换请求。
 
-    def handle_normal_switch_request(self, url: str):
+        preloaded_info 是切换前那一轮已完成解析的结果，仅用于新窗口的首屏预览；
+        VR 格式必须由 android_vr 重新解析，不能沿用。
+        """
+        logger.info(f"Switching to VR mode for URL: {url}")
+        self.show_vr_selection_dialog(url, smart_detect=True, preloaded_info=preloaded_info)
+
+    def handle_normal_switch_request(self, url: str, preloaded_info: dict | None = None):
         """响应智能检测的普通模式切换请求"""
         logger.info(f"Switching to Normal mode for URL: {url}")
-        self.show_selection_dialog(url, smart_detect=True)
+        self.show_selection_dialog(url, smart_detect=True, preloaded_info=preloaded_info)
 
     def show_subtitle_selection_dialog(self, url: str):
         self._remember_recent_target_url(url)

@@ -31,11 +31,13 @@ from qfluentwidgets import (
     PrimaryPushButton,
     PushButton,
     SegmentedWidget,
+    StrongBodyLabel,
     SubtitleLabel,
     SwitchButton,
 )
 from qframelesswindow import FramelessWindow
 
+from fluentytdl.ui.components.common.themed_title_bar import ThemedTitleBar
 from fluentytdl.ui.components.dialogs.section_range_selector import SectionRangeSelector
 from fluentytdl.ui.components.dialogs.selection_dialog import (
     PlaylistFormatDialog,
@@ -65,6 +67,7 @@ from ....utils.filesystem import sanitize_filename
 from ....utils.image_loader import get_image_loader
 from ....utils.logger import logger
 from ....utils.paths import resource_path
+from ....utils.validators import UrlValidator
 from ....youtube.youtube_service import YoutubeServiceOptions
 from ...delegates.playlist_delegate import PlaylistItemDelegate
 from ...dialogs.playlist_subtitle_dialog import PlaylistSubtitleConfigDialog
@@ -310,8 +313,10 @@ class DownloadConfigWindow(FramelessWindow):
     downloadRequested = Signal(list)  # 发送任务列表 [tasks]
     windowClosed = Signal(object)  # 发送自身引用，用于主窗口清理
 
-    request_vr_switch = Signal(str)  # 请求切换到 VR 模式
-    request_normal_switch = Signal(str)  # 请求切换回普通模式
+    # 第二个参数携带切换前那一次「已经解析完成」的 info_dict（可能为 None）。
+    # 新窗口用它先把标题/缩略图画出来，不必让用户对着空白转圈等第二轮子进程。
+    request_vr_switch = Signal(str, object)  # 请求切换到 VR 模式
+    request_normal_switch = Signal(str, object)  # 请求切换回普通模式
 
     def __init__(
         self,
@@ -323,6 +328,7 @@ class DownloadConfigWindow(FramelessWindow):
         smart_detect: bool = False,
         playlist_flat: bool = False,
         target_tab: str | None = None,
+        preloaded_info: dict[str, Any] | None = None,
     ):
         # parent=None ensures independent window behavior (taskbar icon, not always-on-top of main)
         super().__init__(parent=None)
@@ -333,6 +339,12 @@ class DownloadConfigWindow(FramelessWindow):
         self._mode = mode
         self._smart_detect = smart_detect
         self._playlist_flat = playlist_flat
+        # 智能模式切换时上一轮的解析结果。只用于渲染加载页的预览条，
+        # 绝不参与格式选择/下载——VR 与普通模式的格式列表来源不同，必须以本轮解析为准。
+        self._preloaded_info = preloaded_info if isinstance(preloaded_info, dict) else None
+        self._preview_thumb_url = ""
+        self._preview_show_on_thumb = False
+        self._window_state = WindowState.LOADING
         self.video_info: dict[str, Any] | None = None
         self.video_info_dto: VideoInfo | None = None
         try:
@@ -343,6 +355,8 @@ class DownloadConfigWindow(FramelessWindow):
             self._download_dir = ""
         self._download_dir_edit: LineEdit | None = None
 
+        # 换成跟随主题的标题栏，否则深色模式下最小化/最大化/关闭按钮是黑图标
+        self.setTitleBar(ThemedTitleBar(self))
         self.titleBar.raise_()
 
         # === UI Init ===
@@ -487,6 +501,28 @@ class DownloadConfigWindow(FramelessWindow):
         )
         self.loadingTitleLabel.setAlignment(Qt.AlignmentFlag.AlignHCenter)
         self.loadingLayout.addWidget(self.loadingTitleLabel, 0, Qt.AlignmentFlag.AlignHCenter)
+
+        # 加载页预览条：智能模式切换（普通 ⇄ VR）时，上一轮解析结果直接带过来先渲染，
+        # 把「4 秒白屏转圈」变成「立刻看到是哪个视频，格式还在解析」。
+        # 只放标题 + 缩略图：不放格式列表，避免用户对着上一轮模式的格式做选择。
+        self.previewWidget = QWidget(self.loadingWidget)
+        preview_h = QHBoxLayout(self.previewWidget)
+        preview_h.setContentsMargins(0, 0, 0, 0)
+        preview_h.setSpacing(12)
+
+        self.previewThumb = ImageLabel(self.previewWidget)
+        self.previewThumb.setFixedSize(160, 90)
+        self.previewThumb.setScaledContents(True)
+        self.previewThumb.setBorderRadius(8, 8, 8, 8)
+        preview_h.addWidget(self.previewThumb)
+
+        self.previewTitleLabel = StrongBodyLabel("", self.previewWidget)
+        self.previewTitleLabel.setWordWrap(True)
+        self.previewTitleLabel.setMaximumWidth(320)
+        preview_h.addWidget(self.previewTitleLabel, 1)
+
+        self.previewWidget.hide()
+        self.loadingLayout.addWidget(self.previewWidget, 0, Qt.AlignmentFlag.AlignHCenter)
 
         self.loadingRing = IndeterminateProgressRing(self.loadingWidget)
         self.loadingRing.setFixedSize(46, 46)
@@ -1079,8 +1115,10 @@ class DownloadConfigWindow(FramelessWindow):
             y_offset = 30
             x_offset = 0
         else:
-            w, h = 760, 750
-            y_offset = 80
+            # 单视频窗口已加高到 880，再上移就会顶到屏幕上沿（被 y<0 钳制），
+            # 所以这里不做垂直偏移，严格按视觉中心摆放。
+            w, h = 760, 880
+            y_offset = 0
             x_offset = 0
 
         target_geo = self._get_target_geometry(w, h, y_offset, x_offset)
@@ -1183,6 +1221,9 @@ class DownloadConfigWindow(FramelessWindow):
         self, state: WindowState, title: str = "", show_ring: bool = False
     ) -> None:
         """Central state machine for the main panel visibility."""
+        # 记录当前状态：窗口尚未 show() 时子控件的 isVisible() 一律为 False，
+        # 靠它判断「还在加载页吗」会误判，所以这里留一份权威值。
+        self._window_state = state
         self.loadingWidget.setVisible(state == WindowState.LOADING)
         self.contentWidget.setVisible(state == WindowState.CONTENT)
         self.retryWidget.setVisible(state == WindowState.ERROR_COOKIE)
@@ -1205,6 +1246,8 @@ class DownloadConfigWindow(FramelessWindow):
         self._is_closing = False
         self.video_info = None
         self.video_info_dto = None
+        self._t_extract_start = time.perf_counter()
+        self._first_paint_logged = False
         try:
             if self.worker:
                 self.worker.cancel()
@@ -1216,9 +1259,8 @@ class DownloadConfigWindow(FramelessWindow):
             self.tr("正在使用 VR 模式解析...") if self._vr_mode else self.tr("正在解析链接..."),
             show_ring=True,
         )
+        self._show_parse_preview()
         self._current_options = None
-
-        from ....utils.validators import UrlValidator
 
         self._is_channel = UrlValidator.is_channel_url(self.url)
 
@@ -1242,12 +1284,61 @@ class DownloadConfigWindow(FramelessWindow):
             w.start()
         else:
             w = InfoExtractWorker(
-                self.url, self._current_options, playlist_flat=self._playlist_flat
+                self.url,
+                self._current_options,
+                playlist_flat=self._playlist_flat,
+                # 封面模式不读缓存：选中的 thumbnails[].url 会直接变成下载任务的 URL
+                read_cache=self._mode != "cover",
             )
             w.finished.connect(self.on_parse_success)
             w.error.connect(self.on_parse_error)
             self.worker = w
             w.start()
+
+    def _show_parse_preview(self) -> None:
+        """渲染加载页预览条（标题 + 缩略图），让加载页在 yt-dlp 返回前就有内容。
+
+        两个来源，按信息量从高到低：
+        1. preloaded_info —— 智能模式切换（普通 ⇄ VR）带过来的上一轮解析结果，
+           标题和缩略图都是真的。
+        2. 仅凭 URL 推出的 YouTube 缩略图 —— 覆盖「粘贴链接直接解析」这个最常见
+           的场景。标题此时还不知道，只铺图。
+
+        缩略图走全局 image_loader（异步 QNetworkAccessManager，不占 UI 线程），
+        与正文那张共用缓存，命中时几乎瞬时。
+        """
+        info = self._preloaded_info
+        title = str((info or {}).get("title") or "").strip()
+        thumb_url = _infer_entry_thumbnail(info) if info else ""
+
+        if not thumb_url:
+            # 播放列表 / 频道 / 非 YouTube 链接取不到 ID，这里自然返回空串。
+            thumb_url = UrlValidator.youtube_thumbnail_url(self.url)
+
+        self._preview_thumb_url = ""
+        self._preview_show_on_thumb = False
+        self.previewWidget.hide()
+
+        if not title and not thumb_url:
+            return
+
+        self.previewTitleLabel.setText(title)
+        self.previewTitleLabel.setVisible(bool(title))
+        self.previewThumb.setVisible(bool(thumb_url))
+
+        if thumb_url:
+            self._preview_thumb_url = thumb_url
+            try:
+                self.image_loader.load(thumb_url, target_size=(160, 90), radius=8)
+            except Exception:
+                pass
+
+        if title:
+            self.previewWidget.show()
+        else:
+            # 没有标题时整条只有一张图，先别显示：否则会先摆一个 160×90 的空框，
+            # 图到了才填上，比什么都不显示更像故障。等图到了再一次性亮出来。
+            self._preview_show_on_thumb = True
 
     def _on_channel_progress(self, msg: str) -> None:
         self.loadingTitleLabel.setText(msg)
@@ -1260,36 +1351,13 @@ class DownloadConfigWindow(FramelessWindow):
         for tab, cache_data in results.items():
             self._channel_caches[tab] = cache_data
 
-        # Construct a combined info_dict
-        combined_entries = []
-        for tab in ["videos", "shorts", "streams"]:
-            cache = self._channel_caches.get(tab, {})
-            if cache.get("status") == "loaded" and cache.get("data"):
-                entries = cache["data"].get("entries", [])
-                combined_entries.extend(entries)
-
-        if not combined_entries and all(
-            c.get("status") in ("unsupported", "unloaded")
-            for c in self._channel_caches.values()
-            if c is not self._channel_caches.get("all")
-        ):
+        info_dict = self._build_channel_info()
+        if info_dict is None:
+            # 一个标签页都没加载成功
             self.on_parse_error(
                 {"title": self.tr("解析失败"), "content": self.tr("未能找到任何频道内容。")}
             )
             return
-
-        # Set combined into the first loaded tab's dict as base
-        base_info = next(
-            (
-                c["data"]
-                for c in self._channel_caches.values()
-                if c.get("status") == "loaded" and c.get("data")
-            ),
-            {},
-        )
-        info_dict = dict(base_info)
-        info_dict["entries"] = combined_entries
-        info_dict["_type"] = "playlist"
 
         # Calculate max tab count to update UI
         if all(
@@ -1299,6 +1367,49 @@ class DownloadConfigWindow(FramelessWindow):
             self._channel_caches["all"]["status"] = "loaded"
 
         self.on_parse_success(info_dict)
+
+    def _build_channel_info(self) -> dict[str, Any] | None:
+        """把 `_channel_caches` 里当前标签页的数据拼成一个 playlist 形态的 info_dict。
+
+        解析完成与纯缓存切换两条路径原本各写了一份拼装逻辑，语义已经漂移
+        （前者不管选了哪个标签页都把三个 tab 全串上）。合并成一份，顺带让
+        "只看某个标签页"在两条路径上一致。
+
+        排序在这里做，不发 `--playlist-reverse`：后者与 `--lazy-playlist` 语义相冲
+        （要倒序就得先拿全），且每切一次排序都要重跑 1~3 次子进程。本地反转是瞬时的，
+        reverse 因此也不必进解析缓存的键。反转按 tab 各自进行再串联，与
+        `--playlist-reverse` 的逐 tab 语义一致——tab 之间仍是 videos→shorts→streams。
+
+        Returns:
+            拼好的 info_dict；一个标签页都没加载成功时返回 None。
+        """
+        tabs = (
+            ["videos", "shorts", "streams"] if self._channel_tab == "all" else [self._channel_tab]
+        )
+
+        combined_entries: list[Any] = []
+        # 频道级元数据（标题、uploader 等）取**选中范围内**第一个加载成功的 tab。
+        # 不能扫全部缓存：只看 shorts 而 shorts 没加载出来时，会拿 videos 的元数据
+        # 配一个空 entries 端出去，把"这个标签页没数据"伪装成"这个频道是空的"。
+        base_info: dict[str, Any] | None = None
+        for tab in tabs:
+            cache = self._channel_caches.get(tab, {})
+            if cache.get("status") != "loaded" or not cache.get("data"):
+                continue
+            if base_info is None:
+                base_info = cache["data"]
+            entries = list(cache["data"].get("entries") or [])
+            if self._channel_reverse:
+                entries.reverse()
+            combined_entries.extend(entries)
+
+        if base_info is None:
+            return None
+
+        info_dict = dict(base_info)
+        info_dict["entries"] = combined_entries
+        info_dict["_type"] = "playlist"
+        return info_dict
 
     def _ask_switch_to_normal(self) -> bool:
         """询问用户是否切换回普通模式"""
@@ -1335,15 +1446,17 @@ class DownloadConfigWindow(FramelessWindow):
             is_vr = check_is_vr_content(info_dict)
 
             # 1. 普通模式 -> VR 模式
+            # 这一轮解析（几秒级子进程）的结果在新窗口里没法当格式来源用，
+            # 但标题/缩略图是通用的，一并带过去先渲染首屏。
             if not self._vr_mode and is_vr:
-                self.request_vr_switch.emit(self.url)
+                self.request_vr_switch.emit(self.url, info_dict)
                 self.close()
                 return
 
             # 2. VR 模式 -> 普通模式
             elif self._vr_mode and not is_vr:
                 if self._ask_switch_to_normal():
-                    self.request_normal_switch.emit(self.url)
+                    self.request_normal_switch.emit(self.url, info_dict)
                     self.close()
                     return
         # ===================
@@ -1371,8 +1484,6 @@ class DownloadConfigWindow(FramelessWindow):
         )
 
         # 频道检测：通过 URL 模式判断
-        from ....utils.validators import UrlValidator
-
         self._is_channel = UrlValidator.is_channel_url(self.url)
 
         self._apply_dialog_size_for_mode()
@@ -1387,6 +1498,25 @@ class DownloadConfigWindow(FramelessWindow):
             self.setup_content_ui(info_dict)
 
         self._switch_to_state(WindowState.CONTENT)
+        self._log_first_paint()
+
+    def _log_first_paint(self) -> None:
+        """[DialogRender] 首屏可见耗时（P0 基线）：start_extraction → CONTENT 状态。"""
+        if getattr(self, "_first_paint_logged", False):
+            return
+        start = getattr(self, "_t_extract_start", None)
+        if start is None:
+            return
+        self._first_paint_logged = True
+        mode = "VR" if self._vr_mode else ("Channel" if self._is_channel else "Video")
+        if self._is_playlist:
+            mode = "Playlist"
+        logger.info(
+            "[DialogRender] 首屏可见耗时 {:.2f}s mode={} url={}",
+            time.perf_counter() - start,
+            mode,
+            self.url,
+        )
 
     def _clear_content_layout(self) -> None:
         def _clear_layout(layout) -> None:
@@ -1483,23 +1613,18 @@ class DownloadConfigWindow(FramelessWindow):
 
         raw_error = str(err_data.get("raw_error") or "")
 
-        from ....models.errors import ErrorCode
-        from ....utils.error_parser import diagnose_error
+        from ....diagnostics import diagnose
 
-        code_val = err_data.get("code")
-        if code_val is not None:
-            try:
-                category = ErrorCode(code_val)
-                friendly_title = err_data.get("user_title", "")
-                friendly_content = err_data.get("user_message", "")
-            except ValueError:
-                diag = diagnose_error(1, raw_error)
-                category = diag.code
-                friendly_title = diag.user_title
-                friendly_content = diag.user_message
+        # 上游已经带来结构化诊断时直接复用；否则就地重跑一次引擎。
+        if err_data.get("code"):
+            category = str(err_data.get("category") or "unknown")
+            fix_action = err_data.get("fix_action")
+            friendly_title = err_data.get("user_title", "")
+            friendly_content = err_data.get("user_message", "")
         else:
-            diag = diagnose_error(1, raw_error)
-            category = diag.code
+            diag = diagnose(1, raw_error)
+            category = diag.category
+            fix_action = diag.fix_action
             friendly_title = diag.user_title
             friendly_content = diag.user_message
 
@@ -1560,32 +1685,30 @@ class DownloadConfigWindow(FramelessWindow):
         idx = self.viewLayout.indexOf(self.titleLabel)
         self.viewLayout.insertWidget(idx + 1 if idx >= 0 else 1, self._error_label)
 
-        fix_action = err_data.get("fix_action")
-        if not fix_action and "diag" in locals():
-            fix_action = diag.fix_action
-
-        # === 根据分类决定显示哪个面板 ===
-        if fix_action == "update_component":
+        # === 决定显示哪个面板 ===
+        # 优先看规则表给出的 fix_action —— 那是规则作者对"该怎么修"的明确指示；
+        # 没有 fix_action 时才退回按 category 粗分。
+        if fix_action in ("update_component", "refresh_pot"):
             self._switch_to_state(WindowState.ERROR_COOKIE)
             self._authSegment.setCurrentItem("update")
             self.networkDiagWidget.hide()
-        elif category in (
-            ErrorCode.LOGIN_REQUIRED,
-            ErrorCode.COOKIE_EXPIRED,
-            ErrorCode.RATE_LIMITED,
-            ErrorCode.HTTP_ERROR,
-        ):
+        elif fix_action in ("extract_cookie", "relogin"):
             self._switch_to_state(WindowState.ERROR_COOKIE)
             self._authSegment.setCurrentItem("webview2")
             self.networkDiagWidget.hide()
-        elif category == ErrorCode.NETWORK_ERROR:
+        elif fix_action == "switch_proxy" or category == "network":
             self._switch_to_state(WindowState.ERROR_NETWORK)
             self._netProbeResult.setText("")
-        elif category in (ErrorCode.POTOKEN_FAILURE, ErrorCode.EXTRACTOR_ERROR, ErrorCode.GENERAL):
+        elif category == "auth":
+            self._switch_to_state(WindowState.ERROR_COOKIE)
+            self._authSegment.setCurrentItem("webview2")
+            self.networkDiagWidget.hide()
+        elif category in ("toolchain", "unknown"):
             self._switch_to_state(WindowState.ERROR_COOKIE)
             self._authSegment.setCurrentItem("update")
             self.networkDiagWidget.hide()
         else:
+            # media / filesystem：换 Cookie 或换节点都无济于事，只展示信息
             self._switch_to_state(WindowState.ERROR_GENERIC)
             self.retryWidget.hide()
             self.networkDiagWidget.hide()
@@ -1689,6 +1812,14 @@ class DownloadConfigWindow(FramelessWindow):
 
         # 不传 cookies_from_browser，由 auth_service 的 cookie file 提供
         self._current_options = None
+
+        # 用户显式重试意味着"上一次结果不可接受"，必须绕过 TTL 缓存重新走一遍子进程。
+        try:
+            from ....youtube.youtube_service import youtube_service
+
+            youtube_service.invalidate_parse_cache("用户手动重试解析")
+        except Exception:
+            pass
 
         self._switch_to_state(WindowState.LOADING, self.tr("正在重试解析..."), show_ring=True)
 
@@ -2428,6 +2559,7 @@ class DownloadConfigWindow(FramelessWindow):
             vr_mode=self._vr_mode,
             exec_limit=concurrency,
             parent=self,
+            read_cache=self._mode != "cover",
         )
         scheduler.detail_finished.connect(self._on_scheduler_detail_finished)
         scheduler.detail_error.connect(self._on_scheduler_detail_error)
@@ -2516,35 +2648,13 @@ class DownloadConfigWindow(FramelessWindow):
             )
 
         if not needs_fetch:
-            # 全部在缓存中，直接拼装并渲染
-            combined_entries = []
-            if self._channel_tab == "all":
-                for tab in ["videos", "shorts", "streams"]:
-                    cache = self._channel_caches.get(tab, {})
-                    if cache.get("status") == "loaded" and cache.get("data"):
-                        combined_entries.extend(cache["data"].get("entries", []))
-            else:
-                cache = self._channel_caches.get(self._channel_tab, {})
-                if cache.get("status") == "loaded" and cache.get("data"):
-                    combined_entries.extend(cache["data"].get("entries", []))
-
-            base_info = next(
-                (
-                    c["data"]
-                    for c in self._channel_caches.values()
-                    if c.get("status") == "loaded" and c.get("data")
-                ),
-                {},
-            )
-            if not base_info:
+            # 全部在缓存中，直接拼装并渲染（切排序走的就是这条路：零子进程、瞬时）
+            info_dict = self._build_channel_info()
+            if info_dict is None:
                 self.on_parse_error(
                     {"title": self.tr("切换失败"), "content": self.tr("找不到有效的频道数据。")}
                 )
                 return
-
-            info_dict = dict(base_info)
-            info_dict["entries"] = combined_entries
-            info_dict["_type"] = "playlist"
 
             # 由于没有发起请求，我们手动调用 parse_success
             # 为了防止卡死UI或状态机，通过 QTimer singleShot 调用
@@ -3287,6 +3397,21 @@ class DownloadConfigWindow(FramelessWindow):
 
         if self._is_closing:
             return
+
+        # 加载页预览条那张图：只认自己请求的那个 URL，与播放列表的行匹配互不干扰。
+        if self._preview_thumb_url and str(url or "").strip() == self._preview_thumb_url:
+            try:
+                self.previewThumb.setImage(pixmap)
+                self.previewThumb.setFixedSize(160, 90)
+                self.previewThumb.setBorderRadius(8, 8, 8, 8)
+                if self._preview_show_on_thumb:
+                    self._preview_show_on_thumb = False
+                    # 仍停在加载页才亮出来；解析已完成就不要再往回插一条预览。
+                    if self._window_state == WindowState.LOADING:
+                        self.previewWidget.show()
+            except Exception:
+                pass
+
         if not self._is_playlist:
             return
         u = str(url or "").strip()

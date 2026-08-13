@@ -2,17 +2,19 @@ from __future__ import annotations
 
 import os
 import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
+from urllib.parse import parse_qs, urlparse
 
 from PySide6.QtCore import QThread, Signal
 
 from ..core.config_manager import config_manager
+from ..diagnostics import diagnose
 from ..models.errors import YtDlpExecutionError
-from ..utils.error_parser import diagnose_error
 from ..utils.logger import logger
 from ..utils.translator import translate_error
 from ..youtube.youtube_service import YoutubeServiceOptions, youtube_service
-from ..youtube.yt_dlp_cli import YtDlpCancelled, run_dump_single_json
+from ..youtube.yt_dlp_cli import YtDlpCancelled
 from .executor import DownloadExecutor
 from .features import (
     DownloadContext,
@@ -28,6 +30,17 @@ class DownloadCancelled(Exception):
     pass
 
 
+class DownloadFailed(Exception):
+    """终态失败：错误已经诊断过并 emit 过，外层只需收尾，不要二次上报。
+
+    与 ``DownloadCancelled`` 的区别在于它不是用户取消——会员专属、视频已删除、
+    URL 不受支持这类 ``retry.policy == "never"`` 的错误走这条路，避免被 UI
+    误标成"任务已取消"。
+    """
+
+    pass
+
+
 class InfoExtractWorker(QThread):
     """解析工人：后台获取视频元数据 (JSON)，不下载"""
 
@@ -39,11 +52,16 @@ class InfoExtractWorker(QThread):
         url: str,
         options: YoutubeServiceOptions | None = None,
         playlist_flat: bool = False,
+        *,
+        read_cache: bool = True,
     ):
         super().__init__()
         self.url = url
         self.options = options
         self.playlist_flat = playlist_flat
+        # 封面模式传 False：解析结果里的 thumbnails[].url 会直接变成下载任务的 URL，
+        # 命中缓存等于发一条陈旧直链。跳过读，写照常。
+        self.read_cache = read_cache
         self._cancel_event = threading.Event()
 
     def cancel(self) -> None:
@@ -57,7 +75,10 @@ class InfoExtractWorker(QThread):
                 )
             else:
                 info = youtube_service.extract_info_for_dialog_sync(
-                    self.url, self.options, cancel_event=self._cancel_event
+                    self.url,
+                    self.options,
+                    read_cache=self.read_cache,
+                    cancel_event=self._cancel_event,
                 )
             if self._cancel_event.is_set():
                 return
@@ -93,65 +114,127 @@ class ChannelExtractWorker(QThread):
     def cancel(self) -> None:
         self._cancel_event.set()
 
+    @staticmethod
+    def _tab_display(tab: str) -> str:
+        from PySide6.QtCore import QCoreApplication
+
+        return {
+            "videos": QCoreApplication.translate("PlaylistWorker", "常规视频"),
+            "shorts": "Shorts",
+            "streams": QCoreApplication.translate("PlaylistWorker", "直播回放"),
+        }.get(tab, tab)
+
+    def _extract_tab(self, tab: str, ydl_opts: dict) -> tuple[str, dict | None, str]:
+        """解析单个标签页。在线程池里运行，因此**不发任何 Qt 信号**。
+
+        走服务层的 `extract_channel_flat` 而不是直呼子进程：URL 拼接、streams 的
+        `--match-filter`、`channel_tab` TTL 缓存、authcheck 重试与标签页兜底都在那边。
+        这里只负责把异常翻译成 UI 语义的 status —— 那是本层的职责。
+
+        Returns:
+            (tab, info, status)，status ∈ {"loaded", "unsupported", "empty", "cancelled"}
+        """
+        try:
+            info = youtube_service.extract_channel_flat(
+                self.base_url,
+                tab=tab,
+                base_ydl_opts=ydl_opts,
+                cancel_event=self._cancel_event,
+            )
+        except YtDlpCancelled:
+            return tab, None, "cancelled"
+        except Exception as e:
+            msg = str(e).lower()
+            if "does not have a" in msg and "tab" in msg:
+                return tab, None, "unsupported"
+            # 其他错误也标记为不支持以跳过，避免整个任务崩溃。
+            # 注意：这类失败**不进缓存**（服务层只在成功路径 put），
+            # 否则一次瞬时网络错误会让该标签页 5 分钟内重试都看不到。
+            logger.warning(f"频道 {tab} 标签页解析出错: {e}")
+            return tab, None, "unsupported"
+
+        if not info:
+            # 保持旧行为：空结果不写入 results，让上层缓存维持原状态
+            return tab, None, "empty"
+
+        return tab, info, "loaded"
+
     def run(self) -> None:
         try:
-            results = {}
-            total = len(self.target_tabs)
-            for i, tab in enumerate(self.target_tabs, 1):
-                if self._cancel_event.is_set():
-                    return
+            results: dict[str, dict] = {}
+            tabs = list(self.target_tabs)
+            total = len(tabs)
+            if not tabs:
+                self.finished_all.emit(results)
+                return
 
-                from PySide6.QtCore import QCoreApplication
+            from PySide6.QtCore import QCoreApplication
 
-                tab_display = {
-                    "videos": QCoreApplication.translate("PlaylistWorker", "常规视频"),
-                    "shorts": "Shorts",
-                    "streams": QCoreApplication.translate("PlaylistWorker", "直播回放"),
-                }.get(tab, tab)
-
-                progress_msg = QCoreApplication.translate(
-                    "PlaylistWorker", "正在解析 {} ({}/{})..."
-                ).format(tab_display, i, total)
-                self.progress.emit(progress_msg)
-
-                url = f"{self.base_url}/{tab}"
-
-                # 直播页面的特定处理，避免卡死在进行中的直播
-                extra_args = ["--flat-playlist", "--lazy-playlist"]
-                if tab == "streams":
-                    extra_args.extend(["--match-filter", "is_live != True"])
-
-                try:
-                    ydl_opts = dict(youtube_service.build_ydl_options(self.options))
-                    ydl_opts.update(
-                        {
-                            "skip_download": True,
-                            "extract_flat": True,
-                            "lazy_playlist": True,
-                            "ignoreerrors": False,
-                        }
-                    )
-
-                    info = run_dump_single_json(
-                        url, ydl_opts, extra_args=extra_args, cancel_event=self._cancel_event
-                    )
-                    if info:
-                        info["__fluentytdl_tab"] = tab
-                        results[tab] = {"status": "loaded", "data": info}
-                        self.finished_tab.emit(tab, info)
-                except Exception as e:
-                    msg = str(e).lower()
-                    if "does not have a" in msg and "tab" in msg:
-                        # 标记为不支持
-                        results[tab] = {"status": "unsupported", "data": None}
-                    elif isinstance(e, YtDlpCancelled):
-                        return
-                    else:
-                        # 其他错误也标记为不支持以跳过，避免整个任务崩溃
-                        logger.warning(f"频道 {tab} 标签页解析出错: {e}")
-                        results[tab] = {"status": "unsupported", "data": None}
+            # 每个标签页都是一次几秒级的 yt-dlp 子进程往返，彼此无依赖。
+            # 串行解析 "all" 就是单次耗时的三倍；这里并发跑，总耗时收敛到最慢的那一个。
+            # ydl_opts 在这里构建一次共享（每个子任务再各自 dict() 复制），
+            # 避免三个线程重复读 cookie 文件、重复探测 exe 路径。
+            ydl_opts = dict(youtube_service.build_ydl_options(self.options))
+            ydl_opts.update(
+                {
+                    "skip_download": True,
+                    "extract_flat": True,
+                    "lazy_playlist": True,
+                    "ignoreerrors": False,
+                }
+            )
 
             if self._cancel_event.is_set():
+                return
+
+            if total == 1:
+                self.progress.emit(
+                    QCoreApplication.translate("PlaylistWorker", "正在解析 {} ({}/{})...").format(
+                        self._tab_display(tabs[0]), 1, 1
+                    )
+                )
+            else:
+                self.progress.emit(
+                    QCoreApplication.translate(
+                        "PlaylistWorker", "正在并行解析 {} 个标签页..."
+                    ).format(total)
+                )
+
+            cancelled = False
+            done = 0
+            with ThreadPoolExecutor(
+                max_workers=min(3, total), thread_name_prefix="ChannelTab"
+            ) as pool:
+                futures = [pool.submit(self._extract_tab, tab, ydl_opts) for tab in tabs]
+                for fut in as_completed(futures):
+                    if self._cancel_event.is_set():
+                        cancelled = True
+                        break
+                    try:
+                        tab, info, status = fut.result()
+                    except Exception as e:  # noqa: BLE001 - 单个标签页失败不应拖垮整批
+                        logger.warning(f"频道标签页任务异常: {e}")
+                        continue
+
+                    if status == "cancelled":
+                        cancelled = True
+                        break
+                    if status == "loaded" and info is not None:
+                        results[tab] = {"status": "loaded", "data": info}
+                        # 信号统一在本 QThread 里发，不从线程池线程发。
+                        self.finished_tab.emit(tab, info)
+                    elif status == "unsupported":
+                        results[tab] = {"status": "unsupported", "data": None}
+
+                    done += 1
+                    if total > 1:
+                        self.progress.emit(
+                            QCoreApplication.translate(
+                                "PlaylistWorker", "已完成 {} ({}/{})..."
+                            ).format(self._tab_display(tab), done, total)
+                        )
+
+            if cancelled or self._cancel_event.is_set():
                 return
 
             self.finished_all.emit(results)
@@ -178,13 +261,23 @@ class VRInfoExtractWorker(QThread):
     def run(self) -> None:
         try:
             # 策略：
-            # 1. 如果 URL 看起来像播放列表，先尝试 Flat 解析
-            # 2. 如果 Flat 解析发现是单视频（或 URL 不像播放列表），则使用 android_vr 客户端进行深度 VR 解析
+            # 1. URL 同时带 v= 和 list= ⇒ 这是"播放列表上下文里的单视频"，直接走 VR 单视频路径。
+            #    旧实现对这种 URL 先做一次全量 extract_playlist_flat，发现是单视频再重新解析，
+            #    等于白白多付一整轮子进程（几秒级）。
+            # 2. 只有 list= 没有 v= ⇒ 真播放列表，走 Flat 解析。
+            # 3. 其余 ⇒ 单视频，直接 android_vr 深度解析。
+            parsed = urlparse(self.url)
+            query = parse_qs(parsed.query)
+            has_list = bool(query.get("list"))
+            has_video = (
+                bool(query.get("v"))
+                or "/shorts/" in parsed.path
+                or "youtu.be" in (parsed.netloc or "")
+            )
 
-            is_playlist_url = "list=" in self.url
             info = None
 
-            if is_playlist_url:
+            if has_list and not has_video:
                 try:
                     # 尝试作为播放列表解析
                     info = youtube_service.extract_playlist_flat(
@@ -195,6 +288,8 @@ class VRInfoExtractWorker(QThread):
                     if info.get("_type") != "playlist" and not info.get("entries"):
                         # 只有单个条目或不是播放列表，视为单视频，需要重新解析
                         info = None
+                except YtDlpCancelled:
+                    raise
                 except Exception:
                     # 播放列表解析失败，可能是单视频，忽略错误继续尝试 VR 解析
                     info = None
@@ -233,12 +328,16 @@ class EntryDetailWorker(QThread):
         options: YoutubeServiceOptions | None = None,
         *,
         vr_mode: bool = False,
+        read_cache: bool = True,
     ):
         super().__init__()
         self.row = row
         self.url = url
         self.options = options
         self.vr_mode = vr_mode
+        # 封面模式传 False，理由同 InfoExtractWorker：逐行封面直链同样会进下载任务。
+        # VR 分支不受影响——VR 与封面是两个互斥的入口，不会同时成立。
+        self.read_cache = read_cache
         self._cancel_event = threading.Event()
 
     def cancel(self) -> None:
@@ -254,7 +353,10 @@ class EntryDetailWorker(QThread):
             else:
                 # 普通模式：使用标准流程
                 info = youtube_service.extract_video_info(
-                    self.url, self.options, cancel_event=self._cancel_event
+                    self.url,
+                    self.options,
+                    read_cache=self.read_cache,
+                    cancel_event=self._cancel_event,
                 )
 
             if self._cancel_event.is_set():
@@ -300,6 +402,8 @@ class DownloadWorker(QThread):
         self._original_format: str | None = None
         self._ssl_error_count = 0
         self._format_warning_shown = False
+        # 规则驱动的自动重试计数（仅进程内，不落库）
+        self._auto_retries = 0
 
         # ── 红绿灯系统 (threading.Event) ──
         # _pause_event: 默认 set()=绿灯(放行), clear()=红灯(暂停)
@@ -488,6 +592,7 @@ class DownloadWorker(QThread):
     def run(self) -> None:
         self.is_running = True
         self.is_cancelled = False
+        self._auto_retries = 0
         try:
             # ======================================================================
             # 图片直接下载通道：完全无视视频逻辑，发起极简 yt-dlp 请求
@@ -641,21 +746,51 @@ class DownloadWorker(QThread):
                     pct = getattr(self, "progress_val", 0.0)
 
                     # 使用新的诊断引擎生成结构化错误
-                    diag = diagnose_error(exc.exit_code, exc.stderr, exc.parsed_json)
+                    diag = diagnose(exc.exit_code, exc.stderr, exc.parsed_json)
 
                     # 更新内部状态和日志
                     self._clean_logger.force_update(
                         "error", pct, f"❌ {diag.user_title}: {diag.user_message}"
                     )
 
-                    # 将当前 Worker 设为挂起状态
+                    # ── 规则驱动的重试分流 ──
+                    # 规则表在 retry.policy 里声明了"这类错误该怎么处理"，
+                    # 避免所有错误都挂起弹框、卡住整条批量队列。
+                    if diag.retry.is_automatic and self._auto_retries < diag.retry.max_attempts:
+                        delay = diag.retry.delay_for(self._auto_retries)
+                        self._auto_retries += 1
+                        attempt_note = (
+                            f"第 {self._auto_retries}/{diag.retry.max_attempts} 次自动重试"
+                        )
+                        if delay > 0:
+                            self.status_msg.emit(f"{attempt_note}，{int(delay)} 秒后开始…")
+                            self._clean_logger.force_update(
+                                "parsing", pct, f"⏳ {attempt_note}（等待 {int(delay)} 秒）"
+                            )
+                            # 用 cancel 事件的 wait 做退避，取消时立即返回而不是等满一轮
+                            if self._cancel_event.wait(timeout=delay):
+                                raise DownloadCancelled() from None
+                        if self.is_cancelled or self._cancel_event.is_set():
+                            raise DownloadCancelled() from None
+                        self.status_msg.emit(attempt_note)
+                        self._clean_logger.force_update("parsing", pct, f"🔄 {attempt_note}")
+                        continue
+
+                    err_dict = diag.to_dict()
+                    err_dict["worker_id"] = id(self)
+                    err_dict["auto_retries"] = self._auto_retries
+
+                    if diag.retry.policy == "never":
+                        # 会员专属、视频已删除、URL 不支持…… 用户点什么都救不回来，
+                        # 直接失败让批量队列继续走下一个，而不是无谓地挂起。
+                        self.error.emit(err_dict)
+                        raise DownloadFailed(diag.code) from None
+
+                    # after_fix（以及自动重试耗尽的场景）：挂起等用户介入
                     self.is_suspended = True
                     self.suspend_event = threading.Event()
                     self.suspend_action = "cancel"
 
-                    # 传递结构化的 DiagnosedError 给 UI 层，并附带 worker 实例或 id 标识
-                    err_dict = diag.to_dict()
-                    err_dict["worker_id"] = id(self)
                     self.error.emit(err_dict)
 
                     self.status_msg.emit("挂起等待修复...")
@@ -665,6 +800,7 @@ class DownloadWorker(QThread):
                     self.is_suspended = False
 
                     if self.suspend_action == "retry":
+                        self._auto_retries = 0  # 用户已介入修复，自动重试预算重新给满
                         self.status_msg.emit("重新尝试下载...")
                         self._clean_logger.force_update("parsing", pct, "正在重试...")
                         continue
@@ -788,6 +924,14 @@ class DownloadWorker(QThread):
             self._sweep_part_files()
             self.status_msg.emit("任务已取消")
             self.cancelled.emit()
+        except DownloadFailed as failure:
+            # 错误已经在内层诊断并 emit 过了，这里只做残骸清理：
+            # 不重复上报，也不发 cancelled，避免 UI 把失败显示成"任务已取消"
+            logger.info("任务终态失败（不可重试）: {} — {}", self.url, failure)
+            import time
+
+            time.sleep(1.0)
+            self._sweep_part_files()
         except Exception as exc:
             msg = str(exc)
             logger.exception("下载过程发生未知异常: {}", self.url)
@@ -812,6 +956,8 @@ class DownloadWorker(QThread):
         import subprocess
 
         from ..youtube.yt_dlp_cli import (
+            log_pot_from_output,
+            log_pot_in_argv,
             prepare_yt_dlp_env,
             resolve_yt_dlp_exe,
         )
@@ -907,6 +1053,7 @@ class DownloadWorker(QThread):
         cmd.append(self.url)
 
         logger.info("[LightweightExtract] cmd={}", " ".join(cmd))
+        log_pot_in_argv(cmd, stage="Download", task_id="lightweight_extract")
 
         env = prepare_yt_dlp_env()
         env["PYTHONIOENCODING"] = "utf-8"
@@ -962,6 +1109,7 @@ class DownloadWorker(QThread):
 
                 if line:
                     logger.debug("[LightweightExtract] {}", line)
+                    log_pot_from_output(line, stage="Download")
                     parsed = parser.parse_line(line)
                     if parsed.type == "progress" and parsed.progress:
                         prog_dict = {

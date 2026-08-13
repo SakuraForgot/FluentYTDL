@@ -36,7 +36,9 @@ from qfluentwidgets import (
     ToolTipPosition,
     isDarkTheme,
 )
+from qframelesswindow import FramelessDialog
 
+from fluentytdl.ui.components.common.themed_title_bar import ThemedTitleBar
 from fluentytdl.ui.components.home.playlist_item_card import PlaylistItemCard
 from fluentytdl.ui.components.platforms.cover import CoverSelectorWidget
 from fluentytdl.ui.components.platforms.subtitle import SubtitleSelectorWidget
@@ -665,53 +667,116 @@ def _clean_audio_formats(info: Any) -> list[dict[str, Any]]:
     return out
 
 
-class PlaylistFormatDialog(MessageBoxBase):
-    """用于播放列表单项的"高级格式选择"弹窗 (复用各类 SelectorWidget)"""
+class PlaylistFormatDialog(FramelessDialog):
+    """用于播放列表单项的「高级格式选择」独立弹窗 (复用各类 SelectorWidget)
+
+    以前继承 MessageBoxBase（遮罩式对话框）：它会把自己嵌进父窗口里、蒙一层遮罩，
+    尺寸被父窗口夹住。而父窗口 DownloadConfigWindow 本身就是个弹窗，弹窗套弹窗
+    导致格式表被压到只剩 130px 高，内容非常拥挤。
+    改成 FramelessDialog 后它是一个真正独立的顶层窗口，可以自由定尺寸、拖动、缩放。
+    """
 
     def __init__(
         self, info: dict[str, Any], parent=None, *, vr_mode: bool = False, mode: str = "default"
     ):
-        super().__init__(parent)
-        self.widget.setMinimumSize(700, 500)
+        super().__init__(parent=parent)
         self._mode = mode
+
+        # 换成跟随主题的标题栏，否则深色模式下关闭按钮是黑图标
+        self.setTitleBar(ThemedTitleBar(self))
+        self.titleBar.minBtn.hide()
+        self.titleBar.maxBtn.hide()
+        self.titleBar.setDoubleClickEnabled(False)
+        self.titleBar.raise_()
+        self.setWindowTitle(self.tr("选择格式"))
+
+        rootLayout = QVBoxLayout(self)
+        rootLayout.setContentsMargins(24, 48, 24, 24)  # 顶部给无边框标题栏让位
+        rootLayout.setSpacing(16)
+
+        self.viewLayout = QVBoxLayout()
+        self.viewLayout.setSpacing(12)
+        rootLayout.addLayout(self.viewLayout, 1)
 
         self.titleLabel = SubtitleLabel(self.tr("选择格式"), self)
         self.viewLayout.addWidget(self.titleLabel)
 
         if self._mode == "subtitle":
             self.titleLabel.setText(self.tr("选择字幕"))
+            self.setWindowTitle(self.tr("选择字幕"))
             self.selector = SubtitleSelectorWidget(info, self)
         elif self._mode == "cover":
             self.titleLabel.setText(self.tr("选择封面"))
+            self.setWindowTitle(self.tr("选择封面"))
             self.selector = CoverSelectorWidget(info, self)
         elif vr_mode:
             self.selector = VRFormatSelectorWidget(info, self)
         else:
             self.selector = VideoFormatSelectorWidget(info, self)
 
-        # 应用相同的手风琴固定高度调整
+        # 独立窗口不再受父弹窗尺寸挤压，手风琴可以给到正常高度
         if hasattr(self.selector, "video_table"):
-            self.selector.video_table.setFixedHeight(130)
+            self.selector.video_table.setFixedHeight(190)
         if hasattr(self.selector, "audio_table"):
-            self.selector.audio_table.setFixedHeight(130)
+            self.selector.audio_table.setFixedHeight(190)
 
-        # 限制整体弹窗高度，防止被撑开
-        self.widget.setFixedHeight(650)
-
-        self.viewLayout.addWidget(self.selector)
+        self.viewLayout.addWidget(self.selector, 1)
 
         # 新增：单视频独立字幕配置区域
         self._subtitle_override_widget = None
         if self._mode not in ("subtitle", "cover"):
             self._setup_subtitle_override_section(info)
 
-        # Override buttons
-        self.yesButton.setText(self.tr("应用"))
-        self.cancelButton.setText(self.tr("取消"))
+        # 底部按钮区
+        self.buttonLayout = QHBoxLayout()
+        self.buttonLayout.setSpacing(12)
+        self.buttonLayout.addStretch(1)
+        self.cancelButton = PushButton(self.tr("取消"), self)
+        self.yesButton = PrimaryPushButton(self.tr("应用"), self)
+        self.buttonLayout.addWidget(self.cancelButton)
+        self.buttonLayout.addWidget(self.yesButton)
+        rootLayout.addLayout(self.buttonLayout)
+
+        self.cancelButton.clicked.connect(self.reject)
+        self.yesButton.clicked.connect(self.accept)
+        self.yesButton.setFocus()
+
+        self.setMinimumSize(720, 560)
+        self.resize(880, 760)
+        self._center_on_parent()
+
+        from qfluentwidgets import qconfig
+
+        qconfig.themeChanged.connect(self._update_style)
+        self._update_style()
+
+    def _update_style(self):
+        color = QColor(32, 32, 32) if isDarkTheme() else QColor(243, 243, 243)
+        self.setStyleSheet(f"PlaylistFormatDialog {{ background-color: {color.name()}; }}")
+        if hasattr(self.titleBar, "updateStyle"):
+            self.titleBar.updateStyle()
+
+    def _center_on_parent(self) -> None:
+        """在父窗口（没有则主屏）上居中，并夹回可用屏幕区域内。"""
+        from PySide6.QtGui import QGuiApplication
+
+        parent = self.parentWidget()
+        anchor = parent.frameGeometry() if parent else None
+        screen = QGuiApplication.screenAt(anchor.center()) if anchor else None
+        screen = screen or QGuiApplication.primaryScreen()
+        if anchor is None:
+            anchor = screen.availableGeometry()
+
+        x = anchor.x() + (anchor.width() - self.width()) // 2
+        y = anchor.y() + (anchor.height() - self.height()) // 2
+
+        avail = screen.availableGeometry()
+        x = max(avail.x(), min(x, avail.right() - self.width()))
+        y = max(avail.y(), min(y, avail.bottom() - self.height()))
+        self.move(x, y)
 
     def _setup_subtitle_override_section(self, info: dict[str, Any]):
-        from PySide6.QtWidgets import QHBoxLayout
-        from qfluentwidgets import CheckBox, PushButton
+        from qfluentwidgets import CheckBox
 
         row = QHBoxLayout()
         row.setContentsMargins(0, 5, 0, 0)
@@ -1218,12 +1283,13 @@ class SelectionDialog(MessageBoxBase):
         suggestion = str(err_data.get("suggestion") or "")
         raw_error = str(err_data.get("raw_error") or "")
 
-        from ....models.errors import ErrorCode
-        from ....utils.error_parser import diagnose_error
+        from ....diagnostics import diagnose
 
-        category = ErrorCode.GENERAL
-        if raw_error:
-            category = diagnose_error(1, raw_error).code
+        diag = None
+        category = str(err_data.get("category") or "")
+        if not category and raw_error:
+            diag = diagnose(1, raw_error)
+            category = diag.category
 
         text = f"{title}\n\n{content}"
         if suggestion:
@@ -1231,9 +1297,8 @@ class SelectionDialog(MessageBoxBase):
 
         fix_action = err_data.get("fix_action")
         if not fix_action and raw_error:
-            from ....utils.error_parser import diagnose_error
-
-            diag = diagnose_error(1, raw_error)
+            if diag is None:
+                diag = diagnose(1, raw_error)
             fix_action = diag.fix_action
 
         # === 根据分类决定显示哪个面板 ===
@@ -1250,14 +1315,16 @@ class SelectionDialog(MessageBoxBase):
                 text,
                 parent=self.window(),
             )
-            recovery_hint = err_data.get("recovery_hint") or (
-                diag.recovery_hint if "diag" in locals() else self.tr("去处理")
+            recovery_hint = (
+                err_data.get("recovery_hint")
+                or (diag.recovery_hint if diag else "")
+                or self.tr("去处理")
             )
             box.yesButton.setText(recovery_hint)
             box.cancelButton.setText(self.tr("关闭"))
             if box.exec():
                 execute_fix_action(fix_action, self)
-        elif category in (ErrorCode.LOGIN_REQUIRED, ErrorCode.COOKIE_EXPIRED):
+        elif category == "auth":
             self.titleLabel.setText(self.tr("身份验证失败"))
             # 不用长文显示 _error_label，避免视觉打断
             self.retryWidget.hide()
@@ -1840,6 +1907,7 @@ class SelectionDialog(MessageBoxBase):
                         url,
                         self._current_options,
                         self._vr_mode,
+                        read_cache=self._mode != "cover",
                         high_priority=True,
                     )
         else:
@@ -2236,6 +2304,7 @@ class SelectionDialog(MessageBoxBase):
                         url,
                         self._current_options,
                         self._vr_mode,
+                        read_cache=self._mode != "cover",
                         high_priority=True,
                     )
         self._load_thumbs_for_visible_rows()
@@ -2287,6 +2356,7 @@ class SelectionDialog(MessageBoxBase):
                 url,
                 self._current_options,
                 self._vr_mode,
+                read_cache=self._mode != "cover",
                 high_priority=False,
             )
             enqueued += 1
@@ -3029,6 +3099,7 @@ class SelectionDialog(MessageBoxBase):
                                         url,
                                         self._current_options,
                                         self._vr_mode,
+                                        read_cache=self._mode != "cover",
                                         high_priority=True,
                                     )
                         return

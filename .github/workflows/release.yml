@@ -208,7 +208,11 @@ jobs:
           uv sync --frozen --extra dev
           if ($LASTEXITCODE -ne 0) { throw '项目依赖安装失败（uv.lock 可能已过期，请本地运行 uv lock 后提交）' }
 
-          # py7zr 是 7z 打包的纯 Python 回退路径，不属于运行时依赖，单列
+          # py7zr 有两个用途：7z 打包的纯 Python 回退路径，以及 updater.exe 的
+          # 解压后端（打进 exe，见 scripts/updater.spec）。后者是硬依赖 —— 缺了它
+          # 打出来的 updater.exe 会在用户机器上解压失败。
+          # 版本须与 pyproject.toml 的 [project.optional-dependencies].build 严格一致，
+          # tests/test_py7zr_pin.py 断言这两处字符串相同。
           uv pip install "py7zr==$env:PY7ZR_VERSION"
           if ($LASTEXITCODE -ne 0) { throw 'py7zr 安装失败' }
 

@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 import asyncio
+import copy
+import hashlib
 import http.cookiejar
 import json
 import os
 import re
 import shutil
 import threading
+import time
+from collections import OrderedDict
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -23,6 +27,21 @@ from ..utils.format_scorer import bcp47_expand_for_sort
 from .yt_dlp_cli import YtDlpCancelled, run_dump_single_json, run_version
 
 LogCallback = Callable[[str, str], None]
+
+
+def _short_url_tag(url: str) -> str:
+    """日志用的短标识：优先取 YouTube video id，否则取末段路径。仅用于 grep 定位。"""
+    if not url:
+        return "-"
+    try:
+        parsed = urlparse(url)
+        vid = parse_qs(parsed.query).get("v", [""])[0]
+        if vid:
+            return vid
+        tail = parsed.path.rstrip("/").rsplit("/", 1)[-1]
+        return tail or parsed.netloc or "-"
+    except Exception:
+        return "-"
 
 
 @dataclass(slots=True)
@@ -74,6 +93,24 @@ class YoutubeService:
     _instance: YoutubeService | None = None
     _lock = threading.Lock()
 
+    # 解析结果缓存容量上限（info_dict 不小，必须有界）。
+    # 按 mode 分桶而非共享一个总额：播放列表逐条深解析（entry_detail）动辄上百条，
+    # 若与弹窗结果共用一个 LRU，爬一次大列表就会把 dialog / playlist_flat 全挤掉，
+    # P2 的收益反被 P2.1 吃掉。分桶后一个 mode 只能淘汰自己桶里的旧条目。
+    _PARSE_CACHE_MAX = 32  # 未列入下表的 mode 的兜底上限
+    _PARSE_CACHE_LIMITS: dict[str, int] = {
+        "dialog": 12,
+        "playlist_flat": 8,
+        "vr": 12,
+        "entry_detail": 64,
+        "channel_tab": 9,  # 3 个频道 × 3 个标签页
+    }
+
+    # 单条 info 的 entries 上限：超过就不写缓存。
+    # 频道 / 大播放列表的 flat dump 可能有数千条，_parse_cache_get 的 deepcopy 是实打实的
+    # 成本（几十 MB 常驻 + 每次命中几百毫秒），此时缓存反而变成负收益。
+    _PARSE_CACHE_MAX_ENTRIES = 3000
+
     def __new__(cls) -> YoutubeService:
         if cls._instance is not None:
             return cls._instance
@@ -88,6 +125,12 @@ class YoutubeService:
         self._initialized = True
         self._logger = get_logger("fluentytdl.YoutubeService")
         self._log_callback: LogCallback | None = None
+
+        # === 弹窗解析结果 TTL 缓存（P2）===
+        # 只服务"解析 → 弹窗"路径；下载路径绝不读取，否则会拿到过期签名 URL 触发 403。
+        # 不落盘：签名 URL 有时效，持久化只会带来假命中。
+        self._parse_cache: OrderedDict[str, tuple[float, dict[str, Any]]] = OrderedDict()
+        self._parse_cache_lock = threading.Lock()
 
     def set_log_callback(self, callback: LogCallback | None) -> None:
         """UI layer can subscribe to logs later (Stage 2+)."""
@@ -357,20 +400,24 @@ class YoutubeService:
         # --- POT Provider 服务集成 ---
         # POT (Proof of Origin Token) Provider 提供动态 PO Token 生成服务
         # 类似 Cookie Sentinel 的策略：检测服务状态，自动注入 extractor_args
+        # 硬约束：解析路径上绝不阻塞等待 POT。Token 由 POT 服务端缓存，等待并不会让
+        # "这一次"解析更快，却会把最坏情况推到 35s（wait_until_ready 15s 超时后
+        # 还会再跑一次 verify_token_generation 20s）。未预热时降级为无 POT 解析
+        # （即当前默认关闭状态下的既有行为），同时触发一次后台预热。
         pot_injected = False
+        _pot_url_tag = _short_url_tag(url)
+        _pot_skip_reason = "twitter" if _is_twitter else "disabled"
         if not _is_twitter and config_manager.get("pot_provider_enabled", False):
             try:
                 from .pot_manager import pot_manager
 
-                if pot_manager.is_running():
-                    # 就绪门控：确保 POT 服务已完成预热
-                    if not pot_manager.is_warm:
-                        self._emit_log(
-                            "info",
-                            "⏳ POT Provider 正在初始化，请稍候...",
-                        )
-                        pot_manager.wait_until_ready(timeout=15)
-
+                if not pot_manager.is_running():
+                    _pot_skip_reason = "not_running"
+                    pot_manager.ensure_warm_async()
+                elif not pot_manager.is_warm:
+                    _pot_skip_reason = "not_warm"
+                    pot_manager.ensure_warm_async()
+                else:
                     pot_extractor_args = pot_manager.get_extractor_args()
                     if pot_extractor_args:
                         # pot_extractor_args 格式: "youtubepot-bgutilhttp:base_url=http://127.0.0.1:4416"
@@ -391,9 +438,12 @@ class YoutubeService:
                                     pot_args[k] = [v]
 
                             pot_injected = True
+                            _pot_skip_reason = ""
+                            _base_url = (pot_args.get("base_url") or [""])[0]
                             self._emit_log(
                                 "info",
-                                f"🛡️ POT Provider 已激活: 端口 {pot_manager.active_port} (自动绕过机器人检测)",
+                                f"[POT][Parse] 注入 base_url={_base_url} warm=True "
+                                f"port={pot_manager.active_port} url={_pot_url_tag}",
                             )
 
                             # 首次激活时验证 yt-dlp 是否能加载 POT 插件
@@ -411,13 +461,27 @@ class YoutubeService:
                                         )
                                 except Exception as diag_err:
                                     self._emit_log("debug", f"POT 插件诊断异常: {diag_err}")
-                else:
-                    self._emit_log(
-                        "warning",
-                        "⚠️ POT Provider 服务未运行，本次下载将不使用 PO Token（可能触发限速）",
-                    )
             except Exception as e:
+                _pot_skip_reason = "error"
                 self._emit_log("debug", f"POT Provider 检测失败: {e}")
+
+        if not pot_injected and _pot_skip_reason:
+            self._emit_log(
+                "info" if _pot_skip_reason in ("disabled", "twitter") else "warning",
+                f"[POT][Parse] 跳过注入 reason={_pot_skip_reason} url={_pot_url_tag}",
+            )
+            # 这一轮不走 POT，就明确告诉 yt-dlp 别去取 Token。
+            # 不加这个的话，bgutil 插件仍随 exe 被加载，拿不到 base_url 会自己
+            # 回落到默认 127.0.0.1:4416 去 ping，然后刷一条 TransportError WARNING。
+            # 那条 WARNING 会被 log_pot_from_output 转记成 [POT][YtDlp]，让"POT 关闭"
+            # 的日志里出现 POT 相关噪音，正好污染这轮想要的自证能力。
+            # 安全性：yt-dlp 自身没有内置 POT provider（-v 输出里只有 bgutil:cli /
+            # bgutil:http 两个 external），所以 never 禁掉的恰好是本来也不可能成功的
+            # 那次尝试，格式数量实测不变。twitter 不加——参数是 youtube 命名空间的。
+            if not _is_twitter:
+                _ea = cast(dict[str, Any], ydl_opts.setdefault("extractor_args", {}))
+                _yt_args: dict[str, Any] = _ea.setdefault("youtube", {})
+                _yt_args.setdefault("fetch_pot", ["never"])
 
         # --- 诊断日志：打印最终 extractor_args 概要 ---
         final_ea = ydl_opts.get("extractor_args", {})
@@ -1113,11 +1177,35 @@ class YoutubeService:
         url: str,
         options: YoutubeServiceOptions | None = None,
         *,
+        read_cache: bool = True,
         cancel_event: threading.Event | None = None,
     ) -> dict[str, Any]:
-        """Blocking metadata extraction (call from worker thread)."""
+        """Blocking metadata extraction (call from worker thread).
+
+        这是播放列表逐条深解析（EntryDetailWorker）的落点，会被同一批 URL 反复调用
+        （配置窗口爬一遍、选择弹窗再爬一遍），因此接入 P2.1 的 entry_detail 缓存。
+
+        `read_cache=False`：封面模式专用。封面会把 `thumbnails[].url` 直接当成下载
+        任务的 URL 发出去，命中缓存等于发一条最旧可达 TTL 的陈旧直链。**跳过读、
+        照常写** —— 这一趟本来就是新鲜的，写回去顺带刷新条目，对其他模式只有好处。
+        """
 
         ydl_opts = self.build_ydl_options(options, url=url)
+
+        # === TTL 缓存查询（P2.1：播放列表逐条深解析）===
+        _t_total = time.perf_counter()
+        cache_key = self._parse_cache_key(url, "entry_detail", ydl_opts)
+        cached = self._parse_cache_get(cache_key) if read_cache else None
+        if cached is not None:
+            cached_info, age = cached
+            self._log_parse_cache_hit(
+                "entry_detail",
+                url,
+                cached_info,
+                age,
+                (time.perf_counter() - _t_total) * 1000,
+            )
+            return cached_info
 
         try:
             _ = locate_runtime_tool("yt-dlp.exe", "yt-dlp/yt-dlp.exe", "yt_dlp/yt-dlp.exe")
@@ -1143,6 +1231,7 @@ class YoutubeService:
         try:
             self._emit_log("info", f"开始解析 URL: {url}")
             info = _do_extract(ydl_opts)
+            self._parse_cache_put(cache_key, info)
             return info
         except Exception as exc:
             if isinstance(exc, YtDlpCancelled):
@@ -1178,11 +1267,213 @@ class YoutubeService:
             self._emit_log("error", f"解析失败: {msg}")
             raise RuntimeError(msg) from exc
 
+    # ==================== 解析结果 TTL 缓存（P2 / P2.1 / P2.2） ====================
+    # 覆盖范围（五个 mode，各自独立限容）：
+    #   dialog        extract_info_for_dialog_sync  弹窗解析（视频 / 字幕 / 封面共用）
+    #   playlist_flat extract_playlist_flat         播放列表 flat 列举
+    #   entry_detail  extract_info_sync             播放列表逐条深解析
+    #   vr            extract_vr_info_sync          android_vr 深解析
+    #   channel_tab   extract_channel_flat          频道单标签页 flat 列举
+    #
+    # 下载路径绝不读缓存——必须拿新鲜签名 URL，否则 403。这条边界是结构性的：
+    # download/executor.py 只 import youtube.yt_dlp_cli，自己拼 argv，从不调用本类。
+    # entry_detail / vr / channel_tab 三个 mode 的调用方也只有 EntryDetailWorker /
+    # VRInfoExtractWorker / ChannelExtractWorker 这几条纯 UI 链路。
+    # 新增 mode 前请先确认调用方不在下载取流路径上。
+    #
+    # 例外：**封面模式全程不读缓存**（read_cache=False）。封面会把 info 里的
+    # thumbnails[].url 直接当成下载任务的 URL 发出去（见 download_config_window 的
+    # cover 分支 → DownloadWorker._run_cover_direct_download），命中缓存等于发一条
+    # 最旧可达 parse_cache_ttl_seconds 的陈旧直链。写入照常，读取跳过。
+
+    @staticmethod
+    def _parse_cache_enabled() -> bool:
+        return bool(config_manager.get("parse_cache_enabled", True))
+
+    @staticmethod
+    def _parse_cache_ttl() -> float:
+        """解析结果的保留时长（秒）。0 表示不保留，读写一并停掉。
+
+        默认值必须与 config_manager.DEFAULT_CONFIG 保持一致（1800 = 半小时），
+        设置页「解析结果保留时间」写的就是这个键。
+        """
+        try:
+            ttl = float(config_manager.get("parse_cache_ttl_seconds", 1800))
+        except (TypeError, ValueError):
+            ttl = 1800.0
+        return max(0.0, ttl)
+
+    @staticmethod
+    def _cookie_fingerprint(path: str | None) -> str:
+        """Cookie 指纹：只用路径 + 元数据 sidecar 的 mtime/大小，绝不读取内容。
+
+        关键：不能用 cookie jar 自身的 mtime/大小。yt-dlp 每次 `--cookies` 运行结束
+        都会把 jar 回写一遍（数量还会随会话变化），jar 的 mtime 每次解析都在变，
+        拿它做指纹等于让缓存永远 miss。
+
+        `cookies_<platform>.txt.meta` 只有 CookieSentinel 真正刷新凭据时才写
+        （`_save_meta`），正好就是"Cookie 语义变了"的信号；yt-dlp 的回写不碰它。
+        sidecar 不存在时（手动导入的 cookie 文件）退回 jar 自身的 mtime——
+        此时没有回写放大问题，因为这类文件不是 sentinel 托管的。
+        """
+        if not path:
+            return "-"
+        meta = f"{path}.meta"
+        try:
+            st = os.stat(meta)
+            return f"{path}:meta:{st.st_mtime_ns}:{st.st_size}"
+        except OSError:
+            pass
+        try:
+            st = os.stat(path)
+            return f"{path}:jar:{st.st_mtime_ns}:{st.st_size}"
+        except OSError:
+            return f"{path}:missing"
+
+    def _parse_cache_key(self, url: str, mode: str, ydl_opts: dict[str, Any]) -> str:
+        """按"影响解析结果"的少数字段构造键，其余（重试次数、超时等）不参与。
+
+        键带 `mode:` 明文前缀：分桶淘汰要靠它区分归属，日志也能按 mode grep。
+        """
+        payload = {
+            "url": url.strip(),
+            "mode": mode,
+            "cookie": self._cookie_fingerprint(ydl_opts.get("cookiefile")),
+            "proxy": ydl_opts.get("proxy") or "",
+            # extractor_args 里含 player_client / POT base_url / skip=authcheck，
+            # 它们都会改变返回的格式列表，必须进指纹。
+            "extractor_args": ydl_opts.get("extractor_args") or {},
+            "format_sort": ydl_opts.get("format_sort") or [],
+            "format": ydl_opts.get("format") or "",
+            "extract_flat": ydl_opts.get("extract_flat"),
+            "audio_langs": config_manager.get("preferred_audio_languages", []),
+        }
+        raw = json.dumps(payload, sort_keys=True, ensure_ascii=False, default=str)
+        return f"{mode}:{hashlib.sha256(raw.encode('utf-8')).hexdigest()}"
+
+    @classmethod
+    def _parse_cache_limit_for(cls, mode: str) -> int:
+        if mode == "entry_detail":
+            try:
+                configured = int(config_manager.get("parse_cache_entry_max", 64))
+            except (TypeError, ValueError):
+                configured = 64
+            if configured > 0:
+                return configured
+        return cls._PARSE_CACHE_LIMITS.get(mode, cls._PARSE_CACHE_MAX)
+
+    def _parse_cache_buckets(self) -> dict[str, int]:
+        """各 mode 桶的当前条目数，用于验收「大列表爬取没有挤掉弹窗结果」。"""
+        counts: dict[str, int] = {}
+        with self._parse_cache_lock:
+            keys = list(self._parse_cache.keys())
+        for k in keys:
+            mode = k.split(":", 1)[0]
+            counts[mode] = counts.get(mode, 0) + 1
+        return counts
+
+    def _log_parse_cache_hit(
+        self, mode: str, url: str, info: dict[str, Any], age: float, total_ms: float
+    ) -> None:
+        buckets = self._parse_cache_buckets()
+        detail = " ".join(f"{m}={n}" for m, n in sorted(buckets.items()))
+        self._emit_log(
+            "info",
+            f"[ParseCache] 命中 mode={mode}: {_short_url_tag(url)} 缓存年龄 {age:.1f}s "
+            f"本次耗时 {total_ms:.0f}ms (formats={len(info.get('formats') or [])}, "
+            f"entries={len(info.get('entries') or [])}) 桶: {detail}",
+        )
+
+    def _parse_cache_get(self, key: str) -> tuple[dict[str, Any], float] | None:
+        if not self._parse_cache_enabled():
+            return None
+        ttl = self._parse_cache_ttl()
+        if ttl <= 0:
+            return None
+        now = time.monotonic()
+        with self._parse_cache_lock:
+            hit = self._parse_cache.get(key)
+            if hit is None:
+                return None
+            stored_at, info = hit
+            age = now - stored_at
+            if age > ttl:
+                self._parse_cache.pop(key, None)
+                return None
+            self._parse_cache.move_to_end(key)
+        # 返回副本，避免调用方（如 _detect_vr_projection / _merge_formats）就地改写污染缓存
+        return copy.deepcopy(info), age
+
+    @staticmethod
+    def _pot_state_unstable() -> bool:
+        """POT 开着但还没预热好 —— 这一轮的解析结果不该进缓存。
+
+        两个理由，缺一不可：
+        1. **键会漂**：未预热时 build_ydl_options 注入的是 `youtube:fetch_pot=never`，
+           预热完成后换成 `youtubepot-bgutilhttp:base_url=...`。extractor_args 在指纹里，
+           所以预热期写进去的条目在预热完成后永远命不中，纯占桶。
+           实测：启动后第一次爬播放列表正好落在这个窗口里，而这恰是 P2.1 要救的场景。
+        2. **内容可能是降级的**：无 POT 解析可能少格式/被限速，预热完成后再把它端出来
+           属于以次充好。宁可这几秒不缓存。
+
+        POT 关闭时 `fetch_pot=never` 恒定存在，键本来就稳，不受此限制。
+        """
+        if not config_manager.get("pot_provider_enabled", False):
+            return False
+        try:
+            from .pot_manager import pot_manager
+
+            return not pot_manager.is_warm
+        except Exception:
+            return False
+
+    def _parse_cache_put(self, key: str, info: dict[str, Any]) -> None:
+        if not self._parse_cache_enabled() or self._parse_cache_ttl() <= 0:
+            return
+        if not isinstance(info, dict) or not info:
+            return
+        if self._pot_state_unstable():
+            self._emit_log("debug", "[ParseCache] 跳过写入: POT 预热中，键不稳定")
+            return
+        n_entries = len(info.get("entries") or [])
+        if n_entries > self._PARSE_CACHE_MAX_ENTRIES:
+            self._emit_log(
+                "debug",
+                f"[ParseCache] 跳过写入: entries={n_entries} 超过上限 "
+                f"{self._PARSE_CACHE_MAX_ENTRIES}，deepcopy 成本高于收益",
+            )
+            return
+        mode = key.split(":", 1)[0]
+        limit = self._parse_cache_limit_for(mode)
+        snapshot = copy.deepcopy(info)
+        with self._parse_cache_lock:
+            self._parse_cache[key] = (time.monotonic(), snapshot)
+            self._parse_cache.move_to_end(key)
+            # 只在同 mode 桶内淘汰：OrderedDict 本身就是全局 LRU 顺序，
+            # 顺序遍历取第一个同前缀的键即该桶最旧的一条。
+            prefix = f"{mode}:"
+            while True:
+                same_mode = [k for k in self._parse_cache if k.startswith(prefix)]
+                if len(same_mode) <= limit:
+                    break
+                self._parse_cache.pop(same_mode[0], None)
+
+    def invalidate_parse_cache(self, reason: str = "") -> None:
+        """清空弹窗解析缓存（用户手动重试 / Cookie 重新注入等场景调用）。"""
+        with self._parse_cache_lock:
+            n = len(self._parse_cache)
+            self._parse_cache.clear()
+        if n:
+            self._emit_log(
+                "info", f"[ParseCache] 已清空 {n} 条缓存" + (f" ({reason})" if reason else "")
+            )
+
     def extract_info_for_dialog_sync(
         self,
         url: str,
         options: YoutubeServiceOptions | None = None,
         *,
+        read_cache: bool = True,
         cancel_event: threading.Event | None = None,
     ) -> dict[str, Any]:
         """Metadata extraction tuned for UI dialogs.
@@ -1190,9 +1481,16 @@ class YoutubeService:
         Goals:
         - single video: keep full formats list (for manual format selection)
         - playlist: enumerate entries fast without per-entry deep extraction
+
+        `read_cache=False`：封面模式专用，理由同 `extract_info_sync`——选中的
+        `thumbnails[].url` 会直接变成下载任务的 URL。**跳过读、照常写。**
         """
 
+        _t_total = time.perf_counter()
+
+        _t_opts = time.perf_counter()
         ydl_opts = self.build_ydl_options(options, url=url)
+        _opts_ms = (time.perf_counter() - _t_opts) * 1000
         tuned = dict(ydl_opts)
 
         tuned.update(
@@ -1210,6 +1508,38 @@ class YoutubeService:
 
         self._emit_log("info", f"[DialogExtract] 开始解析: {url}")
 
+        # === TTL 缓存查询（仅弹窗路径）===
+        cache_key = self._parse_cache_key(url, "dialog", tuned)
+        cached = self._parse_cache_get(cache_key) if read_cache else None
+        if cached is not None:
+            cached_info, age = cached
+            self._log_parse_cache_hit(
+                "dialog", url, cached_info, age, (time.perf_counter() - _t_total) * 1000
+            )
+            return cached_info
+
+        def _log_done(info: dict[str, Any] | None, *, attempts: int, note: str = "") -> None:
+            """统一的解析完成埋点（P0 基线）+ 结果入缓存（P2）。"""
+            total_ms = (time.perf_counter() - _t_total) * 1000
+            n_fmt = len(info.get("formats") or []) if isinstance(info, dict) else 0
+            n_entries = len(info.get("entries") or []) if isinstance(info, dict) else 0
+            if isinstance(info, dict):
+                self._parse_cache_put(cache_key, info)
+            self._emit_log(
+                "info",
+                f"[DialogExtract] 解析完成: {url} 耗时 {total_ms / 1000:.2f}s "
+                f"(build_opts={_opts_ms:.0f}ms, 子进程轮次={attempts}, "
+                f"formats={n_fmt}, entries={n_entries})" + (f" {note}" if note else ""),
+            )
+
+        def _log_fail(exc: BaseException, *, attempts: int) -> None:
+            total_ms = (time.perf_counter() - _t_total) * 1000
+            self._emit_log(
+                "warning",
+                f"[DialogExtract] 解析失败: {url} 耗时 {total_ms / 1000:.2f}s "
+                f"(build_opts={_opts_ms:.0f}ms, 子进程轮次={attempts}) {type(exc).__name__}",
+            )
+
         try:
             _ = locate_runtime_tool("yt-dlp.exe", "yt-dlp/yt-dlp.exe", "yt_dlp/yt-dlp.exe")
         except FileNotFoundError as e:
@@ -1226,6 +1556,7 @@ class YoutubeService:
             )
             info = cast(dict[str, Any], info)
 
+            _log_done(info, attempts=1)
             return info
         except Exception as exc:
             if isinstance(exc, YtDlpCancelled):
@@ -1239,6 +1570,7 @@ class YoutubeService:
                     extra_args=["--flat-playlist", "--lazy-playlist"],
                     cancel_event=cancel_event,
                 )
+                _log_done(cast(dict[str, Any], info), attempts=2, note="[cookie 刷新后重试]")
                 return cast(dict[str, Any], info)
 
             if self._should_retry_with_youtubetab_skip_authcheck(msg):
@@ -1254,6 +1586,7 @@ class YoutubeService:
                         extra_args=["--flat-playlist", "--lazy-playlist"],
                         cancel_event=cancel_event,
                     )
+                    _log_done(cast(dict[str, Any], info), attempts=2, note="[skip=authcheck 重试]")
                     return cast(dict[str, Any], info)
 
             if self._is_auth_blocked_error(msg):
@@ -1276,6 +1609,7 @@ class YoutubeService:
                     )
                     if info:
                         self._emit_log("info", "✅ 无登录态降级解析成功（格式列表可能不完整）")
+                        _log_done(cast(dict[str, Any], info), attempts=2, note="[无登录态降级]")
                         return cast(dict[str, Any], info)
                 except Exception as fallback_exc:
                     self._emit_log("warning", f"降级解析也失败: {fallback_exc}")
@@ -1284,8 +1618,10 @@ class YoutubeService:
                 url, msg, tuned, ["--flat-playlist", "--lazy-playlist"], cancel_event
             )
             if fallback_info:
+                _log_done(fallback_info, attempts=2, note="[频道标签降级]")
                 return fallback_info
 
+            _log_fail(exc, attempts=1)
             raise
 
     def extract_vr_info_sync(
@@ -1334,6 +1670,18 @@ class YoutubeService:
 
         # JS runtime
         self._maybe_configure_youtube_js_runtime(vr_opts)
+
+        # === TTL 缓存查询（P2.1）===
+        # vr_opts 里没有 cookiefile（android_vr 不支持），指纹自然退化为 "-"。
+        _t_total = time.perf_counter()
+        cache_key = self._parse_cache_key(url, "vr", vr_opts)
+        cached = self._parse_cache_get(cache_key)
+        if cached is not None:
+            cached_info, age = cached
+            self._log_parse_cache_hit(
+                "vr", url, cached_info, age, (time.perf_counter() - _t_total) * 1000
+            )
+            return cached_info
 
         try:
             info = run_dump_single_json(
@@ -1384,6 +1732,10 @@ class YoutubeService:
             # VR 投影类型检测（逐格式标注 + 整体概览）
             self._detect_vr_projection(info)
 
+            # 缓存写入必须放在全部后处理之后：存的是成品（含 __fluentytdl_vr_mode、
+            # __android_vr_format_ids 与逐格式投影标注），否则命中时会缺投影信息。
+            self._parse_cache_put(cache_key, info)
+
             return info
         except Exception as exc:
             if isinstance(exc, YtDlpCancelled):
@@ -1405,11 +1757,14 @@ class YoutubeService:
         url: str,
         options: YoutubeServiceOptions | None = None,
         *,
+        read_cache: bool = True,
         cancel_event: threading.Event | None = None,
     ) -> dict[str, Any]:
         """Compatibility wrapper for older naming."""
 
-        return self.extract_info_sync(url, options, cancel_event=cancel_event)
+        return self.extract_info_sync(
+            url, options, read_cache=read_cache, cancel_event=cancel_event
+        )
 
     def extract_playlist_flat(
         self,
@@ -1445,6 +1800,17 @@ class YoutubeService:
             ydl_opts = self._with_youtubetab_skip_authcheck(ydl_opts)
 
         self._emit_log("info", f"[PlaylistFlat] extracting: {url}")
+
+        _t_total = time.perf_counter()
+        cache_key = self._parse_cache_key(url, "playlist_flat", ydl_opts)
+        cached = self._parse_cache_get(cache_key)
+        if cached is not None:
+            cached_info, age = cached
+            self._log_parse_cache_hit(
+                "playlist_flat", url, cached_info, age, (time.perf_counter() - _t_total) * 1000
+            )
+            return cached_info
+
         try:
             try:
                 _ = locate_runtime_tool("yt-dlp.exe", "yt-dlp/yt-dlp.exe", "yt_dlp/yt-dlp.exe")
@@ -1493,10 +1859,18 @@ class YoutubeService:
 
             info = cast(dict[str, Any], info)
             self._extend_playlist_entries_from_youtube_continuations(url, info)
+            total_ms = (time.perf_counter() - _t_total) * 1000
+            self._parse_cache_put(cache_key, info)
+            self._emit_log(
+                "info",
+                f"[PlaylistFlat] 解析完成: {url} 耗时 {total_ms / 1000:.2f}s "
+                f"(entries={len(info.get('entries') or [])})",
+            )
             return info
         except Exception as exc:
             msg = str(exc)
-            self._emit_log("error", f"播放列表解析失败: {msg}")
+            total_ms = (time.perf_counter() - _t_total) * 1000
+            self._emit_log("error", f"播放列表解析失败 (耗时 {total_ms / 1000:.2f}s): {msg}")
             raise
 
     def _extend_playlist_entries_from_youtube_continuations(
@@ -1791,20 +2165,29 @@ class YoutubeService:
         options: YoutubeServiceOptions | None = None,
         *,
         tab: str = "videos",
-        reverse: bool = False,
+        base_ydl_opts: dict[str, Any] | None = None,
         cancel_event: threading.Event | None = None,
     ) -> dict[str, Any]:
-        """频道专用 flat 提取，支持标签页和排序。
+        """频道单个标签页的 flat 提取（带 channel_tab TTL 缓存）。
 
         在 extract_playlist_flat 基础上增加：
-        - 根据 tab 参数自动拼接 URL 后缀 (/videos 或 /shorts)
-        - 根据 reverse 参数注入 --playlist-reverse
+        - 根据 tab 参数自动拼接 URL 后缀 (/videos /shorts /streams)
+        - streams 标签页过滤掉正在直播的条目
+
+        `base_ydl_opts`：调用方已构建好的基础选项。ChannelExtractWorker 会用三个线程
+        并发拉三个标签页，共享同一份 opts 可以避免重复读 cookie / 重复探测 exe——
+        传入时本方法不再调用 build_ydl_options。
+
+        排序不在这里做：`--playlist-reverse` 与 `--lazy-playlist` 语义相冲（要倒序就得
+        先拿全），且每切一次排序都要重跑子进程。UI 侧对 entries 本地反转即可，
+        reverse 因此也不必进缓存键。
         """
         normalized_url = self._normalize_channel_url(url, tab)
 
-        options = options or YoutubeServiceOptions()
-        base_opts = self.build_ydl_options(options)
-        ydl_opts = dict(base_opts)
+        if base_ydl_opts is not None:
+            ydl_opts = dict(base_ydl_opts)
+        else:
+            ydl_opts = dict(self.build_ydl_options(options or YoutubeServiceOptions()))
         ydl_opts.update(
             {
                 "skip_download": True,
@@ -1818,13 +2201,28 @@ class YoutubeService:
             ydl_opts = self._with_youtubetab_skip_authcheck(ydl_opts)
 
         extra_args = ["--flat-playlist", "--lazy-playlist"]
-        if reverse:
-            extra_args.append("--playlist-reverse")
+        if tab == "streams":
+            # 直播中的条目没有可下载的完整文件，列出来只会让用户点了报错
+            extra_args.extend(["--match-filter", "is_live != True"])
 
-        self._emit_log(
-            "info",
-            f"[ChannelFlat] extracting: {normalized_url} (tab={tab}, reverse={reverse})",
-        )
+        self._emit_log("info", f"[ChannelFlat] extracting: {normalized_url} (tab={tab})")
+
+        # === TTL 缓存查询（P2.2）===
+        # tab 已经在 normalized_url 后缀里，键天然区分三个标签页，无需额外字段。
+        _t_total = time.perf_counter()
+        cache_key = self._parse_cache_key(normalized_url, "channel_tab", ydl_opts)
+        cached = self._parse_cache_get(cache_key)
+        if cached is not None:
+            cached_info, age = cached
+            cached_info["__fluentytdl_tab"] = tab
+            self._log_parse_cache_hit(
+                "channel_tab",
+                normalized_url,
+                cached_info,
+                age,
+                (time.perf_counter() - _t_total) * 1000,
+            )
+            return cached_info
 
         try:
             try:
@@ -1871,10 +2269,22 @@ class YoutubeService:
 
             if not isinstance(info, dict):
                 raise RuntimeError("频道解析失败：返回结果为空")
-            return cast(dict[str, Any], info)
+
+            info = cast(dict[str, Any], info)
+            # 在 put 之前打标记：缓存里存的应当是成品，命中时不需要调用方补写
+            info["__fluentytdl_tab"] = tab
+            total_ms = (time.perf_counter() - _t_total) * 1000
+            self._parse_cache_put(cache_key, info)
+            self._emit_log(
+                "info",
+                f"[ChannelFlat] 解析完成: {normalized_url} 耗时 {total_ms / 1000:.2f}s "
+                f"(tab={tab}, entries={len(info.get('entries') or [])})",
+            )
+            return info
         except Exception as exc:
             msg = str(exc)
-            self._emit_log("error", f"频道解析失败: {msg}")
+            total_ms = (time.perf_counter() - _t_total) * 1000
+            self._emit_log("error", f"频道解析失败 (耗时 {total_ms / 1000:.2f}s): {msg}")
             raise
 
     @staticmethod

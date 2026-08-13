@@ -38,6 +38,43 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from version_manager import parse_version, strip_v_prefix, tag_for  # noqa: E402
 
 
+def load_app_core_include() -> list[str]:
+    """读取 app-core 白名单（唯一事实源: pyproject.toml）。
+
+    与 scripts/build.py::create_app_core_7z() 共读同一份数组 —— 之前这里是
+    一份硬编码副本，而且是**错的**（`VERSION` 和 `docs/` 实际都在 `_internal/`
+    里面，PyInstaller 的 datas 全部落在 `_internal/`，顶层根本没有这两项）。
+
+    注意这份清单的用途：**发布元数据 / 审计**，运行期没有任何消费者
+    （component_update_manager 只按整包 sha256 校验，不逐文件比对）。
+    归档内容的权威在 build.py 的白名单拷贝，不在这里。
+    """
+    pyproject = ROOT / "pyproject.toml"
+    try:
+        import tomllib
+
+        with open(pyproject, "rb") as f:
+            data = tomllib.load(f)
+        items = data.get("tool", {}).get("fluentytdl", {}).get("build", {}).get("app_core_include")
+    except ImportError:
+        # Python 3.10 无 tomllib —— 回退到行解析（数组在 pyproject 里写成单行）
+        items = None
+        for line in pyproject.read_text(encoding="utf-8").splitlines():
+            stripped = line.strip()
+            if stripped.startswith("app_core_include") and "=" in stripped:
+                raw = stripped.split("=", 1)[1].strip()
+                if raw.startswith("[") and raw.endswith("]"):
+                    items = [x.strip(" '\"") for x in raw[1:-1].split(",") if x.strip()]
+                break
+
+    if not items:
+        raise RuntimeError(
+            "无法从 pyproject.toml 读取 [tool.fluentytdl.build].app_core_include。\n"
+            "  该数组必须存在且写成单行 —— 它是 app-core 归档内容的唯一事实源。"
+        )
+    return list(items)
+
+
 def sha256_file(file_path: Path) -> str:
     sha256 = hashlib.sha256()
     with open(file_path, "rb") as f:
@@ -195,15 +232,10 @@ def generate_manifest(
             "url": f"{base_url}/{app_core_name}",
             "sha256": sha256_file(app_core_path),
             "size": app_core_path.stat().st_size,
-            # updater.exe 不包含在 app-core 归档中，因为 updater.exe 正在运行时无法被覆写
-            # updater.exe 的更新通过延迟替换机制处理（见 main.py _cleanup_update_residuals）
-            "files": [
-                "FluentYTDL.exe",
-                "_internal/",
-                "VERSION",
-                "docs/",
-                "licenses/",
-            ],
+            # 归档实际收录的顶层条目，与 build.py 的白名单同源（见 load_app_core_include）。
+            # updater.exe 不在其中：它运行时被进程锁死无法覆写，改由归档里的
+            # updater.exe.new 投递、由退出后的 helper 或新版 main.py 完成替换。
+            "files": load_app_core_include(),
         }
         print(f"  app-core: {app_core_name} (SHA256 OK)")
     else:

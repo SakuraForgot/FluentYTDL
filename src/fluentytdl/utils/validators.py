@@ -55,6 +55,36 @@ class UrlValidator:
             return False
         return bool(re.match(UrlValidator._CHANNEL_REGEX, text.strip()))
 
+    # YouTube 视频 ID 提取：覆盖 watch?v= / youtu.be / shorts / embed / v / live。
+    # 末尾的负向预查保证只吃满 11 位的 ID，不会从更长的 token（播放列表 ID、
+    # 24 位频道 ID）里切出一段假 ID。
+    _VIDEO_ID_RE = re.compile(
+        r"(?:youtu\.be/|/shorts/|/embed/|/live/|/v/|[?&]v=)([A-Za-z0-9_-]{11})(?![A-Za-z0-9_-])"
+    )
+
+    @staticmethod
+    def extract_video_id(text: str) -> str:
+        """从 YouTube URL 里取出 11 位视频 ID，取不到返回空串。
+
+        纯字符串解析，不发网络请求，因此可以在 UI 线程上直接调用。
+        """
+        if not text:
+            return ""
+        m = UrlValidator._VIDEO_ID_RE.search(text.strip())
+        return m.group(1) if m else ""
+
+    @staticmethod
+    def youtube_thumbnail_url(text: str) -> str:
+        """由 URL 直接推出 YouTube 缩略图地址，取不到 ID 时返回空串。
+
+        用途是解析尚未返回时先把缩略图铺上去。选 mqdefault（320×180）：
+        - maxresdefault / hq720 在不少视频上直接 404；
+        - hqdefault 是 480×360 的 4:3，16:9 视频会带上下黑边，塞进 160×90 会变形；
+        - mqdefault 对所有视频都存在，且正好是 16:9，缩到 160×90 是整数倍。
+        """
+        vid = UrlValidator.extract_video_id(text)
+        return f"https://i.ytimg.com/vi/{vid}/mqdefault.jpg" if vid else ""
+
     # X (Twitter) 推文视频 URL 正则
     X_STATUS_REGEX = (
         r"^(https?://)?(www\.)?(mobile\.)?"

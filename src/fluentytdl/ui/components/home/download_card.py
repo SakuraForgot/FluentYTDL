@@ -437,7 +437,7 @@ class DownloadItemCard(CardWidget):
                 pass
 
     def on_error(self, err_data: dict) -> None:
-        # 兼容新的 DiagnosedError 结构和旧的直接字符串 dict
+        # 兼容 Diagnosis.to_dict() 的结构化 dict 与旧的纯字符串 dict
         if "code" in err_data and "severity" in err_data:
             friendly_title = err_data.get("user_title", self.tr("下载出错"))
             err_msg = err_data.get("user_message", self.tr("未知错误"))

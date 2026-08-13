@@ -7,7 +7,7 @@ import time
 from pathlib import Path
 from typing import Any, Literal, cast
 
-from PySide6.QtCore import QCoreApplication, Qt, QThread, Signal
+from PySide6.QtCore import QCoreApplication, Qt, QThread, QTimer, Signal
 from PySide6.QtWidgets import QFileDialog, QStackedWidget, QVBoxLayout, QWidget
 from qfluentwidgets import (
     CheckBox,
@@ -40,7 +40,7 @@ from ..core.dependency_manager import dependency_manager
 from ..core.hardware_manager import hardware_manager
 from ..download.download_manager import download_manager
 from ..processing.subtitle_manager import COMMON_SUBTITLE_LANGUAGES
-from ..utils.logger import LOG_DIR
+from ..utils.logger import LOG_DIR, logger
 from ..utils.paths import find_bundled_executable, is_frozen
 from ..youtube.yt_dlp_cli import resolve_yt_dlp_exe, run_version
 
@@ -835,10 +835,71 @@ class InlineSwitchCard(SettingCard):
         self.switchButton.checkedChanged.connect(self.checkedChanged)
 
 
+class InlineSwitchActionCard(SettingCard):
+    """A fluent setting card with a right-aligned action button + SwitchButton."""
+
+    checkedChanged = Signal(bool)
+    actionClicked = Signal()
+
+    def __init__(self, icon, title: str, content: str | None, action_text: str, parent=None):
+        super().__init__(icon, title, content, parent)
+        self.actionButton = PushButton(action_text, self)
+        self.actionButton.clicked.connect(self.actionClicked)
+        self.switchButton = SwitchButton(self)
+        self.hBoxLayout.addWidget(self.actionButton, 0, Qt.AlignmentFlag.AlignRight)
+        self.hBoxLayout.addSpacing(8)
+        self.hBoxLayout.addWidget(self.switchButton, 0, Qt.AlignmentFlag.AlignRight)
+        self.hBoxLayout.addSpacing(16)
+        self.switchButton.checkedChanged.connect(self.checkedChanged)
+
+
+class PotDiagnoseWorker(QThread):
+    """POT 一键检测：全部网络往返都在子线程里，UI 永不阻塞。
+
+    `get_health_status()` 会真去铸一次 Token（最坏 15s），`probe_ytdlp_provider()`
+    还要起一个 yt-dlp 子进程 —— 这两件事任何一件放在 UI 线程都会把窗口冻住。
+    """
+
+    finished = Signal(dict)
+
+    def __init__(self, parent=None, *, recover: bool = False, probe: bool = True):
+        super().__init__(parent)
+        self.recover = recover
+        self.probe = probe
+
+    def run(self):
+        report: dict[str, Any] = {"recovered": None}
+        try:
+            from ..youtube.pot_manager import pot_manager
+
+            if self.recover:
+                report["recovered"] = pot_manager.try_recover()
+
+            report["health"] = pot_manager.get_health_status()
+            report["plugin_ok"], report["plugin_detail"] = pot_manager.verify_plugin_loadable()
+            report["deno_ok"] = pot_manager._probe_deno()
+
+            # 主动探测只在服务确实活着时才跑：服务没起来时 base_url 都拿不到，
+            # 白起一个 yt-dlp 子进程只会让用户多等几十秒看一句废话。
+            if self.probe and report["health"].get("running"):
+                report["probe_ok"], report["probe_detail"] = pot_manager.probe_ytdlp_provider()
+            else:
+                report["probe_ok"] = None
+                report["probe_detail"] = "服务未运行，跳过主动探测"
+        except Exception as e:
+            report["error"] = str(e)
+            logger.exception("[POT][Diagnose] 检测异常")
+        self.finished.emit(report)
+
+
 class SettingsPage(QWidget):
     """设置页面：管理下载、网络、核心组件配置 (重构版 - Pivot导航)"""
 
     clipboardAutoDetectChanged = Signal(bool)
+
+    # 「解析结果保留时间」下拉框各档位对应的秒数，顺序必须与卡片里的文案一一对应。
+    # 首档 0 = 不保留：youtube_service._parse_cache_ttl() <= 0 时读写一并停掉。
+    PARSE_CACHE_TTL_CHOICES: tuple[int, ...] = (0, 300, 900, 1800, 3600, 7200)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -1086,6 +1147,38 @@ class SettingsPage(QWidget):
             self._on_playlist_extract_concurrency_changed
         )
 
+        # 解析结果保留时间（对应 parse_cache_ttl_seconds）。
+        # 文案刻意不出现 "TTL"/"缓存过期" 这类术语；"不保留" 即等于整体关闭。
+        self.parseCacheTtlCard = InlineComboBoxCard(
+            FluentIcon.HISTORY,
+            self.tr("解析结果保留时间"),
+            self.tr("同一链接在此时间内再次解析会直接复用上次结果，不再重新请求（默认: 30 分钟）"),
+            [
+                self.tr("不保留"),
+                self.tr("5 分钟"),
+                self.tr("15 分钟"),
+                self.tr("30 分钟"),
+                self.tr("1 小时"),
+                self.tr("2 小时"),
+            ],
+            self.downloadGroup,
+        )
+        current_ttl = config_manager.get("parse_cache_ttl_seconds", 1800)
+        try:
+            current_ttl = int(current_ttl)
+        except (TypeError, ValueError):
+            current_ttl = 1800
+        # 落在选项之外的历史值（旧版本手改过 config.json）就近显示为默认档，
+        # 但**不写回配置** —— 用户没动这张卡片就不该被静默改掉。
+        self.parseCacheTtlCard.comboBox.setCurrentIndex(
+            self.PARSE_CACHE_TTL_CHOICES.index(current_ttl)
+            if current_ttl in self.PARSE_CACHE_TTL_CHOICES
+            else self.PARSE_CACHE_TTL_CHOICES.index(1800)
+        )
+        self.parseCacheTtlCard.comboBox.currentIndexChanged.connect(
+            self._on_parse_cache_ttl_changed
+        )
+
         self.failedTaskRetentionCard = InlineComboBoxCard(
             FluentIcon.HISTORY,
             self.tr("失败任务保留时间"),
@@ -1114,6 +1207,7 @@ class SettingsPage(QWidget):
         self.downloadGroup.addSettingCard(self.networkRetriesCard)
         self.downloadGroup.addSettingCard(self.maxConcurrentCard)
         self.downloadGroup.addSettingCard(self.playlistExtractConcurrencyCard)
+        self.downloadGroup.addSettingCard(self.parseCacheTtlCard)
         self.downloadGroup.addSettingCard(self.failedTaskRetentionCard)
         layout.addWidget(self.downloadGroup)
 
@@ -1690,20 +1784,25 @@ class SettingsPage(QWidget):
     def _init_advanced_group(self, parent_widget: QWidget | None, layout: QVBoxLayout) -> None:
         self.advancedGroup = SettingCardGroup(self.tr("高级"), parent_widget)
 
-        self.potProviderEnabledCard = InlineSwitchCard(
+        self.potProviderEnabledCard = InlineSwitchActionCard(
             FluentIcon.CERTIFICATE,
             self.tr("POT 验证引擎 (实验性)"),
-            self.tr(
-                "内置的 bgutil-pot-provider 服务，可绕过 YouTube 机器人检测。开启会增加启动耗时，默认关闭。"
-            ),
+            self.tr("正在读取状态…"),
+            self.tr("一键检测"),
             parent=self.advancedGroup,
         )
         self.potProviderEnabledCard.switchButton.setChecked(
             config_manager.get("pot_provider_enabled", False)
         )
-        self.potProviderEnabledCard.checkedChanged.connect(
-            lambda checked: config_manager.set("pot_provider_enabled", checked)
-        )
+        self.potProviderEnabledCard.checkedChanged.connect(self._on_pot_provider_toggled)
+        self.potProviderEnabledCard.actionClicked.connect(self._on_pot_diagnose_clicked)
+
+        # 开关旁的实时健康摘要。只读内存状态（零网络 I/O），所以可以放心定时刷。
+        self._pot_health_timer = QTimer(self)
+        self._pot_health_timer.setInterval(2000)
+        self._pot_health_timer.timeout.connect(self._refresh_pot_health_content)
+        self._pot_health_timer.start()
+        self._refresh_pot_health_content()
 
         self.poTokenCard = SmartSettingCard(
             FluentIcon.CODE,
@@ -1906,6 +2005,185 @@ class SettingsPage(QWidget):
         if os.name == "nt" and not s.lower().endswith(".exe"):
             return False, "这看起来不是一个 .exe 文件"
         return True, ""
+
+    def _on_pot_provider_toggled(self, checked: bool) -> None:
+        """开关切换后立即在后台预热/停服，无需重启（预热不阻塞 UI）。"""
+        config_manager.set("pot_provider_enabled", checked)
+        try:
+            from fluentytdl.youtube.pot_manager import pot_manager
+
+            if checked:
+                pot_manager.ensure_warm_async()
+            else:
+                pot_manager.stop_server()
+        except Exception as e:
+            logger.warning(f"[POT] 开关切换处理失败: {e}")
+        self._refresh_pot_health_content()
+
+    _POT_CARD_HINT = "后台预热，不阻塞启动与解析；未就绪时自动降级为无 POT 解析。默认关闭。"
+
+    def _refresh_pot_health_content(self) -> None:
+        """把 POT 实时状态摘要写进卡片描述。
+
+        只调 `status_brief()`（纯内存读），绝不调 `get_health_status()` —— 后者会
+        真去铸一次 Token，最坏 15s，放在定时器里等于每 2 秒冻一次 UI。
+
+        单行输出：`SettingCard` 在构造时就 `setFixedHeight(70)`，多行会被裁掉。
+        """
+        card = getattr(self, "potProviderEnabledCard", None)
+        if card is None:
+            return
+        if not card.isVisible() and getattr(self, "_pot_health_seen", False):
+            return
+        try:
+            from fluentytdl.youtube.pot_manager import pot_manager
+
+            brief = pot_manager.status_brief()
+        except Exception as e:
+            brief = f"状态不可用（{e}）"
+        self._pot_health_seen = True
+        text = f"状态：{brief} · {self._POT_CARD_HINT}"
+        if card.contentLabel.text() != text:
+            card.setContent(text)
+
+    def _on_pot_diagnose_clicked(self) -> None:
+        """一键检测：健康状态 + 插件就位 + deno + `-v` 主动探测，全在子线程跑。"""
+        if getattr(self, "_pot_diagnose_worker", None) is not None:
+            return
+        if not config_manager.get("pot_provider_enabled", False):
+            InfoBar.warning(
+                self.tr("POT 未启用"),
+                self.tr("请先打开 POT 验证引擎开关，等待预热后再检测。"),
+                duration=5000,
+                parent=self,
+            )
+            return
+        self._start_pot_diagnose(recover=False)
+
+    def _start_pot_diagnose(self, *, recover: bool) -> None:
+        card = self.potProviderEnabledCard
+        card.actionButton.setEnabled(False)
+        card.actionButton.setText(self.tr("修复中…") if recover else self.tr("检测中…"))
+        InfoBar.info(
+            self.tr("正在检测 POT"),
+            self.tr("会实际铸一次 Token 并跑一次带 -v 的 yt-dlp 探测，可能需要几十秒。"),
+            duration=5000,
+            parent=self,
+        )
+
+        worker = PotDiagnoseWorker(self, recover=recover)
+        self._pot_diagnose_worker = worker
+        worker.finished.connect(self._on_pot_diagnose_finished, Qt.ConnectionType.QueuedConnection)
+        worker.start()
+
+    def _on_pot_diagnose_finished(self, report: dict) -> None:
+        card = self.potProviderEnabledCard
+        card.actionButton.setEnabled(True)
+        card.actionButton.setText(self.tr("一键检测"))
+        worker = getattr(self, "_pot_diagnose_worker", None)
+        self._pot_diagnose_worker = None
+        if worker is not None:
+            worker.deleteLater()
+        self._refresh_pot_health_content()
+
+        if report.get("error"):
+            InfoBar.error(self.tr("检测失败"), str(report["error"]), duration=15000, parent=self)
+            return
+
+        health = report.get("health") or {}
+        lines = self._format_pot_report(report, health)
+        overall_ok = bool(health.get("overall_ok")) and bool(report.get("plugin_ok"))
+        probe_ok = report.get("probe_ok")
+        if probe_ok is False:
+            overall_ok = False
+
+        title = self.tr("POT 检测通过") if overall_ok else self.tr("POT 检测发现问题")
+        box = MessageBox(title, "\n".join(lines), self.window())
+        box.cancelButton.setText(self.tr("关闭"))
+        if overall_ok:
+            box.yesButton.setText(self.tr("好的"))
+            box.exec()
+            return
+
+        box.yesButton.setText(self.tr("尝试修复"))
+        if box.exec():
+            self._start_pot_diagnose(recover=True)
+
+    def _format_pot_report(self, report: dict, health: dict) -> list[str]:
+        """把诊断结果拼成人类可读的报告。只出现端口/长度/条目数，绝不含 Token 明文。
+
+        每行都控制在 ~110 字符内：`MessageBox` 内部会对 content 再跑一遍 TextWrap，
+        超长行会被折得七零八落。完整探测输出走日志，不塞进对话框。
+        """
+
+        def mark(ok: object) -> str:
+            if ok is None:
+                return "—"
+            return "✓" if ok else "✗"
+
+        def clip(s: str, n: int = 110) -> str:
+            s = s.strip()
+            return s if len(s) <= n else s[: n - 1] + "…"
+
+        lines: list[str] = []
+        if report.get("recovered") is not None:
+            ok = report["recovered"]
+            lines.append(f"{mark(ok)} 自动修复：" + ("成功" if ok else "失败，见下方明细"))
+            lines.append("")
+
+        port = health.get("port") or 0
+        running = health.get("running")
+        lines.append(
+            f"{mark(running)} 服务进程："
+            + (f"运行中（127.0.0.1:{port}）" if running and port else "未运行")
+        )
+        lines.append(
+            f"{mark(health.get('token_ok'))} Token 生成：{clip(health.get('token_detail') or '—')}"
+        )
+        lines.append(
+            f"{mark(health.get('minter_ok'))} Minter 缓存：{clip(health.get('minter_detail') or '—')}"
+        )
+        lines.append(
+            f"{mark(report.get('plugin_ok'))} yt-dlp 插件：{clip(report.get('plugin_detail') or '—')}"
+        )
+        lines.append(
+            f"{mark(report.get('deno_ok'))} JS Runtime (Deno)："
+            + (
+                "已就位"
+                if report.get("deno_ok")
+                else "未找到 —— POT 可能铸不出 Token，请在「核心组件」安装"
+            )
+        )
+
+        probe_ok = report.get("probe_ok")
+        detail = str(report.get("probe_detail") or "")
+        lines.append("")
+        lines.append(f"{mark(probe_ok)} yt-dlp 主动探测（-v，验证插件被加载且 provider 被选中）：")
+        if probe_ok:
+            head = [ln for ln in detail.splitlines() if "bgutil" in ln.lower()][:3]
+            lines.extend(f"  {clip(ln)}" for ln in (head or detail.splitlines()[:3]))
+            lines.append("  完整输出见日志。")
+        else:
+            lines.extend(f"  {clip(ln)}" for ln in detail.splitlines()[:6])
+
+        cache_size = health.get("minter_cache_size")
+        if cache_size is not None:
+            lines.append("")
+            lines.append(f"交叉验证：minter 缓存现有 {cache_size} 条。")
+            lines.append("多次解析后它始终不涨，说明 Token 根本没被 yt-dlp 请求。")
+
+        logger.info(
+            "[POT][Diagnose] running={} token_ok={} minter_ok={} plugin_ok={} deno={} probe={}",
+            health.get("running"),
+            health.get("token_ok"),
+            health.get("minter_ok"),
+            report.get("plugin_ok"),
+            report.get("deno_ok"),
+            probe_ok,
+        )
+        if detail:
+            logger.info("[POT][Diagnose] 探测输出:\n{}", detail[:4000])
+        return lines
 
     @staticmethod
     def _validate_po_token(text: str) -> tuple[bool, str]:
@@ -2530,6 +2808,21 @@ class SettingsPage(QWidget):
             else:
                 self.playlistExtractConcurrencyCard.setContent(self.tr("当前: {}").format(new_val))
                 self.playlistExtractConcurrencyCard.setTitle("播放列表解析并发")
+
+    def _on_parse_cache_ttl_changed(self, index: int) -> None:
+        if not 0 <= index < len(self.PARSE_CACHE_TTL_CHOICES):
+            return
+        new_val = self.PARSE_CACHE_TTL_CHOICES[index]
+        config_manager.set("parse_cache_ttl_seconds", new_val)
+
+        if new_val <= 0:
+            # 改成「不保留」只是让后续读写都短路，已经存在的条目还占着内存，
+            # 顺手清掉才是用户点这一档时期待的结果。
+            from ..youtube.youtube_service import youtube_service
+
+            youtube_service.invalidate_parse_cache("解析结果保留时间已关闭")
+        # 缩短保留时间不需要清缓存：_parse_cache_get 每次读都拿当前时长比对年龄，
+        # 超时的条目会在下一次读取时自然淘汰。
 
     def _on_update_source_changed(self, index: int) -> None:
         source = "ghproxy" if index == 1 else "github"

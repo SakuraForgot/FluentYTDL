@@ -10,10 +10,11 @@ FluentYTDL 软件更新卡片
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import QWidget
 from qfluentwidgets import (
     FluentIcon,
+    MessageBox,
     ProgressBar,
     PushButton,
     SettingCard,
@@ -83,6 +84,8 @@ class AppUpdateSettingCard(SettingCard):
         component_update_manager.download_progress.connect(self._on_download_progress)
         component_update_manager.download_finished.connect(self._on_download_finished)
         component_update_manager.download_error.connect(self._on_download_error)
+        component_update_manager.apply_error.connect(self._on_apply_error)
+        component_update_manager.apply_confirm_needed.connect(self._on_apply_confirm_needed)
 
     # ── 状态机 ────────────────────────────────────────────
 
@@ -178,32 +181,54 @@ class AppUpdateSettingCard(SettingCard):
             self.actionButton.setText(f"正在下载... {percent}%")
 
     def _on_download_finished(self, path: str) -> None:
-        """下载完成，启动 updater。"""
+        """下载完成，请求应用更新。
+
+        `request_app_core_update()` 只校验 + 暂存，不会退出进程，也不抛异常 ——
+        失败经 `apply_error` 回来，需要确认经 `apply_confirm_needed` 回来。
+        """
         self.progressBar.setValue(100)
         self.actionButton.setText(self.tr("正在安装..."))
+        component_update_manager.request_app_core_update(path)
 
-        try:
-            component_update_manager.apply_app_core_update(path)
-        except FileNotFoundError as e:
-            self._downloading = False
-            self.progressBar.setVisible(False)
-            self.actionButton.setEnabled(True)
-            self.actionButton.setText(self.tr("立即更新"))
-            InfoBar.error(self.tr("更新失败"), str(e), parent=self.window())
-        except Exception as e:
-            self._downloading = False
-            self.progressBar.setVisible(False)
-            self.actionButton.setEnabled(True)
-            self.actionButton.setText(self.tr("立即更新"))
-            InfoBar.error(self.tr("更新失败"), str(e), parent=self.window())
-
-    def _on_download_error(self, msg: str) -> None:
-        """下载出错。"""
+    def _reset_action_state(self) -> None:
+        """把卡片恢复成"可以再点一次更新"的样子。"""
         self._downloading = False
         self.progressBar.setVisible(False)
         self.actionButton.setEnabled(True)
         self.actionButton.setText(self.tr("立即更新"))
         self.changelogButton.setEnabled(True)
+
+    def _on_apply_error(self, msg: str) -> None:
+        """应用更新失败（updater.exe 或归档缺失等终止性错误）。"""
+        self._reset_action_state()
+        InfoBar.error(self.tr("更新失败"), msg, duration=15000, parent=self.window())
+
+    def _on_apply_confirm_needed(self, active: int, gen: int) -> None:
+        """有活跃下载任务，问一次再决定是否继续。
+
+        用 singleShot 把模态对话框挪出信号发射栈：此刻我们还在
+        `request_app_core_update()` 的 emit 里，不能在这里阻塞它。
+        """
+        QTimer.singleShot(0, lambda: self._ask_confirm(active, gen))
+
+    def _ask_confirm(self, active: int, gen: int) -> None:
+        box = MessageBox(
+            self.tr("确认更新"),
+            self.tr("当前有 {n} 个下载任务正在进行，更新将中断它们。是否继续？").format(n=active),
+            self.window(),
+        )
+        box.yesButton.setText(self.tr("继续更新"))
+        box.cancelButton.setText(self.tr("取消"))
+        if box.exec():
+            self.actionButton.setText(self.tr("正在安装..."))
+            component_update_manager.confirm_pending_update(gen)
+        else:
+            component_update_manager.cancel_pending_update(gen)
+            self._reset_action_state()
+
+    def _on_download_error(self, msg: str) -> None:
+        """下载出错。"""
+        self._reset_action_state()
         InfoBar.error(self.tr("下载失败"), msg, duration=15000, parent=self.window())
 
     # ── 更新日志 ──────────────────────────────────────────

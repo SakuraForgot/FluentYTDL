@@ -111,14 +111,16 @@ class UpdateDialog(MessageBoxBase):
         self.progressLabel.setText(f"正在下载更新... {percent}%")
 
     def _on_downloaded(self, path: str) -> None:
+        """归档就绪 —— 本对话框的职责到此结束。
+
+        安装决策（活跃任务确认、失败告知）由设置页卡片 + 后端状态机负责：卡片也订阅了
+        `download_finished`，会用同一个归档路径调 `request_app_core_update()`，后端按
+        路径去重，所以这里再调一次也不会重复触发。必须 `close()` —— 这是个模态框，
+        留着会遮住卡片的确认弹窗，而且它自己也没有后续状态可以显示了。
+        """
         self.progressLabel.setText(self.tr("下载完成，正在安装..."))
-        try:
-            component_update_manager.apply_app_core_update(path)
-        except Exception as e:
-            self.progressLabel.setText(f"安装失败: {e}")
-            self.yesButton.setEnabled(True)
-            self.skipBtn.setEnabled(True)
-            self.cancelButton.setEnabled(True)
+        component_update_manager.request_app_core_update(path)
+        self.close()
 
     def _on_error(self, msg: str) -> None:
         self.progressLabel.setText(msg)

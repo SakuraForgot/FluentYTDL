@@ -1,0 +1,661 @@
+{
+  "version": 1,
+  "fallbackCode": "unknown",
+  "rules": [
+    {
+      "code": "nsig_extraction_failed",
+      "category": "toolchain",
+      "severity": "warning",
+      "appliesTo": "warning",
+      "priority": 95,
+      "retry": { "policy": "never" },
+      "fix": "update_component",
+      "patterns": [
+        { "kind": "substr", "value": "nsig extraction failed" },
+        { "kind": "substr", "value": "Some formats may be missing" }
+      ]
+    },
+    {
+      "code": "signature_extraction_failed",
+      "category": "toolchain",
+      "severity": "warning",
+      "priority": 94,
+      "retry": { "policy": "never" },
+      "fix": "update_component",
+      "patterns": [
+        { "kind": "substr", "value": "Signature extraction failed" },
+        { "kind": "substr", "value": "unable to decrypt nsig" }
+      ]
+    },
+    {
+      "code": "ytdlp_outdated",
+      "category": "toolchain",
+      "severity": "warning",
+      "priority": 93,
+      "retry": { "policy": "never" },
+      "fix": "update_component",
+      "patterns": [
+        { "kind": "regex", "value": "is older than \\d+ days" },
+        { "kind": "substr", "value": "yt-dlp is out of date" }
+      ]
+    },
+    {
+      "code": "bot_check_sign_in",
+      "category": "auth",
+      "severity": "fatal",
+      "priority": 92,
+      "retry": { "policy": "after_fix" },
+      "fix": "extract_cookie",
+      "patterns": [
+        { "kind": "substr", "value": "Sign in to confirm you're not a bot" },
+        { "kind": "substr", "value": "Sign in to confirm youre not a bot" },
+        { "kind": "substr", "value": "confirm you are not a bot" }
+      ]
+    },
+    {
+      "code": "pot_provider_unavailable",
+      "category": "toolchain",
+      "severity": "recoverable",
+      "priority": 91,
+      "retry": { "policy": "after_fix" },
+      "fix": "refresh_pot",
+      "patterns": [
+        { "kind": "substr", "value": "bgutil" },
+        { "kind": "substr", "value": "GetPOT" },
+        { "kind": "substr", "value": "No PO Token provider" },
+        { "kind": "substr", "value": "pot provider" }
+      ]
+    },
+    {
+      "code": "pot_token_required",
+      "category": "auth",
+      "severity": "fatal",
+      "priority": 90,
+      "retry": { "policy": "after_fix" },
+      "fix": "refresh_pot",
+      "patterns": [
+        { "kind": "substr", "value": "Error solving n challenge" },
+        { "kind": "substr", "value": "poToken" },
+        { "kind": "substr", "value": "PO Token" }
+      ]
+    },
+    {
+      "code": "cookie_expired",
+      "category": "auth",
+      "severity": "fatal",
+      "priority": 89,
+      "retry": { "policy": "after_fix" },
+      "fix": "extract_cookie",
+      "patterns": [
+        { "kind": "substr", "value": "cookies are no longer valid" },
+        { "kind": "substr", "value": "account cookies are no longer valid" },
+        { "kind": "substr", "value": "cookies have been rotated" }
+      ]
+    },
+    {
+      "code": "cookie_file_invalid",
+      "category": "auth",
+      "severity": "fatal",
+      "priority": 89,
+      "retry": { "policy": "after_fix" },
+      "fix": "extract_cookie",
+      "patterns": [
+        { "kind": "substr", "value": "does not look like a Netscape format cookies file" },
+        { "kind": "substr", "value": "Cookies file is not in Netscape format" }
+      ]
+    },
+    {
+      "code": "members_only",
+      "category": "auth",
+      "severity": "fatal",
+      "priority": 88,
+      "retry": { "policy": "never" },
+      "fix": "extract_cookie",
+      "patterns": [
+        { "kind": "substr", "value": "Members-only content" },
+        { "kind": "substr", "value": "Members only content" },
+        { "kind": "substr", "value": "Join this channel to get access" }
+      ]
+    },
+    {
+      "code": "age_restricted",
+      "category": "auth",
+      "severity": "fatal",
+      "priority": 87,
+      "retry": { "policy": "after_fix" },
+      "fix": "extract_cookie",
+      "patterns": [
+        { "kind": "substr", "value": "Sign in to confirm your age" },
+        { "kind": "substr", "value": "inappropriate for some users" },
+        { "kind": "substr", "value": "age-restricted" }
+      ]
+    },
+    {
+      "code": "private_video",
+      "category": "auth",
+      "severity": "fatal",
+      "priority": 86,
+      "retry": { "policy": "never" },
+      "fix": "extract_cookie",
+      "patterns": [
+        { "kind": "substr", "value": "Private video" },
+        { "kind": "substr", "value": "This video is private" },
+        { "kind": "substr", "value": "only available to registered users" }
+      ]
+    },
+    {
+      "code": "login_required",
+      "category": "auth",
+      "severity": "fatal",
+      "priority": 60,
+      "retry": { "policy": "after_fix" },
+      "fix": "extract_cookie",
+      "patterns": [
+        { "kind": "substr", "value": "Sign in to confirm" },
+        { "kind": "substr", "value": "login required" },
+        { "kind": "substr", "value": "requires authentication" },
+        { "kind": "substr", "value": "This video requires payment" },
+        { "kind": "substr", "value": "Use --cookies" }
+      ]
+    },
+    {
+      "code": "copyright_claimed",
+      "category": "media",
+      "severity": "fatal",
+      "priority": 85,
+      "retry": { "policy": "never" },
+      "fix": null,
+      "patterns": [
+        { "kind": "substr", "value": "copyright claim" },
+        { "kind": "substr", "value": "copyright grounds" },
+        { "kind": "substr", "value": "blocked it on copyright" }
+      ]
+    },
+    {
+      "code": "geo_blocked",
+      "category": "media",
+      "severity": "fatal",
+      "priority": 84,
+      "retry": { "policy": "never" },
+      "fix": "switch_proxy",
+      "patterns": [
+        { "kind": "substr", "value": "not available in your country" },
+        { "kind": "substr", "value": "not available from your location" },
+        { "kind": "substr", "value": "geo restriction" },
+        { "kind": "substr", "value": "Geo-restricted" },
+        { "kind": "substr", "value": "blocked it in your country" }
+      ]
+    },
+    {
+      "code": "video_removed",
+      "category": "media",
+      "severity": "fatal",
+      "priority": 83,
+      "retry": { "policy": "never" },
+      "fix": null,
+      "patterns": [
+        { "kind": "substr", "value": "This video has been removed" },
+        { "kind": "substr", "value": "has been terminated" },
+        { "kind": "substr", "value": "account associated with this video has been" }
+      ]
+    },
+    {
+      "code": "video_unavailable",
+      "category": "media",
+      "severity": "fatal",
+      "priority": 55,
+      "retry": { "policy": "never" },
+      "fix": null,
+      "patterns": [
+        { "kind": "substr", "value": "Video unavailable" },
+        { "kind": "substr", "value": "This video is not available" },
+        { "kind": "substr", "value": "video is no longer available" }
+      ]
+    },
+    {
+      "code": "livestream_not_started",
+      "category": "media",
+      "severity": "fatal",
+      "priority": 82,
+      "retry": { "policy": "never" },
+      "fix": null,
+      "patterns": [
+        { "kind": "substr", "value": "This live event will begin" },
+        { "kind": "substr", "value": "live stream has not started" },
+        { "kind": "substr", "value": "Premieres in" }
+      ]
+    },
+    {
+      "code": "livestream_ended",
+      "category": "media",
+      "severity": "fatal",
+      "priority": 81,
+      "retry": { "policy": "never" },
+      "fix": null,
+      "patterns": [
+        { "kind": "substr", "value": "This live event has ended" },
+        { "kind": "substr", "value": "live stream recording is not available" }
+      ]
+    },
+    {
+      "code": "not_premiered_yet",
+      "category": "media",
+      "severity": "fatal",
+      "priority": 80,
+      "retry": { "policy": "never" },
+      "fix": null,
+      "patterns": [
+        { "kind": "substr", "value": "This video will be available" },
+        { "kind": "substr", "value": "Premiere will begin" },
+        { "kind": "substr", "value": "premieres in" }
+      ]
+    },
+    {
+      "code": "playlist_unavailable",
+      "category": "media",
+      "severity": "fatal",
+      "priority": 79,
+      "retry": { "policy": "never" },
+      "fix": null,
+      "patterns": [
+        { "kind": "substr", "value": "The playlist does not exist" },
+        { "kind": "substr", "value": "This playlist is private" },
+        { "kind": "substr", "value": "playlist does not exist" }
+      ]
+    },
+    {
+      "code": "channel_unavailable",
+      "category": "media",
+      "severity": "fatal",
+      "priority": 78,
+      "retry": { "policy": "never" },
+      "fix": null,
+      "patterns": [
+        { "kind": "substr", "value": "This channel does not have a" },
+        { "kind": "substr", "value": "channel is not available" },
+        { "kind": "substr", "value": "Unable to recognize tab page" }
+      ]
+    },
+    {
+      "code": "embed_only",
+      "category": "media",
+      "severity": "fatal",
+      "priority": 77,
+      "retry": { "policy": "never" },
+      "fix": null,
+      "patterns": [
+        { "kind": "substr", "value": "Watch on the latest version of YouTube" },
+        { "kind": "substr", "value": "playable in embed" },
+        { "kind": "substr", "value": "only available on" }
+      ]
+    },
+    {
+      "code": "url_unsupported",
+      "category": "media",
+      "severity": "fatal",
+      "priority": 76,
+      "retry": { "policy": "never" },
+      "fix": null,
+      "patterns": [
+        { "kind": "substr", "value": "Unsupported URL" },
+        { "kind": "substr", "value": "is not a valid URL" },
+        { "kind": "substr", "value": "Incomplete YouTube ID" },
+        { "kind": "substr", "value": "no suitable InfoExtractor" }
+      ]
+    },
+    {
+      "code": "format_unavailable",
+      "category": "media",
+      "severity": "recoverable",
+      "priority": 75,
+      "retry": { "policy": "never" },
+      "fix": null,
+      "patterns": [
+        { "kind": "substr", "value": "Requested format is not available" },
+        { "kind": "substr", "value": "requested format not available" }
+      ]
+    },
+    {
+      "code": "no_formats_found",
+      "category": "media",
+      "severity": "fatal",
+      "priority": 74,
+      "retry": { "policy": "never" },
+      "fix": "update_component",
+      "patterns": [
+        { "kind": "substr", "value": "No video formats found" },
+        { "kind": "substr", "value": "no video results" },
+        { "kind": "substr", "value": "Unable to extract video data" }
+      ]
+    },
+    {
+      "code": "rate_limited_429",
+      "category": "network",
+      "severity": "recoverable",
+      "priority": 73,
+      "retry": { "policy": "backoff", "max": 3, "base_sec": 30 },
+      "fix": "switch_proxy",
+      "patterns": [
+        { "kind": "substr", "value": "HTTP Error 429" },
+        { "kind": "substr", "value": "Too Many Requests" }
+      ]
+    },
+    {
+      "code": "http_403_forbidden",
+      "category": "network",
+      "severity": "recoverable",
+      "priority": 52,
+      "retry": { "policy": "backoff", "max": 2, "base_sec": 10 },
+      "fix": "switch_proxy",
+      "patterns": [
+        { "kind": "substr", "value": "HTTP Error 403" },
+        { "kind": "substr", "value": "Forbidden" }
+      ]
+    },
+    {
+      "code": "http_404_not_found",
+      "category": "network",
+      "severity": "fatal",
+      "priority": 51,
+      "retry": { "policy": "never" },
+      "fix": null,
+      "patterns": [
+        { "kind": "substr", "value": "HTTP Error 404" },
+        { "kind": "substr", "value": "HTTP Error 410" }
+      ]
+    },
+    {
+      "code": "http_server_5xx",
+      "category": "network",
+      "severity": "recoverable",
+      "priority": 50,
+      "retry": { "policy": "backoff", "max": 3, "base_sec": 15 },
+      "fix": null,
+      "patterns": [
+        { "kind": "regex", "value": "HTTP Error 5\\d{2}" },
+        { "kind": "substr", "value": "Internal Server Error" },
+        { "kind": "substr", "value": "Bad Gateway" },
+        { "kind": "substr", "value": "Service Unavailable" }
+      ]
+    },
+    {
+      "code": "ssl_eof",
+      "category": "network",
+      "severity": "recoverable",
+      "priority": 72,
+      "retry": { "policy": "backoff", "max": 3, "base_sec": 5 },
+      "fix": "switch_proxy",
+      "patterns": [
+        { "kind": "substr", "value": "EOF occurred in violation of protocol" },
+        { "kind": "substr", "value": "UNEXPECTED_EOF_WHILE_READING" }
+      ]
+    },
+    {
+      "code": "ssl_cert_invalid",
+      "category": "network",
+      "severity": "recoverable",
+      "priority": 71,
+      "retry": { "policy": "never" },
+      "fix": "switch_proxy",
+      "patterns": [
+        { "kind": "substr", "value": "CERTIFICATE_VERIFY_FAILED" },
+        { "kind": "substr", "value": "certificate verify failed" },
+        { "kind": "substr", "value": "SSLCertVerificationError" }
+      ]
+    },
+    {
+      "code": "proxy_connect_failed",
+      "category": "network",
+      "severity": "recoverable",
+      "priority": 70,
+      "retry": { "policy": "backoff", "max": 2, "base_sec": 5 },
+      "fix": "switch_proxy",
+      "patterns": [
+        { "kind": "substr", "value": "Cannot connect to proxy" },
+        { "kind": "substr", "value": "ProxyError" },
+        { "kind": "substr", "value": "SOCKSHTTPSConnectionPool" },
+        { "kind": "substr", "value": "unable to connect to proxy" },
+        { "kind": "substr", "value": "WinError 10061" }
+      ]
+    },
+    {
+      "code": "dns_resolution_failed",
+      "category": "network",
+      "severity": "recoverable",
+      "priority": 69,
+      "retry": { "policy": "backoff", "max": 2, "base_sec": 5 },
+      "fix": "switch_proxy",
+      "patterns": [
+        { "kind": "substr", "value": "Name or service not known" },
+        { "kind": "substr", "value": "getaddrinfo failed" },
+        { "kind": "substr", "value": "Errno 11001" },
+        { "kind": "substr", "value": "Temporary failure in name resolution" },
+        { "kind": "substr", "value": "nodename nor servname provided" }
+      ]
+    },
+    {
+      "code": "connection_timeout",
+      "category": "network",
+      "severity": "recoverable",
+      "priority": 68,
+      "retry": { "policy": "backoff", "max": 3, "base_sec": 5 },
+      "fix": "switch_proxy",
+      "patterns": [
+        { "kind": "substr", "value": "Connection reset by peer" },
+        { "kind": "substr", "value": "Connection refused" },
+        { "kind": "substr", "value": "Connection timed out" },
+        { "kind": "substr", "value": "Read timed out" },
+        { "kind": "substr", "value": "timed out" },
+        { "kind": "substr", "value": "WinError 10060" },
+        { "kind": "substr", "value": "WinError 10054" }
+      ]
+    },
+    {
+      "code": "download_interrupted",
+      "category": "network",
+      "severity": "recoverable",
+      "priority": 67,
+      "retry": { "policy": "immediate", "max": 2 },
+      "fix": null,
+      "patterns": [
+        { "kind": "substr", "value": "IncompleteRead" },
+        { "kind": "substr", "value": "ContentTooShortError" },
+        { "kind": "substr", "value": "The read operation timed out" }
+      ]
+    },
+    {
+      "code": "fragment_retry",
+      "category": "network",
+      "severity": "warning",
+      "appliesTo": "warning",
+      "priority": 40,
+      "retry": { "policy": "never" },
+      "fix": null,
+      "patterns": [
+        { "kind": "substr", "value": "fragment not found" },
+        { "kind": "substr", "value": "Retrying fragment" },
+        { "kind": "substr", "value": "giving up after" }
+      ]
+    },
+    {
+      "code": "sponsorblock_unreachable",
+      "category": "network",
+      "severity": "warning",
+      "appliesTo": "warning",
+      "priority": 39,
+      "retry": { "policy": "never" },
+      "fix": null,
+      "patterns": [
+        { "kind": "substr", "value": "Unable to communicate with SponsorBlock API" },
+        { "kind": "substr", "value": "sponsor.ajay.app" }
+      ]
+    },
+    {
+      "code": "extractor_broken",
+      "category": "toolchain",
+      "severity": "fatal",
+      "priority": 45,
+      "retry": { "policy": "never" },
+      "fix": "update_component",
+      "patterns": [
+        { "kind": "substr", "value": "Unable to extract initial data" },
+        { "kind": "substr", "value": "unable to extract yt initial data" },
+        { "kind": "substr", "value": "Unable to extract API key" },
+        { "kind": "substr", "value": "unable to extract" }
+      ]
+    },
+    {
+      "code": "ffmpeg_not_found",
+      "category": "toolchain",
+      "severity": "fatal",
+      "priority": 66,
+      "retry": { "policy": "never" },
+      "fix": "update_component",
+      "patterns": [
+        { "kind": "substr", "value": "ffprobe/ffmpeg not found" },
+        { "kind": "substr", "value": "ffmpeg not found" },
+        { "kind": "substr", "value": "ffmpeg isn't installed" },
+        { "kind": "substr", "value": "ffmpeg is not installed" }
+      ]
+    },
+    {
+      "code": "ffmpeg_failed",
+      "category": "toolchain",
+      "severity": "fatal",
+      "component": "ffmpeg",
+      "priority": 65,
+      "retry": { "policy": "never" },
+      "fix": null,
+      "patterns": [
+        { "kind": "substr", "value": "Error opening output file" },
+        { "kind": "substr", "value": "Conversion failed" },
+        { "kind": "substr", "value": "Invalid data found when processing input" },
+        { "kind": "regex", "value": "ffmpeg exited with code \\d+" }
+      ]
+    },
+    {
+      "code": "vr_eac_conversion_failed",
+      "category": "toolchain",
+      "severity": "recoverable",
+      "priority": 64,
+      "retry": { "policy": "never" },
+      "fix": null,
+      "patterns": [
+        { "kind": "substr", "value": "v360" },
+        { "kind": "substr", "value": "EAC conversion" },
+        { "kind": "substr", "value": "spatial metadata" }
+      ]
+    },
+    {
+      "code": "disk_full",
+      "category": "filesystem",
+      "severity": "fatal",
+      "priority": 63,
+      "retry": { "policy": "never" },
+      "fix": "change_download_dir",
+      "patterns": [
+        { "kind": "substr", "value": "No space left on device" },
+        { "kind": "substr", "value": "Disk quota exceeded" },
+        { "kind": "substr", "value": "Errno 28" },
+        { "kind": "substr", "value": "There is not enough space on the disk" }
+      ]
+    },
+    {
+      "code": "permission_denied",
+      "category": "filesystem",
+      "severity": "fatal",
+      "priority": 62,
+      "retry": { "policy": "never" },
+      "fix": "change_download_dir",
+      "patterns": [
+        { "kind": "substr", "value": "Permission denied" },
+        { "kind": "substr", "value": "Errno 13" },
+        { "kind": "substr", "value": "WinError 5" },
+        { "kind": "substr", "value": "used by another process" }
+      ]
+    },
+    {
+      "code": "filename_too_long",
+      "category": "filesystem",
+      "severity": "fatal",
+      "priority": 61,
+      "retry": { "policy": "never" },
+      "fix": null,
+      "patterns": [
+        { "kind": "substr", "value": "File name too long" },
+        { "kind": "substr", "value": "Errno 36" },
+        { "kind": "substr", "value": "WinError 206" },
+        { "kind": "substr", "value": "The filename or extension is too long" }
+      ]
+    },
+    {
+      "code": "file_missing",
+      "category": "filesystem",
+      "severity": "fatal",
+      "priority": 44,
+      "retry": { "policy": "never" },
+      "fix": null,
+      "patterns": [
+        { "kind": "substr", "value": "WinError 2" },
+        { "kind": "substr", "value": "No such file or directory" },
+        { "kind": "substr", "value": "cannot find the file specified" }
+      ]
+    },
+    {
+      "code": "out_of_memory",
+      "category": "filesystem",
+      "severity": "fatal",
+      "priority": 43,
+      "retry": { "policy": "never" },
+      "fix": null,
+      "patterns": [
+        { "kind": "substr", "value": "Cannot allocate memory" },
+        { "kind": "substr", "value": "Errno 12" },
+        { "kind": "substr", "value": "MemoryError" }
+      ]
+    },
+    {
+      "code": "socket_unavailable",
+      "category": "network",
+      "severity": "recoverable",
+      "priority": 42,
+      "retry": { "policy": "backoff", "max": 2, "base_sec": 5 },
+      "fix": "switch_proxy",
+      "patterns": [
+        { "kind": "substr", "value": "Errno 95" },
+        { "kind": "substr", "value": "Network is unreachable" },
+        { "kind": "substr", "value": "Errno 101" },
+        { "kind": "substr", "value": "WinError 10051" }
+      ]
+    },
+    {
+      "code": "input_filter_skipped",
+      "category": "media",
+      "severity": "warning",
+      "appliesTo": "warning",
+      "priority": 30,
+      "retry": { "policy": "never" },
+      "fix": null,
+      "patterns": [
+        { "kind": "substr", "value": "upload date is not in range" },
+        { "kind": "substr", "value": "does not pass filter" },
+        { "kind": "substr", "value": "larger than max-filesize" },
+        { "kind": "substr", "value": "smaller than min-filesize" },
+        { "kind": "substr", "value": "maximum number of downloads reached" }
+      ]
+    },
+    {
+      "code": "already_downloaded",
+      "category": "media",
+      "severity": "warning",
+      "appliesTo": "warning",
+      "priority": 29,
+      "retry": { "policy": "never" },
+      "fix": null,
+      "patterns": [
+        { "kind": "substr", "value": "has already been downloaded" },
+        { "kind": "substr", "value": "has already been recorded in the archive" }
+      ]
+    }
+  ]
+}

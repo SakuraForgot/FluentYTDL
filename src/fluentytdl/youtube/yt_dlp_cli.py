@@ -4,8 +4,9 @@ import json
 import os
 import shutil
 import subprocess
+import time
 from pathlib import Path
-from threading import Event
+from threading import Event, Lock
 from typing import Any
 
 from fluentytdl.utils.paths import (
@@ -23,6 +24,78 @@ from ..models.errors import YtDlpExecutionError
 
 class YtDlpCancelled(Exception):
     """Raised when a yt-dlp subprocess is cancelled by the UI."""
+
+
+# yt-dlp / bgutil 插件在输出里提到 POT 时的关键字。
+# PoTokenProviderRejectedRequest 是"服务不可达导致静默降级"的唯一信号，必须转记。
+_POT_OUTPUT_MARKERS = (
+    "po token",
+    "potoken",
+    "bgutil",
+    "getpot",
+    "youtubepot",
+)
+
+
+def log_pot_from_output(out: str, *, stage: str) -> None:
+    """把 yt-dlp 自身输出里与 POT 相关的行转记为 [POT][YtDlp]（阶段 4）。
+
+    正常运行的 yt-dlp 不会打印 POT 细节（插件只在 trace 级别打），
+    但拒绝/失败类信息会出现在 stderr 中，之前被整段吞掉。
+    """
+    if not out:
+        return
+    from loguru import logger
+
+    for line in out.splitlines():
+        s = line.strip()
+        if not s or s.startswith("{"):
+            continue
+        low = s.lower()
+        if any(m in low for m in _POT_OUTPUT_MARKERS):
+            logger.info("[POT][YtDlp][{}] {}", stage, s[:400])
+
+
+def log_pot_in_argv(cmd: list[str], *, stage: str, task_id: str = "") -> None:
+    """断言式日志：POT 参数到底有没有落进最终 argv（阶段 3）。
+
+    关键在负向分支——"开关开着但命令里没有 POT"目前完全看不出来。
+    只记 base_url（本机回环地址），绝不记 Token。
+    """
+    from loguru import logger
+
+    tail = f" task={task_id}" if task_id else ""
+    hit = ""
+    for i, a in enumerate(cmd):
+        if "youtubepot" in str(a).lower():
+            hit = str(a)
+            break
+        if str(a) == "--extractor-args" and i + 1 < len(cmd):
+            nxt = str(cmd[i + 1])
+            if "youtubepot" in nxt.lower():
+                hit = nxt
+                break
+
+    if hit:
+        base = ""
+        if "base_url=" in hit:
+            base = hit.split("base_url=", 1)[1].split(";", 1)[0].strip()
+        logger.info(
+            "[POT][{}] argv 已含 youtubepot-bgutilhttp base_url={}{}",
+            stage,
+            base or "(未解析出)",
+            tail,
+        )
+        return
+
+    try:
+        enabled = bool(config_manager.get("pot_provider_enabled") or False)
+    except Exception:
+        enabled = False
+    if enabled:
+        logger.warning("[POT][{}] argv 未含 POT 参数 (enabled=True){}", stage, tail)
+    else:
+        logger.debug("[POT][{}] argv 未含 POT 参数 (enabled=False){}", stage, tail)
 
 
 def _safe_working_dir() -> str:
@@ -69,6 +142,12 @@ def _win_hide_console_kwargs() -> dict[str, Any]:
     return kwargs
 
 
+# 可执行文件路径探测的记忆化：键是配置里的 yt_dlp_exe_path，
+# 配置一变就自动失效。多路径探测每次解析都要跑，纯属重复劳动。
+_exe_cache_lock = Lock()
+_exe_cache: tuple[str, Path | None] | None = None
+
+
 def resolve_yt_dlp_exe() -> Path | None:
     """Resolve yt-dlp executable path.
 
@@ -76,9 +155,38 @@ def resolve_yt_dlp_exe() -> Path | None:
     1) config yt_dlp_exe_path (if exists)
     2) bundled _internal/yt-dlp/yt-dlp.exe (frozen)
     3) yt-dlp on PATH
+
+    结果按配置项 `yt_dlp_exe_path` 记忆化；解析出的路径若已消失则重新探测。
     """
+    global _exe_cache
 
     cfg = str(config_manager.get("yt_dlp_exe_path") or "").strip()
+
+    with _exe_cache_lock:
+        if _exe_cache is not None and _exe_cache[0] == cfg:
+            cached = _exe_cache[1]
+            # 缓存命中但文件被删/被移动时，退回重新探测。
+            if cached is None or cached.exists():
+                return cached
+
+        resolved = _resolve_yt_dlp_exe_uncached(cfg)
+        _exe_cache = (cfg, resolved)
+        return resolved
+
+
+def invalidate_yt_dlp_exe_cache() -> None:
+    """清空 exe 路径缓存。
+
+    常规配置变更无需调用——缓存键就是 `yt_dlp_exe_path`，改配置即自动失效；
+    此函数留给"外部替换了 exe 文件但配置未变"这类场景。
+    """
+    global _exe_cache
+    with _exe_cache_lock:
+        _exe_cache = None
+
+
+def _resolve_yt_dlp_exe_uncached(cfg: str) -> Path | None:
+    """`resolve_yt_dlp_exe` 的实际探测逻辑。"""
     if cfg:
         p = Path(cfg)
         if p.exists():
@@ -147,6 +255,13 @@ def _get_pot_plugin_source_dir() -> Path | None:
     return None
 
 
+# 插件同步的结果记忆化：键是源目录内容指纹（文件名 + mtime + size），
+# 值是上次同步结论。每次解析都跑一遍 glob + 逐文件 stat 是纯浪费，
+# 而并行解析（频道多标签）还会让多个线程同时 copy2 同一批文件。
+_pot_sync_lock = Lock()
+_pot_sync_cache: tuple[Any, bool] | None = None
+
+
 def sync_pot_plugins_to_ytdlp() -> bool:
     """将 POT 插件文件同步到 yt-dlp.exe 旁的标准插件目录。
 
@@ -154,11 +269,32 @@ def sync_pot_plugins_to_ytdlp() -> bool:
     需要将插件放置在 <exe-dir>/yt-dlp-plugins/<pkg>/yt_dlp_plugins/extractor/ 下。
 
     此函数执行增量同步：仅当源文件更新（mtime 更新或目标不存在）时才复制。
+    结果按源目录指纹记忆化，并由 `_pot_sync_lock` 串行化，可安全并发调用。
 
     Returns:
         True 如果插件目录就绪（已同步或无需同步）
     """
     from loguru import logger
+
+    with _pot_sync_lock:
+        return _sync_pot_plugins_locked(logger)
+
+
+def _pot_source_fingerprint(source_dir: Path, source_files: list[Path]) -> Any:
+    """源插件目录的轻量指纹：(路径, mtime_ns, size) 三元组的有序元组。"""
+    items = []
+    for f in sorted(source_files):
+        try:
+            st = f.stat()
+            items.append((f.name, st.st_mtime_ns, st.st_size))
+        except OSError:
+            items.append((f.name, -1, -1))
+    return (str(source_dir), tuple(items))
+
+
+def _sync_pot_plugins_locked(logger: Any) -> bool:
+    """`sync_pot_plugins_to_ytdlp` 的实际实现，调用方必须已持有 `_pot_sync_lock`。"""
+    global _pot_sync_cache
 
     try:
         exe = resolve_yt_dlp_exe()
@@ -181,6 +317,11 @@ def sync_pot_plugins_to_ytdlp() -> bool:
             exe.parent / "yt-dlp-plugins" / _PLUGIN_PACKAGE_NAME / "yt_dlp_plugins" / "extractor"
         )
 
+        # 记忆化：源指纹 + 目标目录都没变，就没必要再逐文件 stat 一遍。
+        fingerprint = (str(exe), _pot_source_fingerprint(source_dir, source_files))
+        if _pot_sync_cache is not None and _pot_sync_cache[0] == fingerprint:
+            return _pot_sync_cache[1]
+
         # 增量同步：只在需要时创建目录和复制文件
         needs_sync = False
         if not target_dir.exists():
@@ -198,6 +339,7 @@ def sync_pot_plugins_to_ytdlp() -> bool:
 
         if not needs_sync:
             logger.debug("POT Plugin Sync: 插件已是最新，无需同步")
+            _pot_sync_cache = (fingerprint, True)
             return True
 
         # 执行同步
@@ -226,11 +368,10 @@ def sync_pot_plugins_to_ytdlp() -> bool:
 
         if synced > 0:
             logger.info(f"POT Plugin Sync: 已同步 {synced} 个插件文件到 {target_dir.parent.parent}")
+            _pot_sync_cache = (fingerprint, True)
         return synced > 0
 
     except Exception as e:
-        from loguru import logger
-
         logger.debug(f"POT Plugin Sync: 同步异常: {e}")
         return False
 
@@ -718,8 +859,15 @@ def run_dump_single_json(
         cmd += list(extra_args)
     cmd.append(url)
 
+    from loguru import logger
+
+    log_pot_in_argv(cmd, stage="Parse")
+
+    _t_env = time.perf_counter()
     env = prepare_yt_dlp_env()
     work_dir = _safe_working_dir()
+    _env_ms = (time.perf_counter() - _t_env) * 1000
+    _t_proc = time.perf_counter()
 
     def _safe_decode(b: bytes | None) -> str:
         if not b:
@@ -790,7 +938,11 @@ def run_dump_single_json(
             stderr_snippet = _extract_error_lines(out)
             raise YtDlpExecutionError(proc2.returncode, stderr_snippet)
 
+    _proc_ms = (time.perf_counter() - _t_proc) * 1000
+    log_pot_from_output(out, stage="Parse")
+
     # yt-dlp may print other lines; pick the last parsable JSON line.
+    _t_json = time.perf_counter()
     for line in reversed(out.splitlines()):
         s = line.strip()
         if not s:
@@ -800,6 +952,13 @@ def run_dump_single_json(
         try:
             data = json.loads(s)
             if isinstance(data, dict):
+                logger.info(
+                    "[Timing][run_dump_single_json] env={:.0f}ms 子进程={:.0f}ms JSON={:.0f}ms 输出={}行",
+                    _env_ms,
+                    _proc_ms,
+                    (time.perf_counter() - _t_json) * 1000,
+                    len(out.splitlines()),
+                )
                 return data
         except Exception:
             continue

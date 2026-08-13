@@ -178,6 +178,44 @@ QTableWidget::item:hover {{
 """
 
 
+def _get_split_scroll_qss() -> str:
+    """Theme-aware QSS for the advanced-mode accordion scroll area."""
+    from qfluentwidgets import isDarkTheme
+
+    is_dark = isDarkTheme()
+    handle = "rgba(255, 255, 255, 0.20)" if is_dark else "rgba(0, 0, 0, 0.20)"
+    handle_hover = "rgba(255, 255, 255, 0.32)" if is_dark else "rgba(0, 0, 0, 0.32)"
+
+    return f"""
+QScrollArea {{
+    background-color: transparent;
+    border: none;
+}}
+QScrollArea > QWidget > QWidget {{
+    background-color: transparent;
+}}
+QScrollBar:vertical {{
+    background: transparent;
+    width: 8px;
+    margin: 0px;
+}}
+QScrollBar::handle:vertical {{
+    background: {handle};
+    border-radius: 4px;
+    min-height: 24px;
+}}
+QScrollBar::handle:vertical:hover {{
+    background: {handle_hover};
+}}
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
+    height: 0px;
+}}
+QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{
+    background: transparent;
+}}
+"""
+
+
 # ── 辅助函数 ──────────────────────────────────────────────────
 
 
@@ -214,10 +252,10 @@ class VRPresetWidget(QWidget):
         main_layout.setSpacing(0)
         main_layout.setContentsMargins(0, 0, 0, 0)
 
-        scroll_area = SmoothScrollArea(self)
-        scroll_area.setStyleSheet("QScrollArea { border: none; background-color: transparent; }")
-        scroll_area.setWidgetResizable(True)
-        scroll_area.setMaximumHeight(450)
+        self.preset_scroll = SmoothScrollArea(self)
+        self.preset_scroll.setStyleSheet(_get_split_scroll_qss())
+        self.preset_scroll.setWidgetResizable(True)
+        self.preset_scroll.setMaximumHeight(450)
 
         self.content_widget = QWidget()
         self.content_widget.setObjectName("scroll_widget")
@@ -259,12 +297,20 @@ class VRPresetWidget(QWidget):
         hint_label.setWordWrap(True)
         self.v_layout.addWidget(hint_label)
 
-        scroll_area.setWidget(self.content_widget)
-        main_layout.addWidget(scroll_area)
+        self.preset_scroll.setWidget(self.content_widget)
+        main_layout.addWidget(self.preset_scroll)
 
         # 默认选中第一个
         if self.radios:
             self.radios[0].setChecked(True)
+
+        from qfluentwidgets import qconfig
+
+        qconfig.themeChanged.connect(self._update_style)
+
+    def _update_style(self):
+        if hasattr(self, "preset_scroll"):
+            self.preset_scroll.setStyleSheet(_get_split_scroll_qss())
 
     def get_current_selection(self) -> dict[str, Any]:
         btn = self.btn_group.checkedButton()
@@ -362,7 +408,16 @@ class VRFormatTableWidget(QWidget):
         self.video_container.toggle()
         self.audio_container.toggle()
 
-        layout.addWidget(self.split_container)
+        split_layout.addStretch(1)
+
+        # Wrap in a scroll area so both accordions can expand without
+        # forcing the parent dialog to grow.
+        self.split_scroll = SmoothScrollArea(self)
+        self.split_scroll.setWidget(self.split_container)
+        self.split_scroll.setWidgetResizable(True)
+        self.split_scroll.setMaximumHeight(480)
+        self.split_scroll.setStyleSheet(_get_split_scroll_qss())
+        layout.addWidget(self.split_scroll)
 
         # Single Container (for video-only / audio-only modes)
         self._build_single_table()
@@ -386,6 +441,22 @@ class VRFormatTableWidget(QWidget):
         self._all_video_fmts: list[dict[str, Any]] = []
 
         self._populate(info)
+
+        # Theme change monitoring
+        from qfluentwidgets import qconfig
+
+        qconfig.themeChanged.connect(self._update_style)
+
+    def _update_style(self):
+        """Update styles when theme changes."""
+        if hasattr(self, "video_table"):
+            self.video_table.setStyleSheet(_get_table_selection_qss())
+        if hasattr(self, "audio_table"):
+            self.audio_table.setStyleSheet(_get_table_selection_qss())
+        if hasattr(self, "single_table"):
+            self.single_table.setStyleSheet(_get_table_selection_qss())
+        if hasattr(self, "split_scroll"):
+            self.split_scroll.setStyleSheet(_get_split_scroll_qss())
 
     def _build_video_table(self):
         self.video_table = TableWidget(self.video_container)
@@ -811,11 +882,11 @@ class VRFormatTableWidget(QWidget):
         self.hint_label.setVisible(mode == 0)
 
         if mode == 0:
-            self.split_container.show()
+            self.split_scroll.show()
             self.single_table.hide()
             return
 
-        self.split_container.hide()
+        self.split_scroll.hide()
         self.single_table.show()
 
         if mode == 1:

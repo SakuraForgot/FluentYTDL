@@ -70,6 +70,12 @@ dev = [
   "pyright>=1.1",
   "pyinstaller>=5.9",
 ]
+# 构建 updater.exe 专用。精确 pin：版本必须与 .github/workflows/release.yml 的
+# PY7ZR_VERSION 严格一致（tests/test_py7zr_pin.py 断言这一点）。
+# 构建工具用精确版本换取 release 可复现；不并入 dev 以免与锁文件的范围解析打架。
+build = [
+  "py7zr==1.1.3",
+]
 
 [tool.fluentytdl.build]
 # 项目实际使用的 Qt 模块（含 qfluentwidgets / qframelesswindow 依赖）：
@@ -121,4 +127,23 @@ qt_excludes = [
 ]
 # 构建环境黑名单 — 这些包在 venv 中存在时会导致打包膨胀
 env_blacklist = ["numpy", "scipy", "pandas", "matplotlib", "torch", "tensorflow"]
+
+# ─── 发布物内容白名单 / 黑名单 ───────────────────────────────────────────────
+# ⚠ 以下三个数组必须**写成单行**。build.py 在没有 tomllib 的环境（Python 3.10）
+#   会退化到粗糙的行解析器，它只认 `key = [...]` 这种一行写完的形式；
+#   拆成多行会被解析成字符串 "[" 从而静默失效。qt_excludes 只在有 tomllib 时被读，
+#   这三个数组则是构建期硬断言的数据源，绝不能静默变空。
+#
+# app-core 归档的**唯一事实源**（build.py::classify_app_core_items 与
+# generate_manifest.py 共读）。地面事实取自 dist/FluentYTDL/ 的实际内容。
+# updater.exe.new 由 build_updater() 额外产出，用于 updater 自更新投递。
+app_core_include = ["FluentYTDL.exe", "_internal", "licenses", "LICENSE", "README.md", "TRADEMARK.md", "ACADEMIC_HONESTY.md", "BUILD_INFO.json", "updater.exe.new"]
+# 明确排除：bin/ 由 full.7z 分发；updater.exe 运行时被锁（改走 .new 投递）；
+# portable.txt 只属于便携包。既不在 include 也不在 exclude 的顶层条目 → 构建期硬失败。
+app_core_exclude = ["bin", "updater.exe", "portable.txt"]
+# 任何发布目标（app-core / full.7z / setup.exe）都不允许出现的运行期产物。
+# 见 build.py::assert_dist_clean —— 命中即中止构建。
+# 前两类是用户数据（会覆盖用户的 config/state），bin/ 下三项是**真实凭据**，
+# 一旦进了公开发布包等于泄漏 YouTube 会话。
+dist_forbidden = ["config.json", "logs", "state", "portable.txt", ".fluent_temp", "update_manifest_cache.json", "error_rules.override.json", ".writetest", "bin/cookies_youtube.txt", "bin/cookies_twitter.txt", "bin/dle_user"]
 

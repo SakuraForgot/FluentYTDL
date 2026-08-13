@@ -138,18 +138,26 @@ Name: "{app}\state"; Permissions: users-modify
 ; ============================================================================
 [Files]
 ; 主程序和运行时
-Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+; Excludes "portable.txt" 是纯保险：便携标记只由 scripts/build.py::create_7z() 追加进
+; full.7z，本来就不该出现在 {#SourceDir}（= dist/FluentYTDL/）里。真出现了就意味着
+; 安装版会把配置/任务库/日志写进 Program Files —— 普通权限写不进、提权会话写得进，
+; 同一台机器的数据分裂成两棵树。构建侧还有 assert_dist_clean() 拦一道。
+Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "portable.txt"
 
 ; ============================================================================
 ; [Icons] 快捷方式
 ; ============================================================================
 [Icons]
+; AppUserModelID 必须与 main.py 里 SetCurrentProcessExplicitAppUserModelID("FluentYTDL")
+; 声明的字符串逐字一致。不一致时 Windows 会把"从快捷方式启动的窗口"和"固定项"
+; 当成两个不同的应用，在任务栏上分成两格；而覆盖安装后的图标缓存也更容易失准
+; （隐式归组是按 exe 路径算的）。
 ; 开始菜单
-Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Comment: "{#MyAppDescription}"
+Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Comment: "{#MyAppDescription}"; AppUserModelID: "FluentYTDL"
 Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
 
 ; 桌面图标
-Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon; Comment: "{#MyAppDescription}"
+Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon; Comment: "{#MyAppDescription}"; AppUserModelID: "FluentYTDL"
 
 ; 快速启动栏
 Name: "{userappdata}\Microsoft\Internet Explorer\Quick Launch\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: quicklaunchicon

@@ -54,6 +54,7 @@ class PlaylistScheduler(QObject):
         vr_mode: bool = False,
         exec_limit: int = 3,
         parent: QObject | None = None,
+        read_cache: bool = True,
     ) -> None:
         super().__init__(parent)
         self._mgr = extract_manager
@@ -61,6 +62,7 @@ class PlaylistScheduler(QObject):
         self._total_rows = total_rows
         self._options = options
         self._vr_mode = vr_mode
+        self._read_cache = read_cache
         self._exec_limit = exec_limit
         self._lazy_paused: bool = False
 
@@ -99,6 +101,11 @@ class PlaylistScheduler(QObject):
 
     def set_vr_mode(self, vr_mode: bool) -> None:
         self._vr_mode = vr_mode
+
+    def set_read_cache(self, read_cache: bool) -> None:
+        """封面模式须传 False：逐行封面的 thumbnails[].url 会直接变成下载 URL，
+        命中 TTL 缓存等于发一条陈旧直链（403/404）。"""
+        self._read_cache = read_cache
 
     def set_concurrency(self, limit: int) -> None:
         self._exec_limit = limit
@@ -305,7 +312,7 @@ class PlaylistScheduler(QObject):
             self._running.add(row)
 
             self.row_started.emit(row)  # 触发延迟self.tr("解析中")指示器
-            self._mgr.enqueue(task_id, url, self._options, self._vr_mode)
+            self._mgr.enqueue(task_id, url, self._options, self._vr_mode, self._read_cache)
             self._fill_exec_queue()
 
     def _crawl_tick(self) -> None:

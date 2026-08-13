@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QHeaderView,
+    QSizePolicy,
     QStackedWidget,
     QTableWidget,
     QTableWidgetItem,
@@ -93,6 +94,51 @@ QTableWidget::item:hover {{
     background-color: {hov_bg};
     border: 1px solid {hover_border};
     border-radius: 6px;
+}}
+"""
+
+
+# 专业模式下表格区（可组装的手风琴 / 整表模式的表格）的高度下限。
+# 四种模式共用同一个下限，切换时窗口高度恒定，不随格式条目数变化；
+# 页面里多出来的高度由伸缩因子全部交给表格区，不设上限——否则超出上限的
+# 部分会沉淀成「已选」与「输出容器」之间的底部留白。
+_ADV_TABLE_AREA_H = 288
+
+
+def _get_split_scroll_qss() -> str:
+    """Theme-aware QSS for the advanced-mode accordion scroll area."""
+    from qfluentwidgets import isDarkTheme
+
+    is_dark = isDarkTheme()
+    handle = "rgba(255, 255, 255, 0.20)" if is_dark else "rgba(0, 0, 0, 0.20)"
+    handle_hover = "rgba(255, 255, 255, 0.32)" if is_dark else "rgba(0, 0, 0, 0.32)"
+
+    return f"""
+QScrollArea {{
+    background-color: transparent;
+    border: none;
+}}
+QScrollArea > QWidget > QWidget {{
+    background-color: transparent;
+}}
+QScrollBar:vertical {{
+    background: transparent;
+    width: 8px;
+    margin: 0px;
+}}
+QScrollBar::handle:vertical {{
+    background: {handle};
+    border-radius: 4px;
+    min-height: 24px;
+}}
+QScrollBar::handle:vertical:hover {{
+    background: {handle_hover};
+}}
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
+    height: 0px;
+}}
+QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{
+    background: transparent;
 }}
 """
 
@@ -206,10 +252,10 @@ class SimplePresetWidget(QWidget):
         main_layout.addLayout(type_layout)
 
         # 滚动区域
-        scroll_area = SmoothScrollArea(self)
-        scroll_area.setStyleSheet("QScrollArea { border: none; background-color: transparent; }")
-        scroll_area.setWidgetResizable(True)
-        scroll_area.setMaximumHeight(450)
+        self.preset_scroll = SmoothScrollArea(self)
+        self.preset_scroll.setStyleSheet(_get_split_scroll_qss())
+        self.preset_scroll.setWidgetResizable(True)
+        self.preset_scroll.setMaximumHeight(450)
 
         self.content_widget = QWidget()
         self.content_widget.setObjectName("scroll_widget")
@@ -218,8 +264,8 @@ class SimplePresetWidget(QWidget):
         self.v_layout.setSpacing(12)
         self.v_layout.setContentsMargins(10, 10, 10, 10)
 
-        scroll_area.setWidget(self.content_widget)
-        main_layout.addWidget(scroll_area)
+        self.preset_scroll.setWidget(self.content_widget)
+        main_layout.addWidget(self.preset_scroll)
 
         self.btn_group = QButtonGroup(self)
         self.btn_group.buttonClicked.connect(self.presetSelected)
@@ -313,6 +359,14 @@ class SimplePresetWidget(QWidget):
         }
 
         self._rebuild_presets("video_audio")
+
+        from qfluentwidgets import qconfig
+
+        qconfig.themeChanged.connect(self._update_style)
+
+    def _update_style(self):
+        if hasattr(self, "preset_scroll"):
+            self.preset_scroll.setStyleSheet(_get_split_scroll_qss())
 
     def _on_type_changed(self, index: int):
         types = ["video_audio", "video_only", "audio_only"]
@@ -483,6 +537,16 @@ class _ContainerFormatBar(QFrame):
         row_layout.addWidget(self.container_combo)
         row_layout.addWidget(self.audio_label)
         row_layout.addWidget(self.audio_combo)
+
+        # 「已选：...」摘要并排放在输出格式旁边。
+        # 原先它单独占一行贴在表格区底部，和上方滚动区糊在一起，显示效果很差。
+        # 默认隐藏：只有需要展示选择状态的调用方（专业模式）才会打开。
+        row_layout.addSpacing(16)
+        self.selection_label = CaptionLabel("", self)
+        self.selection_label.setTextColor(QColor(96, 96, 96), QColor(210, 210, 210))
+        self.selection_label.hide()
+        row_layout.addWidget(self.selection_label)
+
         row_layout.addStretch(1)
 
         main_layout.addLayout(row_layout)
@@ -651,6 +715,10 @@ class VideoFormatSelectorWidget(QWidget):
             self.video_table.setStyleSheet(qss)
         if hasattr(self, "audio_table"):
             self.audio_table.setStyleSheet(qss)
+        if hasattr(self, "split_scroll"):
+            self.split_scroll.setStyleSheet(_get_split_scroll_qss())
+        if hasattr(self, "table_scroll"):
+            self.table_scroll.setStyleSheet(_get_split_scroll_qss())
 
     def _init_ui(self):
         layout = QVBoxLayout(self)
@@ -702,12 +770,21 @@ class VideoFormatSelectorWidget(QWidget):
 
         # --- Tables Area ---
 
-        # 1. Single Table (for modes 1, 2, 3)
+        # 1. Single Table (for modes 1, 2, 3) - wrapped in scroll area
         self.table = self._create_table()
+        # 外层滚动区负责滚动，表格自身完整撑开，避免行被从中间截断
+        self.table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.table.cellClicked.connect(self._on_table_clicked)
-        adv_layout.addWidget(self.table)
 
-        # Split Container (for mode 0)
+        self.table_scroll = SmoothScrollArea(self.advanced_widget)
+        self.table_scroll.setStyleSheet(_get_split_scroll_qss())
+        self.table_scroll.setWidget(self.table)
+        self.table_scroll.setWidgetResizable(True)
+        self.table_scroll.setMinimumHeight(_ADV_TABLE_AREA_H)
+        # 伸缩因子 1：页面里多出来的高度全部归表格区，而不是沉淀成底部留白
+        adv_layout.addWidget(self.table_scroll, 1)
+
+        # Split Container (for mode 0) - wrapped in scroll area
         self.split_container = QWidget(self.advanced_widget)
         split_layout = QVBoxLayout(self.split_container)
         split_layout.setContentsMargins(0, 0, 0, 0)
@@ -738,10 +815,17 @@ class VideoFormatSelectorWidget(QWidget):
 
         split_layout.addStretch(1)
 
-        adv_layout.addWidget(self.split_container)
+        # Wrap split container in a scroll area to prevent window expansion
+        self.split_scroll = SmoothScrollArea(self.advanced_widget)
+        self.split_scroll.setStyleSheet(_get_split_scroll_qss())
+        self.split_scroll.setWidget(self.split_container)
+        self.split_scroll.setWidgetResizable(True)
+        self.split_scroll.setMinimumHeight(_ADV_TABLE_AREA_H)
+        adv_layout.addWidget(self.split_scroll, 1)
 
-        self.selection_label = CaptionLabel(self.tr("未选择"), self.advanced_widget)
-        adv_layout.addWidget(self.selection_label)
+        # hint_label 锁成固定高度：多余空间只能流向上面的表格区，
+        # 否则 QVBoxLayout 会把它平摊给标签，文字垂直居中后看起来像在漂移。
+        self.hint_label.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
 
         self.stack.addWidget(self.advanced_widget)
 
@@ -749,6 +833,10 @@ class VideoFormatSelectorWidget(QWidget):
         self.format_bar = _ContainerFormatBar(config_prefix="single", parent=self)
         self.format_bar.formatChanged.connect(self.selectionChanged)
         layout.addWidget(self.format_bar)
+
+        # 「已选：...」摘要现在住在格式栏里（输出格式旁边），而不是表格区底部。
+        # 保留 self.selection_label 这个名字，_update_label / get_summary_text 无需改动。
+        self.selection_label = self.format_bar.selection_label
 
         self.view_switcher.currentItemChanged.connect(self._on_mode_changed)
         self.view_switcher.setCurrentItem("simple")
@@ -806,7 +894,10 @@ class VideoFormatSelectorWidget(QWidget):
 
     def _on_mode_changed(self, routeKey: str):
         self._current_mode = routeKey
-        self.stack.setCurrentIndex(0 if routeKey == "simple" else 1)
+        is_advanced = routeKey != "simple"
+        self.stack.setCurrentIndex(1 if is_advanced else 0)
+        # 「已选」摘要只在专业模式下有意义：简易模式的预设单选项本身就自述了选择内容
+        self.selection_label.setVisible(is_advanced)
 
     def _build_rows(self, info: dict[str, Any]):
         formats = info.get("formats") or []
@@ -1000,9 +1091,9 @@ class VideoFormatSelectorWidget(QWidget):
 
         if mode == 0:
             # Split View
-            self.table.hide()
-            if getattr(self, "split_container", None):
-                self.split_container.show()
+            self.table_scroll.hide()
+            if getattr(self, "split_scroll", None):
+                self.split_scroll.show()
 
             video_rows = [r for r in getattr(self, "_rows", []) if r["kind"] == "video"]
             audio_rows = [r for r in getattr(self, "_rows", []) if r["kind"] == "audio"]
@@ -1019,9 +1110,9 @@ class VideoFormatSelectorWidget(QWidget):
 
         else:
             # Single View
-            if getattr(self, "split_container", None):
-                self.split_container.hide()
-            self.table.show()
+            if getattr(self, "split_scroll", None):
+                self.split_scroll.hide()
+            self.table_scroll.show()
 
             view_rows = []
             for r in self._rows:
@@ -1049,19 +1140,28 @@ class VideoFormatSelectorWidget(QWidget):
             elif mode == 3:
                 sel_id = self._selected_audio_id
 
-            self._populate_table(self.table, view_rows, sel_id)
+            self._populate_table(self.table, view_rows, sel_id, fill_content=True)
 
         self._update_label()
         self.selectionChanged.emit()
 
-    def _populate_table(self, table: QTableWidget, rows: list[dict], selected_id: str | None):
+    def _populate_table(
+        self,
+        table: QTableWidget,
+        rows: list[dict],
+        selected_id: str | None,
+        fill_content: bool = False,
+    ):
         table.setRowCount(len(rows))
         table.setProperty("_rows", rows)
 
-        # 动态自适应高度，最大显示 2 行
+        # 高度策略与可组装模式保持一致：外层滚动区填满可用空间（下限
+        # _ADV_TABLE_AREA_H），窗口高度不随行数变化；表格自身按内容完整
+        # 撑开，超出部分由滚动区消化，行不会被从中间截断。
         row_height = 42
         header_height = 42 if not table.horizontalHeader().isHidden() else 0
-        visible_rows = min(max(len(rows), 1), 2)
+        row_count = max(len(rows), 1)
+        visible_rows = row_count if fill_content else min(row_count, 2)
         total_height = header_height + visible_rows * row_height + 2
         table.setMinimumHeight(total_height)
         table.setMaximumHeight(total_height)

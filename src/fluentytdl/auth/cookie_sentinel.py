@@ -552,17 +552,16 @@ class CookieSentinel:
         if not ytdlp_stderr:
             return ""
 
-        from ..models.errors import ErrorCode
-        from ..utils.error_parser import diagnose_error
+        from ..diagnostics import FALLBACK_CODE, diagnose
 
-        diag = diagnose_error(1, ytdlp_stderr)
-        category = diag.code
+        diag = diagnose(1, ytdlp_stderr)
 
-        if category in (ErrorCode.LOGIN_REQUIRED, ErrorCode.COOKIE_EXPIRED):
+        if diag.category == "auth":
             return "cookie"
-        elif category == ErrorCode.NETWORK_ERROR:
+        if diag.category == "network":
             return "network"
-        elif category == ErrorCode.GENERAL:
+        if diag.code == FALLBACK_CODE:
+            # 没能归类的错误：Cookie 失效常以各种面目出现，交给调用方走保守分支
             return "ambiguous"
         return ""
 

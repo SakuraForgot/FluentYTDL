@@ -51,6 +51,11 @@ class POTManager:
         self._job_handle: int | None = None  # Windows Job Object
         self._lock = threading.Lock()
         self._warm_event = threading.Event()  # 预热完成信号
+        self._warm_thread: threading.Thread | None = None  # 后台预热线程
+        self._warm_attempts: int = 0  # 预热失败次数（退避用）
+        self._warm_retry_at: float = 0.0  # 下次允许重试的 monotonic 时间
+        self._last_token_len: int = 0  # 最近一次成功铸出的 Token 长度（只记长度）
+        self._last_minter_size: int | None = None  # 最近一次读到的 minter 缓存条目数
 
         # 注册退出清理
         atexit.register(self.stop_server)
@@ -64,7 +69,14 @@ class POTManager:
         try:
             import win32job
 
-            job_handle = win32job.CreateJobObject(None, "FluentYTDL_POT_Job")
+            # 必须匿名。具名 job（曾用 "FluentYTDL_POT_Job"）会被同名进程共享：
+            # CreateJobObject 遇到已存在的名字时返回*现有* job 的句柄，而
+            # KILL_ON_JOB_CLOSE 只在最后一个句柄关闭时才触发。于是两个实例同时跑
+            # 时，A 被强杀后 B 仍持句柄 → A 的 POT 服务变成孤儿进程活下来。
+            # 匿名 job 每进程独占，句柄随进程消亡，强杀也能带走子进程。
+            # 名字传 ""，不能传 None —— pywin32 会抛 "None is not a valid string"，
+            # 于是 _job_handle 变 None、进程根本没被纳管，比具名还糟。
+            job_handle = win32job.CreateJobObject(None, "")
             if job_handle is None:
                 raise RuntimeError("CreateJobObject returned None")
             info = win32job.QueryInformationJobObject(
@@ -267,10 +279,15 @@ class POTManager:
                 else:
                     # 检查进程是否还在运行
                     if self._process.poll() is None:
-                        # 进程还在运行，可能只是健康检查未通过
-                        logger.warning("POT Manager: 健康检查未通过，但进程仍在运行，标记为已启动")
-                        self._is_running = True
-                        return True
+                        # 进程活着但端口不通：绝不能标记 running。
+                        # 否则 is_running() 会撒谎 → 注入一个不可用的 base_url →
+                        # yt-dlp 侧白等插件的 _GETPOT_TIMEOUT(20s) 后静默降级。
+                        self._is_running = False
+                        logger.warning(
+                            "[POT][Ready] 失败 stage=server_down "
+                            f"(进程存活 pid={self._process.pid} 但端口 {self._active_port} 不通)"
+                        )
+                        return False
                     else:
                         # 进程已退出，获取输出以便调试
                         stdout, stderr = self._process.communicate(timeout=1)
@@ -467,6 +484,8 @@ class POTManager:
 
             po_token = data.get("poToken") or data.get("po_token") or data.get("token") or ""
             if isinstance(po_token, str) and len(po_token) >= 16:
+                # 只记长度，绝不记 Token 明文（CLAUDE.md §8 / 日志安全约束）
+                self._last_token_len = len(po_token)
                 self._warm_event.set()  # 标记预热完成
                 return True, f"Token 有效 (长度 {len(po_token)})"
             else:
@@ -506,10 +525,15 @@ class POTManager:
             # 尝试提取有意义的信息
             if isinstance(data, dict):
                 cache_size = data.get("size") or data.get("len") or data.get("count")
+                if cache_size is None and data:
+                    # 有些版本直接把缓存内容当字典返回，键数即条目数
+                    cache_size = len(data)
+                self._last_minter_size = self._as_int(cache_size)
                 if cache_size is not None:
                     return True, f"Minter 缓存正常 (条目: {cache_size})"
                 return True, "Minter 已初始化"
             elif isinstance(data, list):
+                self._last_minter_size = len(data)
                 return True, f"Minter 缓存正常 ({len(data)} 条目)"
             else:
                 return True, "Minter 响应正常"
@@ -523,6 +547,22 @@ class POTManager:
             return True, "Minter 响应正常 (非 JSON)"
         except Exception as e:
             return False, f"请求失败: {e}"
+
+    @staticmethod
+    def _as_int(value: object) -> int | None:
+        try:
+            return int(value)  # type: ignore[arg-type]
+        except (TypeError, ValueError):
+            return None
+
+    @property
+    def last_minter_size(self) -> int | None:
+        """最近一次读到的 minter 缓存条目数（未读到过为 None）。
+
+        用途是交叉验证：把它和"解析/下载次数"对比，能反向确认 Token 是真被
+        yt-dlp 消费了，还是根本没人请求（后者说明插件没加载或 provider 没被选中）。
+        """
+        return self._last_minter_size
 
     def get_health_status(self) -> dict:
         """综合诊断 POT 服务状态（用于一键检测）
@@ -546,6 +586,8 @@ class POTManager:
             "token_detail": "",
             "minter_ok": False,
             "minter_detail": "",
+            "minter_cache_size": None,
+            "token_len": self._last_token_len,
             "overall_ok": False,
             "summary": "",
         }
@@ -562,11 +604,13 @@ class POTManager:
         minter_ok, minter_detail = self.check_minter_health()
         result["minter_ok"] = minter_ok
         result["minter_detail"] = minter_detail
+        result["minter_cache_size"] = self._last_minter_size
 
         # L1: Token 生成能力
         token_ok, token_detail = self.verify_token_generation()
         result["token_ok"] = token_ok
         result["token_detail"] = token_detail
+        result["token_len"] = self._last_token_len
 
         # 综合判定
         result["overall_ok"] = result["running"] and token_ok
@@ -630,6 +674,121 @@ class POTManager:
         except Exception as e:
             return False, f"插件检测异常: {e}"
 
+    # 主动探测用的默认目标：yt-dlp 自己的测试视频，长期可用且时长极短。
+    PROBE_URL = "https://www.youtube.com/watch?v=BaW_jenozKc"
+
+    def probe_ytdlp_provider(
+        self, url: str | None = None, timeout: float = 90.0
+    ) -> tuple[bool, str]:
+        """带 `-v` 跑一次真实解析，抓 yt-dlp 自己关于 POT provider 的输出。
+
+        这是唯一能证明"插件被加载 + provider 被选中"的手段：bgutil 插件只在
+        trace 级别打自己的日志，正常运行的 yt-dlp 输出里看不到任何痕迹，
+        所以被动扫日志永远拿不到这一层证据。
+
+        不传 cookie：诊断不该碰 cookie jar，输出也就不会夹带凭据。
+
+        Returns:
+            (ok, 证据文本)。ok=True 表示输出里出现了 bgutil provider 的痕迹。
+        """
+        from .yt_dlp_cli import (
+            _safe_working_dir,
+            _win_hide_console_kwargs,
+            prepare_yt_dlp_env,
+            resolve_yt_dlp_exe,
+        )
+
+        exe = resolve_yt_dlp_exe()
+        if exe is None:
+            return False, "yt-dlp 可执行文件未找到"
+
+        args = self.get_extractor_args()
+        if not args:
+            return False, "POT 服务未运行，无法注入 base_url（先启用并等待预热）"
+
+        cmd = [
+            str(exe),
+            "--no-color",
+            "--no-progress",
+            "--simulate",
+            "--no-playlist",
+            "-v",
+            "--extractor-args",
+            args,
+            url or self.PROBE_URL,
+        ]
+
+        try:
+            proc = subprocess.run(
+                cmd,
+                capture_output=True,
+                timeout=timeout,
+                env=prepare_yt_dlp_env(),
+                cwd=_safe_working_dir(),
+                **_win_hide_console_kwargs(),
+            )
+        except subprocess.TimeoutExpired:
+            return False, f"探测超时（>{timeout:.0f}s）"
+        except Exception as e:
+            return False, f"探测执行失败: {e}"
+
+        out = (proc.stdout or b"").decode("utf-8", errors="replace")
+        out += "\n" + (proc.stderr or b"").decode("utf-8", errors="replace")
+
+        markers = ("bgutil", "getpot", "po token", "po_token", "potoken", "youtubepot")
+        evidence: list[str] = []
+        rejected = False
+        for line in out.splitlines():
+            s = line.strip()
+            if not s:
+                continue
+            low = s.lower()
+            if any(m in low for m in markers):
+                if "rejected" in low:
+                    rejected = True
+                if len(evidence) < 40:
+                    evidence.append(s[:300])
+
+        if not evidence:
+            return False, (
+                f"yt-dlp 输出里没有任何 POT 痕迹 —— 插件很可能没被加载。\n退出码={proc.returncode}"
+            )
+
+        text = "\n".join(evidence)
+        hit_bgutil = any("bgutil" in e.lower() for e in evidence)
+        if rejected:
+            return False, "provider 拒绝了请求（服务不可达时会静默降级）：\n" + text
+        if not hit_bgutil:
+            return False, "只看到 POT 相关输出，但没有 bgutil provider 的痕迹：\n" + text
+        return True, text
+
+    def status_brief(self) -> str:
+        """一行状态摘要。**只读内存状态，零网络 I/O**，可直接在 UI 线程调用。
+
+        get_health_status() 会真去铸一次 Token（最坏 15s），绝不能拿它刷 UI。
+        """
+        from ..core.config_manager import config_manager
+
+        if not config_manager.get("pot_provider_enabled", False):
+            return "已关闭"
+        if self.is_warm:
+            extra = f"，Token 长度 {self._last_token_len}" if self._last_token_len else ""
+            if self._last_minter_size is not None:
+                extra += f"，minter 缓存 {self._last_minter_size}"
+            return f"已就绪（端口 {self._active_port}{extra}）"
+        running = self.is_running()
+        # 退避判定必须先于"预热中"：断网时服务是本地进程、起得来，只有铸 Token 失败，
+        # 于是 running=True 而预热线程早已退出。若先看 running 就会一直显示"预热中…"，
+        # 把"正在退避、当前没人干活"说成"马上就好"。
+        if self._warm_retry_at:
+            remaining = self._warm_retry_at - time.monotonic()
+            if remaining > 0:
+                prefix = "服务已起但未就绪" if running else "未运行"
+                return f"{prefix}，{remaining:.0f}s 后重试预热（已失败 {self._warm_attempts} 次）"
+        if not running:
+            return "未运行"
+        return f"预热中…（端口 {self._active_port}，此期间解析降级为无 POT）"
+
     def get_extractor_args(self) -> str | None:
         """获取 yt-dlp 的 extractor-args 参数"""
         if not self.is_running():
@@ -645,40 +804,104 @@ class POTManager:
         """预热是否完成（至少成功生成过一次 Token）"""
         return self._warm_event.is_set()
 
-    def wait_until_ready(self, timeout: float = 15.0) -> bool:
-        """等待 POT 服务预热完成
+    # 这里曾有一个 wait_until_ready(timeout=15)：等 _warm_event，超时后还会再主动跑一次
+    # verify_token_generation(timeout=20) —— 最坏 35s。它已被 ensure_warm_async() 取代
+    # （解析路径只读 is_warm，未就绪即降级），且全仓库无调用方，故整段删除而非留着当陷阱。
+    # 需要"等就绪"的场景请用 ensure_warm_async() + 轮询 is_warm，绝不要在解析路径上等。
 
-        如果已预热 → 立即返回 True
-        如果未预热 → 等待 _warm_event 信号，最多等 timeout 秒
-        如果等待超时且服务在运行 → 尝试主动预热
+    # --- 后台预热（解析路径永不阻塞） ---
 
-        Args:
-            timeout: 最大等待时间（秒）
+    _BACKOFF_SCHEDULE = (30.0, 120.0, 300.0)
 
-        Returns:
-            True 如果 POT 已就绪可用
+    def ensure_warm_async(self) -> None:
+        """触发一次后台预热，立即返回。解析路径调用此方法，绝不等待。
+
+        - 已 warm 或已有预热线程在跑 → 直接返回
+        - 失败按 30s / 2min / 5min 退避重试，不再"一次失败就永久不 warm"
         """
         if self._warm_event.is_set():
-            return True
+            return
+        with self._lock:
+            if self._warm_thread is not None and self._warm_thread.is_alive():
+                return
+            if self._warm_retry_at and time.monotonic() < self._warm_retry_at:
+                return
+            self._warm_thread = threading.Thread(
+                target=self._warm_worker, name="pot-warm", daemon=True
+            )
+            self._warm_thread.start()
 
-        if not self.is_running():
+    def _warm_worker(self) -> None:
+        """daemon 线程体：拉起服务 → 铸 Token → 校验插件 → 合成一条 [POT][Ready]。"""
+        t0 = time.monotonic()
+        try:
+            if not self.is_running() and not self.start_server():
+                self._schedule_warm_retry("server_down")
+                return
+
+            ok, msg = self.verify_token_generation(timeout=20.0)
+            if not ok:
+                self._schedule_warm_retry("token_fail", detail=msg)
+                return
+
+            plugin_ok, plugin_msg = self.verify_plugin_loadable()
+            minter_ok, minter_msg = self.check_minter_health()
+            deno_ok = self._probe_deno()
+            # 记条目数而非笼统的 OK：诊断时拿它和"解析/下载次数"对比，
+            # 就能反向确认 Token 是真被消费，还是根本没人请求。
+            if not minter_ok:
+                minter_state = minter_msg
+            elif self._last_minter_size is None:
+                minter_state = "OK"
+            else:
+                minter_state = f"OK(cache={self._last_minter_size})"
+            warm_ms = (time.monotonic() - t0) * 1000
+            logger.info(
+                f"[POT][Ready] 服务就绪 port={self._active_port} "
+                f"pid={getattr(self._process, 'pid', '-')} token_len={self._last_token_len} "
+                f"warm_ms={warm_ms:.0f} plugin={'OK' if plugin_ok else plugin_msg} "
+                f"minter={minter_state} deno={'OK' if deno_ok else 'MISSING'}"
+            )
+            if not plugin_ok:
+                logger.warning(
+                    f"[POT][Ready] 警告 stage=plugin_missing {plugin_msg} "
+                    "— 服务已就绪但 yt-dlp 无法加载插件，PO Token 不会被使用"
+                )
+            if not deno_ok:
+                logger.warning(
+                    "[POT][Ready] 警告 stage=deno_missing — 未找到 deno.exe，"
+                    "POT 服务可能无法铸造 BotGuard Token。请在「设置 → 依赖组件」安装 JS Runtime (Deno)。"
+                )
+            self._warm_attempts = 0
+        except Exception as e:
+            self._schedule_warm_retry("error", detail=str(e))
+
+    @staticmethod
+    def _probe_deno() -> bool:
+        """POT 服务端依赖 deno 铸 BotGuard Token；缺失时必须明确提示而非静默失败。"""
+        from ..core.config_manager import config_manager
+        from ..utils.paths import locate_runtime_tool
+
+        configured = str(config_manager.get("js_runtime_path") or "").strip()
+        if configured and Path(configured).exists():
+            return True
+        try:
+            locate_runtime_tool("deno.exe", "js/deno.exe", "deno/deno.exe")
+            return True
+        except FileNotFoundError:
+            return find_bundled_executable("deno.exe", "js/deno.exe", "deno/deno.exe") is not None
+        except Exception:
             return False
 
-        # 等待后台预热完成
-        logger.debug(f"POT Manager: 等待预热完成 (最多 {timeout}s)...")
-        ready = self._warm_event.wait(timeout=timeout)
-
-        if ready:
-            return True
-
-        # 超时后仍未就绪 → 主动尝试一次
-        logger.info("POT Manager: 预热等待超时，主动尝试生成 Token...")
-        ok, msg = self.verify_token_generation(timeout=20.0)
-        if ok:
-            logger.info(f"POT Manager: 主动预热成功: {msg}")
-        else:
-            logger.warning(f"POT Manager: 主动预热失败: {msg}")
-        return ok
+    def _schedule_warm_retry(self, stage: str, detail: str = "") -> None:
+        """记录失败原因并安排退避重试。"""
+        delay = self._BACKOFF_SCHEDULE[min(self._warm_attempts, len(self._BACKOFF_SCHEDULE) - 1)]
+        self._warm_attempts += 1
+        self._warm_retry_at = time.monotonic() + delay
+        logger.warning(
+            f"[POT][Ready] 失败 stage={stage} {detail} 将在 {delay:.0f}s 后重试 "
+            f"(第 {self._warm_attempts} 次)"
+        )
 
 
 # 单例实例

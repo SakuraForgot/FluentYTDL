@@ -20,6 +20,7 @@ class MetadataFetchRunnable(QRunnable):
         options: YoutubeServiceOptions | None,
         vr_mode: bool,
         signals: AsyncExtractorSignals,
+        read_cache: bool = True,
     ):
         super().__init__()
         self.task_id = task_id
@@ -30,6 +31,7 @@ class MetadataFetchRunnable(QRunnable):
             url=url,
             options=options,
             vr_mode=vr_mode,
+            read_cache=read_cache,
         )
         self.signals = signals
 
@@ -88,15 +90,22 @@ class AsyncExtractManager(QObject):
         url: str,
         options: YoutubeServiceOptions | None = None,
         vr_mode: bool = False,
+        read_cache: bool = True,
         **kwargs,  # Accept legacy kwargs like high_priority to avoid breaking changes
     ) -> None:
-        """Add a metadata extraction task directly to the thread pool."""
+        """Add a metadata extraction task directly to the thread pool.
+
+        `read_cache=False` 只由封面模式传：逐行封面会把解析出的 thumbnails[].url
+        直接当下载 URL 用，陈旧直链会 403/404。
+        """
         with QMutexLocker(self._mutex):
             if task_id in self._active_tasks:
                 return
 
             logger.info(f"AsyncExtractManager starting task {task_id}")
-            runnable = MetadataFetchRunnable(task_id, url, options, vr_mode, self.signals)
+            runnable = MetadataFetchRunnable(
+                task_id, url, options, vr_mode, self.signals, read_cache
+            )
             runnable.setAutoDelete(True)
             self._active_tasks[task_id] = runnable
             self._thread_pool.start(runnable)

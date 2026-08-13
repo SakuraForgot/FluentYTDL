@@ -190,16 +190,54 @@ class ParsePage(QWidget):
 
         from ..utils.url_router import url_router
 
-        result = url_router.process(url)
+        # t.co 展开是 url_router 里唯一走网络的分支（requests.head，timeout=3s）。
+        # 同步调用会把 UI 线程冻住，连"正在解析"都来不及显示，所以先用零成本的
+        # fast_check 判定，只有确实是短链才丢进后台线程；其余路径 process() 不联网，
+        # 保持原来的同步语义。
+        if url_router.fast_check(url) == "tco_shortlink":
+            self._begin_shortlink_parse(url)
+            return
 
+        self._apply_parse_result(url_router.process(url))
+
+    def _begin_shortlink_parse(self, url: str) -> None:
+        """后台展开 t.co 短链，展开完成后再触发解析。"""
+        from ..utils.url_router import url_router
+
+        self.parseBtn.setEnabled(False)
+        self.parseBtn.setText(self.tr("展开中..."))
+        self.hintLabel.setText(self.tr("⏳ 正在解析短链接..."))
+
+        # 与 on_url_changed 同一套过期校验：回调回来时若用户已换了链接，直接丢弃。
+        self._pending_parse_url = url
+
+        def _on_resolved(result) -> None:
+            if getattr(self, "_pending_parse_url", None) != url:
+                return
+            self._pending_parse_url = None
+            self.parseBtn.setEnabled(True)
+            self.parseBtn.setText(self.tr("开始解析"))
+            self._apply_parse_result(result)
+
+        url_router.process_async(url, _on_resolved, parent=self)
+
+    def _apply_parse_result(self, result) -> None:
+        """统一处理链接预处理结果：被拒则提示，通过则发起解析。"""
         if not result.accepted:
             from qfluentwidgets import InfoBar, InfoBarPosition
 
-            InfoBar.error(
-                title=self.tr("不支持的链接"),
-                content=self.tr(
+            if result.link_type == "t.co" and result.rejection_reason:
+                title = self.tr("短链接展开失败")
+                content = result.rejection_reason
+            else:
+                title = self.tr("不支持的链接")
+                content = self.tr(
                     "未知的链接格式或目前不支持该平台/类型（X 平台仅支持包含 status/ 的单推文视频）。"
-                ),
+                )
+
+            InfoBar.error(
+                title=title,
+                content=content,
                 orient=Qt.Orientation.Horizontal,
                 isClosable=True,
                 position=InfoBarPosition.TOP,

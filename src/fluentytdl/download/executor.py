@@ -24,6 +24,8 @@ from loguru import logger
 from ..models.errors import YtDlpExecutionError
 from ..utils.container_compat import choose_lossless_merge_container
 from ..youtube.yt_dlp_cli import (
+    log_pot_from_output,
+    log_pot_in_argv,
     prepare_yt_dlp_env,
     resolve_yt_dlp_exe,
     ydl_opts_to_cli_args,
@@ -245,6 +247,7 @@ class DownloadExecutor:
         cmd.append(url)
 
         logger.info("[Executor][Native] cmd={}", " ".join(cmd))
+        log_pot_in_argv(cmd, stage="Download", task_id=label or "native")
 
         env = prepare_yt_dlp_env()
         env["PYTHONIOENCODING"] = "utf-8"
@@ -289,6 +292,7 @@ class DownloadExecutor:
             if not line:
                 continue
             tail.append(line)
+            log_pot_from_output(line, stage="Download")
 
             parsed = self._ytdlp_parser.parse_line(line)
 
@@ -529,6 +533,7 @@ class DownloadExecutor:
         cmd.append(url)
 
         logger.debug("[Executor] 提取 URL cmd={}", " ".join(cmd))
+        log_pot_in_argv(cmd, stage="Download", task_id="extract_stream_urls")
 
         env = prepare_yt_dlp_env()
         env["PYTHONIOENCODING"] = "utf-8"
@@ -545,6 +550,8 @@ class DownloadExecutor:
         )
 
         stdout, stderr = proc.communicate()
+
+        log_pot_from_output(stderr, stage="Download")
 
         if cancel_check():
             raise RuntimeError("用户取消下载")

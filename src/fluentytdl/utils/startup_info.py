@@ -94,8 +94,15 @@ def _quick_detect_version(key: str, exe_path: Path) -> str:
         return "检测失败"
 
 
-def log_startup_info() -> None:
-    """记录启动版本信息到日志。"""
+def log_startup_info() -> tuple[list[str], list[str]]:
+    """记录启动版本信息到日志，并把该弹给用户看的迁移问题交回调用方。
+
+    返回 ``(failures, conflicts)``。**为什么由这个函数带出去**：
+    `paths.take_migration_report()` 是取走即清空的语义，谁先调谁就是唯一的
+    消费者；而本函数在 `launch_main_window()` 里比任何 UI 提示都先跑，
+    main.py 再取一次只会拿到两个空列表。冲突时静默选一份数据是不可接受的，
+    所以带出来的这两个列表就是 InfoBar 的唯一数据源。
+    """
     from fluentytdl.utils.logger import logger
 
     try:
@@ -121,6 +128,8 @@ def log_startup_info() -> None:
     logger.info(f"  安装类型: {install_type} | 路径: {app_dir}")
     logger.info("-" * 50)
 
+    migration_failures, migration_conflicts = _replay_migration_report()
+
     # 组件版本检测
     from fluentytdl.utils.paths import frozen_app_dir as _frozen_app_dir
 
@@ -143,3 +152,41 @@ def log_startup_info() -> None:
         logger.info(f"  {key:<16} {version}")
 
     logger.info("=" * 50)
+
+    return migration_failures, migration_conflicts
+
+
+def _replay_migration_report() -> tuple[list[str], list[str]]:
+    """把 `paths.py` 攒下的数据迁移消息回放到 loguru，返回 ``(failures, conflicts)``。
+
+    为什么要"攒"再"放"：迁移跑在 `main.py` 的单实例锁之后，比 loguru 的落点确定
+    还早；而 `paths.py` **不能 import loguru** —— `utils/logger.py:13` 在导入期就
+    调 `user_data_dir()`，反向 import 会成环。所以 paths 只往模块级列表里塞字符串，
+    由这里（主窗口已出现、日志已就位）取走。零新增 hook。
+
+    **不清 `_MIGRATION_OK`**：`commit_migration_marker()` 还要靠它判断"零失败"，
+    而本函数比 `finalize_startup()` 先跑 —— 详见 `paths.take_migration_report()`。
+    """
+    from fluentytdl.utils.logger import logger
+
+    try:
+        from fluentytdl.utils.paths import take_migration_report
+
+        log, failures, conflicts = take_migration_report()
+    except Exception as e:
+        logger.debug(f"读取数据迁移报告失败: {e}")
+        return [], []
+
+    if not log and not failures and not conflicts:
+        return [], []
+
+    logger.info("  数据迁移报告:")
+    for line in log:
+        logger.info(f"    {line}")
+    for line in failures:
+        logger.warning(f"    迁移失败: {line}")
+    for line in conflicts:
+        logger.warning(f"    迁移冲突: {line}")
+    logger.info("-" * 50)
+
+    return failures, conflicts

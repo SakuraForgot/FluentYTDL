@@ -221,6 +221,29 @@ MAJOR.MINOR.PATCH[-(rc|beta).N]
 
 资产下载 URL 以 **tag** 而非版本号为键 —— `generate_manifest.py` 的 `--tag` 参数正是为此存在（`/releases/download/v3.5.5/FluentYTDL-3.5.5-win64-full.7z`）。
 
+### 打包卫生 [关键]
+
+- **`pyproject.toml [tool.fluentytdl.build]` 是"发布物包含什么"的唯一事实源。** `app_core_include`（白名单）、`app_core_exclude`（已知且故意不收）、`dist_forbidden`（运行期垃圾黑名单）只写在这里。`dist/` 顶层出现两张名单都没登记的条目时 `classify_app_core_items()` 直接让构建失败 —— 白名单真正的风险是"以后新增的合法发布物被静默丢掉"，这条断言把它变成一盏红灯。每个数组都必须写成**单行**：`_load_config()` 在没有 `tomllib` 的 Python 3.10 上会退化成只认 `key = [...]` 的行解析器，多行数组会解析成空数组，从而静默地让整道检查失效。
+- **`assert_dist_clean()` 对三个发布目标全都跑**（`full.7z`、`app-core.7z`、`setup.exe`），不是只跑一个。任何人从 `dist/` 直接启动过程序，自己的 `config.json`、`logs/`、`state/tasks/tasks.db` 就留在了那里，而 `bin/cookies_*.txt` 与 `bin/dle_user/` 里是**真实凭据** —— 这些进了公开归档是会话泄漏，不是观感问题。`full.7z` 合法地包含 `bin/` 与 `updater.exe`，套不了 app-core 的白名单，兜住它的正是这份黑名单。
+- **构建 `updater.exe` 需要 build extra：`uv sync --extra build`。** `py7zr` 是 updater 解压 app-core 归档的唯一手段。钉住的版本必须三处一致 —— `pyproject.toml` 的 `build` extra、`.github/workflows/release.yml` 的 `PY7ZR_VERSION`、以及 `scripts/updater.spec` 里那道断言。
+- **`updater.exe.new` 随 app-core 投递，app-core 里没有 `updater.exe`。** 用户机器上正在运行的 `updater.exe` 覆写不了自己，所以修复只能以"归档里一个普通文件"的形式送到已安装用户手上：`build_updater()` 把产物额外拷成 `dist/updater.exe.new`，真正的替换由 `main.py::_cleanup_update_residuals()`（便携版 / 可写安装路径）或提权 updater 退出后的 helper `updater.py::_self_update_updater()`（Program Files）完成。两条路径互为兜底 —— 替换失败时**绝不要删掉** `updater.exe.new`，它就是下次重试的素材。
+
+### 数据位置 [关键]
+
+`utils/paths.py::user_data_dir()` 用**双轨**决定数据根目录，**绝不做写权限探测**：
+
+| 场景 | 位置 |
+| --- | --- |
+| 传了 `--data-dir` / `FLUENTYTDL_DATA_DIR_OVERRIDE` | 该路径（updater 降权重启新版时用） |
+| frozen 且 exe 同级有 `portable.txt` | exe 所在目录（便携版 `full.7z`） |
+| frozen 且无标记 | `%LOCALAPPDATA%\FluentYTDL`（安装版） |
+| 非 frozen | `project_root()` |
+
+- **绝不要重新引入 `.writetest` 写探测。** 同一台机器的数据分裂成两棵树就是它造成的：提权会话写得进 `C:\Program Files\FluentYTDL`，普通会话写不进，用户看到的就是"更新把我的设置和任务全弄没了"。
+- **`portable.txt` 只进 `full.7z`**，由 `create_7z()` 从 `tempfile.TemporaryDirectory()` 追加。绝不能写进 `dist/` —— `dist/` 是 app-core 与 `setup.exe` 的共同取材地，`dist_forbidden` 里列着它，写进去会直接打断构建。`.iss` 另有 `Excludes: "portable.txt"` 作为纯保险。
+- **迁移只复制、绝不删除遗留位置**（`migrate_user_data()`），因为二进制回滚必须等价于数据兼容的回滚。`.migrated_v2` 标记只由 `finalize_startup()` → `commit_migration_marker()` 写出，且只在本次零失败时写 —— 写早了，被回滚的旧版会继续往旧路径写数据，而下次更新看到标记就跳过迁移、直接采用陈旧副本。
+- **`paths.py` 永远不能 import loguru。** `utils/logger.py:13` 在导入期就求值 `LOG_DIR = str(user_data_dir() / "logs")`，反向 import 会成环；迁移消息先攒在模块级列表里，由 `utils/startup_info.py::log_startup_info()` 回放。
+
 ### 注意事项
 
 - `build.py` 构建前会把版本同步到 `pyproject.toml`、`__init__.py`、`.iss`；当 `__init__.py` 动态读取 `VERSION` 时跳过同步

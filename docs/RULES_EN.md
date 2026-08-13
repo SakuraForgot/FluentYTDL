@@ -223,6 +223,29 @@ MAJOR.MINOR.PATCH[-(rc|beta).N]
 
 Asset download URLs are keyed by **tag**, not version — `generate_manifest.py` takes `--tag` for exactly this reason (`/releases/download/v3.5.5/FluentYTDL-3.5.5-win64-full.7z`).
 
+### Packaging Hygiene [CRITICAL]
+
+- **`pyproject.toml [tool.fluentytdl.build]` is the single source of truth for what ships.** `app_core_include` (whitelist), `app_core_exclude` (known-and-deliberately-dropped), and `dist_forbidden` (runtime-garbage denylist) live there and nowhere else. `classify_app_core_items()` fails the build when a top-level `dist/` entry matches neither list — the whitelist's real hazard is a *new legitimate* artifact being silently dropped, and that assertion turns it into a red light. Keep each array on a **single line**: `_load_config()` falls back to a `key = [...]` line parser on Python 3.10 (no `tomllib`), and a multi-line array parses as empty, which silently disables the check.
+- **`assert_dist_clean()` runs for all three release targets** (`full.7z`, `app-core.7z`, `setup.exe`), never just one. Anyone who launches the app from `dist/` leaves their own `config.json`, `logs/`, `state/tasks/tasks.db` behind, and `bin/cookies_*.txt` + `bin/dle_user/` hold **real credentials** — shipping those in a public archive is a session leak, not a cosmetic flaw. `full.7z` legitimately contains `bin/` and `updater.exe`, so it cannot reuse the app-core whitelist; the denylist is what covers it.
+- **Building `updater.exe` requires the `build` extra: `uv sync --extra build`.** `py7zr` is the updater's only way to unpack an app-core archive. The pinned version must match in three places — `pyproject.toml`'s `build` extra, `.github/workflows/release.yml`'s `PY7ZR_VERSION`, and the assertion inside `scripts/updater.spec`.
+- **`updater.exe.new` is delivered *with* app-core; `updater.exe` is not in it.** On a user's machine the running `updater.exe` cannot overwrite itself, so fixes reach installed users as a plain file in the archive: `build_updater()` copies its output to `dist/updater.exe.new`, and the actual swap happens either in `main.py::_cleanup_update_residuals()` (portable / writable install paths) or in the elevated post-exit helper `updater.py::_self_update_updater()` (Program Files). The two are each other's fallback — never "clean up" `updater.exe.new` on failure, it is the retry material.
+
+### Data Location [CRITICAL]
+
+`utils/paths.py::user_data_dir()` resolves the data root by **double track, never by probing for write permission**:
+
+| Situation | Location |
+| --- | --- |
+| `--data-dir` / `FLUENTYTDL_DATA_DIR_OVERRIDE` set | that path (used when the updater relaunches the new build de-elevated) |
+| frozen + `portable.txt` next to the exe | the exe's own directory (portable `full.7z`) |
+| frozen, no marker | `%LOCALAPPDATA%\FluentYTDL` (installed builds) |
+| not frozen | `project_root()` |
+
+- **Never reintroduce a `.writetest` write probe.** That is exactly what split one machine's data into two trees: an elevated session could write into `C:\Program Files\FluentYTDL` while a normal session could not, and the user saw "the update ate my settings and my task list".
+- **`portable.txt` goes only into `full.7z`**, appended by `create_7z()` from a `tempfile.TemporaryDirectory()`. It must never be written into `dist/` — `dist/` is the shared source for app-core and `setup.exe`, and `dist_forbidden` lists it so a slip breaks the build. `.iss` also carries `Excludes: "portable.txt"` as belt-and-braces.
+- **Migration copies and never deletes the legacy location** (`migrate_user_data()`), because a binary rollback must stay a data-compatible rollback. The `.migrated_v2` marker is written only by `finalize_startup()` → `commit_migration_marker()`, only when the run had zero failures — writing it earlier would let a rolled-back build keep using the old path while the next update skips migration and adopts a stale copy.
+- **`paths.py` must never import loguru.** `utils/logger.py:13` evaluates `LOG_DIR = str(user_data_dir() / "logs")` at import time, so the import would cycle; migration messages are queued in module-level lists and replayed by `utils/startup_info.py::log_startup_info()`.
+
 ### Notes
 
 - `build.py` syncs the version to `pyproject.toml`, `__init__.py`, and `.iss` before building; `__init__.py` is skipped when it reads `VERSION` dynamically
