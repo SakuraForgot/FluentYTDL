@@ -77,7 +77,7 @@
 **规则**：语言与原音偏好**只能**由格式串里的过滤器表达，走 `_inject_language_into_format()`：
 
 - 语言用 `[language^=xx]`（startswith）。裸 `[language=en]` 匹配不到真实标注 `en-US`，那是"偏好了英语却一条音轨都拿不到"的直接原因；别名分支用精确 `=`（别名表把 `zh-Hans` 放宽到裸 `zh`，用 `^=` 展开会连 `zh-Hant` 一起命中）
-- 原音用 `[language_preference>=10?]`。**`?`（none-inclusive）不能掉**：`_build_format_filter` 的 `_filter` 在 `actual_value is None` 时返回 `m.group('none_inclusive')`，不带 `?` 即为假，而 `language_preference` 只有 YouTube extractor 会算 —— Twitter 等平台会被过滤掉**所有**音轨
+- 原音用 `[language_preference>=?10]`。**`?`（none-inclusive）不能掉**：`_build_format_filter` 的 `_filter` 在 `actual_value is None` 时返回 `m.group('none_inclusive')`，不带 `?` 即为假，而 `language_preference` 只有 YouTube extractor 会算 —— Twitter 等平台会被过滤掉**所有**音轨。**位置也是语法的一部分**：该标记在运算符与值之间（`>=?10`）。写成值侧的 `>=10?` 解析不成数字，真实 yt-dlp 直接以 `SyntaxError: Invalid filter specification` 拒收整次运行（yt-dlp 2026.08.30 实测）
 - 原始格式串永远作为最后一条兜底分支。少了它，没有对应音轨的视频会一条格式都选不出来（合并直接失败）
 - 意图经 `ydl_opts["_fytdl_audio_langs"]` / `["_fytdl_audio_strategy"]` 传递（下划线前缀 = 不进 argv）；`format_sort` 只留 `res,br,fps,acodec`
 

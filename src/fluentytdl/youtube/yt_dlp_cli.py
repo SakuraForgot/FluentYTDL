@@ -445,9 +445,14 @@ def prepare_yt_dlp_env(extra_paths: list[str] | None = None) -> dict[str, str]:
 #: **`?` 是必须的**（none-inclusive）：yt-dlp 的 `_build_format_filter` 在
 #: `actual_value is None` 时返回 `m.group('none_inclusive')`，不带 `?` 就是假。
 #: `language_preference` 只有 YouTube extractor 会算，Twitter 等平台的格式里压根
-#: 没有这个键 —— 不带 `?` 会把那些平台的**所有**音轨过滤光，下载直接失败。
-#: 带 `?` 的语义正好是想要的："有这个字段就要原音，没有就别管。"
-_ORIGINAL_AUDIO_FILTER = "[language_preference>=10?]"
+#: 没有这个键 —— 不带 `?` 会把那些平台的**所有**音轨过滤光，只能靠格式串末尾的
+#: 无过滤兜底救回来。带 `?` 的语义正好是想要的："有这个字段就要原音，没有就别管。"
+#:
+#: **`?` 跟在运算符后面，不是跟在值后面**：yt-dlp 的过滤器正则把 none-inclusive 标记
+#: 放在 `operator` 与 `value` 之间（`>=?10`）。写成 `>=10?` 会被当成值的一部分，
+#: 真实 yt-dlp 直接 `SyntaxError: Invalid filter specification` 整个下载起不来 ——
+#: 实测过，见 `tests/test_audio_format_injection.py::test_original_filter_is_none_inclusive`。
+_ORIGINAL_AUDIO_FILTER = "[language_preference>=?10]"
 
 
 def _inject_language_into_format(

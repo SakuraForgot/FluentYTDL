@@ -100,7 +100,7 @@ pythonVersion = "3.10"
 1. **绝不强制 `player_client`** — 信任 yt-dlp 默认策略（tv → web_safari → android_vr）
 2. **绝不启用 `sleep_interval`** — 导致签名 URL 过期 → HTTP 403
 3. **绝不使用 `--cookies-from-browser`** — Windows 上导致 DPAPI 文件锁
-4. **`-S lang:xx` 是失效的 —— 绝不用它表达语言偏好。** `lang` 是 `language_preference` 的**数值**别名，不接受语言码（喂语言码会把全局 `settings['lang']['convert']` 改成 `'string'`、拿 10/5/−1/−10 跟 `"ja"` 比），而且 `FormatSorter.add_item` 只接受**第一个** `lang:` 条目。语言与原音偏好必须走 `_inject_language_into_format()` 的格式串过滤器：`[language^=xx]`（startswith —— 裸 `[language=en]` 匹配不到真实标注 `en-US`）与原音的 `[language_preference>=10?]`（**`?` 是必须的** —— 只有 YouTube 有 `language_preference`，不带 none-inclusive 会把 Twitter 等平台的所有音轨过滤光）。原始格式串永远作为最后兜底
+4. **`-S lang:xx` 是失效的 —— 绝不用它表达语言偏好。** `lang` 是 `language_preference` 的**数值**别名，不接受语言码（喂语言码会把全局 `settings['lang']['convert']` 改成 `'string'`、拿 10/5/−1/−10 跟 `"ja"` 比），而且 `FormatSorter.add_item` 只接受**第一个** `lang:` 条目。语言与原音偏好必须走 `_inject_language_into_format()` 的格式串过滤器：`[language^=xx]`（startswith —— 裸 `[language=en]` 匹配不到真实标注 `en-US`）与原音的 `[language_preference>=?10]`（**`?` 是必须的，且必须紧跟运算符** —— 只有 YouTube 有 `language_preference`，不带 none-inclusive 会把 Twitter 等平台的所有音轨过滤光；而 yt-dlp 的过滤器语法把该标记放在运算符与值之间，写成值侧的 `>=10?` 会直接 `SyntaxError: Invalid filter specification`，整个下载起不来）。原始格式串永远作为最后兜底
 5. **非零退出时验证文件大小** — Windows `.part-Frag` 删除失败但下载已完成
 6. **同步 POT 插件到 exe 目录** — 编译后的 yt-dlp 无法通过 PYTHONPATH 发现插件
 7. **TUN 模式不注入代理环境变量** — 注入 `HTTPS_PROXY` 导致双重代理

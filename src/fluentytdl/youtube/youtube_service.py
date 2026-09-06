@@ -282,7 +282,7 @@ class YoutubeService:
         # `"ja"` 比；更要紧的是 `FormatSorter.add_item` 有 `if field in self._order: return`,
         # 所以十几个 `lang:` 条目里**只有第一个会被接受**。这整段展开的贡献是零。
         # 语言与原音偏好改由 `_inject_language_into_format()` 的格式过滤器表达
-        # （`[language^=xx]` / `[language_preference=10?]`），意图靠下面两个私有键传递。
+        # （`[language^=xx]` / `[language_preference>=?10]`），意图靠下面两个私有键传递。
         ydl_opts["format_sort"] = ["res", "br", "fps", "acodec"]
 
         # 下划线前缀 = 不进 argv。`ydl_opts_to_cli_args()` 是逐键显式映射而非遍历，

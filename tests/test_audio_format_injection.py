@@ -10,13 +10,15 @@ BCP-47 别名（十几个 `lang:` 条目）贡献为零。
 唯一有效的表达是格式串里的过滤器，也就是这里测的东西：
 
 - 语言用 `[language^=xx]`（startswith）—— 裸 `[language=en]` 匹配不到真实标注 `en-US`
-- 原音用 `[language_preference>=10?]` —— `?` 是**必须的**，见 `_ORIGINAL_AUDIO_FILTER`
+- 原音用 `[language_preference>=?10]` —— `?` 是**必须的**，且**必须紧跟运算符**，
+  见 `_ORIGINAL_AUDIO_FILTER`
 - 兜底永远是原始格式串 —— 少了它，没有原音标记的视频会一条格式都选不出来
 
 不需要 QApplication：`_plan_language_injection()` 是纯函数。
 """
 
 import os
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -24,6 +26,8 @@ from pathlib import Path
 os.environ.setdefault("FLUENTYTDL_DATA_DIR_OVERRIDE", tempfile.mkdtemp(prefix="fytdl-langinj-"))
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
+
+import pytest  # noqa: E402
 
 from fluentytdl.utils.format_scorer import (  # noqa: E402
     STRATEGY_LANGUAGE_FIRST,
@@ -85,12 +89,19 @@ def test_original_filter_is_injected_without_any_language_preference():
 
 
 def test_original_filter_is_none_inclusive():
-    """`?` 不能掉：Twitter 等平台的格式里没有 `language_preference`。
+    """`?` 不能掉，而且**位置只能在运算符后面**。
 
-    不带 `?` 时 `_build_format_filter` 对 `None` 返回假，会把那些平台的**所有**音轨
-    过滤光 —— 一个纯粹为 YouTube 加的偏好会让别的平台整体下载失败。
+    两件事各有代价，都实测过（yt-dlp 2026.08.30，真实多语言视频）：
+
+    1. 掉了 `?`：Twitter 等平台的格式里没有 `language_preference`，
+       `_build_format_filter` 对 `None` 返回假，那些平台的**所有**音轨被过滤光，
+       只能靠格式串末尾的无过滤兜底救回来。
+    2. 写成 `>=10?`（`?` 跟在值后面）：yt-dlp 的过滤器正则把 none-inclusive 标记
+       放在 operator 与 value 之间，`10?` 解析不成数字 ——
+       `SyntaxError: Invalid filter specification`，整个下载起不来。
+       这条断言原先只写了 `endswith("?]")`，正好放过了这种写法。
     """
-    assert _ORIGINAL_AUDIO_FILTER.endswith("?]")
+    assert _ORIGINAL_AUDIO_FILTER == "[language_preference>=?10]"
 
 
 # ── 语言过滤器的形状 ────────────────────────────────────────
@@ -198,3 +209,47 @@ def test_unknown_strategy_falls_back_to_original_first():
 def test_strategy_is_reported_for_the_log():
     """`strategy` 进日志：`audio_kind` / `audio_ranked` 要和它一起读才有意义。"""
     assert _plan(["ja"], STRATEGY_LANGUAGE_FIRST).strategy == STRATEGY_LANGUAGE_FIRST
+
+
+# ── 真实 yt-dlp 的语法校验 ──────────────────────────────────
+
+
+def _ytdlp_binary() -> str | None:
+    """开发树里的 yt-dlp（`scripts/fetch_tools.py` 放在 `assets/bin/`）。"""
+    exe = (
+        Path(__file__).resolve().parent.parent
+        / "assets"
+        / "bin"
+        / "yt-dlp"
+        / ("yt-dlp.exe" if os.name == "nt" else "yt-dlp")
+    )
+    return str(exe) if exe.exists() else None
+
+
+@pytest.mark.parametrize(
+    "strategy", [STRATEGY_ORIGINAL_FIRST, STRATEGY_LANGUAGE_FIRST, STRATEGY_ORIGINAL_ONLY]
+)
+def test_real_ytdlp_accepts_the_generated_format_string(strategy: str) -> None:
+    """让**真的** yt-dlp 解析我们产出的格式串。
+
+    上面那些断言全是字符串形状 —— 形状对、语法错的过滤器能整套通过，然后在用户机器上
+    以 `SyntaxError: Invalid filter specification` 炸掉。实际发生过：
+    `[language_preference>=10?]` 满足当时的 `endswith("?]")` 断言，真实 yt-dlp 直接拒收。
+
+    `--simulate --skip-download` + 一个不存在的 URL：格式串的解析发生在取 URL **之前**，
+    所以拿不到网络也能测到语法。判定只看有没有 `Invalid filter specification`，
+    网络类报错一概不算失败。
+    """
+    exe = _ytdlp_binary()
+    if not exe:
+        pytest.skip("assets/bin 下没有 yt-dlp，跳过真实语法校验")
+
+    fmt = _plan(["ja", "zh-Hans"], strategy).fmt
+    proc = subprocess.run(  # noqa: S603
+        [exe, "--simulate", "--no-warnings", "-f", fmt, "https://example.invalid/watch?v=x"],
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    combined = proc.stdout + proc.stderr
+    assert "Invalid filter specification" not in combined, combined[:600]
