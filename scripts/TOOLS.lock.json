@@ -11,24 +11,24 @@
       }
     },
     "deno": {
-      "version": "2.9.4",
+      "version": "2.9.6",
       "files": {
         "deno.exe": {
-          "sha256": "4a2757fe99afc2c62c46500c8221cfa0189ac4bfb7064141875ad9c0f04b60ef",
-          "size": 97175328
+          "sha256": "2ff9493dfa356be2975f477025ea770088e9e9cb2c83d983236d13561b96b7a6",
+          "size": 97316640
         }
       }
     },
     "ffmpeg": {
-      "version": "N-125914-g0da8f2f4ee-20260802",
+      "version": "N-126405-g9f63b36a26-20260904",
       "files": {
         "ffmpeg.exe": {
-          "sha256": "92251ff90377bce9a0652f0d8ef4a247c383e4e6aa358c22d169e987b04b7724",
-          "size": 145241088
+          "sha256": "e20f336811798c95cf1631aee98a88b3f73f85ed7a0bd05793a6d30c30669b3a",
+          "size": 145871872
         },
         "ffprobe.exe": {
-          "sha256": "0f408227c09831bc02fc8c97cdfd9376e57943775cc84f11cebcdb9a4a6131af",
-          "size": 145031168
+          "sha256": "896bde821ea58ebb41eed9d897a3683cad2a9a2a041c71ac5c9599b31c0ac84f",
+          "size": 145660416
         }
       }
     },
@@ -42,11 +42,11 @@
       }
     },
     "yt-dlp": {
-      "version": "2026.08.18.122307",
+      "version": "2026.08.30.232658",
       "files": {
         "yt-dlp.exe": {
-          "sha256": "652e154bce7170070d0f26415c9a3c35c121f5a7903cb8cde6d31c4577517fb9",
-          "size": 17798916
+          "sha256": "a3a504c66e91f6474cef0be83b16aedfb7b42b9400a962242d0d433e98f67a70",
+          "size": 17842860
         }
       }
     }
