@@ -46,6 +46,61 @@ from fetch_tools import load_tool_versions  # noqa: E402
 from version_manager import parse_version, strip_v_prefix, tag_for  # noqa: E402
 
 # ============================================================================
+# 目标 → 产出物映射（唯一事实源）
+#
+# run_all() 的分发、_assert_expected_artifacts() 的断言、build_gui.py 的产物
+# 清单全都读这一张表。以前是三处各写一遍 `if target in ("all", "7z")`，于是
+# 「只要便携版」实际还会吐出 app-core.7z、update-manifest.json 和一份把
+# release/ 里所有历史遗留文件都列进去的 SHA256SUMS.txt —— 目标形同虚设。
+#
+# 五种产出物：
+#   full      FluentYTDL-{v}-{arch}-full.7z      便携完整版
+#   app-core  FluentYTDL-{v}-{arch}-app-core.7z  增量更新内部包
+#   setup     FluentYTDL-{v}-{arch}-setup.exe    Inno Setup 安装向导
+#   manifest  update-manifest.json               程序内更新器读的清单
+#   checksums SHA256SUMS.txt                     本次产物的校验和
+#
+# manifest 绑定 app-core：清单里唯一有实质内容的组件就是 app-core，缺了它
+# generate_manifest.py 只会打印「⚠ app-core 归档不存在」并写出一份没有
+# app-core 组件的空壳清单 —— 那种清单一旦发布，程序内更新器会认为新版本
+# 无可下载载荷。所以宁可不生成，也不生成空壳。
+# ============================================================================
+
+TARGET_OUTPUTS: dict[str, frozenset[str]] = {
+    "all": frozenset({"full", "app-core", "setup", "manifest", "checksums"}),
+    "7z": frozenset({"full"}),
+    "app-core": frozenset({"app-core", "manifest"}),
+    "setup": frozenset({"setup"}),
+}
+
+# CLI 别名。"spec" 不在 TARGET_OUTPUTS 里 —— 它在产物分发之前就 return 了
+TARGET_ALIASES = {"full": "7z"}
+
+# 产出物 kind → 文件名模板。{base} = FluentYTDL-{版本}-{架构}
+OUTPUT_FILENAMES = {
+    "full": "{base}-full.7z",
+    "app-core": "{base}-app-core.7z",
+    "setup": "{base}-setup.exe",
+    "manifest": "update-manifest.json",
+    "checksums": "SHA256SUMS.txt",
+}
+
+
+def release_names(target: str, version: str, arch: str = "win64") -> dict[str, str]:
+    """目标 → {产出物 kind: 文件名}。
+
+    模块级纯函数，`build_gui.py` 直接 import 这一份 —— GUI 以前自己抄了一张
+    产物清单，和 run_all() 的真实行为对不上，用户看到的"本次产出"是假的。
+    """
+    effective = TARGET_ALIASES.get(target, target)
+    base = f"FluentYTDL-{version}-{arch}"
+    return {
+        kind: OUTPUT_FILENAMES[kind].format(base=base)
+        for kind in sorted(TARGET_OUTPUTS.get(effective, frozenset()))
+    }
+
+
+# ============================================================================
 # 工具函数
 # ============================================================================
 
@@ -854,8 +909,7 @@ class Builder:
         return RELEASE_DIR / f"{out_name}.exe"
 
     def run_all(self, target: str = "all") -> None:
-        # "full" 是 "7z" 的别名
-        effective_target = {"full": "7z"}.get(target, target)
+        effective_target = TARGET_ALIASES.get(target, target)
 
         print(f"========== FluentYTDL Pipelined Build {self._full_version} ==========")
 
@@ -867,6 +921,8 @@ class Builder:
             print(f"\n✅ .spec 验证通过: {app_dir}")
             return
 
+        wanted = TARGET_OUTPUTS[effective_target]
+
         # 2. 拉取外部工具（bundle_tools 的输入）
         self.ensure_tools()
 
@@ -876,34 +932,37 @@ class Builder:
         # 4. 注入二进制工具
         self.bundle_tools(app_dir)
 
-        # 5. 产物分发
-        print("\n========== Release 打包 ==========")
+        # 5. 产物分发 —— 严格按 TARGET_OUTPUTS，目标没点名的一律不产出
+        print(f"\n========== Release 打包 (target={effective_target}) ==========")
+        print(f"   本次产出: {', '.join(sorted(wanted))}")
         results = []
 
         # 完整绿化包
-        if effective_target in ("all", "7z"):
+        if "full" in wanted:
             full_archive = self.create_7z(
                 app_dir, f"FluentYTDL-{self._full_version}-{self.arch}-full"
             )
             results.append(full_archive)
 
         # app-core 归档（仅主程序，用于增量更新）
-        if effective_target in ("all", "7z"):
+        if "app-core" in wanted:
             app_core_archive = self.create_app_core_7z(app_dir)
             if app_core_archive.exists():
                 results.append(app_core_archive)
 
         # Inno 安装包
-        if effective_target in ("all", "setup"):
+        if "setup" in wanted:
             setup_exe = self.build_setup(app_dir)
             if setup_exe and setup_exe.exists():
                 results.append(setup_exe)
 
-        # 生成更新清单
-        self.generate_update_manifest()
+        # 生成更新清单（只在产出 app-core 时才有意义，见 TARGET_OUTPUTS 注释）
+        if "manifest" in wanted:
+            self.generate_update_manifest()
 
-        # 计算全局指纹
-        self.generate_checksums()
+        # 计算指纹 —— 只覆盖本次产出，不再把 release/ 里的陈年旧物一起列进去
+        if "checksums" in wanted:
+            self.generate_checksums(results)
 
         # 校验目标要求的产物是否真的落盘 —— 否则"构建成功"是假的
         self._assert_expected_artifacts(effective_target)
@@ -913,22 +972,43 @@ class Builder:
             size_mb = res.stat().st_size / 1024 / 1024
             print(f"   ► {res.name} ({size_mb:.1f} MB)")
 
+        self._warn_foreign_release_files(effective_target)
+
+    def _warn_foreign_release_files(self, effective_target: str) -> None:
+        """列出 release/ 里不属于本次目标的残留文件。
+
+        clean() 只清 dist/ 与 build/，从不清 release/。上一次构建的 app-core.7z
+        或 SHA256SUMS.txt 会原地留着，让人误以为"选了便携版却打了全部"。
+        这里只提示不删除 —— 删产物必须是用户的显式动作（GUI 有勾选项）。
+        """
+        if not RELEASE_DIR.exists():
+            return
+
+        expected = {p.name for p in self._expected_paths(effective_target)}
+        foreign = sorted(
+            p.name
+            for p in RELEASE_DIR.iterdir()
+            if p.is_file() and p.name not in expected and p.name != ".gitkeep"
+        )
+        if foreign:
+            print(f"\n⚠ release/ 内另有 {len(foreign)} 个文件不属于本次目标（未删除）:")
+            for name in foreign[:15]:
+                print(f"     · {name}")
+            if len(foreign) > 15:
+                print(f"     … 另有 {len(foreign) - 15} 个")
+
+    def _expected_paths(self, effective_target: str) -> list[Path]:
+        """本次目标应当落盘的全部文件（含 manifest / checksums）。"""
+        names = release_names(effective_target, self._full_version, self.arch)
+        return [RELEASE_DIR / name for name in names.values()]
+
     def _assert_expected_artifacts(self, effective_target: str) -> None:
         """断言目标对应的产物都已生成。
 
         历史上 build_setup() 在缺少 ISCC 时静默返回空路径，流水线照样打印
         "✅ 流水线完成"，导致零产物的构建被当成成功。
         """
-        expected: list[Path] = []
-        base = f"FluentYTDL-{self._full_version}-{self.arch}"
-
-        if effective_target in ("all", "7z"):
-            expected.append(RELEASE_DIR / f"{base}-full.7z")
-            expected.append(RELEASE_DIR / f"{base}-app-core.7z")
-        if effective_target in ("all", "setup"):
-            expected.append(RELEASE_DIR / f"{base}-setup.exe")
-
-        missing = [p for p in expected if not p.exists()]
+        missing = [p for p in self._expected_paths(effective_target) if not p.exists()]
         if missing:
             raise FileNotFoundError(
                 "构建目标 '"
@@ -937,15 +1017,21 @@ class Builder:
                 + "\n".join(f"  ✗ {p.name}" for p in missing)
             )
 
-    def generate_checksums(self):
+    def generate_checksums(self, artifacts: list[Path]) -> Path:
+        """写出 SHA256SUMS.txt，只覆盖本次构建产出的文件。
+
+        以前是遍历整个 release/ —— 本地反复构建时，那份校验和里会混进上个
+        版本的 full.7z，发布出去等于给用户一张对不上的清单。
+        """
         checksums = []
-        for file in sorted(RELEASE_DIR.iterdir()):
-            if file.is_file() and file.suffix in {".exe", ".7z", ".zip"}:
-                hash_value = sha256_file(file)
-                checksums.append(f"{hash_value}  {file.name}")
+        for file in sorted(artifacts, key=lambda p: p.name):
+            if file.is_file():
+                checksums.append(f"{sha256_file(file)}  {file.name}")
 
         checksum_file = RELEASE_DIR / "SHA256SUMS.txt"
         checksum_file.write_text("\n".join(checksums) + "\n", encoding="utf-8")
+        print(f"✓ 校验和: {checksum_file.name}（{len(checksums)} 项）")
+        return checksum_file
 
     def build_updater(self, copy_to: Path | None = None) -> Path:
         """构建 updater.exe（独立更新器）。"""
@@ -1155,15 +1241,36 @@ class Builder:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="FluentYTDL 构建中枢系统")
+    parser = argparse.ArgumentParser(
+        description="FluentYTDL 构建中枢系统",
+        # RawText 而非默认 formatter：--target 的帮助是一张多行对照表，
+        # 默认 formatter 会把换行全压成一行，表格就废了
+        formatter_class=argparse.RawTextHelpFormatter,
+    )
     parser.add_argument(
         "--target",
         "-t",
-        choices=["all", "7z", "setup", "full", "spec"],
+        choices=["all", "7z", "full", "app-core", "setup", "spec"],
         default="all",
-        help="构建目标 (默认: all; full=7z; spec=只验证 PyInstaller 蓝图，不产出发布物)",
+        help=(
+            "构建目标（严格产出，目标没点名的一律不生成）:\n"
+            "  all      full.7z + app-core.7z + setup.exe + update-manifest.json + SHA256SUMS.txt\n"
+            "  7z/full  只产出 full.7z（便携完整版）\n"
+            "  app-core 只产出 app-core.7z + update-manifest.json（增量更新内部包）\n"
+            "  setup    只产出 setup.exe\n"
+            "  spec     只验证 PyInstaller 蓝图，不产出发布物"
+        ),
     )
     parser.add_argument("--version", "-v", help="覆盖打包版本号")
+    parser.add_argument(
+        "--print-names",
+        action="store_true",
+        help=(
+            "只打印该目标本次会产出的文件名（每行一个）后退出，不构建。\n"
+            "给 CI 校验步骤用：预期产物清单必须来自 TARGET_OUTPUTS 这张表，\n"
+            "在工作流里手抄一份的话，目标语义一变就立刻误报"
+        ),
+    )
     parser.add_argument("--skip-hygiene", action="store_true", help="强制无视黑名单环境污染告警")
     parser.add_argument(
         "--strict-tools",
@@ -1178,6 +1285,14 @@ def main():
         skip_hygiene=args.skip_hygiene,
         strict_tools=args.strict_tools,
     )
+
+    if args.print_names:
+        # 走 Builder 而不是直接调 release_names()：版本号解析（VERSION 文件回落、
+        # -rc.N 后缀、v 前缀拒绝）和架构判定都在 Builder 里，绕过去就是第二份实现
+        names = release_names(args.target, builder._full_version, builder.arch)
+        for name in sorted(names.values()):
+            print(name)
+        return
 
     try:
         builder.run_all(target=args.target)

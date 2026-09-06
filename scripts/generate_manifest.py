@@ -35,6 +35,7 @@ if sys.platform == "win32":
 ROOT = Path(__file__).resolve().parent.parent
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from fetch_tools import load_tool_assets  # noqa: E402
 from version_manager import parse_version, strip_v_prefix, tag_for  # noqa: E402
 
 
@@ -98,7 +99,10 @@ def detect_component_versions(release_dir: Path) -> dict[str, dict]:
         "ffmpeg": {
             "exe": "ffmpeg/ffmpeg.exe",
             "cmd": ["-version"],
-            "repo": "BtbN/FFmpeg-Builds",
+            # 必须与 dependency_manager._fetch_remote_from_api() 查的是同一个仓库，
+            # 否则清单声明的来源和运行时实际查询的来源对不上。
+            # 项目自带的 ffmpeg 来自 yt-dlp 的修复版构建，不是 BtbN 的。
+            "repo": "yt-dlp/FFmpeg-Builds",
         },
         "deno": {
             "exe": "deno/deno.exe",
@@ -241,16 +245,36 @@ def generate_manifest(
     else:
         print(f"  ⚠ app-core 归档不存在: {app_core_name}")
 
-    # bin/ 工具组件（从 assets/bin/ 检测版本）
+    # bin/ 工具组件（版本来自 assets/bin/ 的实测，制品元数据来自 TOOLS.lock.json）
+    #
+    # url/sha256 以前无条件写空串，而运行时 `_get_remote_version()` 只要看到清单条目
+    # 有 version 就整体采用它 —— 于是 download_url 恒为空，点「立即更新」直接死在
+    # "没能解析出下载地址"。运行时那一侧已经改成"API 定版本、清单只补制品元数据"
+    # （见 `dependency_manager._overlay_manifest()`），这里把真实元数据填上，
+    # 让用户少打一次 GitHub API。
+    #
+    # 版本号必须与锁文件对得上才写：锁里记的哈希属于那个版本的资产，版本一错，
+    # 清单就会让运行时拿着错的 sha256 去校验，必然失败。对不上就留空串 ——
+    # 运行时会自动退回 API 解析，空串不再是死路。
     bin_versions = detect_component_versions(release_dir)
+    lock_assets = load_tool_assets()
     for key, info in bin_versions.items():
-        manifest["components"][f"bin/{key}"] = {
-            "version": info["version"],
-            "url": "",  # bin 工具由各工具的 GitHub API 提供下载 URL
-            "sha256": "",
-            "repo": info["repo"],
-        }
-        print(f"  bin/{key}: {info['version']}")
+        version = info["version"]
+        asset = lock_assets.get(key)
+        entry: dict = {"version": version, "url": "", "sha256": "", "repo": info["repo"]}
+
+        if asset is None:
+            note = "无锁文件制品元数据，运行时走 API"
+        elif asset["version"] != version:
+            note = f"锁文件版本 {asset['version']} 与实测 {version} 不符，留空走 API"
+        else:
+            entry["url"] = asset["url"]
+            entry["sha256"] = asset["sha256"]
+            entry["size"] = asset["size"]
+            note = f"制品 {asset['sha256'][:16]}…"
+
+        manifest["components"][f"bin/{key}"] = entry
+        print(f"  bin/{key}: {version} ({note})")
 
     return manifest
 

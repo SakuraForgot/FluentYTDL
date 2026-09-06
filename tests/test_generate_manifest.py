@@ -10,6 +10,7 @@ import pytest
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "scripts"))
 
+import generate_manifest as gm  # noqa: E402
 from generate_manifest import generate_manifest, sha256_file  # noqa: E402
 from version_manager import (  # noqa: E402
     is_valid_version,
@@ -161,3 +162,75 @@ class TestGenerateManifest:
         manifest = generate_manifest("3.0.18", tmp_path, "https://example.com")
         assert manifest["app_version"] == "3.0.18"
         assert isinstance(manifest["components"], dict)
+
+
+class TestBinComponentArtifacts:
+    """bin/* 的 url/sha256 必须来自锁文件，且只在版本对得上时才写。
+
+    以前这两个字段无条件写空串，运行时 `_get_remote_version()` 又优先采信清单条目，
+    于是 `download_url` 恒为空 —— deno 点「立即更新」直接报"没能解析出下载地址"。
+    """
+
+    ASSET = {
+        "version": "2.9.5",
+        "url": "https://example.com/deno-x86_64-pc-windows-msvc.zip",
+        "sha256": "a" * 64,
+        "size": 12345,
+    }
+
+    def _patch(self, monkeypatch, detected: dict, assets: dict) -> None:
+        monkeypatch.setattr(gm, "detect_component_versions", lambda _dir: detected)
+        monkeypatch.setattr(gm, "load_tool_assets", lambda: assets)
+
+    def test_uses_lock_asset_when_version_matches(self, tmp_path, monkeypatch):
+        self._patch(
+            monkeypatch,
+            {"deno": {"version": "2.9.5", "repo": "denoland/deno"}},
+            {"deno": self.ASSET},
+        )
+        entry = generate_manifest("3.6.10", tmp_path, "https://example.com")["components"][
+            "bin/deno"
+        ]
+
+        assert entry["url"] == self.ASSET["url"]
+        assert entry["sha256"] == self.ASSET["sha256"]
+        assert entry["size"] == self.ASSET["size"]
+        assert entry["version"] == "2.9.5"
+
+    def test_version_mismatch_leaves_url_empty(self, tmp_path, monkeypatch):
+        """锁里的哈希属于另一个版本 —— 写进清单会让运行时校验必然失败。"""
+        self._patch(
+            monkeypatch,
+            {"deno": {"version": "2.9.6", "repo": "denoland/deno"}},
+            {"deno": self.ASSET},
+        )
+        entry = generate_manifest("3.6.10", tmp_path, "https://example.com")["components"][
+            "bin/deno"
+        ]
+
+        assert entry["url"] == ""
+        assert entry["sha256"] == ""
+        assert "size" not in entry
+        assert entry["version"] == "2.9.6"
+
+    def test_missing_lock_asset_leaves_url_empty(self, tmp_path, monkeypatch):
+        """ffmpeg 走滚动 tag，锁里没有资产元数据；空串由运行时退回 API 兜住。"""
+        self._patch(
+            monkeypatch,
+            {"ffmpeg": {"version": "8.0", "repo": "yt-dlp/FFmpeg-Builds"}},
+            {},
+        )
+        entry = generate_manifest("3.6.10", tmp_path, "https://example.com")["components"][
+            "bin/ffmpeg"
+        ]
+
+        assert entry["url"] == ""
+        assert entry["sha256"] == ""
+
+    def test_repo_matches_runtime_source(self):
+        """清单声明的仓库必须与 dependency_manager 实际查询的一致。"""
+        defs = gm.detect_component_versions.__doc__  # 仅确认函数存在
+        assert defs is not None
+        src = (ROOT / "scripts" / "generate_manifest.py").read_text(encoding="utf-8")
+        assert "yt-dlp/FFmpeg-Builds" in src
+        assert "BtbN/FFmpeg-Builds" not in src

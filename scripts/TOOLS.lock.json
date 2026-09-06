@@ -42,11 +42,11 @@
       }
     },
     "yt-dlp": {
-      "version": "2026.07.04",
+      "version": "2026.08.18.122307",
       "files": {
         "yt-dlp.exe": {
-          "sha256": "52fe3c26dcf71fbdc85b528589020bb0b8e383155cfa81b64dd447bbe35e24b8",
-          "size": 18226085
+          "sha256": "652e154bce7170070d0f26415c9a3c35c121f5a7903cb8cde6d31c4577517fb9",
+          "size": 17798916
         }
       }
     }

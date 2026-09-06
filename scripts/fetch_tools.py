@@ -150,6 +150,22 @@ def sha256_file(file_path: Path) -> str:
     return digest.hexdigest()
 
 
+def asset_meta(url: str, path: Path) -> dict:
+    """记录**被下载的那个资产**的 url / sha256 / size。
+
+    锁文件原本只记解压后文件的哈希（deno 记的是 ``deno.exe`` 的，不是 ``.zip`` 的），
+    但运行时更新下载的是资产本身，`update-manifest.json` 需要的也是资产的哈希 ——
+    拿解压后的哈希去校验压缩包，每一次下载都会被判成"文件校验失败"。
+
+    这里记的是**实际下载用的那个 URL**，多数上游是 ``releases/latest/download/...``
+    这种滚动地址。运行时不会因此装错版本：`dependency_manager._overlay_manifest()`
+    只在清单版本与 API 查到的最新版本**精确相等**时才采用清单的 url/sha256，版本一动
+    就整体退回 API 解析。剩下的窗口只有"查完版本、下载途中上游正好发新版"，那种情况
+    表现为一次 sha256 不符的失败，重试即可，不会静默装上不对的东西。
+    """
+    return {"url": url, "sha256": sha256_file(path), "size": path.stat().st_size}
+
+
 def assert_sha256(file_path: Path, expected_hash: str, source: str) -> None:
     """校验文件 SHA256，不一致直接抛错。
 
@@ -349,8 +365,20 @@ class ToolLock:
             print(f"  ℹ 未找到 {path.name}，本次运行将生成初始锁文件")
             self._dirty = True
 
-    def reconcile(self, tool: str, version: str, files: dict[str, Path]) -> None:
-        """比对并（必要时）刷新某个工具的锁条目。"""
+    def reconcile(
+        self,
+        tool: str,
+        version: str,
+        files: dict[str, Path],
+        asset: dict | None = None,
+    ) -> None:
+        """比对并（必要时）刷新某个工具的锁条目。
+
+        `asset` 是**被下载的那个资产**的 url/sha256/size（见 `asset_meta()`），
+        只在本次真的联网下载过时才有值 —— "只校验"路径拿不到它，此时保留锁里已有的
+        条目，别把它清空：`generate_manifest.py` 靠它填 `bin/*` 的下载地址，清空
+        就等于让下一个 release 的清单退回空 url。
+        """
         observed = {
             name: {"sha256": sha256_file(p), "size": p.stat().st_size}
             for name, p in sorted(files.items())
@@ -363,7 +391,7 @@ class ToolLock:
 
         if entry is None:
             print(f"  🔒 {tool}: 锁文件中无记录，登记为 {version}")
-            self._record(tool, version, observed)
+            self._record(tool, version, observed, asset)
             return
 
         locked_version = entry.get("version", "unknown")
@@ -376,7 +404,7 @@ class ToolLock:
                     f"  确认新版本可用后运行: python scripts/fetch_tools.py --update-lock"
                 )
             print(f"  🔄 {msg}（锁文件将刷新）")
-            self._record(tool, version, observed)
+            self._record(tool, version, observed, asset)
             return
 
         # 版本相同 → 字节必须相同。不同即"同版本号不同产物"，是最值得警惕的信号。
@@ -404,13 +432,33 @@ class ToolLock:
         new_files = [n for n in observed if n not in locked_files]
         if new_files:
             print(f"  🔒 {tool}: 新增文件 {', '.join(new_files)}，补录到锁文件")
-            self._record(tool, version, observed)
+            self._record(tool, version, observed, asset)
+            return
+
+        # 版本与产物都没变，但锁文件里还没有资产元数据（旧锁文件，或上次是"只校验"跑的）
+        # —— 这次手上有就补录，否则清单里 bin/* 的 url 会一直是空串。
+        if asset and asset != entry.get("asset"):
+            print(f"  🔒 {tool}: 补录资产元数据（{asset['sha256'][:16]}…）")
+            self._record(tool, version, observed, asset)
             return
 
         print(f"  ✓ {tool} {version} 与锁文件一致")
 
-    def _record(self, tool: str, version: str, observed: dict) -> None:
-        self.data["tools"][tool] = {"version": version, "files": observed}
+    def _record(
+        self, tool: str, version: str, observed: dict, asset: dict | None = None
+    ) -> None:
+        entry: dict = {"version": version, "files": observed}
+        keep = asset
+        if keep is None:
+            # 只校验路径拿不到 asset：**仅当版本没变**才沿用锁里已有的。
+            # 版本变了还留着旧资产哈希更糟 —— 清单会写上一个与版本号不匹配的
+            # sha256，运行时下载完必然校验失败。宁可空着退回 API 解析。
+            old = self.data["tools"].get(tool) or {}
+            if old.get("version") == version:
+                keep = old.get("asset")
+        if keep:
+            entry["asset"] = keep
+        self.data["tools"][tool] = entry
         self._dirty = True
 
     def versions(self) -> dict[str, str]:
@@ -431,11 +479,16 @@ class ToolLock:
 
 # ============================================================================
 # 工具下载函数
-#   每个函数返回 (版本号, {落盘文件名: 路径})，由 main() 统一交给锁文件比对
+#   每个函数返回 (版本号, {落盘文件名: 路径}, 资产元数据 | None)，
+#   由 main() 统一交给锁文件比对。资产元数据经 TOOLS.lock.json 流向
+#   scripts/generate_manifest.py，最终成为 update-manifest.json 里 bin/* 的
+#   url + sha256 + size；返回 None 表示"这个工具不进清单，运行时只走 API"。
 # ============================================================================
 
+YT_DLP_ASSET_URL = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe"
 
-def fetch_yt_dlp(dest_dir: Path) -> tuple[str, dict[str, Path]]:
+
+def fetch_yt_dlp(dest_dir: Path) -> tuple[str, dict[str, Path], dict | None]:
     """获取 yt-dlp（上游提供 SHA2-256SUMS，硬校验）"""
     print("\n🔧 获取 yt-dlp...")
     dest_dir.mkdir(parents=True, exist_ok=True)
@@ -444,9 +497,7 @@ def fetch_yt_dlp(dest_dir: Path) -> tuple[str, dict[str, Path]]:
         tmp_path = Path(tmp)
 
         exe_path = tmp_path / "yt-dlp.exe"
-        download_file(
-            "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe", exe_path
-        )
+        download_file(YT_DLP_ASSET_URL, exe_path)
 
         expected = fetch_upstream_sha256(
             "https://github.com/yt-dlp/yt-dlp/releases/latest/download/SHA2-256SUMS",
@@ -455,15 +506,17 @@ def fetch_yt_dlp(dest_dir: Path) -> tuple[str, dict[str, Path]]:
         )
         assert_sha256(exe_path, expected, "yt-dlp SHA2-256SUMS")
 
+        asset = asset_meta(YT_DLP_ASSET_URL, exe_path)
+
         final_path = dest_dir / "yt-dlp.exe"
         shutil.move(str(exe_path), str(final_path))
 
     version = probe_version(dest_dir / "yt-dlp.exe", ["--version"])
     print(f"  ✓ yt-dlp {version} 已安装到 {dest_dir}")
-    return version, {"yt-dlp.exe": dest_dir / "yt-dlp.exe"}
+    return version, {"yt-dlp.exe": dest_dir / "yt-dlp.exe"}, asset
 
 
-def fetch_ffmpeg(dest_dir: Path) -> tuple[str, dict[str, Path]]:
+def fetch_ffmpeg(dest_dir: Path) -> tuple[str, dict[str, Path], dict | None]:
     """获取 ffmpeg (yt-dlp 官方修复版本)
 
     yt-dlp/FFmpeg-Builds 的 ``latest`` release 不发布 .sha256 附件，
@@ -504,28 +557,37 @@ def fetch_ffmpeg(dest_dir: Path) -> tuple[str, dict[str, Path]]:
 
     version = probe_version(dest_dir / "ffmpeg.exe", ["-version"], r"ffmpeg version (\S+)")
     print(f"  ✓ ffmpeg {version} 已安装到 {dest_dir}")
-    return version, {
-        "ffmpeg.exe": dest_dir / "ffmpeg.exe",
-        "ffprobe.exe": dest_dir / "ffprobe.exe",
-    }
+    # 资产元数据故意返回 None：`yt-dlp/FFmpeg-Builds` 用滚动的 `latest` tag，
+    # 同一个 URL 的内容随时被替换，钉不住版本。ffmpeg 因此不进清单，运行时只走 API。
+    return (
+        version,
+        {
+            "ffmpeg.exe": dest_dir / "ffmpeg.exe",
+            "ffprobe.exe": dest_dir / "ffprobe.exe",
+        },
+        None,
+    )
 
 
-def fetch_deno(dest_dir: Path) -> tuple[str, dict[str, Path]]:
+def fetch_deno(dest_dir: Path) -> tuple[str, dict[str, Path], dict | None]:
     """获取 Deno（上游提供 .zip.sha256sum，硬校验）"""
     print("\n🔧 获取 Deno...")
     dest_dir.mkdir(parents=True, exist_ok=True)
 
     base = "https://github.com/denoland/deno/releases/latest/download"
     asset = "deno-x86_64-pc-windows-msvc.zip"
+    asset_url = f"{base}/{asset}"
 
     with tempfile.TemporaryDirectory() as tmp:
         tmp_path = Path(tmp)
         zip_path = tmp_path / "deno.zip"
 
-        download_file(f"{base}/{asset}", zip_path)
+        download_file(asset_url, zip_path)
 
-        expected = fetch_upstream_sha256(f"{base}/{asset}.sha256sum", asset, tmp_path)
+        expected = fetch_upstream_sha256(f"{asset_url}.sha256sum", asset, tmp_path)
         assert_sha256(zip_path, expected, "deno .sha256sum")
+
+        asset_info = asset_meta(asset_url, zip_path)
 
         print("  📦 解压中...")
         with zipfile.ZipFile(zip_path, "r") as z:
@@ -542,10 +604,10 @@ def fetch_deno(dest_dir: Path) -> tuple[str, dict[str, Path]]:
 
     version = probe_version(dest_dir / "deno.exe", ["--version"], r"deno (\S+)")
     print(f"  ✓ Deno {version} 已安装到 {dest_dir}")
-    return version, {"deno.exe": dest_dir / "deno.exe"}
+    return version, {"deno.exe": dest_dir / "deno.exe"}, asset_info
 
 
-def fetch_atomicparsley(dest_dir: Path) -> tuple[str, dict[str, Path]]:
+def fetch_atomicparsley(dest_dir: Path) -> tuple[str, dict[str, Path], dict | None]:
     """获取 AtomicParsley (用于嵌入封面)
 
     上游不发布校验文件，完整性依赖 TOOLS.lock.json。
@@ -561,6 +623,7 @@ def fetch_atomicparsley(dest_dir: Path) -> tuple[str, dict[str, Path]]:
             "https://github.com/wez/atomicparsley/releases/latest/download/AtomicParsleyWindows.zip"
         )
         download_file(url, zip_path)
+        asset_info = asset_meta(url, zip_path)
 
         print("  📦 解压中...")
         with zipfile.ZipFile(zip_path, "r") as z:
@@ -579,10 +642,10 @@ def fetch_atomicparsley(dest_dir: Path) -> tuple[str, dict[str, Path]]:
         dest_dir / "AtomicParsley.exe", ["--version"], r"AtomicParsley version:?\s*(\S+)"
     )
     print(f"  ✓ AtomicParsley {version} 已安装到 {dest_dir}")
-    return version, {"AtomicParsley.exe": dest_dir / "AtomicParsley.exe"}
+    return version, {"AtomicParsley.exe": dest_dir / "AtomicParsley.exe"}, asset_info
 
 
-def fetch_pot_provider(dest_dir: Path) -> tuple[str, dict[str, Path]]:
+def fetch_pot_provider(dest_dir: Path) -> tuple[str, dict[str, Path], dict | None]:
     """获取 POT Provider (bgutil-ytdlp-pot-provider-rs)
 
     上游不发布校验文件，完整性依赖 TOOLS.lock.json。
@@ -596,6 +659,7 @@ def fetch_pot_provider(dest_dir: Path) -> tuple[str, dict[str, Path]]:
 
         url = "https://github.com/jim60105/bgutil-ytdlp-pot-provider-rs/releases/latest/download/bgutil-pot-windows-x86_64.exe"
         download_file(url, exe_path)
+        asset_info = asset_meta(url, exe_path)
 
         final_path = dest_dir / "bgutil-pot-provider.exe"
         shutil.move(str(exe_path), str(final_path))
@@ -604,7 +668,7 @@ def fetch_pot_provider(dest_dir: Path) -> tuple[str, dict[str, Path]]:
         dest_dir / "bgutil-pot-provider.exe", ["--version"], r"bgutil-pot\s+(\S+)"
     )
     print(f"  ✓ POT Provider {version} 已安装到 {dest_dir}")
-    return version, {"bgutil-pot-provider.exe": dest_dir / "bgutil-pot-provider.exe"}
+    return version, {"bgutil-pot-provider.exe": dest_dir / "bgutil-pot-provider.exe"}, asset_info
 
 
 # ============================================================================
@@ -643,8 +707,8 @@ FETCHERS = [
 SENTINELS = [TARGET_DIR / subdir / files[0] for _, subdir, _, files, _ in FETCHERS]
 
 
-def load_tool_versions() -> dict[str, str]:
-    """给 build.py 用：读锁文件里记录的工具版本，写进 BUILD_INFO.json。"""
+def _load_lock_tools() -> dict[str, dict]:
+    """读锁文件的 tools 段，读不出来就当空 —— 调用方都能靠降级路径继续。"""
     if not TOOLS_LOCK.exists():
         return {}
     try:
@@ -654,11 +718,39 @@ def load_tool_versions() -> dict[str, str]:
     tools = data.get("tools", {})
     if not isinstance(tools, dict):
         return {}
-    return {
-        name: entry.get("version", "unknown")
-        for name, entry in tools.items()
-        if isinstance(entry, dict)
-    }
+    return {name: entry for name, entry in tools.items() if isinstance(entry, dict)}
+
+
+def load_tool_versions() -> dict[str, str]:
+    """给 build.py 用：读锁文件里记录的工具版本，写进 BUILD_INFO.json。"""
+    return {name: entry.get("version", "unknown") for name, entry in _load_lock_tools().items()}
+
+
+def load_tool_assets() -> dict[str, dict]:
+    """给 generate_manifest.py 用：{工具: {version, url, sha256, size}}。
+
+    只返回三个字段都齐的条目。缺一个就整条不给 —— 清单里"有 url 没 sha256"比没有
+    更危险（下载不校验），"有 sha256 没 url"则是死路（`install_component()` 拿不到
+    地址）。锁里没有的工具（ffmpeg，或旧锁文件）在清单里保持空串，运行时会按
+    `dependency_manager._overlay_manifest()` 自动退回 API 解析。
+    """
+    out: dict[str, dict] = {}
+    for name, entry in _load_lock_tools().items():
+        asset = entry.get("asset")
+        if not isinstance(asset, dict):
+            continue
+        url = str(asset.get("url") or "").strip()
+        sha256 = str(asset.get("sha256") or "").strip()
+        size = asset.get("size")
+        if not url or not sha256 or not isinstance(size, int) or size <= 0:
+            continue
+        out[name] = {
+            "version": str(entry.get("version", "unknown")),
+            "url": url,
+            "sha256": sha256,
+            "size": size,
+        }
+    return out
 
 
 def main():
@@ -704,15 +796,17 @@ def main():
 
         for tool_name, subdir, fetcher, filenames, probe in FETCHERS:
             dest = TARGET_DIR / subdir
+            asset: dict | None = None
             if download:
-                version, files = fetcher(dest)
+                version, files, asset = fetcher(dest)
             else:
                 # 只校验：不联网，直接对已落盘的文件重算哈希并比对锁文件。
                 # 本地被替换/篡改的工具会在这里暴露。
+                # 资产元数据拿不到（没下载过），交给 reconcile 决定是否沿用锁里已有的。
                 files = {name: dest / name for name in filenames}
                 exe_name, probe_args, pattern = probe
                 version = probe_version(dest / exe_name, probe_args, pattern)
-            lock.reconcile(tool_name, version, files)
+            lock.reconcile(tool_name, version, files, asset)
 
         lock.save()
     except Exception as e:
