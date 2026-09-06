@@ -1,5 +1,46 @@
+import shutil
 import subprocess
 from pathlib import Path
+
+PREFIX = "fluentytdl"
+
+
+def _locale_of(ts_file: Path) -> str:
+    """``fluentytdl_en_US.ts`` -> ``en_US``。"""
+    return ts_file.stem[len(PREFIX) + 1 :] if ts_file.stem.startswith(PREFIX + "_") else ""
+
+
+def _write_language_aliases(locales_dir: Path) -> None:
+    """为每个"只有一个地区变体"的语言额外产出一份 bare-language .qm。
+
+    ``QTranslator.load(QLocale("en_GB"), ...)`` 的回退链是
+    ``en_GB -> en_Latn_GB -> en``，**永远不会**落到 ``en_US``。仓库里只有
+    ``fluentytdl_en_US.qm``，所以 auto 模式下的 en_GB/en_AU/en_CA 用户拿不到任何翻译器，
+    界面 100% 回退成中文源串（ISSUE #88）。补一份 ``fluentytdl_en.qm`` 让 ``en`` 这一级命中。
+
+    只在某语言**唯一**一个 .ts 时才做别名：``zh`` 同时有 zh_CN/zh_TW，
+    bare ``zh`` 指向哪个都是错的，直接跳过 —— 反正源语言就是中文，拿不到翻译器时
+    回退到源串本身就是正确结果。
+    """
+    by_language: dict[str, list[str]] = {}
+    for ts_file in sorted(locales_dir.glob("*.ts")):
+        locale = _locale_of(ts_file)
+        if not locale:
+            continue
+        by_language.setdefault(locale.split("_")[0], []).append(locale)
+
+    for language, locales in sorted(by_language.items()):
+        if language in locales:  # 已经有 bare-language 的 .ts，无需别名
+            continue
+        if len(locales) != 1:
+            print(f"  skip alias '{language}': ambiguous ({', '.join(sorted(locales))})")
+            continue
+        source = locales_dir / f"{PREFIX}_{locales[0]}.qm"
+        if not source.exists():
+            continue
+        alias = locales_dir / f"{PREFIX}_{language}.qm"
+        shutil.copyfile(source, alias)
+        print(f"  alias {alias.name} <- {source.name}")
 
 
 def main():
@@ -10,7 +51,7 @@ def main():
         print("No locales directory found.")
         return
 
-    for ts_file in locales_dir.glob("*.ts"):
+    for ts_file in sorted(locales_dir.glob("*.ts")):
         qm_file = ts_file.with_suffix(".qm")
         print(f"Releasing {qm_file}...")
 
@@ -26,6 +67,8 @@ def main():
                 lrelease_exe = "lrelease"
         cmd = [str(lrelease_exe), str(ts_file), "-qm", str(qm_file)]
         subprocess.run(cmd, check=True)
+
+    _write_language_aliases(locales_dir)
 
     print("i18n release completed.")
 
