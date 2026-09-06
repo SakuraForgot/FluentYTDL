@@ -77,10 +77,15 @@ class ConfigManager(QObject):
         # 频道标签页，以及播放列表逐条深解析；下载路径永不读取
         # （必须拿新鲜签名 URL，否则 403）。
         # 设置页「解析结果保留时间」直接写 parse_cache_ttl_seconds，0 表示不保留。
+        # 默认关闭：缓存键里没有出口 IP 这一维（system/TUN 模式下 proxy 压根不设），
+        # 换节点撞不掉旧条目；cookie 那边弱回退被闸门拒绝时 .meta 也不动。
+        # 机制没研究透之前默认不保留，想要的人自己在设置页开。
         "parse_cache_enabled": True,
-        "parse_cache_ttl_seconds": 1800,
+        "parse_cache_ttl_seconds": 0,
         # 一次性迁移标记：旧版本把保留时间写死成 300 且无 UI 入口，见 _load()。
         "parse_cache_ttl_migrated": True,
+        # 一次性迁移标记：把上一版的默认 1800 降到 0（默认关闭），见 _load()。
+        "parse_cache_ttl_off_migrated": True,
         # 播放列表逐条深解析（entry_detail）的独立容量。它与弹窗结果分桶存放，
         # 调大只会占更多内存，不会挤掉弹窗/列表缓存。
         "parse_cache_entry_max": 64,
@@ -185,6 +190,12 @@ class ConfigManager(QObject):
         "vr_hw_accel_mode": "auto",
         "vr_keep_source": True,
         "vr_max_resolution": 2160,
+        # === 观测层 ===
+        # yt-dlp 原始输出的全程留档。默认关：干净成功的下载不留原文，那是绝大多数
+        # 情形，留下来只会把 trace 目录写满。**关掉也仍会**在 failed / degraded /
+        # recovered 三种异常终态自动留一份（`sinks.dump_raw_for_outcome()`），
+        # 这个开关只决定"正常成功的下载要不要也留"。
+        "log_raw_ytdlp": False,
     }
 
     def __new__(cls) -> ConfigManager:
@@ -265,6 +276,8 @@ class ConfigManager(QObject):
 
             # Migration: parse cache retention default 5 min -> 30 min.
             self._migrate_parse_cache_ttl(data, merged)
+            # Migration: parse cache retention default 30 min -> off.
+            self._migrate_parse_cache_ttl_off(data, merged)
 
             # Normalize tool paths: if a user keeps an old absolute path that no longer
             # exists (common after packaging/moving folders), fall back to auto-detect.
@@ -298,6 +311,32 @@ class ConfigManager(QObject):
             merged["parse_cache_ttl_seconds"] = 1800
         merged["parse_cache_ttl_migrated"] = True
 
+    @staticmethod
+    def _migrate_parse_cache_ttl_off(data: dict[str, Any], merged: dict[str, Any]) -> None:
+        """解析结果保留时间默认关闭：磁盘上的 1800s（半小时）降到 0（不保留）。
+
+        缓存机制本身还没研究透——键里没有出口 IP 这一维（`proxy_mode == "system"`
+        和 TUN 模式下 `ydl_opts["proxy"]` 压根不设），在 V2RayN 里换节点撞不掉旧条目；
+        cookie 提交被校验闸门拒绝（弱回退）时 `.meta` 不动，缓存也不失效。用户看到的
+        就是"换了 Cookie、切了 IP，画质还是上次那样"。默认关掉止损，想要的人自己开。
+
+        **判定读的是 `merged` 而不是 `data`**：`_load()` 里这一步跑在
+        `_migrate_parse_cache_ttl()` 之后，旧的 300 安装刚被那一步抬成 1800，
+        读 `data`（还是 300）会让它卡在 1800 上，恰好是最该被关掉的那批人。
+
+        代价是设置页上线后主动挑过「30 分钟」的用户会被降一次。这个选择和旧默认值在
+        磁盘上无法区分，而本次改动的目的正是"机制不可靠，先静默"，降掉可以接受。
+        标记位保证只跑一次：用户降完再挑回 30 分钟，下次启动不会又被降。
+
+        比较刻意用 `== 1800` 而不是 `int(...)`——理由同 `_migrate_parse_cache_ttl`：
+        `_load()` 整段外面套着 except，这里抛一次会把用户的整份配置回退成默认值。
+        """
+        if data.get("parse_cache_ttl_off_migrated"):
+            return
+        if merged.get("parse_cache_ttl_seconds") == 1800:
+            merged["parse_cache_ttl_seconds"] = 0
+        merged["parse_cache_ttl_off_migrated"] = True
+
     def save(self) -> None:
         try:
             self.config_file.parent.mkdir(parents=True, exist_ok=True)
@@ -313,28 +352,56 @@ class ConfigManager(QObject):
         return self.config.get(key, default)
 
     def set(self, key: str, value: Any) -> None:
+        # 旧值必须在覆盖前取 —— `kind=config scope=change` 记的是 old → new。
+        old = self.config.get(key)
         self.config[key] = value
         self.save()
+        try:
+            # 函数级 import：`observability` 不许依赖 `core`（`config_snapshot` 反过来
+            # 只接一个取值 callable 就是为了这个），模块级 import 会成环。
+            #
+            # 整段裹 try/except 而不是只信任 `emit_config_change()` 自己的兜底：
+            # import 语句本身在它的 try 之外，而硬规则 5 要求记录失败绝不能影响业务 ——
+            # 保存设置显然是业务。
+            #
+            # `_depth=3` 让日志里的 `{name}:{function}:{line}` 指向**改配置的那一行**
+            # （设置页某个控件的槽函数），而不是恒定的 `config_manager.py:set` ——
+            # 排查"我的设置怎么自己变了"时要的正是"谁改的"。
+            from ..observability.config_snapshot import emit_config_change
+
+            emit_config_change(key, old, value, _depth=3)
+        except Exception:
+            pass
         self.configChanged.emit(key, value)
 
     def get_subtitle_config(self) -> SubtitleConfig:
-        """获取字幕配置对象"""
+        """获取字幕配置对象。
+
+        默认值一律回落到 `DEFAULT_CONFIG`，不再在这里重写一遍字面量 ——
+        `_load()` 走的是 `{**DEFAULT_CONFIG, **data}`，所以这些键必然存在，
+        原先那份副本（`"vtt"` / `2`）纯属第二处真相来源。
+
+        注意：`SubtitleConfig` 的 dataclass 默认值（`srt` / `10`）与 `DEFAULT_CONFIG`
+        （`vtt` / `2`）**并不一致**。以 `DEFAULT_CONFIG` 为准，dataclass 默认值只在
+        直接 `SubtitleConfig()` 时生效（测试、临时覆盖）。
+        """
         from ..models.subtitle_config import SubtitleTypePreference
 
+        def _get(key: str) -> Any:
+            return self.config.get(key, self.DEFAULT_CONFIG[key])
+
         return SubtitleConfig(
-            enabled=self.config.get("subtitle_enabled", False),
-            type_preference=SubtitleTypePreference(
-                self.config.get("subtitle_type_preference", "manual_and_asr")
-            ),
-            default_languages=self.config.get("subtitle_default_languages", ["zh-Hans", "en"]),
-            enable_auto_captions=self.config.get("subtitle_enable_auto_captions", True),
-            embed_type=self.config.get("subtitle_embed_type", "soft"),
-            embed_mode=self.config.get("subtitle_embed_mode", "always"),
-            output_format=self.config.get("subtitle_output_format", "vtt"),
-            quality_check=self.config.get("subtitle_quality_check", True),
-            remove_ads=self.config.get("subtitle_remove_ads", False),
-            fallback_to_english=self.config.get("subtitle_fallback_to_english", True),
-            max_languages=self.config.get("subtitle_max_languages", 2),
+            enabled=_get("subtitle_enabled"),
+            type_preference=SubtitleTypePreference(_get("subtitle_type_preference")),
+            default_languages=_get("subtitle_default_languages"),
+            enable_auto_captions=_get("subtitle_enable_auto_captions"),
+            embed_type=_get("subtitle_embed_type"),
+            embed_mode=_get("subtitle_embed_mode"),
+            output_format=_get("subtitle_output_format"),
+            quality_check=_get("subtitle_quality_check"),
+            remove_ads=_get("subtitle_remove_ads"),
+            fallback_to_english=_get("subtitle_fallback_to_english"),
+            max_languages=_get("subtitle_max_languages"),
         )
 
     def set_subtitle_config(self, config: SubtitleConfig) -> None:

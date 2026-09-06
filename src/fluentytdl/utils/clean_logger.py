@@ -83,13 +83,19 @@ class CleanLogger:
         section_start: float = 0.0,
         section_stream_layout: str = "",
         section_estimated_bytes: int = 0,
+        *,
+        trace: Any = None,
     ):
         """
         :param callback: 向外发射的清理后信号方法 (状态码, float进度, 友好状态文案)
         :param playlist_tracker: 可选的 PlaylistProgressTracker 实例
+        :param trace: 可选的 `TaskTrace`，仅用于把多流阶段切换落成 `kind=stage`。
+            为什么传对象而不是 import observability：`utils/` 是 Foundation 层，
+            反向 import 上层会成环；trace 自带 `emit()` 出口，方向天然是对的。
         """
         self.callback = callback
         self.playlist_tracker = playlist_tracker
+        self.trace = trace
         self._current_state = "queued"
         self._current_percent = 0.0
         self._current_msg = "等待下载..."
@@ -123,6 +129,27 @@ class CleanLogger:
         """人工强制刷新指定状态"""
         self._emit(state, percent, msg)
 
+    def _emit_phase_stage(self, phase: tuple) -> None:
+        """把一次多流阶段切换（视频流 → 音频流 / 单流启动）落成一条 `kind=stage`。
+
+        为什么单独记这个：进度不进事件层（那会把 JSONL 灌成进度数据库），但
+        "音轨阶段到底有没有开始过"是排查"多音轨视频只下到视频没有声音"的头号问题
+        —— `detect_phase()` 返回 `switched=True` 恰好就是这个语义变化点，且是全项目
+        唯一看得见 vcodec/acodec 切换的地方。
+
+        best-effort：没有 trace（测试、独立调用）或 emit 失败都不该影响下载（硬规则 5）。
+        """
+        trace = getattr(self, "trace", None)
+        if trace is None:
+            return
+        try:
+            phase_name = phase[0] if phase else "single"
+            # `stage="download"` 固定：这是下载流水线内部的子阶段切换，不是流水线换段。
+            # 用 `phase=` 字段区分 video/audio/single，`stage` 维持 grep 友好的稳定值。
+            trace.emit("stage", stage="download", _depth=3, phase=phase_name)
+        except Exception:
+            pass
+
     def handle_status(self, raw_status_msg: str) -> None:
         """处理一般性的 status 消息 (通常来自 FFmpeg 等后处理步骤、或者字幕转换)"""
         if self._current_state in ("completed", "error", "paused", "cancelled"):
@@ -131,6 +158,22 @@ class CleanLogger:
         msg = raw_status_msg.strip()
 
         if "Deleting original file" in msg:
+            return
+
+        if msg.startswith("⚠️"):
+            # `executor._execute_native` 的 warning 分支唯一的出口。翻译链认不出它，
+            # 结尾的 `if processed_msg:` 会静默丢掉 —— 而去掉 `--no-warnings` 之后，
+            # 这些行恰恰是"任务成功但字幕为空"的唯一线索。
+            # 沿用当前状态与进度：一条警告不代表阶段发生了变化，更不代表失败。
+            self._emit(self._current_state, self._current_percent, msg)
+            return
+
+        if "There are no subtitles for the requested languages" in msg:
+            # 这句是 `[info]` 级 —— `--no-warnings` 管不着它，它是死在下面那个
+            # `[info]` 提前 return 上的（"📡 正在获取流媒体元数据"）。
+            # 而它恰恰是"字幕开着却一个文件都没有"最直接的一句解释。
+            # 同样沿用当前状态：字幕是 best-effort，任务照旧成功。
+            self._emit(self._current_state, self._current_percent, "⚠️ 请求的语言没有可用字幕")
             return
 
         if "Retrying" in msg or "retrying" in msg:
@@ -153,9 +196,6 @@ class CleanLogger:
         # 拦截前置准备动作 (Parsing Phase)
         if "] Extracting URL" in msg:
             self._emit("parsing", 0, "🔍 正在解析目标地址...")
-            return
-        elif msg.startswith("[info]"):
-            self._emit("parsing", 0, "📡 正在获取流媒体元数据...")
             return
         elif msg.startswith("[hlsnative]"):
             self._emit("parsing", 0, "🧩 正在组装 m3u8 碎片地图...")
@@ -225,6 +265,13 @@ class CleanLogger:
                 self._emit("processing", self.playlist_tracker.overall_percent, msg)
             else:
                 self._emit("processing", self._current_percent, processed_msg)
+        elif msg.startswith("[info]") and self._current_state in ("queued", "parsing"):
+            # 翻译链认不出的 `[info]`。这条 return 以前排在翻译链**前面**，于是
+            # `[info] Writing video subtitles to:` 永远走不到上面那条字幕翻译 ——
+            # 那行翻译一直是死代码。现在只在真的还没开始下载时才当作"取元数据"：
+            # 下载中途的 `[info] Downloading 1 format(s)` 若也走这条，状态会从
+            # downloading 倒退回 parsing。
+            self._emit("parsing", 0, "📡 正在获取流媒体元数据...")
 
     def handle_progress(self, progress_data: dict[str, Any]) -> None:
         """处理 yt-dlp 的原生 progress 回调 (来自 dict)"""
@@ -387,6 +434,7 @@ class CleanLogger:
                 phase, switched = self._stream_phase.detect_phase(info)
                 if switched:
                     self._phase_just_switched = True
+                    self._emit_phase_stage(phase)
                 pct = self._stream_phase.map_progress(phase, pct)
                 pct = round(pct, 1)
 

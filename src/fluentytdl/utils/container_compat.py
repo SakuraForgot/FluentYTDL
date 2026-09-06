@@ -3,6 +3,16 @@
 
 所有容器格式决策和字幕兼容性修正必须通过本模块执行。
 禁止在其他文件中复制此逻辑。
+
+## 观测
+
+两个 `ensure_*` 函数是**原地改写**：它们会把用户/打分引擎定好的容器悄悄换掉，而换完
+之后从命令行上再也看不出原来是什么。"我明明选了 MP4，出来的却是 MKV" 的答案只在这里，
+所以它们各收一个可选 `trace`，**只在真的改了值时**落一条 `kind=decision subsystem=container`。
+
+`trace` 传的是对象而不是 `import observability`：`utils/` 是 Foundation 层，反向 import
+上层会成环；`trace` 自带 `emit()` 出口，方向天然是对的（同 `utils/clean_logger.py`）。
+不传 trace 就完全不记 —— 观测永远是 best-effort，不许影响改写本身（硬规则 5）。
 """
 
 from __future__ import annotations
@@ -11,6 +21,34 @@ from typing import Any
 
 # MP4 和 MKV 都支持字幕嵌入，只有 WebM 不支持 SRT/ASS
 _SUBTITLE_COMPATIBLE_CONTAINERS = {"mp4", "mkv", "mov", "m4v"}
+
+
+def _report_rewrite(trace: Any, *, before: str, after: str, reason: str, **fields: Any) -> None:
+    """把一次容器改写落成 `kind=decision subsystem=container`。
+
+    **只在值真的变了时候调**（调用方负责）—— "检查过、保持原样"不是决策，记下来只是噪音，
+    而且会让 `count(kind=decision subsystem=container)` 不再等于"容器被系统改过几次"。
+
+    `level="DEBUG"`：进文件与 JSONL，不刷控制台。改写本身是**正确行为**（不改会产出
+    播不了的文件），不是警告；它只是不可见，而不可见才是要修的那个毛病。
+
+    `_depth=4` 数的是 `emit_event ← trace.emit ← 本函数 ← ensure_* ← 调用点`：日志里的
+    `{name}:{function}:{line}` 要指向拼 opts 的那个调用点（四处之一），而不是本模块 ——
+    "哪个 ensure_ 改的" 已经由 `reason` 说清了，"哪条装配路径" 才是查不出来的那半。
+    """
+    if trace is None:
+        return
+    trace.emit(
+        "decision",
+        level="DEBUG",
+        stage="select",
+        _depth=4,
+        subsystem="container",
+        reason=reason,
+        container_before=before or None,
+        container=after,
+        **fields,
+    )
 
 
 def choose_lossless_merge_container(video_ext: str | None, audio_ext: str | None) -> str | None:
@@ -32,7 +70,7 @@ def choose_lossless_merge_container(video_ext: str | None, audio_ext: str | None
     return "mkv"
 
 
-def ensure_subtitle_compatible_container(opts: dict[str, Any]) -> None:
+def ensure_subtitle_compatible_container(opts: dict[str, Any], *, trace: Any = None) -> None:
     """确保容器格式兼容字幕嵌入（原地修改 opts）。
 
     仅当 embedsubtitles=True 时生效：
@@ -41,6 +79,9 @@ def ensure_subtitle_compatible_container(opts: dict[str, Any]) -> None:
     - 未指定容器 → mkv
     - mp4 单字幕 → 保持（mov_text 单轨可用）
     - mkv/mov → 保持
+
+    Args:
+        trace: 可选的 `FlowTrace` / `TaskTrace`，只用于观测（见模块 docstring）。
     """
     if not opts.get("embedsubtitles"):
         return
@@ -50,14 +91,25 @@ def ensure_subtitle_compatible_container(opts: dict[str, Any]) -> None:
     sub_langs = opts.get("subtitleslangs") or []
     if isinstance(sub_langs, list) and len(sub_langs) > 1 and (fmt == "mp4" or not fmt):
         opts["merge_output_format"] = "mkv"
+        # 语言条数是这条分支的全部理由，必须一起记：`bcp47.resolve_requested(per_pref_limit=1)`
+        # 的默认值就是为了不在这里凭空触发升级，哪天它松了，这个字段是唯一的现场证据。
+        _report_rewrite(
+            trace,
+            before=fmt,
+            after="mkv",
+            reason="subtitle_multi_lang",
+            sub_langs_n=len(sub_langs),
+        )
         return
 
     if fmt in _SUBTITLE_COMPATIBLE_CONTAINERS:
         return
     elif fmt == "webm":
         opts["merge_output_format"] = "mkv"
+        _report_rewrite(trace, before=fmt, after="mkv", reason="subtitle_webm_incompatible")
     elif not fmt:
         opts["merge_output_format"] = "mkv"
+        _report_rewrite(trace, before=fmt, after="mkv", reason="subtitle_container_unset")
 
 
 def check_container_codec_compat(
@@ -115,9 +167,13 @@ def check_subtitle_container_compat(
 
 
 def ensure_audio_multistream_compatible_container(
-    opts: dict[str, Any], audio_track_count: int
+    opts: dict[str, Any], audio_track_count: int, *, trace: Any = None
 ) -> None:
-    """确保容器格式支持多音轨（原地修改 opts）。"""
+    """确保容器格式支持多音轨（原地修改 opts）。
+
+    Args:
+        trace: 可选的 `FlowTrace` / `TaskTrace`，只用于观测（见模块 docstring）。
+    """
     if audio_track_count <= 1 and not opts.get("audio_multistreams"):
         return
 
@@ -127,6 +183,13 @@ def ensure_audio_multistream_compatible_container(
     # 为了保护用户体验，如果 UI 没带特别强烈的指令而发现冲突，或者没指定格式，默认升 MKV
     if fmt == "mp4" or fmt == "webm" or not fmt:
         opts["merge_output_format"] = "mkv"
+        _report_rewrite(
+            trace,
+            before=fmt,
+            after="mkv",
+            reason="audio_multistream",
+            audio_tracks=audio_track_count,
+        )
 
 
 def check_audio_multistream_container_compat(container: str, track_count: int) -> str | None:

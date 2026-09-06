@@ -5,6 +5,7 @@ import os
 import shutil
 import subprocess
 import time
+from dataclasses import dataclass
 from pathlib import Path
 from threading import Event, Lock
 from typing import Any
@@ -20,6 +21,7 @@ from fluentytdl.utils.paths import (
 
 from ..core.config_manager import config_manager
 from ..models.errors import YtDlpExecutionError
+from ..observability import current_flow, emit_event, emit_success_signals, mask_secrets
 
 
 class YtDlpCancelled(Exception):
@@ -437,7 +439,9 @@ def prepare_yt_dlp_env(extra_paths: list[str] | None = None) -> dict[str, str]:
     return env
 
 
-def _inject_language_into_format(fmt: str, format_sort: list | str | None) -> str:
+def _inject_language_into_format(
+    fmt: str, format_sort: list | str | None, *, multistreams: bool = False
+) -> str:
     """Prepend language-filtered format alternatives to the format string.
 
     yt-dlp's ``-S lang:xx`` cannot override the built-in ``language_preference=10``
@@ -454,26 +458,85 @@ def _inject_language_into_format(fmt: str, format_sort: list | str | None) -> st
                   "/bv*[height<=1080]+ba[ext=m4a][language=zh-hans]/b[height<=1080][language=zh-hans]"
                   "/bv*[height<=1080]+ba[language=zh-hans]"
                   "/bv*[height<=1080]+ba[ext=m4a]/b[height<=1080]/bv*[height<=1080]+ba")
-    """
-    if not fmt or not format_sort:
-        return fmt
 
-    # Extract language codes from format_sort entries (e.g. "lang:ja" -> "ja")
+    判定本身在 `_plan_language_injection()` 里（纯函数、五条路径全收口），这里只负责
+    emit 一条 `kind=decision subsystem=audio`：**"我设了日语音轨偏好，为什么下到的还是
+    英语"只有在这里才答得上来** —— `-S lang:ja` 进了命令行不代表它生效（§4.9 的规则 4），
+    真正决定成败的是 `[language=ja]` 到底有没有进 `-f`。四种"没注入"的成因里，
+    `explicit_multistream_ids` 是正常的（音轨已按 ID 点选），其余三种都值得看一眼。
+
+    Args:
+        multistreams: `audio_multistreams` 是否开启。开着就**故意不注入** ——
+            多音轨模式下格式串是显式的 `v+a1+a2` ID，插 `[language=xx]` 会把它改坏。
+    """
+    plan = _plan_language_injection(fmt, format_sort, multistreams=multistreams)
+    emit_event(
+        "decision",
+        trace=current_flow(),
+        # 每次下载一条，播放列表逐个视频一条 —— 只进文件与 JSONL，不刷控制台。
+        level="DEBUG",
+        stage="select",
+        subsystem="audio",
+        injected=plan.injected,
+        reason=plan.reason,
+        langs=plan.langs or None,
+    )
+    return plan.fmt
+
+
+@dataclass(frozen=True)
+class _LangInjectionPlan:
+    """`_plan_language_injection()` 的判定结果。
+
+    `fmt` 是最终格式串，其余三个字段纯粹为了日志 —— 四种 `injected=False` 的成因在
+    命令行上长得一模一样（都是"没有 `[language=xx]`"），但一个是正常、三个是问题。
+    """
+
+    fmt: str
+    langs: list[str]
+    injected: bool
+    reason: str
+
+
+def _plan_language_injection(
+    fmt: str, format_sort: list | str | None, *, multistreams: bool
+) -> _LangInjectionPlan:
+    """纯函数：算出注入后的格式串，以及注入了 / 没注入以及为什么。
+
+    五条路径全部收口在这里（包括 `multistreams` 那条"故意不注入"，它原先是调用点上的
+    一个 `if` + 注释），所以 `_inject_language_into_format()` 只需要一个 emit 点，
+    也就不存在"第六条路径忘了记日志"。
+    """
+    if not fmt:
+        return _LangInjectionPlan(fmt, [], False, "no_format_string")
+
+    # 从 format_sort 里取语言码（`"lang:ja"` → `"ja"`）。
+    # `orig` 不算具体请求（"跟着视频原始语言走"），与
+    # `observability.artifacts.audio_langs_from_opts()` 的判定保持一致 ——
+    # 那边是 `expect` 事件的 `audio_langs`，两处对不上就会自相矛盾。
     langs: list[str] = []
-    items = format_sort if isinstance(format_sort, list) else [format_sort]
+    items = format_sort if isinstance(format_sort, list) else ([format_sort] if format_sort else [])
     for item in items:
         s = str(item).strip().lower()
         if s.startswith("lang:"):
             code = s[5:].strip()
-            if code and code != "orig":
+            # 去重：重复的 lang 只会生成一份重复的 `[language=xx]` 分支组，纯粹让
+            # 格式串变长。生产端（`youtube_service`）已经去过重，这里是兜底。
+            if code and code != "orig" and code not in langs:
                 langs.append(code)
 
     if not langs:
-        return fmt
+        # 压根没请求过具体语言 —— 不是"注入失败"，没什么可注入的
+        return _LangInjectionPlan(fmt, [], False, "no_language_request")
+
+    if multistreams:
+        # 显式多音轨 ID（`v+a1+a2`）：音轨已经按 ID 点选完了，语言偏好是多余的，
+        # 插 `[language=xx]` 只会把那串 ID 改坏
+        return _LangInjectionPlan(fmt, langs, False, "explicit_multistream_ids")
 
     alternatives = [a.strip() for a in fmt.split("/") if a.strip()]
     if not alternatives:
-        return fmt
+        return _LangInjectionPlan(fmt, langs, False, "unparsable_format_string")
 
     lang_groups: list[str] = []
     for lang in langs:
@@ -490,10 +553,66 @@ def _inject_language_into_format(fmt: str, format_sort: list | str | None) -> st
             lang_groups.append("/".join(lang_alts))
 
     if not lang_groups:
-        return fmt
+        return _LangInjectionPlan(fmt, langs, False, "unparsable_format_string")
 
     # Prepend language-filtered alternatives, with original format as fallback
-    return "/".join(lang_groups) + "/" + fmt
+    return _LangInjectionPlan("/".join(lang_groups) + "/" + fmt, langs, True, "injected")
+
+
+def build_subtitle_args(ydl_opts: dict[str, Any], *, allow_embed: bool = True) -> list[str]:
+    """把字幕相关的 opts 翻译成 CLI 参数。
+
+    `ydl_opts_to_cli_args()` 和 `workers.py::_run_lightweight_extract()` 共用这一份 ——
+    后者原本自己抄了一遍（还用的是 `--write-subs` 复数别名），于是这次修复给
+    `--sub-langs` 加的东西只在完整下载路径上生效，纯字幕模式还在走老逻辑。
+    字幕参数是本次修复的核心，两份实现意味着 bug 只修一半。
+
+    Args:
+        allow_embed: `--embed-subs` / `--keep-subs` 是否可发。纯字幕模式带
+            `--skip-download`，压根没有视频文件可嵌，那两个参数在那里没有意义。
+    """
+    args: list[str] = []
+
+    # 写入字幕
+    if ydl_opts.get("writesubtitles"):
+        args += ["--write-sub"]
+    elif ydl_opts.get("writesubtitles") is False:
+        # 显式禁用：覆盖外部 yt-dlp 配置中可能存在的 --write-sub
+        args += ["--no-write-sub"]
+
+    # 写入自动字幕
+    if ydl_opts.get("writeautomaticsub"):
+        args += ["--write-auto-sub"]
+    elif ydl_opts.get("writeautomaticsub") is False:
+        # 显式禁用：覆盖外部 yt-dlp 配置中可能存在的 --write-auto-sub
+        args += ["--no-write-auto-sub"]
+
+    # 字幕语言。这里的每一项都必须是**真实字幕键**或锚定正则，不能是用户偏好 ——
+    # 裸 `en` 匹配不到 `en-GB`，解析在 `utils/bcp47.py` 里做完。
+    subtitleslangs = ydl_opts.get("subtitleslangs")
+    if isinstance(subtitleslangs, (list, tuple)) and subtitleslangs:
+        args += ["--sub-langs", ",".join(str(lang) for lang in subtitleslangs)]
+    elif isinstance(subtitleslangs, str) and subtitleslangs:
+        args += ["--sub-langs", subtitleslangs]
+
+    if allow_embed:
+        # 嵌入字幕
+        if ydl_opts.get("embedsubtitles"):
+            args += ["--embed-subs"]
+
+        # 保留外置字幕文件
+        # `--embed-subs` 嵌入完会顺手删掉外置字幕文件，字幕后处理因此永远校验不到东西
+        # （旧版那句"未找到字幕文件"有一半来自这里）。置位方在
+        # `download/features.py::SubtitleFeature.on_download_start`，校验完由后处理清理。
+        if ydl_opts.get("keepsubtitles"):
+            args += ["--keep-subs"]
+
+    # 字幕格式转换 (显式指定的情况下)
+    convert_subs = ydl_opts.get("convertsubtitles")
+    if isinstance(convert_subs, str) and convert_subs:
+        args += ["--convert-subs", convert_subs]
+
+    return args
 
 
 def ydl_opts_to_cli_args(ydl_opts: dict[str, Any]) -> list[str]:
@@ -577,7 +696,7 @@ def ydl_opts_to_cli_args(ydl_opts: dict[str, Any]) -> list[str]:
         # {"youtube": {"player_client": ["android,ios"], "player_skip": ["js,configs,hls"]}}
         from loguru import logger
 
-        logger.debug("[CLI] extractor_args 输入: {}", extractor_args)
+        logger.debug("[CLI] extractor_args 键: {}", sorted(extractor_args.keys()))
         for ie_key, ie_args in extractor_args.items():
             if not ie_key:
                 continue
@@ -598,12 +717,15 @@ def ydl_opts_to_cli_args(ydl_opts: dict[str, Any]) -> list[str]:
                 if not val:
                     continue
                 parts.append(f"{k}={val}")
-                logger.debug("[CLI] ie_key={}, k={}, v={}, val={}", ie_key, k, v, val)
-            logger.debug("[CLI] ie_key={}, parts={}", ie_key, parts)
             if parts:
                 # See yt-dlp CLI: --extractor-args IE_KEY:ARGS, where ARGS is semicolon-separated.
                 extractor_arg = f"{ie_key}:{';'.join(parts)}"
-                logger.debug("[CLI] 添加参数: --extractor-args {}", extractor_arg)
+                # 只落**脱敏后**的一行。这里以前有四条 DEBUG（输入 dict、逐 key 的
+                # `v`/`val`、`parts`、最终值），每一条都把 `po_token=<用户的完整 Token>`
+                # 原样写进日志 —— 而文件 sink 是 DEBUG 级，那是真的落盘了。
+                # `log_pot_in_argv` 的注释早就写明"只记 base_url，绝不记 Token"，
+                # 这条路却整个绕过了它。四条内容本来就互相重复，留一条脱敏的信息量不减。
+                logger.debug("[CLI] 添加参数: --extractor-args {}", mask_secrets(extractor_arg))
                 args += ["--extractor-args", extractor_arg]
 
     outtmpl = ydl_opts.get("outtmpl")
@@ -624,12 +746,14 @@ def ydl_opts_to_cli_args(ydl_opts: dict[str, Any]) -> list[str]:
 
     fmt = ydl_opts.get("format")
     if isinstance(fmt, str) and fmt:
-        # 当明确使用多音轨直接指定 ID（如 v+a1+a2）时，绝对不能注入 [language=xx]/ 分支语法
-        if not ydl_opts.get("audio_multistreams"):
-            # Inject [language=xx] filters into format string for multi-language audio.
-            # -S lang:xx alone cannot override language_preference=10 on original tracks.
-            format_sort_val = ydl_opts.get("format_sort")
-            fmt = _inject_language_into_format(fmt, format_sort_val)
+        # `[language=xx]` 注入。`audio_multistreams`（显式 `v+a1+a2` ID）时故意不注入 ——
+        # 这个"不注入"的决定连同其余四条路径一起收口在 `_plan_language_injection()`，
+        # 所以它现在也会留下日志，而不是在这里被一个 `if` 悄悄跳过。
+        fmt = _inject_language_into_format(
+            fmt,
+            ydl_opts.get("format_sort"),
+            multistreams=bool(ydl_opts.get("audio_multistreams")),
+        )
         args += ["-f", fmt]
 
     # 格式排序（音轨语言偏好等）
@@ -732,35 +856,7 @@ def ydl_opts_to_cli_args(ydl_opts: dict[str, Any]) -> list[str]:
 
     # ========== 字幕相关参数 ==========
 
-    # 写入字幕
-    if ydl_opts.get("writesubtitles"):
-        args += ["--write-sub"]
-    elif ydl_opts.get("writesubtitles") is False:
-        # 显式禁用：覆盖外部 yt-dlp 配置中可能存在的 --write-sub
-        args += ["--no-write-sub"]
-
-    # 写入自动字幕
-    if ydl_opts.get("writeautomaticsub"):
-        args += ["--write-auto-sub"]
-    elif ydl_opts.get("writeautomaticsub") is False:
-        # 显式禁用：覆盖外部 yt-dlp 配置中可能存在的 --write-auto-sub
-        args += ["--no-write-auto-sub"]
-
-    # 字幕语言
-    subtitleslangs = ydl_opts.get("subtitleslangs")
-    if isinstance(subtitleslangs, list) and subtitleslangs:
-        args += ["--sub-langs", ",".join(subtitleslangs)]
-    elif isinstance(subtitleslangs, str) and subtitleslangs:
-        args += ["--sub-langs", subtitleslangs]
-
-    # 嵌入字幕
-    if ydl_opts.get("embedsubtitles"):
-        args += ["--embed-subs"]
-
-    # 字幕格式转换 (显式指定的情况下)
-    convert_subs = ydl_opts.get("convertsubtitles")
-    if isinstance(convert_subs, str) and convert_subs:
-        args += ["--convert-subs", convert_subs]
+    args += build_subtitle_args(ydl_opts)
 
     # ========== 片段下载参数 ==========
 
@@ -940,6 +1036,22 @@ def run_dump_single_json(
 
     _proc_ms = (time.perf_counter() - _t_proc) * 1000
     log_pot_from_output(out, stage="Parse")
+
+    # rc == 0 —— 解析成功了，但输出里可能躺着 nsig 降级 / PO Token 被拒 /
+    # "请求的语言没有字幕" 这类征兆。以前这段只有 POT 行被捞走，其余全丢，于是
+    # "解析成功但结果不对"在日志里没有任何痕迹。
+    #
+    # 落 `signal` 而**不是** `diagnosis`：`diagnose()` 是失败边界的主因仲裁，
+    # 在 rc=0 上调它会让 `count(kind=diagnosis)` 不再等于"真正发生了错误"（硬规则 2）。
+    #
+    # trace 取本线程的环境 flow：解析链路要穿过 `youtube_service` 十几个方法才到这里，
+    # 为一条日志给整个服务层加贯穿参数不值得（见 `observability/trace.py` 的说明）。
+    emit_success_signals(
+        out,
+        trace=current_flow(),
+        stage="parse",
+        operation="dump_single_json",
+    )
 
     # yt-dlp may print other lines; pick the last parsable JSON line.
     _t_json = time.perf_counter()

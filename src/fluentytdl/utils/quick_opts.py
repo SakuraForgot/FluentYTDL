@@ -66,8 +66,28 @@ def quick_params_to_opts(params: QuickDownloadParams) -> dict[str, Any]:
 
     # === 字幕 ===
     if params.subtitle_enabled:
+        # 局部 import：`processing` 在 `utils` 之上（同文件 `:84` 取 `config_manager`
+        # 已是同样的处理）。把偏好→真实字幕键的换算集中在 subtitle_service 一处，
+        # 比在这里复制一份私有键的形状更重要。
+        from ..models.subtitle_config import SubtitleConfig, SubtitleTypePreference
+        from ..processing.subtitle_service import declare_subtitle_intent
+
         opts["writesubtitles"] = True
-        opts["subtitleslangs"] = params.subtitle_languages
+        # 快速模式 opts 自包含，所以上下文用**默认** SubtitleConfig，只把面板上真有的
+        # 那一项映射进去：勾了"自动字幕"就连自动翻译一起收（`ALL`）—— YouTube 上不少
+        # 视频的中文只有自动翻译版本；没勾就是明确的"只要人工字幕"。
+        sub_config = SubtitleConfig(
+            enabled=True,
+            enable_auto_captions=params.subtitle_auto_captions,
+            type_preference=(
+                SubtitleTypePreference.ALL
+                if params.subtitle_auto_captions
+                else SubtitleTypePreference.MANUAL_ONLY
+            ),
+        )
+        # 直写 `subtitleslangs` 会把 `zh-Hans` / `en` 这样的偏好送进 `--sub-langs`，
+        # 而那里的每一项是锚定正则，匹配不到真实键 `en-GB`。
+        opts.update(declare_subtitle_intent(params.subtitle_languages, sub_config))
         if params.subtitle_auto_captions:
             opts["writeautomaticsub"] = True
         if params.subtitle_embed:

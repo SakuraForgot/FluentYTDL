@@ -1,3 +1,4 @@
+import json
 import os
 import time
 from typing import TYPE_CHECKING
@@ -10,7 +11,10 @@ if TYPE_CHECKING:
 
 from ..download.download_manager import download_manager
 from ..download.workers import DownloadWorker
+from ..observability import FlowTrace, new_flow
 from ..storage.task_db import task_db
+from ..utils.aux_files import aux_files as _aux_files
+from ..utils.quality_presets import current_preset_height, downgraded_opts, next_lower_height
 from .config_manager import config_manager
 
 
@@ -85,11 +89,21 @@ class AppController(QObject):
         self._delete_workers: list[FileDeleteWorker] = []
         self._quick_workers: list[QThread] = []
 
-    def handle_add_tasks(self, tasks: list[tuple[str, str, dict, str]]) -> list[DownloadWorker]:
+    def handle_add_tasks(
+        self,
+        tasks: list[tuple[str, str, dict, str]],
+        *,
+        flow: FlowTrace | None = None,
+    ) -> list[DownloadWorker]:
         """
         Process the payload from the DownloadConfigWindow and inject it into the manager and DB.
         Returns the created workers so the UI model can bind to them.
         tasks payload: [(title, url, opts, thumb), ...]
+
+        `flow` 是发起解析的那个对话框的操作链标识。传进来，解析段（`flow=k72f task=-`）
+        和这里创建的每个 task 才连成一条链；不传则每个 worker 自铸一条孤立的链，
+        UI 时间线上就看不到"这个任务是从哪次解析来的"。播放列表一次产出几十个 task，
+        它们**共享同一个 flow** —— 那正是 flow 这一级存在的理由。
         """
         created_workers = []
         default_dir = config_manager.get("download_dir")
@@ -155,6 +169,7 @@ class AppController(QObject):
                 t_url,
                 t_opts,
                 cached_info={"title": t_title, "thumbnail": str(t_thumb) if t_thumb else ""},
+                flow=flow,
             )
             created_workers.append((worker, t_title, t_thumb))
 
@@ -175,11 +190,14 @@ class AppController(QObject):
         """
         from .quick_add_worker import QuickAddWorker
 
-        worker = QuickAddWorker(urls, params, max_playlist_items=500, controller=self)
+        # 快速下载没有配置窗口，所以 flow 由本层铸造：一次「快速下载」点击 = 一条链，
+        # 无论它展开成 1 个还是 500 个 task。
+        flow = new_flow(stage="parse")
+        worker = QuickAddWorker(urls, params, max_playlist_items=500, controller=self, flow=flow)
 
         def on_finished_tasks(tasks: list):
             # 将 tasks 交给 handle_add_tasks 处理并启动
-            created = self.handle_add_tasks(tasks)
+            created = self.handle_add_tasks(tasks, flow=flow)
             if "finished" in callbacks:
                 callbacks["finished"](created)
             if worker in self._quick_workers:
@@ -268,14 +286,8 @@ class AppController(QObject):
         # 收集最终上岸的文件
         if final_path and os.path.exists(str(final_path)):
             paths_to_delete.append(str(final_path))
-
             # 同时顺便删除同名的附属文件(字幕,封面等)
-            base_name, _ = os.path.splitext(str(final_path))
-            aux_exts = [".jpg", ".jpeg", ".webp", ".png", ".vtt", ".srt", ".ass", ".lrc"]
-            for ext in aux_exts:
-                aux_file = base_name + ext
-                if os.path.exists(aux_file):
-                    paths_to_delete.append(aux_file)
+            paths_to_delete.extend(_aux_files(str(final_path)))
 
         # 针对播放列表多文件兜底
         if getattr(worker, "is_single_playlist", False) and getattr(worker, "download_dir", None):
@@ -294,6 +306,173 @@ class AppController(QObject):
 
         if paths_to_delete:
             self.delete_files_best_effort(paths_to_delete, success_title="已删除文件残留")
+
+    # === 无 worker 的历史行（融合后列表的另一半来源）===
+    #
+    # 上面所有 handle_* 都以 `DownloadWorker` 为入口，`if not worker: return`。
+    # 分页从 `tasks` 表补进来的终态行没有 worker，走那条路等于「历史行删不掉、重下不了」。
+    # 下面两个方法只依赖快照字段（`db_id` / `url` / `output_path`），不碰 download_manager
+    # 的线程池 —— 没有线程在跑。
+    #
+    # 参数刻意是**朴素类型**而不是 `TaskRow`：`TaskRow` 住在 `ui/models/`，
+    # 而 core/ 不许 import ui/（见 CLAUDE.md §2 分层）。
+
+    def handle_remove_snapshots(
+        self, rows: list[tuple[int, str]], force_delete_files: bool = False
+    ) -> None:
+        """删除若干条历史行。`rows` 是 `(db_id, output_path)` 序列。
+
+        单行删除也走这里（传一个元素的列表）—— 文件删除是异步的，每条各起一个
+        `FileDeleteWorker` 会在批量清空时开出几百个线程。
+        """
+        paths: list[str] = []
+        db_ids: list[int] = []
+
+        for raw_id, output_path in rows:
+            db_id = int(raw_id or 0)
+            if db_id > 0:
+                db_ids.append(db_id)
+            if not force_delete_files:
+                continue
+            final_path = str(output_path or "")
+            if final_path and os.path.exists(final_path):
+                paths.append(final_path)
+                paths.extend(_aux_files(final_path))
+
+        for db_id in dict.fromkeys(db_ids):
+            try:
+                task_db.delete_task(db_id)
+            except Exception as e:
+                logger.error(f"删除历史行 {db_id} 失败: {e}")
+
+        paths = list(dict.fromkeys(paths))
+        if paths:
+            self.delete_files_best_effort(paths, success_title=f"已删除 {len(paths)} 个文件")
+
+    def handle_start_snapshot(
+        self, db_id: int, url: str, title: str = "", thumbnail: str = ""
+    ) -> DownloadWorker | None:
+        """把一条历史行「复活」成活任务；返回新 worker，失败返回 None。
+
+        `TaskRow` 只保留渲染要用的字段，**没有 ydl_opts** —— 重下必须知道当初的参数
+        （画质档位、输出目录、字幕设置），所以按 `db_id` 现取现读 `ydl_opts_json`。
+        不预先塞进每一行：融合后列表可能上万行，而「重下」是罕见点击。
+
+        `restore_db_id` 复用同一个 `tasks.id`，所以调用方拿到 worker 后
+        `model.rebind_worker(row, worker)` 就是**就地升级**，不会多出一行。
+
+        opts 读不出来时返回 None 而不是造一份默认参数：那会静默下成别的画质，
+        调用方应该提示用户走「重新解析」。
+        """
+        if not url:
+            return None
+
+        opts: dict = {}
+        db_row = task_db.get_task(int(db_id)) if db_id else None
+        if db_row:
+            try:
+                parsed = json.loads(db_row.get("ydl_opts_json") or "{}")
+                if isinstance(parsed, dict):
+                    opts = parsed
+            except (TypeError, ValueError):
+                # 用户机器上的历史数据，别假设它一定是合法 JSON
+                opts = {}
+        if not opts:
+            logger.warning(f"历史行 {db_id} 没有可用的 ydl_opts，无法直接重下")
+            return None
+
+        worker = download_manager.create_worker(
+            url,
+            opts,
+            cached_info={"title": title, "thumbnail": thumbnail},
+            restore_db_id=int(db_id or 0),
+        )
+        download_manager.start_worker(worker)
+        return worker
+
+    def task_opts(self, db_id: int, worker: DownloadWorker | None = None) -> dict:
+        """取一个任务当初的 ydl_opts：活任务问 worker，历史行按 `db_id` 现读快照。
+
+        和 `handle_start_snapshot` 同一个理由：`TaskRow` 不带 opts（融合后列表可能上万行），
+        而需要 opts 的动作都是罕见点击。
+        """
+        if worker is not None:
+            opts = getattr(worker, "opts", None)
+            if isinstance(opts, dict) and opts:
+                return dict(opts)
+
+        db_row = task_db.get_task(int(db_id)) if db_id else None
+        if not db_row:
+            return {}
+        try:
+            parsed = json.loads(db_row.get("ydl_opts_json") or "{}")
+        except (TypeError, ValueError):
+            # 用户机器上的历史数据，别假设它一定是合法 JSON
+            return {}
+        return dict(parsed) if isinstance(parsed, dict) else {}
+
+    def handle_downgrade_quality(
+        self,
+        db_id: int,
+        url: str,
+        title: str = "",
+        thumbnail: str = "",
+        worker: DownloadWorker | None = None,
+    ) -> tuple[DownloadWorker | None, str, int]:
+        """把一个严格画质档位任务降一档重试。
+
+        返回 `(新 worker, 原因码, 新档位)`。原因码给调用方做汇总提示用：
+
+        * `""` —— 成功，`新 worker` 非 None，调用方必须 `rebind_worker`；
+        * `"no_preset"` —— 不是严格档位任务（或 opts 读不出来），降档无从下手；
+        * `"lowest"` —— 已经在阶梯最低档，只能手动调整格式；
+        * `"failed"` —— 建 worker 失败。
+
+        这是 `download_card._maybe_handle_format_unavailable` 的下半截（自动降档那一支）。
+        上半截「弹窗问用户」留在 UI 侧：批量选中 50 行时只该弹一次，不该由这里决定。
+        「手动调整」那一支对应右键菜单的「重新解析」，走
+        `MainWindow.show_selection_dialog(url, smart_detect=True)`，不在这里重复实现。
+
+        降档后的 opts 必须落库（`update_task_opts`）—— `create_worker` 走
+        `restore_db_id` 时不写 `ydl_opts_json`，不落库的话重启后又会用回旧档位。
+        """
+        if not url:
+            return None, "no_preset", 0
+
+        opts = self.task_opts(db_id, worker)
+        current_height = current_preset_height(opts)
+        if not current_height:
+            return None, "no_preset", 0
+
+        next_height = next_lower_height(current_height)
+        if next_height is None:
+            return None, "lowest", current_height
+
+        new_opts = downgraded_opts(opts, next_height)
+
+        # 旧 worker 先摘掉：`error` 态的线程已经结束，但它还挂在 active_workers 里占额度
+        if worker is not None:
+            try:
+                download_manager.remove_worker(worker)
+            except Exception as e:
+                logger.warning(f"降档前移除旧 worker 失败（继续）: {e}")
+
+        try:
+            new_worker = download_manager.create_worker(
+                url,
+                new_opts,
+                cached_info={"title": title, "thumbnail": thumbnail},
+                restore_db_id=int(db_id or 0),
+            )
+        except Exception as e:
+            logger.error(f"降档重建 worker 失败: {e}")
+            return None, "failed", next_height
+
+        if db_id:
+            task_db.update_task_opts(int(db_id), new_opts)
+
+        download_manager.start_worker(new_worker)
+        return new_worker, "", next_height
 
     def handle_pause_resume_task(self, worker: DownloadWorker | None) -> DownloadWorker | None:
         """
@@ -335,8 +514,12 @@ class AppController(QObject):
                 "thumbnail": getattr(worker, "v_thumbnail", ""),
             }
             opts = worker.opts.copy()
-            if getattr(worker, "effective_state", "") == "quality_warning":
-                opts.pop("__fluentytdl_quality_intent", None)
+            # 注：这里曾有一段 `if effective_state == "quality_warning": opts.pop(...)`，
+            # 但 DownloadWorker.effective_state 只可能返回
+            # running/paused/queued/completed/error/cancelled/quality_guard，
+            # 从来不会是 "quality_warning" —— 该分支自始至终未执行过，已删除。
+            # 「重启质量守卫任务时是否要绕过守卫（即 pop __fluentytdl_quality_intent）」
+            # 是一个待定的 UX 决策，不要在这里悄悄改变行为。
 
             new_worker = download_manager.create_worker(
                 worker.url, opts, cached_info=cached_meta, restore_db_id=old_db_id
@@ -346,32 +529,10 @@ class AppController(QObject):
 
         return None
 
-    def handle_batch_start(
-        self, workers: list[DownloadWorker]
-    ) -> list[tuple[DownloadWorker, DownloadWorker]]:
-        """
-        Explicitly resume or restart only the tasks that are not running or queued.
-        Returns a list of tuples (old_worker, new_worker) for the ones that were recreated.
-        """
-        recreated = []
-        for worker in workers:
-            if not worker:
-                continue
-            state = getattr(worker, "effective_state", "")
-            # Skip tasks that are already running or queued or completed
-            if state in ("running", "queued", "completed"):
-                continue
-
-            # It's paused, errored, cancelled, completed, etc. We use the same resume logic
-            new_worker = self.handle_pause_resume_task(worker)
-            if new_worker:
-                recreated.append((worker, new_worker))
-
-        # Pump queue once after batch start
-        if workers:
-            download_manager.pump()
-
-        return recreated
+    # `handle_batch_start` 已删除：融合后「批量开始」必须同时处理活任务与历史行，
+    # 而这个方法的入口是 `list[DownloadWorker]`，历史行根本传不进来。
+    # 现在由 UI 侧的分块执行器逐行调 `handle_pause_resume_task` /
+    # `handle_start_snapshot`，并在每块结束后 `download_manager.pump()`。
 
     def handle_batch_pause(self, workers: list[DownloadWorker]) -> None:
         """
@@ -436,21 +597,7 @@ class AppController(QObject):
 
                     if final_path and os.path.exists(str(final_path)):
                         paths_to_delete.append(str(final_path))
-                        base_name, _ = os.path.splitext(str(final_path))
-                        aux_exts = [
-                            ".jpg",
-                            ".jpeg",
-                            ".webp",
-                            ".png",
-                            ".vtt",
-                            ".srt",
-                            ".ass",
-                            ".lrc",
-                        ]
-                        for ext in aux_exts:
-                            aux_file = base_name + ext
-                            if os.path.exists(aux_file):
-                                paths_to_delete.append(aux_file)
+                        paths_to_delete.extend(_aux_files(str(final_path)))
 
                     if getattr(worker, "is_single_playlist", False) and getattr(
                         worker, "download_dir", None

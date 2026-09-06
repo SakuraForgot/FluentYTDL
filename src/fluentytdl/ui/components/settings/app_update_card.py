@@ -31,6 +31,15 @@ from ....core.component_update_manager import component_update_manager
 class AppUpdateSettingCard(SettingCard):
     """软件更新卡片：显示版本信息、检查/执行更新。"""
 
+    #: 按钮当前代表的动作。以前 `_on_action_clicked()` 拿 `actionButton.text()` 和
+    #: `self.tr(...)` 比字符串来分派 —— 换语言就点不动了，而 `_on_download_progress`
+    #: 还会把文案改成"正在下载... 42%"（跟任何一个 `tr()` 都不相等）。状态显式存。
+    _IDLE = "idle"
+    _CHECKING = "checking"
+    _UPDATE_AVAILABLE = "update_available"
+    _DOWNLOADING = "downloading"
+    _INSTALLING = "installing"
+
     def __init__(self, parent: QWidget | None = None):
         try:
             from fluentytdl import __version__
@@ -48,6 +57,7 @@ class AppUpdateSettingCard(SettingCard):
         self._current_version = current_ver
         self._latest_info: dict | None = None
         self._downloading = False
+        self._state = self._IDLE
 
         # 进度条
         self.progressBar = ProgressBar(self)
@@ -89,23 +99,28 @@ class AppUpdateSettingCard(SettingCard):
 
     # ── 状态机 ────────────────────────────────────────────
 
+    def _set_state(self, state: str, text: str) -> None:
+        """状态和按钮文案必须一起改。"""
+        self._state = state
+        self.actionButton.setText(text)
+
     def _on_action_clicked(self) -> None:
-        text = self.actionButton.text()
-        if text == self.tr("检查更新"):
+        if self._state == self._IDLE:
             self._start_check()
-        elif text == self.tr("立即更新"):
+        elif self._state == self._UPDATE_AVAILABLE:
             self._start_download()
+        # checking / downloading / installing：按钮 disabled，到不了这里
 
     def _start_check(self) -> None:
-        """开始检查更新。"""
+        """开始检查更新（用户手动点击）。"""
         # 检查版本锁定（beta/pre）
         if component_update_manager.is_locked():
             self._show_locked_dialog()
             return
 
-        self.actionButton.setText(self.tr("正在检查..."))
+        self._set_state(self._CHECKING, self.tr("正在检查..."))
         self.actionButton.setEnabled(False)
-        component_update_manager.check_app_update()
+        component_update_manager.check_app_update(silent=False)
 
     def _start_download(self) -> None:
         """开始下载更新。"""
@@ -121,7 +136,7 @@ class AppUpdateSettingCard(SettingCard):
         self.progressBar.setVisible(True)
         self.progressBar.setValue(0)
         self.actionButton.setEnabled(False)
-        self.actionButton.setText(self.tr("正在下载..."))
+        self._set_state(self._DOWNLOADING, self.tr("正在下载..."))
         self.changelogButton.setEnabled(False)
 
         sha256 = self._latest_info.get("sha256", "")
@@ -140,8 +155,13 @@ class AppUpdateSettingCard(SettingCard):
 
         self.setTitle(f"FluentYTDL ({prefix}更新)")
         self.setContent(f"当前: {self._current_version}  |  最新: {latest_ver}")
-        self.actionButton.setText(self.tr("立即更新"))
+        self._set_state(self._UPDATE_AVAILABLE, self.tr("立即更新"))
         self.changelogButton.setVisible(True)
+
+        # 自动检查不弹 InfoBar —— 提醒已经由消息中心（标题栏小铃铛）接管，
+        # 见 `notification/update_notifier.py`。手动点「检查更新」才给即时反馈。
+        if info.get("silent"):
+            return
 
         InfoBar.info(
             self.tr("发现新版本"),
@@ -153,8 +173,12 @@ class AppUpdateSettingCard(SettingCard):
     def _on_no_update(self) -> None:
         """无更新。"""
         self.actionButton.setEnabled(True)
-        self.actionButton.setText(self.tr("检查更新"))
+        self._set_state(self._IDLE, self.tr("检查更新"))
         self.setContent(self.tr("当前版本: {}  |  已是最新").format(self._current_version))
+
+        # 「已是最新」对用户来说没有任何可做的事 —— 自动检查时是纯噪音，不弹。
+        if component_update_manager.is_silent_check:
+            return
 
         InfoBar.info(
             self.tr("已是最新"),
@@ -166,7 +190,11 @@ class AppUpdateSettingCard(SettingCard):
     def _on_check_error(self, msg: str) -> None:
         """检查出错。"""
         self.actionButton.setEnabled(True)
-        self.actionButton.setText(self.tr("检查更新"))
+        self._set_state(self._IDLE, self.tr("检查更新"))
+
+        # 自动检查失败（多半是没网）不打扰用户，只留日志
+        if component_update_manager.is_silent_check:
+            return
 
         if msg == "locked":
             self._show_locked_dialog()
@@ -187,7 +215,7 @@ class AppUpdateSettingCard(SettingCard):
         失败经 `apply_error` 回来，需要确认经 `apply_confirm_needed` 回来。
         """
         self.progressBar.setValue(100)
-        self.actionButton.setText(self.tr("正在安装..."))
+        self._set_state(self._INSTALLING, self.tr("正在安装..."))
         component_update_manager.request_app_core_update(path)
 
     def _reset_action_state(self) -> None:
@@ -195,7 +223,7 @@ class AppUpdateSettingCard(SettingCard):
         self._downloading = False
         self.progressBar.setVisible(False)
         self.actionButton.setEnabled(True)
-        self.actionButton.setText(self.tr("立即更新"))
+        self._set_state(self._UPDATE_AVAILABLE, self.tr("立即更新"))
         self.changelogButton.setEnabled(True)
 
     def _on_apply_error(self, msg: str) -> None:
@@ -220,7 +248,7 @@ class AppUpdateSettingCard(SettingCard):
         box.yesButton.setText(self.tr("继续更新"))
         box.cancelButton.setText(self.tr("取消"))
         if box.exec():
-            self.actionButton.setText(self.tr("正在安装..."))
+            self._set_state(self._INSTALLING, self.tr("正在安装..."))
             component_update_manager.confirm_pending_update(gen)
         else:
             component_update_manager.cancel_pending_update(gen)
@@ -274,10 +302,14 @@ class AppUpdateSettingCard(SettingCard):
     # ── 手动触发检查 ──────────────────────────────────────
 
     def check_for_update(self) -> None:
-        """外部调用：自动检查更新（静默模式，不弹无更新提示）。"""
+        """外部调用：自动检查更新（静默模式，不弹任何提示）。
+
+        静默由 `silent=True` 真正落实：无更新 / 检查失败都不弹 InfoBar，发现新版本
+        也只更新卡片自身文案，用户可见的提醒交给消息中心（标题栏小铃铛）。
+        """
         if component_update_manager.is_locked():
             return
-        component_update_manager.check_app_update()
+        component_update_manager.check_app_update(silent=True)
 
     def reset_state(self) -> None:
         """重置到初始状态。"""
@@ -286,7 +318,7 @@ class AppUpdateSettingCard(SettingCard):
         self.progressBar.setVisible(False)
         self.changelogButton.setVisible(False)
         self.actionButton.setEnabled(True)
-        self.actionButton.setText(self.tr("检查更新"))
+        self._set_state(self._IDLE, self.tr("检查更新"))
         try:
             from fluentytdl import __version__
 

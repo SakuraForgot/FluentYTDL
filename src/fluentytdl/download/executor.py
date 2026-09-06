@@ -21,8 +21,18 @@ from typing import Any, Protocol
 
 from loguru import logger
 
+from ..diagnostics.collect import DiagnosticLineCollector
 from ..models.errors import YtDlpExecutionError
+from ..observability import (
+    current_flow,
+    emit_event,
+    emit_success_signals,
+    render_argv,
+    sanitize_path,
+    should_keep_raw_line,
+)
 from ..utils.container_compat import choose_lossless_merge_container
+from ..utils.disk_space import check_space_for_download
 from ..youtube.yt_dlp_cli import (
     log_pot_from_output,
     log_pot_in_argv,
@@ -56,6 +66,80 @@ def _is_auxiliary_file(path: str) -> bool:
     """判断路径是否为附属文件（字幕、封面、元数据等），不应作为主输出路径。"""
     ext = os.path.splitext(path)[1].lower()
     return ext in _AUXILIARY_EXTENSIONS
+
+
+def _mark_recovered(trace: Any, reason: str) -> None:
+    """把"某个异常被容忍了"这个事实钉到 trace 上，让 run 的终态边界能读到。
+
+    executor 只**决定**"rc≠0 但产物有效"这件事，`recovered` 标志却要一路带到
+    `DownloadWorker.run()` 的 `finish()` 里去（硬规则 4：outcome 只属于 run 终态）。
+    下载路径上 `current_flow()` 拿到的正是那个 worker 的 `TaskTrace`，它有
+    `mark_recovered`；解析路径拿到的是纯 `FlowTrace`（没有 run，也就没有终态），
+    `hasattr` 保护掉后者即可，缺了它只是少一条 recovery，不影响下载判定。
+    """
+    fn = getattr(trace, "mark_recovered", None)
+    if fn is None:
+        return
+    try:
+        fn(reason)
+    except Exception:
+        pass  # 硬规则 5：观测失败绝不回传业务层
+
+
+#: 预检时要求的最小剩余空间（GB）。**这个数字不用来拦下载**，只用来决定日志级别。
+#:
+#: 开跑前的体积预估根本不可靠（DASH 分流各算一份、合并产物、后处理临时文件都不在
+#: `filesize_approx` 里），拿它当门禁只会误杀。所以它是"剩这么点该被看见"的门槛，
+#: 不是"不许下载"的门槛。
+_PREFLIGHT_MIN_FREE_GB = 1.0
+
+
+def _emit_disk_space_signal(output_dir: str) -> None:
+    """`Popen` 之前落一条 `kind=signal stage=preflight subsystem=disk`。
+
+    **只报告，绝不阻止下载**（`utils/disk_space.py` 模块 docstring 讲了为什么）。
+    真正的判定留给 yt-dlp 自己的写盘错误 —— 这条事件的全部作用是让那个错误
+    **有上下文**：`code=no_space_left` 落地时，往上翻一屏就能看到开跑前只剩 200 MB，
+    而不是对着一句"写入失败"猜是不是磁盘满了。
+
+    三个 code 分得很清，因为它们对应三种完全不同的下一步：
+
+    - ``disk_space_unknown`` —— 探测本身失败（路径不存在 / 无权限）。**我们瞎了**，
+      不是磁盘满了。两者在 `SpaceCheckResult` 里都表现为
+      `sufficient=False, available_bytes=0`，混成一个 code 就永远分不出来。
+    - ``disk_space_low`` —— 确实低于门槛。WARNING 级，要冒到控制台。
+    - ``disk_space_ok`` —— DEBUG 级，进文件与 JSONL 不刷控制台。它存在的唯一理由是
+      给"磁盘满"排除法提供反证：没有这条，"日志里没提磁盘"既可能是空间充足，
+      也可能是这段代码压根没跑。
+
+    不记 `result.message` —— 那是本地化文案，写进日志会让内容随界面语言变化、搜不着。
+    """
+    try:
+        result = check_space_for_download(output_dir, 0, min_free_gb=_PREFLIGHT_MIN_FREE_GB)
+        if result.error:
+            code, level = "disk_space_unknown", "WARNING"
+        elif not result.sufficient:
+            code, level = "disk_space_low", "WARNING"
+        else:
+            code, level = "disk_space_ok", "DEBUG"
+        emit_event(
+            "signal",
+            trace=current_flow(),
+            level=level,
+            stage="preflight",
+            subsystem="disk",
+            code=code,
+            # 目录本身也是线索（哪个盘、哪个子目录），脱敏只折掉用户名前缀。
+            dir=sanitize_path(output_dir),
+            available_bytes=result.available_bytes,
+            required_bytes=result.required_bytes,
+            shortfall_bytes=result.shortfall_bytes or None,
+            # 探测失败时记异常类名，不记那句拼了路径的中文 message。
+            probe_error=result.error or None,
+        )
+    except Exception:
+        # 硬规则 5：观测永远 best-effort，绝不能让一条日志挡掉下载。
+        pass
 
 
 # 有效媒体文件的最小大小门槛（10 KB）
@@ -154,6 +238,18 @@ class DownloadExecutor:
     def __init__(self) -> None:
         self._proc: subprocess.Popen[Any] | None = None
         self._ytdlp_parser = YtDlpOutputParser()
+        # 诊断行缓冲：失败时作为 `diagnose()` 的输入，成功时供再跑一次 `parse_events`
+        # —— 字幕缺失不会让任务失败，而 `diagnose()` 只在 rc != 0 时跑。
+        # 不能复用 `_execute_native` 里的 `tail`：那个 maxlen=120 且混着进度行，
+        # 一段稍长的下载就能把开头的警告挤出去。
+        # "哪些行算诊断线索"的判据集中在 `diagnostics/collect.py`，与规则表同步；
+        # 尤其是 `[download] ... Skipping` 这类无级别前缀的行，靠它才能被捞到。
+        self.diag_lines = DiagnosticLineCollector()
+        # raw 输出缓冲：`diag_lines` 是**筛过**的行（只留诊断线索），失败复现时往往还需要
+        # 它周围那些上下文 —— 用了哪个 client、走了哪条 format、ffmpeg 的完整命令行。
+        # 2000 行足够覆盖一次下载的非进度输出；只在 failed / degraded / recovered
+        # （或用户开了 `log_raw_ytdlp`）时落盘，见 `sinks.dump_raw_for_outcome()`。
+        self.raw_lines: deque[str] = deque(maxlen=2000)
 
     def execute(
         self,
@@ -223,7 +319,11 @@ class DownloadExecutor:
         cmd: list[str] = [
             str(exe),
             "--ignore-config",
-            "--no-warnings",
+            # 刻意**不加** `--no-warnings`：字幕限流、PO Token 缺失这些"任务成功但
+            # 结果不对"的唯一线索都是 WARNING: 级，加上它就等于把原因扔掉，用户只剩
+            # 一句"未找到字幕文件"（见 `FluentYTDL-字幕下载问题排查报告.md`）。
+            # 代价是 WARNING 会进 `diagnose()`：`engine.py` 的护栏负责保证一条警告
+            # 不会被当成任务的失败主因。
             "--no-color",
             "--newline",
             "--progress",
@@ -246,12 +346,25 @@ class DownloadExecutor:
         cmd += ydl_opts_to_cli_args(ydl_opts)
         cmd.append(url)
 
-        logger.info("[Executor][Native] cmd={}", " ".join(cmd))
+        # 这条 argv 里可能有 `socks5://user:pass@host`、cookie 文件的完整路径、含
+        # Windows 用户名的输出路径，而日志文件是用户会直接贴进 Issue 的东西 ——
+        # 所以落盘前必过 `render_argv()`（脱敏规则见 `observability/sanitize.py`）。
+        # 走 `kind=argv` 事件而不是裸 `logger.info`：导 bug 包时要能从 JSONL 里
+        # 按 run 取到"这次到底是用什么命令行跑的"，那是复现的第一手材料。
+        emit_event(
+            "argv",
+            trace=current_flow(),
+            stage="download",
+            component="executor.native",
+            label=label or "native",
+            argv=render_argv(cmd),
+        )
         log_pot_in_argv(cmd, stage="Download", task_id=label or "native")
 
         env = prepare_yt_dlp_env()
         env["PYTHONIOENCODING"] = "utf-8"
         work_dir = self._resolve_output_dir(ydl_opts)
+        _emit_disk_space_signal(work_dir)
 
         self._proc = subprocess.Popen(
             cmd,
@@ -278,7 +391,23 @@ class DownloadExecutor:
         self._active_postprocessor = ""
         dest_paths: set[str] = set()
         tail: deque[str] = deque(maxlen=120)
-        expected_total_bytes: int = 0  # 累计预期文件大小，用于完整性校验
+        # 规则驱动的自动重试会复用同一个 executor，上一轮的警告不能算进这一轮的诊断
+        self.diag_lines.clear()
+        self.raw_lines.clear()
+        # 预期总大小，按文件名分流累计，用于 rc != 0 时的完整性校验。
+        # 每个流（视频/音频各一次独立下载）在**每个 tick** 都会重报自己的 total_bytes，
+        # 所以这里按文件名**赋值**而不是 `+=`，最后求和。
+        # 原先是 `expected_total_bytes = max(expected_total_bytes, tb)`：DASH 合并产物
+        # 必然大于任何单流，ratio 恒 > 1，下面那道 `ratio < 0.5` 的保险丝从未触发过。
+        expected_by_file: dict[str, int] = {}
+
+        # 失败阶段判定的两个观察点。用户在任务卡上只看到"正在拉取元数据"，
+        # 一个裸 exit_code=1 说不出这次失败是死在解析、选片还是下载途中 ——
+        # 而 yt-dlp 的输出恰好给了两个无歧义的分界线：
+        #   `[info] <id>: Downloading 1 format(s): 137+251` ⇒ 格式已经选定
+        #   结构化进度行 / `[download] Destination:`        ⇒ 字节已经开始走
+        saw_format_decision = False
+        saw_progress = False
 
         proc = self._proc
         assert proc is not None
@@ -296,11 +425,37 @@ class DownloadExecutor:
 
             parsed = self._ytdlp_parser.parse_line(line)
 
+            # 阶段推进只往前走，不回退：合并/后处理阶段再出现的 info 行不会把
+            # 已经 True 的 saw_progress 抹掉。
+            if parsed.type in ("progress", "ffmpeg_progress", "destination"):
+                saw_progress = True
+            elif parsed.type == "info" and "format(s)" in (parsed.message or ""):
+                # `output_parser` 的 `[info]` 分支刻意保留整行原文（含 `[info]` 前缀），
+                # 所以这里直接在 message 上判子串。
+                saw_format_decision = True
+
+            # 诊断行的收集口只此一处：判据在 `diagnostics/collect.py`，随规则表演进。
+            # 以前是散在下面 warning/error/info 三个分支里各 append 一次，于是
+            # `[download] ... Skipping`（被 output_parser 判成 status）永远进不来。
+            # 进度行提前排掉：`--newline` 下它们能有上万条，且**不可能**是诊断线索，
+            # 没必要让每条都走一遍 53 条规则的匹配。
+            if parsed.type not in ("progress", "ffmpeg_progress"):
+                self.diag_lines.feed(line)
+                # raw 缓冲比 `diag_lines` 宽一档：前者只留命中规则的行，复现问题时往往
+                # 还要看它旁边那些"用了哪个 client、挑了哪个 format、ffmpeg 完整命令行"。
+                # `should_keep_raw_line()` 再挡一次自家的 `FLUENTYTDL|` 进度模板行 ——
+                # 那种行 `parsed.type` 未必是 progress，却纯粹是噪音。
+                if should_keep_raw_line(line):
+                    self.raw_lines.append(line)
+
             if parsed.type == "progress" and parsed.progress:
-                # 追踪预期总大小（累加各流的 total_bytes）
                 tb = parsed.progress.total_bytes
                 if isinstance(tb, (int, float)) and tb > 0:
-                    expected_total_bytes = max(expected_total_bytes, int(tb))
+                    # 附属文件（字幕/封面）不计入期望值：`actual_size` 那一侧只量主媒体
+                    # 文件，两边口径必须一致，否则封面体积会系统性压低 ratio。
+                    fname = parsed.progress.filename or ""
+                    if not fname or not _is_auxiliary_file(fname):
+                        expected_by_file[fname] = int(tb)
 
                 on_progress(
                     {
@@ -334,8 +489,26 @@ class DownloadExecutor:
                         on_path(p)
 
             elif parsed.type == "warning":
+                # 去掉 `--no-warnings` 之后这里才真的有东西可收。字幕限流 / PO Token
+                # 缺失都是 WARNING 级，且**不会**让任务失败 —— 不落到日志文件和
+                # `diag_lines` 里就等于彻底丢掉，用户只剩一句"未找到字幕文件"。
+                logger.warning("[yt-dlp] {}", parsed.message or line)
                 if parsed.message:
                     on_status("⚠️ " + parsed.message)
+
+            elif parsed.type == "error":
+                # 刻意**不**发 on_status：yt-dlp 的 ERROR: 不等于任务失败（跳过失效
+                # 分片、播放列表里某条不可用都会打），把 UI 状态改成 error 会把成功
+                # 的任务标红。真正的失败判定归 rc != 0 那段两级体积校验。
+                logger.error("[yt-dlp] {}", parsed.message or line)
+
+            elif parsed.type == "info":
+                # `[info] There are no subtitles for the requested languages` 走的是
+                # 这条。它既不是 WARNING 也不是 ERROR，以前没有分支接，直接消失在
+                # `unknown` 兜底里 —— 那正是报告里"日志什么都没说"的由来。
+                logger.info("[yt-dlp] {}", parsed.message or line)
+                if parsed.message:
+                    on_status(parsed.message)
 
             elif parsed.type == "ffmpeg_progress":
                 if parsed.progress:
@@ -418,6 +591,16 @@ class DownloadExecutor:
             # ━━━ 关卡 2: 预期大小比对 ━━━
             # 如果进度回调中记录了预期总大小，且实际文件远小于预期，
             # 说明文件是不完整的残留，不应视为成功
+            #
+            # 有一类选项会**合法地**让产物远小于各流之和（转码降码率、剪掉赞助段、
+            # 只下一段），此时体积比对没有意义 —— 与其调阈值，不如直接不参与判定：
+            # 这道保险丝只在 rc != 0 的宽恕路径上被问到，宁可放过也不能误杀好文件。
+            size_changing_opts = (
+                bool(ydl_opts.get("extract_audio"))
+                or bool(ydl_opts.get("sponsorblock_remove"))
+                or bool(ydl_opts.get("download_sections"))
+            )
+            expected_total_bytes = 0 if size_changing_opts else sum(expected_by_file.values())
             if is_valid and expected_total_bytes > 0 and actual_size > 0:
                 ratio = actual_size / expected_total_bytes
                 if ratio < 0.5:
@@ -428,6 +611,33 @@ class DownloadExecutor:
                         ratio,
                     )
                     is_valid = False
+                elif ratio < 0.9:
+                    # 阈值刻意仍留 0.5：容器开销让合并产物与分流之和有正常偏差，调高会
+                    # 误杀好文件。0.5–0.9 这段是"可疑但不判失败"——丢一条音轨通常只差
+                    # 5-10%，落在这里。只记录，不改判定语义。
+                    logger.warning(
+                        "文件大小 ({}) 为预期 ({}) 的 {:.0%}，低于预期但仍判定为有效"
+                        "（预期由 {} 个流累计）",
+                        actual_size,
+                        expected_total_bytes,
+                        ratio,
+                        len(expected_by_file),
+                    )
+                    # `signal` 而不是 `diagnosis`：这次操作没被判失败（硬规则 2），
+                    # 而且这里**只报告观察到的事实**，不参与 `is_valid` 的裁决。
+                    # 丢一条音轨正是落在这一段 —— 真正把它认定成降级要靠
+                    # `expected − actual`（硬规则 3），体积比只能提供怀疑的理由。
+                    emit_event(
+                        "signal",
+                        trace=current_flow(),
+                        level="WARNING",
+                        stage="download",
+                        code="output_size_below_expected",
+                        ratio=round(ratio, 3),
+                        actual_bytes=actual_size,
+                        expected_bytes=expected_total_bytes,
+                        streams=len(expected_by_file),
+                    )
 
             if is_valid:
                 if not output_path and valid_path_found:
@@ -438,8 +648,62 @@ class DownloadExecutor:
                     output_path,
                     actual_size / 1024,
                 )
+                # 这里**不许**宣布 outcome（硬规则 4）：executor 返回之后还有
+                # postprocess / verify / finalize，任何一步都可能再失败，一个 run
+                # 就会出两个 outcome。所以只报告事实 `kind=recovery`，由 run 的终态
+                # 边界（`DownloadWorker.run()`）唯一地裁决。
+                #
+                # `confidence=low` 是**必须**的：判据是"文件存在且体积不离谱"，
+                # 一个体积启发式，不是完整性证明。把它记成高置信度，等于教读日志的人
+                # 相信一条它给不出的保证。
+                _mark_recovered(current_flow(), "nonzero_exit_valid_output")
+                emit_event(
+                    "recovery",
+                    trace=current_flow(),
+                    level="WARNING",
+                    stage="download",
+                    decision="recovery_accept",
+                    reason="nonzero_exit_valid_output",
+                    verification="size_heuristic",
+                    confidence="low",
+                    exit_code=rc,
+                    size_bytes=actual_size,
+                    expected_bytes=expected_total_bytes or None,
+                )
             else:
-                raise YtDlpExecutionError(exit_code=rc, stderr=last_lines)
+                # 喂给 `diagnose()` 的必须是 `diag_lines`，不是 `tail`：`tail` maxlen=120
+                # 且混着进度行，一段稍长的下载能把唯一那句 `ERROR:` 挤出窗口，于是主因
+                # 仲裁只能落到兜底。`or last_lines` 是空保险 —— 一条诊断行都没收到时
+                # （例如进程被环境直接打死，只留下几行进度），传空串会让 `diagnose()`
+                # 走 `_EMPTY_OUTPUT` 占位，把唯一的线索也丢掉。
+                raise YtDlpExecutionError(
+                    exit_code=rc,
+                    stderr=self.diag_lines.as_text() or last_lines,
+                    phase=(
+                        "download"
+                        if saw_progress
+                        else ("select" if saw_format_decision else "parse")
+                    ),
+                )
+        else:
+            # rc == 0 —— 但"进程成功退出"不等于"拿到了想要的东西"。请求的字幕语言
+            # 一个都没匹配上、指定的音轨不存在、nsig 提取降级，全都以 WARNING 出现在
+            # **正常退出**的输出里。这些行早就被收进 `diag_lines` 了，只是一直只为
+            # 失败路径的 `diagnose()` 服务，rc=0 时整个 buffer 被原样丢掉 —— 于是
+            # "下载完了但字幕没有"在日志里一个字都没有，正是这轮重构的起因。
+            #
+            # 落 `signal` 而**不是** `diagnosis`（硬规则 2）：这次操作确实成功了，
+            # 在这里做主因仲裁会让 `count(kind=diagnosis)` 不再等于"真正发生了错误"。
+            #
+            # `diag_lines` 已经是筛过的行，`emit_success_signals` 内部会再筛一遍 ——
+            # 判据是同一个 `is_diagnostic_line`，重筛是幂等的。为省这一遍去开个
+            # "已筛过"的旁路参数，不值得让这个函数长出两种输入语义。
+            emit_success_signals(
+                self.diag_lines.as_text(),
+                trace=current_flow(),
+                stage="download",
+                operation="download",
+            )
 
         return output_path
 
@@ -532,7 +796,15 @@ class DownloadExecutor:
 
         cmd.append(url)
 
-        logger.debug("[Executor] 提取 URL cmd={}", " ".join(cmd))
+        # DEBUG 级：这条只是取流地址的辅助探测，正常排查用不到，但脱敏一样不能省。
+        emit_event(
+            "argv",
+            trace=current_flow(),
+            level="DEBUG",
+            stage="preflight",
+            component="executor.extract_stream_urls",
+            argv=render_argv(cmd),
+        )
         log_pot_in_argv(cmd, stage="Download", task_id="extract_stream_urls")
 
         env = prepare_yt_dlp_env()

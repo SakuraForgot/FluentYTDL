@@ -12,8 +12,20 @@
 class YtDlpExecutionError(Exception):
     """当 yt-dlp 子进程非正常退出时抛出，携带完整的上下文字段以便后续诊断"""
 
-    def __init__(self, exit_code: int, stderr: str, parsed_json: dict | None = None):
+    def __init__(
+        self,
+        exit_code: int,
+        stderr: str,
+        parsed_json: dict | None = None,
+        *,
+        phase: str = "",
+    ):
         super().__init__(f"yt-dlp 执行失败 (退出码: {exit_code})")
         self.exit_code = exit_code
         self.stderr = stderr
         self.parsed_json = parsed_json or {}
+        #: 失败发生在哪一步：`parse`（连格式都没挑出来）/ `select`（挑完格式但
+        #: 一个字节都没下）/ `download`。取值来自 `observability.STAGES` 闭集，
+        #: 由 executor 根据"见过哪些输出行"判定；算不出来时留空串。
+        #: keyword-only + 默认值 —— 只有 executor 有这个上下文，其余 raise 点不必改。
+        self.phase = phase

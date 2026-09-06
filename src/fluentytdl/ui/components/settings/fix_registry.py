@@ -1,10 +1,14 @@
+"""修复动作注册表。
+
+文案一律写成 ``QCoreApplication.translate("FixRegistry", "...")`` 的**完整形式**：
+本模块全是模块级函数，没有类可以让 ``pyside6-lupdate`` 推断上下文。历史上这里包了一层
+``def tr(text)`` 的辅助函数，结果 lupdate 把源串抽到了**空上下文**，而运行时按 ``FixRegistry``
+查表，两边永远对不上 —— 英文界面下这些提示全是中文（ISSUE #88）。别再包辅助函数。
+"""
+
 from PySide6.QtCore import QCoreApplication
 from PySide6.QtWidgets import QWidget
 from qfluentwidgets import InfoBar, InfoBarPosition
-
-
-def tr(text: str) -> str:
-    return QCoreApplication.translate("FixRegistry", text)
 
 
 def do_relogin(parent_widget: QWidget) -> None:
@@ -16,16 +20,18 @@ def do_relogin(parent_widget: QWidget) -> None:
         if hasattr(main_win, "switchTo"):
             main_win.switchTo(settings_iface)  # type: ignore
         InfoBar.info(
-            tr("提示"),
-            tr("请在设置页中重新提取或验证您的账号 Cookie。"),
+            QCoreApplication.translate("FixRegistry", "提示"),
+            QCoreApplication.translate(
+                "FixRegistry", "请在设置页中重新提取或验证您的账号 Cookie。"
+            ),
             parent=main_win,
             position=InfoBarPosition.TOP,
             duration=5000,
         )
     else:
         InfoBar.warning(
-            tr("不支持的操作"),
-            tr("无法定位到设置界面。"),
+            QCoreApplication.translate("FixRegistry", "不支持的操作"),
+            QCoreApplication.translate("FixRegistry", "无法定位到设置界面。"),
             parent=main_win,
             position=InfoBarPosition.TOP,
             duration=3000,
@@ -44,8 +50,8 @@ def switch_proxy(parent_widget: QWidget) -> None:
     if settings_iface is not None and hasattr(main_win, "switchTo"):
         main_win.switchTo(settings_iface)  # type: ignore
         InfoBar.info(
-            tr("网络设置"),
-            tr("请在此配置可用的代理节点。"),
+            QCoreApplication.translate("FixRegistry", "网络设置"),
+            QCoreApplication.translate("FixRegistry", "请在此配置可用的代理节点。"),
             parent=main_win,
             position=InfoBarPosition.TOP,
             duration=5000,
@@ -59,8 +65,8 @@ def change_download_dir(parent_widget: QWidget) -> None:
     if settings_iface is not None and hasattr(main_win, "switchTo"):
         main_win.switchTo(settings_iface)  # type: ignore
         InfoBar.info(
-            tr("存储设置"),
-            tr("请更改默认的下载保存路径。"),
+            QCoreApplication.translate("FixRegistry", "存储设置"),
+            QCoreApplication.translate("FixRegistry", "请更改默认的下载保存路径。"),
             parent=main_win,
             position=InfoBarPosition.TOP,
             duration=5000,
@@ -74,12 +80,50 @@ def update_component(parent_widget: QWidget) -> None:
     if settings_iface is not None and hasattr(main_win, "switchTo"):
         main_win.switchTo(settings_iface)  # type: ignore
         InfoBar.info(
-            tr("组件更新"),
-            tr("请在设置页中检查并更新 yt-dlp 核心组件。"),
+            QCoreApplication.translate("FixRegistry", "组件更新"),
+            QCoreApplication.translate("FixRegistry", "请在设置页中检查并更新 yt-dlp 核心组件。"),
             parent=main_win,
             position=InfoBarPosition.TOP,
             duration=5000,
         )
+
+
+def install_js_runtime(parent_widget: QWidget) -> None:
+    """引导用户装 / 指定 JS Runtime。
+
+    刻意不复用 ``update_component``：缺 JS Runtime 时点"更新 yt-dlp"是无效操作，
+    把用户送到组件更新面板会让他反复更新却毫无变化。
+    """
+    main_win = parent_widget.window()
+    settings_iface = getattr(main_win, "settings_interface", None)
+    if settings_iface is None:
+        InfoBar.warning(
+            QCoreApplication.translate("FixRegistry", "不支持的操作"),
+            QCoreApplication.translate("FixRegistry", "无法定位到设置界面。"),
+            parent=main_win,
+            position=InfoBarPosition.TOP,
+            duration=3000,
+        )
+        return
+
+    switch_to = getattr(main_win, "switchTo", None)
+    if callable(switch_to):
+        switch_to(settings_iface)
+
+    checker = getattr(settings_iface, "_check_js_runtime", None)
+    if callable(checker):
+        checker()
+        return
+
+    InfoBar.info(
+        QCoreApplication.translate("FixRegistry", "JS Runtime"),
+        QCoreApplication.translate(
+            "FixRegistry", "请在设置页的「JS Runtime」处安装 Deno 或指定可执行文件路径。"
+        ),
+        parent=main_win,
+        position=InfoBarPosition.TOP,
+        duration=6000,
+    )
 
 
 def refresh_pot(parent_widget: QWidget) -> None:
@@ -92,8 +136,8 @@ def refresh_pot(parent_widget: QWidget) -> None:
     settings_iface = getattr(main_win, "settings_interface", None)
     if settings_iface is None:
         InfoBar.warning(
-            tr("不支持的操作"),
-            tr("无法定位到设置界面。"),
+            QCoreApplication.translate("FixRegistry", "不支持的操作"),
+            QCoreApplication.translate("FixRegistry", "无法定位到设置界面。"),
             parent=main_win,
             position=InfoBarPosition.TOP,
             duration=3000,
@@ -110,11 +154,53 @@ def refresh_pot(parent_widget: QWidget) -> None:
         return
 
     InfoBar.info(
-        tr("POT 验证引擎"),
-        tr("请在设置页中点击 POT 验证引擎的「检测」按钮完成修复。"),
+        QCoreApplication.translate("FixRegistry", "POT 验证引擎"),
+        QCoreApplication.translate(
+            "FixRegistry", "请在设置页中点击 POT 验证引擎的「检测」按钮完成修复。"
+        ),
         parent=main_win,
         position=InfoBarPosition.TOP,
         duration=5000,
+    )
+
+
+def enable_pot_provider(parent_widget: QWidget) -> None:
+    """引导用户启用 POT 验证引擎（字幕级 PO Token 警告的处置）。
+
+    与 ``refresh_pot`` 的区别是刻意的：那个动作假设引擎已启用、只是坏了，会直接跑
+    一轮 ``try_recover()``；而字幕报 "requires a PO Token" 时最常见的前提恰恰是
+    ``pot_provider_enabled=False``（这是出厂默认，见 ``config_manager:48``），此时
+    重启一个没开的服务毫无意义。
+
+    **绝不代替用户把开关打开。** POT 引擎是实验性功能，启用后会常驻一个本地服务；
+    是否接受这个代价只能由用户自己决定，这里只负责把人带到开关前面并说明利弊。
+    """
+    main_win = parent_widget.window()
+    settings_iface = getattr(main_win, "settings_interface", None)
+    if settings_iface is None:
+        InfoBar.warning(
+            QCoreApplication.translate("FixRegistry", "不支持的操作"),
+            QCoreApplication.translate("FixRegistry", "无法定位到设置界面。"),
+            parent=main_win,
+            position=InfoBarPosition.TOP,
+            duration=3000,
+        )
+        return
+
+    switch_to = getattr(main_win, "switchTo", None)
+    if callable(switch_to):
+        switch_to(settings_iface)
+
+    InfoBar.info(
+        QCoreApplication.translate("FixRegistry", "字幕需要 PO Token"),
+        QCoreApplication.translate(
+            "FixRegistry",
+            "自动生成/自动翻译字幕受 PO Token 保护。可在「高级 → POT 验证引擎」中启用"
+            "（实验性，会常驻一个本地服务）；不启用则只能下载人工字幕。",
+        ),
+        parent=main_win,
+        position=InfoBarPosition.TOP,
+        duration=8000,
     )
 
 
@@ -133,8 +219,8 @@ def retry_now(parent_widget: QWidget) -> None:
         return
 
     InfoBar.info(
-        tr("请手动重试"),
-        tr("请点击任务卡片上的重试按钮重新开始下载。"),
+        QCoreApplication.translate("FixRegistry", "请手动重试"),
+        QCoreApplication.translate("FixRegistry", "请点击任务卡片上的重试按钮重新开始下载。"),
         parent=parent_widget.window(),
         position=InfoBarPosition.TOP,
         duration=4000,
@@ -155,8 +241,8 @@ def open_download_dir(parent_widget: QWidget) -> None:
         target = str(config_manager.get("download_dir") or "").strip()
     if not target or not os.path.isdir(target):
         InfoBar.warning(
-            tr("目录不存在"),
-            tr("找不到下载目录，请到设置页确认保存路径。"),
+            QCoreApplication.translate("FixRegistry", "目录不存在"),
+            QCoreApplication.translate("FixRegistry", "找不到下载目录，请到设置页确认保存路径。"),
             parent=parent_widget.window(),
             position=InfoBarPosition.TOP,
             duration=4000,
@@ -172,7 +258,9 @@ FIX_ACTIONS = {
     "switch_proxy": switch_proxy,
     "change_download_dir": change_download_dir,
     "update_component": update_component,
+    "install_js_runtime": install_js_runtime,
     "refresh_pot": refresh_pot,
+    "enable_pot_provider": enable_pot_provider,
     "retry_now": retry_now,
     "open_download_dir": open_download_dir,
 }
@@ -187,8 +275,11 @@ def execute_fix_action(action_id: str, parent_widget: QWidget) -> bool:
             return True
         except Exception as e:
             InfoBar.error(
-                tr("执行失败"),
-                f"尝试执行自动修复时发生错误: {e}",
+                QCoreApplication.translate("FixRegistry", "执行失败"),
+                # 先翻译再 format：拼接后再翻译会让源串带上运行期内容，永远匹配不到译文
+                QCoreApplication.translate(
+                    "FixRegistry", "尝试执行自动修复时发生错误: {error}"
+                ).format(error=e),
                 parent=parent_widget.window(),
                 position=InfoBarPosition.TOP,
             )

@@ -9,13 +9,14 @@ from __future__ import annotations
 from PySide6.QtCore import Qt, Signal
 from qfluentwidgets import (
     BodyLabel,
-    InfoBar,
     InfoBarPosition,
     MessageBoxBase,
     PushButton,
     StrongBodyLabel,
     isDarkTheme,
 )
+
+from fluentytdl.ui.components.common.custom_info_bar import InfoBar
 
 
 class CookieRepairDialog(MessageBoxBase):
@@ -30,12 +31,31 @@ class CookieRepairDialog(MessageBoxBase):
     repair_requested = Signal()  # 用户点击自动修复
     manual_import_requested = Signal()  # 用户点击手动导入
 
-    def __init__(self, error_message: str = "", parent=None, auth_source: str = "browser"):
+    def __init__(
+        self,
+        error_message: str = "",
+        parent=None,
+        auth_source: str = "browser",
+        platform: str = "youtube",
+    ):
         super().__init__(parent)
 
         self.error_message = error_message
         self._auth_source = auth_source
+        self._platform = platform
+        # 「修复」按钮的文案随模式变化。存下来，show_repair_result() 失败回滚时要用 ——
+        # 以前那里硬写"自动修复"，登录模式下点一次失败按钮就从"重新登录"变成"自动修复"。
+        self._repair_label = {
+            "webview2": self.tr("重新登录"),
+            "file": self.tr("重新导入"),
+        }.get(auth_source, self.tr("自动修复"))
         self._setup_ui()
+
+    def _platform_label(self) -> str:
+        """真相源展示名。跟着 platform 走，不再一律写 YouTube。"""
+        from ....auth.auth_service import PLATFORM_LABELS
+
+        return PLATFORM_LABELS.get(self._platform, self._platform)
 
     def _setup_ui(self):
         """初始化 UI"""
@@ -46,24 +66,27 @@ class CookieRepairDialog(MessageBoxBase):
         self.title_label.setStyleSheet("font-size: 16px;")
         self.viewLayout.addWidget(self.title_label)
 
+        # 平台名先 tr() 再 format —— 拼接后再翻译，源串会带上运行期内容，永远匹配不到译文
+        label = self._platform_label()
+
         # 根据验证模式动态调整说明文本
         if self._auth_source == "webview2":
             desc_text = (
-                self.tr("YouTube 需要重新验证身份，请选择以下方式修复：\n\n")
-                + self.tr("• 重新登录：点击下方按钮在浏览器中重新登录 YouTube\n")
+                self.tr("{} 需要重新验证身份，请选择以下方式修复：\n\n").format(label)
+                + self.tr("• 重新登录：点击下方按钮在弹出的登录窗口中重新登录 {}\n").format(label)
                 + self.tr("• 手动导入：使用浏览器扩展 Get cookies.txt LOCALLY 导出并导入")
             )
         elif self._auth_source == "file":
             desc_text = (
-                self.tr("YouTube 需要重新验证身份，请选择以下方式修复：\n\n")
+                self.tr("{} 需要重新验证身份，请选择以下方式修复：\n\n").format(label)
                 + self.tr("• 重新导入：选择更新的 Cookie 文件 (Netscape 格式)\n")
                 + self.tr("• 推荐使用浏览器扩展 Get cookies.txt LOCALLY 导出\n")
                 + self.tr("• 或切换到「登录获取」模式，无需手动导出")
             )
         else:
             desc_text = (
-                self.tr("YouTube 需要重新验证身份，请选择以下方式修复：\n\n")
-                + self.tr("• 自动修复：尝试重新提取 Cookie (Chrome/Edge 若失败请使用下方方案)\n")
+                self.tr("{} 需要重新验证身份，请选择以下方式修复：\n\n").format(label)
+                + self.tr("• 自动修复：尝试重新提取 Cookie (Edge 若失败请使用下方方案)\n")
                 + self.tr("• 强烈建议：将设置页面的提取来源换为 Firefox 或 LibreWolf\n")
                 + self.tr("• 手动导入：使用浏览器扩展 Get cookies.txt LOCALLY 导出并手动导入")
             )
@@ -95,10 +118,7 @@ class CookieRepairDialog(MessageBoxBase):
 
         # 按钮区域 (MessageBoxBase 已经提供了 self.yesButton 和 self.cancelButton)
         self.cancelButton.setText(self.tr("稍后处理"))
-        if self._auth_source == "webview2":
-            self.yesButton.setText(self.tr("重新登录"))
-        else:
-            self.yesButton.setText(self.tr("自动修复"))
+        self.yesButton.setText(self._repair_label)
 
         try:
             self.yesButton.clicked.disconnect()
@@ -171,20 +191,23 @@ class CookieRepairDialog(MessageBoxBase):
             )
             # 恢复按钮状态
             self.yesButton.setEnabled(True)
-            self.yesButton.setText(self.tr("自动修复"))
+            self.yesButton.setText(self._repair_label)
 
 
-def show_cookie_repair_dialog(error_message: str = "", parent=None) -> CookieRepairDialog:
+def show_cookie_repair_dialog(
+    error_message: str = "", parent=None, platform: str = "youtube"
+) -> CookieRepairDialog:
     """
     显示 Cookie 修复对话框（便捷函数）
 
     Args:
         error_message: 错误消息
         parent: 父窗口
+        platform: 目标平台（youtube / twitter），决定文案里的平台名
 
     Returns:
         对话框实例（已显示但未 exec）
     """
-    dialog = CookieRepairDialog(error_message, parent)
+    dialog = CookieRepairDialog(error_message, parent, platform=platform)
     dialog.show()
     return dialog

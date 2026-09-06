@@ -216,6 +216,16 @@ class ExpandHelpCard(ExpandSettingCard):
 # Wizard step HTML content
 _WIZARD_LOGO_URI = r"e:\YouTube\FluentYTDL\assets\logo.png"
 
+
+def _wizard_step_html(source: str) -> str:
+    """把 ``_WIZARD_STEPn_HTML`` 源串翻译成当前语言。
+
+    这些常量在下面用 ``QT_TRANSLATE_NOOP("HelpWindow", ...)`` 标记，lupdate 从**声明处**
+    抽取；本函数只做运行期查表，参数永远是变量，所以不影响提取。
+    """
+    return QCoreApplication.translate("HelpWindow", source)
+
+
 _WIZARD_STEP1_HTML = QT_TRANSLATE_NOOP(
     "HelpWindow",
     """
@@ -485,15 +495,17 @@ class WelcomeGuideWidget(QWidget):
         bg_color = "#202020" if theme == Theme.DARK else "#F9F9F9"
         self.setStyleSheet(f"WelcomeGuideWidget {{ background-color: {bg_color}; border: none; }}")
 
-        def tr(text: str) -> str:
-            return QCoreApplication.translate("HelpWindow", text)
+        # 这里不包 ``def tr(text)`` 辅助函数：见 ISSUE #88，本项目统一用完整形式的
+        # ``QCoreApplication.translate("HelpWindow", ...)``，源串已在
+        # ``_WIZARD_STEPn_HTML`` 处用 QT_TRANSLATE_NOOP 标记。
+        _tr_html = _wizard_step_html
 
         if hasattr(self, "step1_browser"):
             from fluentytdl.utils.paths import resource_path
 
             logo_uri = f"file:///{resource_path('assets', 'logo.png').as_posix()}"
             step1_html = (
-                tr(_WIZARD_STEP1_HTML)
+                _tr_html(_WIZARD_STEP1_HTML)
                 .replace("__version__", getattr(self, "_ver", "?"))
                 .replace("file:///e:/YouTube/FluentYTDL/assets/logo.png", logo_uri)
             )
@@ -506,35 +518,35 @@ class WelcomeGuideWidget(QWidget):
                 get_markdown_css(theme) + _WIZARD_CSS_OVERRIDE
             )
             self.step2_browser.setHtml(
-                f'<div style="text-align:center">{tr(_WIZARD_STEP2_HTML)}</div>'
+                f'<div style="text-align:center">{_tr_html(_WIZARD_STEP2_HTML)}</div>'
             )
         if hasattr(self, "step3_browser"):
             self.step3_browser.document().setDefaultStyleSheet(
                 get_markdown_css(theme) + _WIZARD_CSS_OVERRIDE
             )
             self.step3_browser.setHtml(
-                f'<div style="text-align:center">{tr(_WIZARD_STEP3_HTML)}</div>'
+                f'<div style="text-align:center">{_tr_html(_WIZARD_STEP3_HTML)}</div>'
             )
         if hasattr(self, "step4_browser"):
             self.step4_browser.document().setDefaultStyleSheet(
                 get_markdown_css(theme) + _WIZARD_CSS_OVERRIDE
             )
             self.step4_browser.setHtml(
-                f'<div style="text-align:center">{tr(_WIZARD_STEP4_HTML)}</div>'
+                f'<div style="text-align:center">{_tr_html(_WIZARD_STEP4_HTML)}</div>'
             )
         if hasattr(self, "step5_browser"):
             self.step5_browser.document().setDefaultStyleSheet(
                 get_markdown_css(theme) + _WIZARD_CSS_OVERRIDE
             )
             self.step5_browser.setHtml(
-                f'<div style="text-align:center">{tr(_WIZARD_STEP5_HTML)}</div>'
+                f'<div style="text-align:center">{_tr_html(_WIZARD_STEP5_HTML)}</div>'
             )
         if hasattr(self, "step6_browser"):
             self.step6_browser.document().setDefaultStyleSheet(
                 get_markdown_css(theme) + _WIZARD_CSS_OVERRIDE
             )
             self.step6_browser.setHtml(
-                f'<div style="text-align:center">{tr(_WIZARD_STEP6_HTML)}</div>'
+                f'<div style="text-align:center">{_tr_html(_WIZARD_STEP6_HTML)}</div>'
             )
 
 

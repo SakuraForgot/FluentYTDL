@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from loguru import logger
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QBrush, QColor
 from PySide6.QtWidgets import (
@@ -35,8 +34,15 @@ from qfluentwidgets import (
 from fluentytdl.ui.components.common.badges import QualityCellWidget
 
 from ....core.config_manager import config_manager
+from ....observability import FlowTrace, emit_event
+from ....utils.bcp47 import matches as bcp47_matches
 from ....utils.container_compat import choose_lossless_merge_container
-from ....utils.format_scorer import ScoringContext, decide_merge_container, score_audio_format
+from ....utils.format_scorer import (
+    ScoringContext,
+    decide_merge_container,
+    format_ranking,
+    rank_audio_formats,
+)
 
 
 def _get_table_selection_qss() -> str:
@@ -162,11 +168,13 @@ def _format_size(value: Any) -> str:
 
 
 def _analyze_format_tags(r: dict) -> list[tuple[str, str]]:
-    """Generates badge data for format details: [(text, color_style), ...]"""
-    from PySide6.QtCore import QCoreApplication
+    """Generates badge data for format details: [(text, color_style), ...]
 
-    def tr(text: str) -> str:
-        return QCoreApplication.translate("FormatSelector", text)
+    文案写成 ``QCoreApplication.translate("FormatSelector", "...")`` 的完整形式：
+    模块级函数里包一层 ``def tr(text)`` 会让 lupdate 抽到空上下文，运行时按
+    ``FormatSelector`` 查表永远查不到（ISSUE #88）。
+    """
+    from PySide6.QtCore import QCoreApplication
 
     tags = []
 
@@ -188,7 +196,7 @@ def _analyze_format_tags(r: dict) -> list[tuple[str, str]]:
         track_type = str(r.get("audio_track_type") or "").lower()
         # Original track usually marked by youtube or has language="original" in yt-dlp
         if track_type == "original" or lang.lower() == "orig" or lang.lower() == "original":
-            tags.append((tr("原音"), "green"))
+            tags.append((QCoreApplication.translate("FormatSelector", "原音"), "green"))
         else:
             tags.append((f"[{lang.upper()}]", "blue"))
 
@@ -686,9 +694,16 @@ class VideoFormatSelectorWidget(QWidget):
 
     selectionChanged = Signal()
 
-    def __init__(self, info: dict[str, Any], parent=None):
+    def __init__(self, info: dict[str, Any], parent=None, *, trace: FlowTrace | None = None):
         super().__init__(parent)
         self.info = info
+        # 本控件跑在 GUI 线程上，`current_flow()` 在这里永远是 None，所以 trace 必须显式传进来
+        # （`observability/trace.py` 的规则：有 trace 可传的地方一律显式传参）。
+        self._trace = trace
+        #: 上一条已 emit 的决策指纹。`get_selection_result()` 不只在"确定下载"时被调用，
+        #: 也被字幕选择器拿去问容器（`selection_dialog._open_subtitle_picker`），
+        #: 同一个选择重复问不是新决策 —— 只在指纹变化时才落事件。
+        self._last_decision_sig: tuple | None = None
 
         # State for advanced mode
         self._rows: list[dict[str, Any]] = []
@@ -953,6 +968,11 @@ class VideoFormatSelectorWidget(QWidget):
                     "dynamic_range": f.get("dynamic_range"),
                     "language": f.get("language"),
                     "audio_track_type": f.get("audio_track_type"),
+                    # `score_audio_format()` 的 is_orig / 配音加权全靠它（"yt-dlp 经常把
+                    # original 放在 format_note 里"）。之前这里没带上，于是打分引擎里
+                    # 那三条 format_note 分支在本控件的候选集上永远是死的 —— 原音识别
+                    # 只剩 `audio_track_type == "original"` 一条路，AI 配音的降权也从未生效。
+                    "format_note": f.get("format_note"),
                 }
             )
 
@@ -990,8 +1010,12 @@ class VideoFormatSelectorWidget(QWidget):
         自动推断最优的音频流。
 
         若传入 ctx，直接使用其 preferred_audio_langs；否则从 config_manager 读取。
-        评分委托给 format_scorer.score_audio_format，使用等差间距 + BCP-47 别名匹配，
-        彻底修复了旧版 10**i 指数间距在第 8 个偏好后 multiplier 归零的精度崩塌问题。
+        评分委托给 format_scorer.rank_audio_formats（内部即 score_audio_format），
+        使用等差间距 + BCP-47 别名匹配，彻底修复了旧版 10**i 指数间距在第 8 个偏好后
+        multiplier 归零的精度崩塌问题。
+
+        取 `rank_audio_formats(...)[0]` 而不是 `max(...)`：两者语义完全一致（稳定排序），
+        但排名同时是观测口 —— `_emit_format_decision()` 要用同一份排序回答"亚军是谁、差多少"。
         """
         if not audio_rows:
             return None
@@ -1002,8 +1026,7 @@ class VideoFormatSelectorWidget(QWidget):
                 pref_langs = ["orig", "zh-Hans", "en"]
             ctx = ScoringContext(preferred_audio_langs=pref_langs)
 
-        best_audio = max(audio_rows, key=lambda r: score_audio_format(r, ctx))
-        return best_audio["format_id"]
+        return rank_audio_formats(audio_rows, ctx)[0][0]["format_id"]
 
     def _pick_best_video(self, video_rows: list[dict], intent: dict) -> str | None:
         """
@@ -1385,6 +1408,188 @@ class VideoFormatSelectorWidget(QWidget):
 
     def get_selection_result(self) -> dict:
         """Returns {format: str, extra_opts: dict} or {} if invalid."""
+        result = self._compute_selection_result()
+        self._emit_format_decision(result)
+        return result
+
+    def _emit_format_decision(self, result: dict) -> None:
+        """把最终选出的格式落成一条 `kind=decision subsystem=format`，偏差过大时再补一条 `signal`。
+
+        **从结果反推，而不是在各个分支里各打一份。** `_compute_selection_result()` 有十来个
+        return 点（纯音频 / 视频+音频 / 用户点选多音轨 / 降级整合流 / 兜底 `best` / 专业模式
+        四条），在每条上加一句 emit，迟早会有第十一条忘了加。这里只认最终 `format` 串，把 id
+        回查 `self._rows` 得到实际拿到的东西，再和 intent 里要的东西并排放 —— 分支怎么改都不
+        会漏记。
+
+        这两对"要的 vs 拿到的"就是答案本身：
+
+        - `target_height` / `video_height` / `avail_height_max`：三个数一起才分得清"这视频压根
+          没有 1080p"和"有 1080p 却没被选中"——后者是 bug，前者不是，而命令行上两者一模一样。
+        - `pref_langs` / `audio_lang` / `avail_langs`：音轨侧的同一个问题。"我设了日语音轨怎么
+          还是英语"，只有看 `avail_langs` 里到底有没有 ja 才答得上来。
+
+        `audio_ranked`（`format_id:lang:score`，前四名）回答的是**同一语言里的内斗**：
+        `avail_langs` 说明不了"有两条日语音轨，为什么挑了 AI 配音那条"。分差的来源是配音
+        加权（原音 +50000 / 人工 +10000 / AI −50000），而那套加权全靠 `format_note` ——
+        它此前在两个候选集构造器里都被丢掉了（见 `_build_rows` 的注释），也就是说这条
+        排名同时是那处修复的验收口。用挑流时那份 ctx 重算（`_build_scoring_ctx()`），
+        不是随手 `ScoringContext()`，否则分数对不上真实选择。
+
+        容器要三个一起看：`container_auto` 是按流的编解码器无损推断的，`container` 是最终值，
+        `container_forced` 是用户在输出格式栏里压的。**"输出容器"只作用于合并后的容器，从不参与
+        挑流**（`intent["prefer_ext"]` 全项目没有一处赋非 None 值，所以 `_pick_best_video()` 的
+        容器硬约束与 `score_audio_format()` 的 mp4 亲和加分实际都没被触发过），于是"我选了 MP4
+        怎么下了个 VP9、还卡在转封装上"就只有 `container_forced=mp4 video_ext=webm` 这一处看得见。
+        """
+        rows = getattr(self, "_rows", [])
+        video_rows = [r for r in rows if r.get("kind") == "video"]
+        audio_rows = [r for r in rows if r.get("kind") == "audio"]
+        muxed_rows = [r for r in rows if r.get("kind") == "muxed"]
+
+        fmt = str(result.get("format") or "")
+        extra = result.get("extra_opts") or {}
+        simple = getattr(self, "_current_mode", "simple") == "simple"
+        intent: dict = {}
+        if simple:
+            intent = (self.simple_widget.get_current_selection() or {}).get("intent") or {}
+
+        # 把 `137+251+140` / `18` 拆成 id，再按 kind 归位。`/` 只会出现在兜底串里（`best`），
+        # 那种情况下查不到行，各字段自然是 None —— 正是"没走打分引擎"的实情。
+        picked = [p for p in fmt.replace("/", "+").split("+") if p]
+        by_id = {str(r.get("format_id")): r for r in rows}
+        vid_row = next((by_id[p] for p in picked if by_id.get(p, {}).get("kind") == "video"), None)
+        aud_rows = [by_id[p] for p in picked if by_id.get(p, {}).get("kind") == "audio"]
+        mux_row = next((by_id[p] for p in picked if by_id.get(p, {}).get("kind") == "muxed"), None)
+        aud_row = aud_rows[0] if aud_rows else None
+
+        pref_langs = _global_pref_langs()
+
+        video_ext = (vid_row or mux_row or {}).get("ext")
+        audio_lang = (aud_row or {}).get("language")
+        video_height = int((vid_row or mux_row or {}).get("height") or 0)
+        target_height = intent.get("max_height")
+
+        sig = (
+            fmt,
+            extra.get("merge_output_format"),
+            bool(extra.get("extract_audio")),
+            len(picked),
+        )
+        if sig == self._last_decision_sig:
+            return
+        self._last_decision_sig = sig
+
+        emit_event(
+            "decision",
+            trace=self._trace,
+            # 每次取值一条（同一选择重复取值已被指纹挡掉），只进文件与 JSONL，不刷控制台。
+            level="DEBUG",
+            stage="select",
+            subsystem="format",
+            mode="simple" if simple else "advanced",
+            route=self._decision_route(result, vid_row, aud_rows, mux_row),
+            format=fmt or None,
+            target_height=target_height,
+            video_height=video_height or None,
+            avail_height_max=max(
+                (int(r.get("height") or 0) for r in video_rows + muxed_rows), default=0
+            )
+            or None,
+            video_ext=video_ext,
+            audio_ext=(aud_row or {}).get("ext"),
+            pref_langs=pref_langs if audio_rows else None,
+            audio_lang=audio_lang,
+            audio_track_type=(aud_row or {}).get("audio_track_type"),
+            lang_matched=self._lang_pref_matched(pref_langs, aud_row) if aud_row else None,
+            avail_langs=sorted(
+                {str(r.get("language")).lower() for r in audio_rows if r.get("language")}
+            )
+            or None,
+            audio_tracks=len(aud_rows) if len(aud_rows) > 1 else None,
+            audio_ranked=format_ranking(rank_audio_formats(audio_rows, _build_scoring_ctx(intent)))
+            if audio_rows
+            else None,
+            container=extra.get("merge_output_format"),
+            container_auto=choose_lossless_merge_container(video_ext, (aud_row or {}).get("ext"))
+            if aud_row
+            else None,
+            container_forced=self.get_container_override(),
+            candidates=f"{len(video_rows)}v/{len(audio_rows)}a/{len(muxed_rows)}m",
+        )
+
+        # ── 兜底验证：最终拿到的画质是否严重偏离目标 ──
+        # 跟着决策事件走，而不是留在 `_compute_selection_result()` 里，有两个理由：
+        #   1. 那边每次取值都会重跑，字幕选择器顺手问一次容器就多喊一声 WARNING；这里在
+        #      指纹闸门之后，只有选择真的变了才叫。
+        #   2. 那边判的是 `_pick_best_video()` 的中间结果。走 `muxed_fallback` 时那条视频流
+        #      根本没被采用（真正下载的是 360p 整合流），旧代码却拿它报"144p vs 360p"——
+        #      一条纯误报。这里只认最终 `format` 串里真的那一路。
+        if video_height and target_height and video_height <= int(target_height) * 0.5:
+            # 成功路径上的异常征兆只能是 signal，不是 diagnosis（硬规则 2）。
+            # 记 code 而不是本地化文案：原先这里是 `logger.warning(self.tr(...))`，
+            # 日志内容会随界面语言变化，搜不着也对不上。
+            emit_event(
+                "signal",
+                trace=self._trace,
+                level="WARNING",
+                stage="select",
+                subsystem="format",
+                code="quality_score_deviation",
+                target_height=target_height,
+                actual_height=video_height,
+                format=fmt or None,
+            )
+
+    @staticmethod
+    def _decision_route(
+        result: dict, vid_row: dict | None, aud_rows: list[dict], mux_row: dict | None
+    ) -> str:
+        """这次结果是走哪条装配路线出来的。
+
+        `muxed_fallback` 与 `video_audio` 在命令行上都是"一个 format 串"，但前者意味着
+        分离音轨一条都没匹配上、只能退回整合流 —— "音轨怎么变成单声道 / 怎么不是我要的语言"
+        的头号成因。`bare_fallback`（`format=best`）则代表打分引擎彻底没参与。
+        """
+        if not result:
+            return "no_selection"
+        if (result.get("extra_opts") or {}).get("extract_audio"):
+            return "audio_only"
+        fmt = str(result.get("format") or "")
+        if fmt in ("best", ""):
+            return "bare_fallback"
+        if vid_row and aud_rows:
+            return "video_audio"
+        if mux_row:
+            return "muxed_fallback"
+        if vid_row:
+            return "video_no_audio"
+        if aud_rows:
+            return "audio_stream_only"
+        return "unresolved_ids"
+
+    @staticmethod
+    def _lang_pref_matched(pref_langs: list, aud_row: dict) -> bool:
+        """选中的音轨是否命中了用户的语言偏好。
+
+        复用 `utils/bcp47.matches`（打分引擎用的同一个匹配器），不重抄别名表 —— 抄一份就会
+        出现"日志说匹配上了、打分说没有"的自相矛盾。`orig` 不是语言码而是"跟视频原始语言走"，
+        单独判。
+        """
+        lang = str(aud_row.get("language") or "").strip().lower()
+        ttype = str(aud_row.get("audio_track_type") or "").strip().lower()
+        note = str(aud_row.get("format_note") or "").strip().lower()
+        is_orig = ttype == "original" or "original" in note or lang in {"orig", "original"}
+        for pref in pref_langs:
+            p = str(pref).strip().lower()
+            if p == "orig":
+                if is_orig:
+                    return True
+            elif bcp47_matches(p, lang):
+                return True
+        return False
+
+    def _compute_selection_result(self) -> dict:
+        """算出 {format, extra_opts}；观测由 `get_selection_result()` 统一负责。"""
         if getattr(self, "_current_mode", "simple") == "simple":
             sel = self.simple_widget.get_current_selection()
             if not sel:
@@ -1397,29 +1602,9 @@ class VideoFormatSelectorWidget(QWidget):
             muxed_rows = [r for r in rows if r.get("kind") == "muxed"]
 
             # ── 构建打分上下文（整合用户设置 + 预设意图 + 字幕配置）──────────
-            pref_langs = config_manager.get("preferred_audio_languages")
-            if not isinstance(pref_langs, list) or not pref_langs:
-                pref_langs = ["orig", "zh-Hans", "en"]
-
-            # 从字幕配置预填充字幕信息（决策时序：此处在 subtitle_service.apply 之前）
-            # 最终容器修正由 _ensure_subtitle_compatible_container 兜底，ctx 值仅作预判
-            sub_config = config_manager.get_subtitle_config()
-            sub_enabled = (
-                sub_config.enabled
-                and sub_config.embed_type == "soft"
-                and sub_config.embed_mode != "never"
-            )
-            sub_lang_count = len(sub_config.default_languages) if sub_enabled else 0
-
-            intent.get("type", "video_audio")
-            ctx = ScoringContext(
-                is_simple_mode=True,
-                max_height=intent.get("max_height"),
-                prefer_ext=intent.get("prefer_ext"),
-                preferred_audio_langs=pref_langs,
-                embed_subtitles=sub_enabled,
-                subtitle_lang_count=sub_lang_count,
-            )
+            # 决策时序：此处在 subtitle_service.apply 之前，ctx 里的字幕信息仅作预判，
+            # 最终容器修正由 `ensure_subtitle_compatible_container()` 兜底。
+            ctx = _build_scoring_ctx(intent)
 
             # --- 纯音频模式 ---
             if intent.get("type") == "audio_only":
@@ -1441,20 +1626,6 @@ class VideoFormatSelectorWidget(QWidget):
             # --- 含视频模式：用打分引擎挑选最优视频+音频 ---
             best_vid = self._pick_best_video(video_rows, intent)
             best_aud = self._get_best_audio_id(audio_rows, ctx) if audio_rows else None
-
-            # ── 兜底验证：打分结果是否偏离目标 ──
-            if best_vid and intent.get("max_height"):
-                selected_row = next((r for r in video_rows if r["format_id"] == best_vid), None)
-                if selected_row:
-                    actual_h = int(selected_row.get("height") or 0)
-                    target_h = intent["max_height"]
-                    if actual_h > 0 and target_h > 0 and actual_h <= target_h * 0.5:
-                        logger.warning(
-                            self.tr("打分引擎选出 {}p (format_id={}), 目标 {}p, 偏差过大"),
-                            actual_h,
-                            best_vid,
-                            target_h,
-                        )
 
             extra_opts: dict = {}
 
@@ -1557,22 +1728,42 @@ class VideoFormatSelectorWidget(QWidget):
 # ==============================================================================
 
 
-def resolve_global_format(info: dict | None, override: Any) -> tuple[str, dict]:
+def resolve_global_format(
+    info: dict | None, override: Any, *, trace: FlowTrace | None = None
+) -> tuple[str, dict]:
     """
     根据给定的全局格式覆盖配置，为指定视频 info 推断最优 format 及 extra_opts。
     override: PlaylistGlobalFormatOverride
     返回: (format_str, extra_opts_dict)
+
+    Args:
+        trace: 传了才落 `kind=decision subsystem=format`。**这里刻意与 `subtitle_service`
+            那种"没 trace 也照记"的写法不同**：本函数有两个调用点，一个是列表里逐行刷新的
+            画质预览（用户拖一下滚动条就跑几十次），另一个才是真正拼 `row_opts` 的那次。
+            只有后者传 trace，预览就不会把 JSONL 灌成一堆 `flow=-` 的孤儿事件。
     """
     if not info or not isinstance(info.get("formats"), list):
+        if trace is not None:
+            _emit_global_format_decision(
+                trace, override, *_fallback_global_format_str(override), []
+            )
         return _fallback_global_format_str(override)
 
-    from ....core.config_manager import config_manager
-    from ....utils.format_scorer import ScoringContext, decide_merge_container, score_audio_format
+    candidates = _build_global_candidates(info["formats"])
+    fmt, extra = _resolve_global_format(candidates, override)
+    if trace is not None:
+        _emit_global_format_decision(trace, override, fmt, extra, candidates)
+    return fmt, extra
 
-    formats = info["formats"]
+
+def _build_global_candidates(formats: list) -> list[dict]:
+    """把 yt-dlp 的 formats 压成打分引擎要的精简属性表（对应控件侧的 `_build_rows`）。
+
+    从 `resolve_global_format()` 里拆出来，是为了让"建候选集 / 做决策 / 记决策"三件事分开：
+    观测点要能拿到完整候选集才答得上"你要的 1080p 到底在不在候选里"。
+    """
     candidates = []
 
-    # 建立精简属性表 (复用 _build_rows)
     for f in formats:
         if not isinstance(f, dict):
             continue
@@ -1614,9 +1805,17 @@ def resolve_global_format(info: dict | None, override: Any) -> tuple[str, dict]:
                 "dynamic_range": f.get("dynamic_range"),
                 "language": f.get("language"),
                 "audio_track_type": f.get("audio_track_type"),
+                # 见 `_build_rows` 里的同名注释：少了它，`score_audio_format()` 的原音识别
+                # 与配音降权在这条路径上同样是死的。
+                "format_note": f.get("format_note"),
             }
         )
 
+    return candidates
+
+
+def _resolve_global_format(candidates: list[dict], override: Any) -> tuple[str, dict]:
+    """在给定候选集上执行全局预设的格式决策。观测由 `resolve_global_format()` 统一负责。"""
     video_rows = [r for r in candidates if r["kind"] == "video"]
     audio_rows = [r for r in candidates if r["kind"] == "audio"]
     muxed_rows = [r for r in candidates if r["kind"] == "muxed"]
@@ -1624,28 +1823,12 @@ def resolve_global_format(info: dict | None, override: Any) -> tuple[str, dict]:
     intent = override.preset_intent or {}
     download_type = override.download_type
 
-    pref_langs = config_manager.get("preferred_audio_languages")
-    if not isinstance(pref_langs, list) or not pref_langs:
-        pref_langs = ["orig", "zh-Hans", "en"]
-
-    sub_config = config_manager.get_subtitle_config()
-    sub_enabled = (
-        sub_config.enabled and sub_config.embed_type == "soft" and sub_config.embed_mode != "never"
-    )
-
-    ctx = ScoringContext(
-        is_simple_mode=True,
-        max_height=intent.get("max_height"),
-        prefer_ext=intent.get("prefer_ext"),
-        preferred_audio_langs=pref_langs,
-        embed_subtitles=sub_enabled,
-        subtitle_lang_count=len(sub_config.default_languages) if sub_enabled else 0,
-    )
+    ctx = _build_scoring_ctx(intent)
 
     # 推断最佳音轨
     best_aud = None
     if audio_rows:
-        best_aud = max(audio_rows, key=lambda r: score_audio_format(r, ctx))["format_id"]
+        best_aud = rank_audio_formats(audio_rows, ctx)[0][0]["format_id"]
 
     # 推断最佳画质
     def pick_best(pool, intent_max_height, intent_prefer_ext):
@@ -1726,3 +1909,119 @@ def _fallback_global_format_str(override: Any) -> tuple[str, dict]:
         opts["merge_output_format"] = override.container_override
 
     return format_str, opts
+
+
+def _global_pref_langs() -> list[str]:
+    """音轨语言偏好，带默认值。控件侧与全局预设侧读的是同一份配置，缺省值也必须是同一份。"""
+    pref_langs = config_manager.get("preferred_audio_languages")
+    if not isinstance(pref_langs, list) or not pref_langs:
+        return ["orig", "zh-Hans", "en"]
+    return pref_langs
+
+
+def _build_scoring_ctx(intent: dict) -> ScoringContext:
+    """从预设意图 + 全局配置装出打分上下文。控件侧与全局预设侧**必须共用这一份**。
+
+    原先这段在 `_compute_selection_result()` 和 `_resolve_global_format()` 里各抄了一遍
+    （逐字相同）。收成一处的直接原因是观测：两个 `_emit_*_format_decision()` 要在事件里
+    带上排名（"赢家凭什么赢"），而排名必须用**挑流时那份 ctx** 重算才有意义 ——
+    `ScoringContext.prefer_ext` 的 dataclass 缺省值是 `"mp4"`，而实际传进来的
+    `intent.get("prefer_ext")` 从来是 `None`，随手 `ScoringContext()` 出来的分数
+    会因为那 +2000 的 mp4 亲和加分和真实排名对不上。一份对不上的排名比没有排名更糟。
+    """
+    pref_langs = _global_pref_langs()
+    sub_config = config_manager.get_subtitle_config()
+    sub_enabled = (
+        sub_config.enabled and sub_config.embed_type == "soft" and sub_config.embed_mode != "never"
+    )
+    return ScoringContext(
+        is_simple_mode=True,
+        max_height=intent.get("max_height"),
+        prefer_ext=intent.get("prefer_ext"),
+        preferred_audio_langs=pref_langs,
+        embed_subtitles=sub_enabled,
+        subtitle_lang_count=len(sub_config.default_languages) if sub_enabled else 0,
+    )
+
+
+def _emit_global_format_decision(
+    trace: FlowTrace, override: Any, fmt: str, extra: dict, candidates: list[dict]
+) -> None:
+    """播放列表全局预设侧的 `kind=decision subsystem=format`。
+
+    字段与控件侧的 `_emit_format_decision()` **刻意保持同名同义**：播放列表里"这一行怎么
+    是 720p"和单视频里的同一个问题，应该用同一条查询语句就能筛出来。`mode=global` 是唯一
+    的区别 —— 它标明这条决策没有 UI 参与，全靠预设推的。
+
+    这里同样从结果反推（见控件侧那份 docstring 的理由）：本函数有六个 return 点。
+
+    **刻意不发控件侧那条 `quality_score_deviation` signal。** 它是 WARNING 级、会进控制台，
+    而这里是播放列表逐行调用 —— 一个几百条老视频的列表能刷出几百行警告。偏差本身仍然可查：
+    `target_height` / `video_height` / `avail_height_max` 三个字段一条查询就筛得出来。
+    """
+    video_rows = [r for r in candidates if r.get("kind") == "video"]
+    audio_rows = [r for r in candidates if r.get("kind") == "audio"]
+    muxed_rows = [r for r in candidates if r.get("kind") == "muxed"]
+
+    intent = override.preset_intent or {}
+    picked = [p for p in str(fmt or "").replace("/", "+").split("+") if p]
+    by_id = {str(r.get("format_id")): r for r in candidates}
+    vid_row = next((by_id[p] for p in picked if by_id.get(p, {}).get("kind") == "video"), None)
+    aud_row = next((by_id[p] for p in picked if by_id.get(p, {}).get("kind") == "audio"), None)
+    mux_row = next((by_id[p] for p in picked if by_id.get(p, {}).get("kind") == "muxed"), None)
+
+    pref_langs = _global_pref_langs()
+    video_ext = (vid_row or mux_row or {}).get("ext")
+
+    if not candidates:
+        route = "no_formats"
+    elif extra.get("extract_audio"):
+        route = "audio_only"
+    elif not picked or not by_id.get(picked[0]):
+        # `bv*[height<=1080]+ba/b[...]` 这类兜底串：查不到任何 format_id，说明没走打分引擎
+        route = "bare_fallback"
+    elif vid_row and aud_row:
+        route = "video_audio"
+    elif mux_row:
+        route = "muxed_fallback"
+    else:
+        route = "video_no_audio" if vid_row else "unresolved_ids"
+
+    emit_event(
+        "decision",
+        trace=trace,
+        # 播放列表逐行一条，只进文件与 JSONL，不刷控制台。
+        level="DEBUG",
+        stage="select",
+        subsystem="format",
+        mode="global",
+        route=route,
+        format=fmt or None,
+        target_height=intent.get("max_height"),
+        video_height=(vid_row or mux_row or {}).get("height") or None,
+        avail_height_max=max(
+            (int(r.get("height") or 0) for r in video_rows + muxed_rows), default=0
+        )
+        or None,
+        video_ext=video_ext,
+        audio_ext=(aud_row or {}).get("ext"),
+        pref_langs=pref_langs if audio_rows else None,
+        audio_lang=(aud_row or {}).get("language"),
+        audio_track_type=(aud_row or {}).get("audio_track_type"),
+        lang_matched=(
+            VideoFormatSelectorWidget._lang_pref_matched(pref_langs, aud_row) if aud_row else None
+        ),
+        avail_langs=sorted(
+            {str(r.get("language")).lower() for r in audio_rows if r.get("language")}
+        )
+        or None,
+        audio_ranked=format_ranking(rank_audio_formats(audio_rows, _build_scoring_ctx(intent)))
+        if audio_rows
+        else None,
+        container=extra.get("merge_output_format"),
+        container_auto=choose_lossless_merge_container(video_ext, (aud_row or {}).get("ext"))
+        if aud_row
+        else None,
+        container_forced=override.container_override,
+        candidates=f"{len(video_rows)}v/{len(audio_rows)}a/{len(muxed_rows)}m",
+    )

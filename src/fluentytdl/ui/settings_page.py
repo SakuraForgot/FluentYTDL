@@ -7,9 +7,11 @@ import time
 from pathlib import Path
 from typing import Any, Literal, cast
 
-from PySide6.QtCore import QCoreApplication, Qt, QThread, QTimer, Signal
+from PySide6.QtCore import QCoreApplication, Qt, QThread, QTimer, QUrl, Signal
+from PySide6.QtGui import QColor, QDesktopServices
 from PySide6.QtWidgets import QFileDialog, QStackedWidget, QVBoxLayout, QWidget
 from qfluentwidgets import (
+    CaptionLabel,
     CheckBox,
     ComboBox,
     FluentIcon,
@@ -31,6 +33,7 @@ from qfluentwidgets import (
     ToolTipPosition,
 )
 
+from fluentytdl.ui.components.common.cookie_refresh_worker import CookieRefreshWorker
 from fluentytdl.ui.components.common.custom_info_bar import InfoBar
 from fluentytdl.ui.components.settings.app_update_card import AppUpdateSettingCard
 from fluentytdl.ui.components.settings.smart_setting_card import SmartSettingCard
@@ -41,70 +44,27 @@ from ..core.hardware_manager import hardware_manager
 from ..download.download_manager import download_manager
 from ..processing.subtitle_manager import COMMON_SUBTITLE_LANGUAGES
 from ..utils.logger import LOG_DIR, logger
-from ..utils.paths import find_bundled_executable, is_frozen
+from ..utils.paths import find_bundled_executable
 from ..youtube.yt_dlp_cli import resolve_yt_dlp_exe, run_version
 
-# ============================================================================
-# Cookie 刷新 Worker（使用Qt线程，确保打包后正常工作）
-# ============================================================================
-
-
-class CookieRefreshWorker(QThread):
-    """Cookie刷新工作线程（Qt线程，打包后可靠）"""
-
-    finished = Signal(bool, str, bool)  # (成功标志, 消息, 是否需要管理员权限)
-
-    def __init__(self, parent=None, platform: str | None = None):
-        super().__init__(parent)
-        self.platform = platform
-
-    def run(self):
-        """在Qt线程中执行Cookie刷新"""
-        from ..auth.auth_service import auth_service
-        from ..auth.cookie_sentinel import cookie_sentinel
-        from ..utils.logger import logger
-
-        success = False
-        message = "未知错误"
-
-        try:
-            # 直接刷新（调用前已检查权限，或已是管理员/非Edge/Chrome）
-            success, message = cookie_sentinel.force_refresh_with_uac(platform=self.platform)
-
-            if not success:
-                # 获取详细状态
-                status = auth_service.last_status
-                if status and hasattr(status, "message") and status.message:
-                    message = status.message
-
-                # 友好的错误引导
-                browser_name = auth_service.current_source_display
-
-                # 如果 auth_service 已经提供了关于【提取解密失败】的详细多行指引，则保留其内容
-                # 否则，如果是其他诸如“未找到文件”或普通的异常，才覆盖为通用建议
-                if "【提取解密失败】" not in message and (
-                    "未找到" in message or "not found" in message.lower()
-                ):
-                    message = (
-                        f"无法从 {browser_name} 提取 Cookie\n\n"
-                        + self.tr("可能的原因：\n")
-                        + f"1. {browser_name} 未安装或未登录相关平台\n"
-                        f"2. {browser_name} Cookie 数据库被锁定（请关闭浏览器）\n\n"
-                        + self.tr("建议：完全关闭浏览器后重试")
-                    )
-
-                logger.warning(f"[CookieRefreshWorker] 提取失败: {message}")
-        except Exception as e:
-            success = False
-            message = f"刷新异常: {str(e)}"
-            logger.exception("[CookieRefreshWorker] 异常")
-
-        # 发射信号（线程安全，第三个参数保留但不再使用）
-        self.finished.emit(success, message, False)
+# `CookieRefreshWorker` 已搬到 ui/components/common/cookie_refresh_worker.py ——
+# selection_dialog / reimagined_main_window 也要用它，dialog 不该去 import 一个 page。
+# 这里保留 re-export，老的 `from .settings_page import CookieRefreshWorker` 仍然有效。
+__all__ = ["CookieRefreshWorker"]
 
 
 class ComponentSettingCard(SettingCard):
     """Card for managing an external component (check update, install)."""
+
+    #: 按钮当前代表的动作。以前 `_on_action_clicked()` 是拿 `actionButton.text()` 去和
+    #: `self.tr("检查更新")` 之类比字符串来决定干什么 —— 换界面语言、或者 setText 和
+    #: 点击之间插进一个信号，就会点错动作（甚至什么都不做）。状态显式存下来。
+    _IDLE = "idle"
+    _CHECKING = "checking"
+    _UPDATE_AVAILABLE = "update_available"
+    _NOT_INSTALLED = "not_installed"
+    _DOWNLOADING = "downloading"
+    _INSTALLING = "installing"
 
     def __init__(
         self,
@@ -116,6 +76,7 @@ class ComponentSettingCard(SettingCard):
     ):
         super().__init__(icon, title, content, parent)
         self.component_key = component_key
+        self._state = self._IDLE
 
         # UI Elements
         self.progressBar = ProgressBar(self)
@@ -162,12 +123,17 @@ class ComponentSettingCard(SettingCard):
         dependency_manager.download_error.connect(self._on_error)
         dependency_manager.install_finished.connect(self._on_install_finished)
 
+    def _set_state(self, state: str, text: str):
+        """状态和按钮文案必须一起改 —— 分开改就是这个类以前的 bug。"""
+        self._state = state
+        self.actionButton.setText(text)
+
     def _on_action_clicked(self):
-        text = self.actionButton.text()
-        if text == self.tr("检查更新"):
+        if self._state == self._IDLE:
             dependency_manager.check_update(self.component_key)
-        elif text in (self.tr("立即更新"), self.tr("立即安装")):
+        elif self._state in (self._UPDATE_AVAILABLE, self._NOT_INSTALLED):
             dependency_manager.install_component(self.component_key)
+        # checking / downloading / installing：按钮此时是 disabled，走不到这里
 
     def _on_import_clicked(self):
         # Filter based on component type
@@ -199,7 +165,6 @@ class ComponentSettingCard(SettingCard):
             # Simple check
             if src.stat().st_size == 0:
                 InfoBar.error(self.tr("错误"), self.tr("所选文件为空"), parent=self.window())
-                InfoBar.error(self.tr("错误"), self.tr("所选文件为空"), parent=self.window())
                 return
 
             shutil.copy2(src, target_path)
@@ -230,8 +195,19 @@ class ComponentSettingCard(SettingCard):
     def _on_check_started(self, key):
         if key != self.component_key:
             return
-        self.actionButton.setText(self.tr("正在检查..."))
+        self._set_state(self._CHECKING, self.tr("正在检查..."))
         self.actionButton.setEnabled(False)
+
+    def _format_version(self, version: str, channel: str) -> str:
+        """把裸版本号和频道拼成展示串。
+
+        core 那边只给裸版本号 + 独立的 channel 字段 —— 拼字符串是 UI 的活。以前
+        core 直接造 `"2026.08.20 (nightly)"` 传上来，而清单路径又不拼，两条路径格式
+        不一致，跨频道比较就悄悄失效了。
+        """
+        if not channel:
+            return version
+        return f"{version} ({channel})"
 
     def _on_check_finished(self, key, result):
         if key != self.component_key:
@@ -240,23 +216,58 @@ class ComponentSettingCard(SettingCard):
 
         curr = result.get("current", "unknown")
         latest = result.get("latest", "unknown")
+        curr_ch = str(result.get("current_channel") or "")
+        latest_ch = str(result.get("latest_channel") or "")
         has_update = result.get("update_available", False)
+        source = result.get("source", "")
+        # 自动（启动）检查：一条 InfoBar 都不弹。启动时 5 个组件的结果几乎同时回来，
+        # 弹出来就是一屏噪音；「有更新」这件事由消息中心（标题栏小铃铛）负责提醒，
+        # 见 `notification/update_notifier.py`。
+        silent = bool(result.get("silent"))
 
-        self.setContent(self.tr("当前: {}  |  最新: {}").format(curr, latest))
+        curr_text = self._format_version(curr, curr_ch if curr != "unknown" else "")
+        latest_text = self._format_version(latest, latest_ch if latest != "unknown" else "")
+
+        # 组件可能来自自带的 bin 目录，也可能是用户自己装在 PATH 上的那一份 ——
+        # yt-dlp 子进程两种都能用，所以必须把来源写出来。不写的话，PATH 用户会看到
+        # 一个版本号却不知道它是哪来的，而更新按钮装出来的是另一份（自带目录优先）。
+        content = self.tr("当前: {}  |  最新: {}").format(curr_text, latest_text)
+        if source == "path":
+            content += self.tr("  |  来源: 系统 PATH")
+        self.setContent(content)
 
         title_text = self.titleLabel.text()
+        # 频道不一致时这不是"升级"而是"换频道"，装上去的版本号可能反而更小
+        channel_switch = bool(curr_ch and latest_ch and curr_ch != latest_ch and curr != "unknown")
 
         if has_update:
-            self.actionButton.setText(self.tr("立即更新"))
+            self._set_state(self._UPDATE_AVAILABLE, self.tr("立即更新"))
+            if silent:
+                return
+            if channel_switch:
+                detail = self.tr("将从 {} 频道切换到 {} 频道（版本 {} → {}）").format(
+                    curr_ch, latest_ch, curr, latest
+                )
+            else:
+                detail = self.tr("版本 {} 可用 (当前: {})").format(latest, curr)
+            if source == "path":
+                # 安装动作只会写自带目录，不会去动 PATH 上别人的文件。
+                detail += self.tr(
+                    "\n当前使用的是系统 PATH 上的版本，更新会在应用自带目录下安装一份并优先使用。"
+                )
             InfoBar.info(
-                self.tr("发现新版本: {}").format(title_text),
-                self.tr("版本 {} 可用 (当前: {})").format(latest, curr),
+                self.tr("切换频道: {}").format(title_text)
+                if channel_switch
+                else self.tr("发现新版本: {}").format(title_text),
+                detail,
                 duration=15000,
                 parent=self.window(),
             )
         else:
             if latest == "unknown":
-                self.actionButton.setText(self.tr("检查更新"))
+                self._set_state(self._IDLE, self.tr("检查更新"))
+                if silent:
+                    return
                 InfoBar.error(
                     self.tr("检查失败"),
                     self.tr("无法获取 {} 的最新版本信息，请检查网络连接或更换镜像源。").format(
@@ -266,12 +277,15 @@ class ComponentSettingCard(SettingCard):
                     parent=self.window(),
                 )
             elif curr == "unknown":
-                self.actionButton.setText(self.tr("立即安装"))
+                self._set_state(self._NOT_INSTALLED, self.tr("立即安装"))
             else:
-                self.actionButton.setText(self.tr("检查更新"))
+                self._set_state(self._IDLE, self.tr("检查更新"))
+                # 「已是最新」用户什么都不用做 —— 自动检查时是纯噪音
+                if silent:
+                    return
                 InfoBar.info(
                     self.tr("已是最新"),
-                    self.tr("{} 当前版本 {} 已是最新。").format(title_text, curr),
+                    self.tr("{} 当前版本 {} 已是最新。").format(title_text, curr_text),
                     duration=5000,
                     parent=self.window(),
                 )
@@ -282,7 +296,7 @@ class ComponentSettingCard(SettingCard):
         self.progressBar.setVisible(True)
         self.progressBar.setValue(0)
         self.actionButton.setEnabled(False)
-        self.actionButton.setText(self.tr("正在下载..."))
+        self._set_state(self._DOWNLOADING, self.tr("正在下载..."))
 
     def _on_download_progress(self, key, percent):
         if key != self.component_key:
@@ -292,14 +306,14 @@ class ComponentSettingCard(SettingCard):
     def _on_download_finished(self, key):
         if key != self.component_key:
             return
-        self.actionButton.setText(self.tr("正在安装..."))
+        self._set_state(self._INSTALLING, self.tr("正在安装..."))
 
     def _on_install_finished(self, key):
         if key != self.component_key:
             return
         self.progressBar.setVisible(False)
         self.actionButton.setEnabled(True)
-        self.actionButton.setText(self.tr("检查更新"))
+        self._set_state(self._IDLE, self.tr("检查更新"))
         # Trigger a re-check to update version text
         dependency_manager.check_update(self.component_key)
 
@@ -311,16 +325,23 @@ class ComponentSettingCard(SettingCard):
             parent=self.window(),
         )
 
-    def _on_error(self, key, msg):
+    def _on_error(self, key, code):
         if key != self.component_key:
             return
         self.progressBar.setVisible(False)
         self.actionButton.setEnabled(True)
-        self.actionButton.setText(self.tr("检查更新"))  # Reset
+        self._set_state(self._IDLE, self.tr("检查更新"))  # Reset
+
+        # 信号里传的是稳定 code（它要进 JSONL 日志），翻译只能在 UI 这一层做；
+        # 没见过的 code 原样显示 —— 比"未知错误"有用。
+        from .components.settings.component_error_text import translate as translate_component_error
 
         title_text = self.titleLabel.text()
         InfoBar.error(
-            self.tr("{} 错误").format(title_text), msg, duration=15000, parent=self.window()
+            self.tr("{} 错误").format(title_text),
+            translate_component_error(code),
+            duration=15000,
+            parent=self.window(),
         )
 
 
@@ -374,7 +395,13 @@ class InlineLineEditCard(SettingCard):
 
 
 class LanguageSelectionDialog(MessageBox):
-    """语言多选对话框"""
+    """字幕语言**偏好**多选对话框。
+
+    这里选的不是精确字幕代码，而是偏好：YouTube 上的真实字幕键几乎总带地区或来源
+    （人工 `en-GB`、自动生成 `en-en-GB`、自动翻译 `zh-Hans-en-GB`），下载时由
+    `utils/bcp47.py` 把偏好匹配到视频上真实存在的那条轨。文案必须说清这件事 ——
+    否则用户看到列表里写着 `(en)`，会以为自己的 `en-GB` 视频选了也没用。
+    """
 
     def __init__(self, languages: list[tuple[str, str]], selected: list[str], parent=None):
         super().__init__(self.tr("选择字幕语言"), "", parent)
@@ -392,8 +419,22 @@ class LanguageSelectionDialog(MessageBox):
         content_layout.setContentsMargins(0, 0, 0, 0)
 
         # 添加说明
-        hint_label = SubtitleLabel(self.tr("请选择要下载的字幕语言（可多选）："), content_widget)
+        hint_label = SubtitleLabel(self.tr("请选择字幕语言偏好（可多选）："), content_widget)
         content_layout.addWidget(hint_label)
+        content_layout.addSpacing(4)
+
+        # 展开规则只说一遍，不逐行重复：21 行里每行都挂一句 `→ en-*` 是纯噪声，
+        # 而规则对每一行都是同一条。
+        expand_hint = CaptionLabel(
+            self.tr(
+                "这里选的是偏好，不是精确代码。下载时会匹配视频上真实存在的字幕轨 —— "
+                "选「英语 (en)」也能拿到 en-GB、en-US，以及由英语自动生成/翻译的轨道。"
+            ),
+            content_widget,
+        )
+        expand_hint.setWordWrap(True)
+        expand_hint.setTextColor(QColor(96, 96, 96), QColor(210, 210, 210))
+        content_layout.addWidget(expand_hint)
         content_layout.addSpacing(12)
 
         # 创建复选框容器
@@ -1078,6 +1119,42 @@ class SettingsPage(QWidget):
         # 每次显示设置页面时刷新Cookie状态
         self._update_cookie_status()
 
+    # === 启动自动更新检查 ===
+
+    #: 启动检查的错峰间隔（毫秒）。每个组件的检查都要在工作线程里
+    #: `subprocess.run([exe, "--version"])` 再发一次 HTTPS 请求，5 个一起来会把
+    #: 启动瞬间的 CPU / 磁盘吃干。1.2s 一个，用户完全感知不到，但不再卡顿。
+    _STARTUP_CHECK_STAGGER_MS = 1200
+
+    def schedule_startup_update_check(self) -> None:
+        """启动后错峰执行自动更新检查（由主窗口延迟调用）。
+
+        全程静默：不弹「已是最新」，也不弹「检查失败」。只有真的发现新版本，才由
+        `notification/update_notifier.py` 写进消息中心，用小铃铛的未读徽章提示。
+        """
+        if not config_manager.get("check_updates_on_startup", True):
+            return
+
+        last_check = float(config_manager.get("last_update_check") or 0)
+        now = time.time()
+        # 24 小时内检查过就跳过
+        if now - last_check <= 86400:
+            return
+
+        config_manager.set("last_update_check", now)
+
+        # app-core 先走（只发一次 HTTPS，没有 subprocess 开销）
+        self.appUpdateCard.check_for_update()
+
+        # bin/ 下的外部工具错峰排队
+        for i, key in enumerate(
+            ("yt-dlp", "ffmpeg", "deno", "pot-provider", "atomicparsley"), start=1
+        ):
+            QTimer.singleShot(
+                i * self._STARTUP_CHECK_STAGGER_MS,
+                lambda k=key: dependency_manager.check_update(k, silent=True),
+            )
+
     def _init_download_group(self, parent_widget: QWidget | None, layout: QVBoxLayout) -> None:
         self.downloadGroup = SettingCardGroup(self.tr("下载选项"), parent_widget)
 
@@ -1152,7 +1229,7 @@ class SettingsPage(QWidget):
         self.parseCacheTtlCard = InlineComboBoxCard(
             FluentIcon.HISTORY,
             self.tr("解析结果保留时间"),
-            self.tr("同一链接在此时间内再次解析会直接复用上次结果，不再重新请求（默认: 30 分钟）"),
+            self.tr("同一链接在此时间内再次解析会直接复用上次结果，不再重新请求（默认: 不保留）"),
             [
                 self.tr("不保留"),
                 self.tr("5 分钟"),
@@ -1163,21 +1240,32 @@ class SettingsPage(QWidget):
             ],
             self.downloadGroup,
         )
-        current_ttl = config_manager.get("parse_cache_ttl_seconds", 1800)
+        current_ttl = config_manager.get("parse_cache_ttl_seconds", 0)
         try:
             current_ttl = int(current_ttl)
         except (TypeError, ValueError):
-            current_ttl = 1800
+            current_ttl = 0
         # 落在选项之外的历史值（旧版本手改过 config.json）就近显示为默认档，
         # 但**不写回配置** —— 用户没动这张卡片就不该被静默改掉。
         self.parseCacheTtlCard.comboBox.setCurrentIndex(
             self.PARSE_CACHE_TTL_CHOICES.index(current_ttl)
             if current_ttl in self.PARSE_CACHE_TTL_CHOICES
-            else self.PARSE_CACHE_TTL_CHOICES.index(1800)
+            else self.PARSE_CACHE_TTL_CHOICES.index(0)
         )
         self.parseCacheTtlCard.comboBox.currentIndexChanged.connect(
             self._on_parse_cache_ttl_changed
         )
+
+        # 主动清空入口。缓存键里没有出口 IP 这一维，换节点撞不掉旧条目；
+        # cookie 提交被闸门拒绝时 .meta 也不动。这张卡是那两种情况唯一的出口。
+        self.parseCacheClearCard = PushSettingCard(
+            self.tr("立即清空"),
+            FluentIcon.DELETE,
+            self.tr("清空已保留的解析结果"),
+            self.tr("换过 Cookie 或切换了代理节点后，若解析结果仍是旧的，点这里强制重新解析"),
+            self.downloadGroup,
+        )
+        self.parseCacheClearCard.clicked.connect(self._on_parse_cache_clear_clicked)
 
         self.failedTaskRetentionCard = InlineComboBoxCard(
             FluentIcon.HISTORY,
@@ -1208,6 +1296,7 @@ class SettingsPage(QWidget):
         self.downloadGroup.addSettingCard(self.maxConcurrentCard)
         self.downloadGroup.addSettingCard(self.playlistExtractConcurrencyCard)
         self.downloadGroup.addSettingCard(self.parseCacheTtlCard)
+        self.downloadGroup.addSettingCard(self.parseCacheClearCard)
         self.downloadGroup.addSettingCard(self.failedTaskRetentionCard)
         layout.addWidget(self.downloadGroup)
 
@@ -1504,6 +1593,8 @@ class SettingsPage(QWidget):
 
     def _init_account_group(self, parent_widget: QWidget | None, layout: QVBoxLayout) -> None:
         """初始化账号与认证设置组"""
+        from ..auth.auth_service import BROWSER_COMBO_LABELS
+
         self.accountGroup = SettingCardGroup(self.tr("账号验证"), parent_widget)
 
         # === Cookie Sentinel 配置组 ===
@@ -1524,19 +1615,9 @@ class SettingsPage(QWidget):
             FluentIcon.GLOBE,
             self.tr("选择浏览器"),
             self.tr("Chromium 内核需管理员权限，Firefox 内核无需管理员权限"),
-            [
-                self.tr("Microsoft Edge"),
-                self.tr("Google Chrome (⚠️不稳定)"),
-                self.tr("Chromium"),
-                self.tr("Brave"),
-                self.tr("Opera"),
-                self.tr("Opera GX"),
-                self.tr("Vivaldi"),
-                self.tr("Arc"),
-                self.tr("Firefox"),
-                self.tr("LibreWolf"),
-                self.tr("百分浏览器 (Cent)"),
-            ],
+            # 列表来自 auth_service.BROWSER_COMBO_LABELS —— 别在这里手写位置列表。
+            # 浏览器名是专名，原来逐个套 self.tr() 只是给译者送去一堆不该翻的词条。
+            list(BROWSER_COMBO_LABELS),
             self.accountGroup,
         )
         self.browserCard.comboBox.currentIndexChanged.connect(self._on_cookie_browser_changed)
@@ -1649,7 +1730,10 @@ class SettingsPage(QWidget):
         self.updateSourceCard = InlineComboBoxCard(
             FluentIcon.GLOBE,
             self.tr("组件更新源"),
-            self.tr("选择组件下载和检查更新的网络来源"),
+            # 说实话：这个设置只作用于**软件自身更新**（app-core 归档与更新清单）的
+            # 下载。bin 工具的版本检查打的是 api.github.com，而 ghproxy 从来不代理
+            # api 域名，所以那部分不受这里影响。
+            self.tr("软件更新与清单下载的网络来源（不影响 bin 工具的版本检查）"),
             [self.tr("GitHub (官方)"), self.tr("GHProxy (加速镜像)")],
             parent=self.coreGroup,
         )
@@ -1660,7 +1744,8 @@ class SettingsPage(QWidget):
             FluentIcon.SYNC,
             self.tr("yt-dlp 更新频道"),
             self.tr("选择 yt-dlp 版本的更新分支"),
-            [self.tr("Nightly (每夜版)"), self.tr("Stable (稳定版)"), self.tr("Master (主线)")],
+            # 顺序必须与 _on_ytdlp_channel_changed / _load_settings 的 channel_map 一致
+            [self.tr("Stable (稳定版)"), self.tr("Nightly (每夜版)"), self.tr("Master (主线)")],
             parent=self.coreGroup,
         )
         self.ytDlpChannelCard.comboBox.currentIndexChanged.connect(self._on_ytdlp_channel_changed)
@@ -1804,6 +1889,21 @@ class SettingsPage(QWidget):
         self._pot_health_timer.start()
         self._refresh_pot_health_content()
 
+        # 字幕专属提示。**只提示，不改默认**：`pot_provider_enabled` 仍是 False，
+        # `fetch_pot=never` 也不动 —— 那两个默认值各有理由（见
+        # `youtube_service.py` 里 `fetch_pot` 附近那段注释：bgutil 会去 ping 一个
+        # 已关闭的 127.0.0.1:4416）。这里只是把"字幕拿不到时该拧哪个开关"说清楚，
+        # 决定权留给用户。
+        self.potSubtitleHintCard = PushSettingCard(
+            self.tr("启用"),
+            FluentIcon.INFO,
+            self.tr("字幕下载可能需要 POT"),
+            # 单行：`SettingCard` 构造时就 `setFixedHeight(70)`，第二行会被裁掉
+            self.tr("自动翻译字幕易被限流(429)或拒绝，启用 POT 验证引擎可提高成功率"),
+            parent=self.advancedGroup,
+        )
+        self.potSubtitleHintCard.clicked.connect(self._on_pot_enable_from_hint)
+
         self.poTokenCard = SmartSettingCard(
             FluentIcon.CODE,
             self.tr("YouTube PO Token(可选)"),
@@ -1813,7 +1913,7 @@ class SettingsPage(QWidget):
             validator=self._validate_po_token,
             fixer=None,
             prefer_multiline=True,
-            dialog_content="粘贴或输入 PO Token。允许留空；非空时将进行简单格式校验。",
+            dialog_content=self.tr("粘贴或输入 PO Token。允许留空；非空时将进行简单格式校验。"),
         )
 
         self.jsRuntimePathCard = SmartSettingCard(
@@ -1825,7 +1925,9 @@ class SettingsPage(QWidget):
             validator=self._validate_optional_exe_path,
             fixer=self._fix_windows_path,
             empty_text="",
-            dialog_content="请输入 JS Runtime 可执行文件路径（可留空）。支持粘贴带引号的路径。",
+            dialog_content=self.tr(
+                "请输入 JS Runtime 可执行文件路径（可留空）。支持粘贴带引号的路径。"
+            ),
             pick_file=True,
             file_filter="Executable Files (*.exe);;All Files (*)",
         )
@@ -1834,6 +1936,9 @@ class SettingsPage(QWidget):
         )
 
         self.advancedGroup.addSettingCard(self.potProviderEnabledCard)
+        self.advancedGroup.addSettingCard(self.potSubtitleHintCard)
+        self._indent_setting_card(self.potSubtitleHintCard)
+        self._refresh_pot_subtitle_hint()
         self.advancedGroup.addSettingCard(self.poTokenCard)
         self.advancedGroup.addSettingCard(self.jsRuntimePathCard)
         layout.addWidget(self.advancedGroup)
@@ -1896,7 +2001,7 @@ class SettingsPage(QWidget):
 
         # 刷新按钮
         self.vrRefreshHardwareBtn = ToolButton(FluentIcon.SYNC, self.vrHardwareStatusCard)
-        self.vrRefreshHardwareBtn.setToolTip("重新检测硬件")
+        self.vrRefreshHardwareBtn.setToolTip(self.tr("重新检测硬件"))
         self.vrRefreshHardwareBtn.clicked.connect(self._update_vr_hardware_status)
         self.vrHardwareStatusCard.hBoxLayout.addWidget(
             self.vrRefreshHardwareBtn, 0, Qt.AlignmentFlag.AlignRight
@@ -1966,7 +2071,14 @@ class SettingsPage(QWidget):
         layout.addWidget(self.vrGroup)
 
         # 初始化状态
-        self._update_vr_hardware_status()
+        #
+        # **不在构造期同步探测**：`_render_vr_hardware_status()` 要跑 `ffmpeg -encoders`
+        # 子进程，而 SettingsPage 是 `MainWindow.__init__` 里造的，构造期的每一毫秒都在
+        # 「窗口还没出来」那段里。错峰到 1.5 秒后 —— 这条 Banner 躺在设置页 VR 分组里，
+        # 用户得先导航过来再往下滚，1.5 秒内不可能被看到。
+        # 排在 `check_first_run`（1s）之后、启动更新检查（3s）之前，跟既有的错峰节奏一致。
+        self.vrHardwareStatusCard.setContent(self.tr("检测中..."))
+        QTimer.singleShot(1500, self._render_vr_hardware_status)
 
     def _indent_setting_card(self, card: QWidget, left: int = 32) -> None:
         """Indent a setting card to visually indicate it depends on another option."""
@@ -2019,6 +2131,33 @@ class SettingsPage(QWidget):
         except Exception as e:
             logger.warning(f"[POT] 开关切换处理失败: {e}")
         self._refresh_pot_health_content()
+        self._refresh_pot_subtitle_hint()
+
+    def _on_pot_enable_from_hint(self) -> None:
+        """提示卡上的「启用」：走和手动拨开关**完全相同**的路径。
+
+        `SwitchButton.setChecked()` 不会发 `checkedChanged` —— qfluentwidgets 只在
+        `Indicator.mouseReleaseEvent` 里发那个信号，程序化 setter 只更新文字和指示器
+        外观。所以这里必须自己再调一次处理函数，否则开关看着是开了，而
+        `config_manager` 和 `pot_manager.ensure_warm_async()` 一个都没动 ——
+        用户下次重开设置页会发现开关又变回了关。
+
+        （`:1874` 那行 init 期的 `setChecked()` 正是靠这个特性才不会误触发预热。）
+        """
+        self.potProviderEnabledCard.switchButton.setChecked(True)
+        self._on_pot_provider_toggled(True)
+        InfoBar.success(
+            self.tr("POT 验证引擎已启用"),
+            self.tr("正在后台预热，不阻塞当前操作；未就绪时会自动降级为无 POT 解析。"),
+            duration=5000,
+            parent=self,
+        )
+
+    def _refresh_pot_subtitle_hint(self) -> None:
+        """POT 已启用时收起提示卡 —— 提示只在真的有事可做时出现。"""
+        card = getattr(self, "potSubtitleHintCard", None)
+        if card is not None:
+            card.setVisible(not config_manager.get("pot_provider_enabled", False))
 
     _POT_CARD_HINT = "后台预热，不阻塞启动与解析；未就绪时自动降级为无 POT 解析。默认关闭。"
 
@@ -2287,7 +2426,7 @@ class SettingsPage(QWidget):
         )
 
         # 添加选择按钮
-        self._sponsorBlockCategoriesBtn = PushButton("选择类别")
+        self._sponsorBlockCategoriesBtn = PushButton(self.tr("选择类别"))
         self._sponsorBlockCategoriesBtn.clicked.connect(self._show_sponsorblock_categories_dialog)
         self.sponsorBlockCategoriesCard.hBoxLayout.addWidget(self._sponsorBlockCategoriesBtn)
         self.sponsorBlockCategoriesCard.hBoxLayout.addSpacing(16)
@@ -2312,7 +2451,9 @@ class SettingsPage(QWidget):
         self.subtitleEnabledCard = InlineSwitchCard(
             FluentIcon.DOCUMENT,
             self.tr("启用字幕下载"),
-            self.tr("自动下载视频字幕（支持多语言、嵌入、双语合成）"),
+            # 原文案写着"双语合成"，那是个**不存在的功能**（`SubtitleProcessResult.merged_file`
+            # 恒为 None，从来没有合成代码）。这三项是真的：多语言、格式转换、嵌入。
+            self.tr("自动下载视频字幕（支持多语言、格式转换、嵌入到视频）"),
             parent=self.subtitleGroup,
         )
         self.subtitleEnabledCard.checkedChanged.connect(self._on_subtitle_enabled_changed)
@@ -2322,8 +2463,9 @@ class SettingsPage(QWidget):
         current_languages = config.default_languages if config.default_languages else []
         self.subtitleLanguagesCard = LanguageMultiSelectCard(
             FluentIcon.GLOBE,
-            self.tr("字幕语言"),
-            self.tr("选择要下载的字幕语言（可多选）"),
+            self.tr("字幕语言偏好"),
+            # 单行：`SettingCard` 构造时就 `setFixedHeight(70)`，第二行会被裁掉
+            self.tr("按偏好匹配视频上真实存在的字幕轨，如 en 可命中 en-GB / en-US"),
             languages=COMMON_SUBTITLE_LANGUAGES,
             selected_default=current_languages,
             parent=self.subtitleGroup,
@@ -2438,11 +2580,16 @@ class SettingsPage(QWidget):
         layout.addWidget(self.logGroup)
 
     def _on_view_log_clicked(self):
-        """打开日志查看器"""
-        from fluentytdl.ui.components.dialogs.log_viewer_dialog import LogViewerDialog
+        """打开日志查看器（独立非模态窗口）
 
-        dialog = LogViewerDialog(self.window())
-        dialog.exec()
+        不用 `exec()`：看日志的用途是**对照**正在跑的下载 —— 哪个任务卡住了、进度停在
+        哪一格。遮罩对话框把主窗口整片盖住、`exec()` 又阻塞事件循环，恰好把"对照"变成
+        "轮流看"。`show_singleton()` 负责第二次点击时把已开着的那扇提到前面，
+        而不是叠第二扇（两扇窗口会各自订阅一份日志信号）。
+        """
+        from fluentytdl.ui.components.dialogs.log_viewer_window import LogViewerWindow
+
+        LogViewerWindow.show_singleton(self.window())
 
     def _on_open_log_dir(self):
         """打开日志目录"""
@@ -2549,7 +2696,7 @@ class SettingsPage(QWidget):
         )
 
         # Cookie 配置从 auth_service 加载
-        from ..auth.auth_service import AuthSourceType, auth_service
+        from ..auth.auth_service import AuthSourceType, auth_service, browser_combo_index
 
         current_source = auth_service.current_source
 
@@ -2572,22 +2719,9 @@ class SettingsPage(QWidget):
         else:
             self.cookieModeCard.comboBox.setCurrentIndex(0)  # 自动提取
 
-            # 设置浏览器（顺序与UI一致）
-            browser_map = {
-                AuthSourceType.EDGE: 0,
-                AuthSourceType.CHROME: 1,
-                AuthSourceType.CHROMIUM: 2,
-                AuthSourceType.BRAVE: 3,
-                AuthSourceType.OPERA: 4,
-                AuthSourceType.OPERA_GX: 5,
-                AuthSourceType.VIVALDI: 6,
-                AuthSourceType.ARC: 7,
-                AuthSourceType.FIREFOX: 8,
-                AuthSourceType.LIBREWOLF: 9,
-                AuthSourceType.CENT: 10,
-            }
-            browser_idx = browser_map.get(current_source, 0)
-            self.browserCard.comboBox.setCurrentIndex(browser_idx)
+            # 设置浏览器 —— 索引由 BROWSER_COMBO_ITEMS 反查，
+            # 已停止支持的源（chrome / centbrowser）回落到 0（Edge）。
+            self.browserCard.comboBox.setCurrentIndex(browser_combo_index(current_source))
 
         self.cookieModeCard.comboBox.blockSignals(False)
         self.browserCard.comboBox.blockSignals(False)
@@ -2600,21 +2734,10 @@ class SettingsPage(QWidget):
 
         self.poTokenCard.setValue(str(config_manager.get("youtube_po_token") or ""))
 
-        # Automatic update check (frequency control)
-        # Only check if enabled in settings
-        if config_manager.get("check_updates_on_startup", True):
-            last_check = float(config_manager.get("last_update_check") or 0)
-            now = time.time()
-            # Check if 24 hours (86400 seconds) have passed.
-            if now - last_check > 86400:
-                # 检查 app-core 更新（通过 ComponentUpdateManager）
-                self.appUpdateCard.check_for_update()
-                # 检查 bin/ 工具更新
-                dependency_manager.check_update("yt-dlp")
-                dependency_manager.check_update("ffmpeg")
-                dependency_manager.check_update("deno")
-                dependency_manager.check_update("pot-provider")
-                config_manager.set("last_update_check", now)
+        # 启动时的自动更新检查不在这里做 —— 见 schedule_startup_update_check()。
+        # `_load_settings_to_ui()` 跑在 `SettingsPage.__init__` 里，也就是主窗口构造的
+        # 关键路径上；在这里同时拉起 5 个检查线程（每个都要 subprocess 跑一次
+        # `--version` 再发一次 HTTPS 请求）会让启动明显卡一下。
 
         self.jsRuntimePathCard.setContent(self._js_runtime_status_text())
         self.jsRuntimePathCard.setValue(str(config_manager.get("js_runtime_path") or ""))
@@ -2804,10 +2927,10 @@ class SettingsPage(QWidget):
                 self.playlistExtractConcurrencyCard.setContent(
                     self.tr("⚠️ 当前: {} (高风险! 极易导致 429 请求过多)").format(new_val)
                 )
-                self.playlistExtractConcurrencyCard.setTitle("播放列表解析并发 (慎用)")
+                self.playlistExtractConcurrencyCard.setTitle(self.tr("播放列表解析并发 (慎用)"))
             else:
                 self.playlistExtractConcurrencyCard.setContent(self.tr("当前: {}").format(new_val))
-                self.playlistExtractConcurrencyCard.setTitle("播放列表解析并发")
+                self.playlistExtractConcurrencyCard.setTitle(self.tr("播放列表解析并发"))
 
     def _on_parse_cache_ttl_changed(self, index: int) -> None:
         if not 0 <= index < len(self.PARSE_CACHE_TTL_CHOICES):
@@ -2824,15 +2947,52 @@ class SettingsPage(QWidget):
         # 缩短保留时间不需要清缓存：_parse_cache_get 每次读都拿当前时长比对年龄，
         # 超时的条目会在下一次读取时自然淘汰。
 
-    def _on_update_source_changed(self, index: int) -> None:
-        source = "ghproxy" if index == 1 else "github"
-        config_manager.set("update_source", source)
-        InfoBar.info(
-            self.tr("设置已更新"),
-            self.tr("下载源已切换为: {}").format(source),
-            duration=5000,
-            parent=self,
-        )
+    def _on_parse_cache_clear_clicked(self) -> None:
+        """「立即清空」：把已保留的解析结果全部丢掉，下次解析重走子进程。
+
+        存在的理由是缓存的失效条件不完备——键里没有出口 IP（system/TUN 模式下
+        `ydl_opts["proxy"]` 压根不设），在 V2RayN 里换节点撞不掉旧条目。那种情况下
+        这张卡是唯一的出口。
+        """
+        from ..youtube.youtube_service import youtube_service
+
+        n = youtube_service.invalidate_parse_cache("用户在设置页手动清空")
+        if n:
+            InfoBar.success(
+                self.tr("已清空"),
+                self.tr("清掉 {} 条解析结果，下次解析会重新请求。").format(n),
+                duration=5000,
+                parent=self,
+            )
+        else:
+            InfoBar.info(
+                self.tr("无需清空"),
+                self.tr("当前没有保留任何解析结果。"),
+                duration=3000,
+                parent=self,
+            )
+
+    def _invalidate_parse_cache_quietly(self, reason: str) -> None:
+        """静默清掉解析缓存：Cookie 刷新 / 代理变更后调用，不打扰用户。
+
+        用户没有主动要求清缓存，所以不弹 InfoBar——他要的是"刷新 Cookie"或
+        "换代理"的结果，缓存失效只是让那件事真正生效的附带动作。
+
+        Cookie 刷新那条路径**成功失败都要调**：`_commit_to_truth_source()` 成功时
+        会重写 `.meta`（缓存指纹读的正是它），本来就会自然失效；真正需要这一手的是
+        被校验闸门拒掉的弱回退路径——那时 `.meta` 不动，旧缓存会继续被复用。
+        """
+        try:
+            from ..youtube.youtube_service import youtube_service
+
+            youtube_service.invalidate_parse_cache(reason)
+        except Exception as e:
+            from ..utils.logger import logger
+
+            logger.warning(f"清理解析缓存失败（不影响主流程）: {e}")
+
+    # 这里以前还有一份 `_on_update_source_changed`，被下面 4007 行那份同名方法覆盖
+    # （Python 后定义胜出），从来没被调用过。留着只会让人改错地方，删掉。
 
     def _on_theme_mode_changed(self, index: int) -> None:
         modes = ["Auto", "Light", "Dark"]
@@ -2855,14 +3015,7 @@ class SettingsPage(QWidget):
                 parent=self,
             )
 
-    def _on_check_updates_startup_changed(self, checked: bool) -> None:
-        config_manager.set("check_updates_on_startup", bool(checked))
-        InfoBar.info(
-            self.tr("设置已更新"),
-            self.tr("已开启启动时自动检查更新") if checked else self.tr("已关闭启动时自动检查更新"),
-            duration=5000,
-            parent=self,
-        )
+    # 同上：`_on_check_updates_startup_changed` 也有两份，生效的是后面那份。
 
     def _on_clipboard_detect_changed(self, checked: bool) -> None:
         config_manager.set("clipboard_auto_detect", bool(checked))
@@ -3078,6 +3231,8 @@ class SettingsPage(QWidget):
             config_manager.set("proxy_mode", mode)
             # Backward-compat shadow key
             config_manager.set("proxy_enabled", mode in {"http", "socks5"})
+            # 换了代理就等于换了出口，旧解析结果不再可信。
+            self._invalidate_parse_cache_quietly("代理模式已变更")
             InfoBar.info(
                 self.tr("设置已更新"),
                 self.tr("代理模式已切换为: {}").format(self.proxyModeCard.comboBox.currentText()),
@@ -3093,6 +3248,7 @@ class SettingsPage(QWidget):
     def _on_proxy_url_edited(self) -> None:
         new_proxy = (self.proxyEditCard.lineEdit.text() or "").strip()
         config_manager.set("proxy_url", new_proxy)
+        self._invalidate_parse_cache_quietly("代理地址已变更")
         if new_proxy:
             InfoBar.info(
                 self.tr("保存成功"),
@@ -3105,29 +3261,11 @@ class SettingsPage(QWidget):
 
     def _on_cookie_mode_changed(self, index: int) -> None:
         """Cookie 模式切换：0=浏览器提取, 1=DLE登录获取, 2=手动文件"""
-        from ..auth.auth_service import AuthSourceType, auth_service
+        from ..auth.auth_service import AuthSourceType, auth_service, browser_source_at
 
         if index == 0:
             # 浏览器提取模式
-            browser_index = self.browserCard.comboBox.currentIndex()
-            browser_map = [
-                AuthSourceType.EDGE,
-                AuthSourceType.CHROME,
-                AuthSourceType.CHROMIUM,
-                AuthSourceType.BRAVE,
-                AuthSourceType.OPERA,
-                AuthSourceType.OPERA_GX,
-                AuthSourceType.VIVALDI,
-                AuthSourceType.ARC,
-                AuthSourceType.FIREFOX,
-                AuthSourceType.LIBREWOLF,
-                AuthSourceType.CENT,
-            ]
-            source = (
-                browser_map[browser_index]
-                if 0 <= browser_index < len(browser_map)
-                else AuthSourceType.EDGE
-            )
+            source = browser_source_at(self.browserCard.comboBox.currentIndex())
             auth_service.set_source(source, auto_refresh=True)
 
             self.browserCard.setVisible(True)
@@ -3185,26 +3323,11 @@ class SettingsPage(QWidget):
         """浏览器选择变化 - 自动提取新浏览器的 Cookies"""
         from qfluentwidgets import MessageBox
 
-        from ..auth.auth_service import AuthSourceType, auth_service
+        from ..auth.auth_service import BROWSER_COMBO_ITEMS, auth_service
         from ..utils.admin_utils import is_admin
 
-        # 顺序与UI一致
-        browser_map = [
-            (AuthSourceType.EDGE, "Edge"),
-            (AuthSourceType.CHROME, "Chrome"),
-            (AuthSourceType.CHROMIUM, "Chromium"),
-            (AuthSourceType.BRAVE, "Brave"),
-            (AuthSourceType.OPERA, "Opera"),
-            (AuthSourceType.OPERA_GX, "Opera GX"),
-            (AuthSourceType.VIVALDI, "Vivaldi"),
-            (AuthSourceType.ARC, "Arc"),
-            (AuthSourceType.FIREFOX, "Firefox"),
-            (AuthSourceType.LIBREWOLF, "LibreWolf"),
-            (AuthSourceType.CENT, "百分浏览器 (Cent)"),
-        ]
-
-        if 0 <= index < len(browser_map):
-            source, name = browser_map[index]
+        if 0 <= index < len(BROWSER_COMBO_ITEMS):
+            source, name = BROWSER_COMBO_ITEMS[index]
 
             # WebView2 登录卡片在浏览器提取模式下由 _on_cookie_mode_changed 控制
 
@@ -3213,17 +3336,19 @@ class SettingsPage(QWidget):
 
             if source in ADMIN_REQUIRED_BROWSERS and not is_admin():
                 box = MessageBox(
-                    f"{name} 需要管理员权限",
-                    f"{name} 使用了 App-Bound 加密保护，\n"
-                    f"需要以管理员身份运行程序才能提取 Cookie。\n\n"
+                    self.tr("{name} 需要管理员权限").format(name=name),
+                    self.tr(
+                        "{name} 使用了 App-Bound 加密保护，\n"
+                        "需要以管理员身份运行程序才能提取 Cookie。\n\n"
+                    ).format(name=name)
                     + self.tr("点击「以管理员身份重启」后将自动完成提取。\n\n")
                     + self.tr("或者您可以：\n")
                     + self.tr("• 选择 Firefox/LibreWolf 浏览器（无需管理员权限）\n")
                     + self.tr("• 手动导出 Cookie 文件"),
                     self,
                 )
-                box.yesButton.setText("以管理员身份重启")
-                box.cancelButton.setText("取消")
+                box.yesButton.setText(self.tr("以管理员身份重启"))
+                box.cancelButton.setText(self.tr("取消"))
 
                 if box.exec():
                     # 先保存选择
@@ -3271,9 +3396,11 @@ class SettingsPage(QWidget):
                     if need_admin:
                         from qfluentwidgets import MessageBox
 
-                        box = MessageBox(f"{name} 需要管理员权限", content, self)
-                        box.yesButton.setText("以管理员身份重启")
-                        box.cancelButton.setText("取消")
+                        box = MessageBox(
+                            self.tr("{name} 需要管理员权限").format(name=name), content, self
+                        )
+                        box.yesButton.setText(self.tr("以管理员身份重启"))
+                        box.cancelButton.setText(self.tr("取消"))
 
                         if box.exec():
                             from ..utils.admin_utils import restart_as_admin
@@ -3298,53 +3425,106 @@ class SettingsPage(QWidget):
             worker.start()
 
     def _on_browser_refresh_clicked(self):
-        """刷新 Cookie — 一次提取两平台 (自动从本地浏览器提取)"""
+        """刷新 Cookie — 一次提取两平台，经写入闸门落到两个真相源"""
         self.browserRefreshCard.button.setEnabled(False)
-        from ..auth.auth_service import auth_service
 
-        def progress_callback(platform_label: str, status_msg: str):
-            """更新状态提示"""
-            InfoBar.info(
-                self.tr("提取进度"),
-                self.tr(f"正在提取 {platform_label} Cookie... {status_msg}"),
-                duration=3000,
-                parent=self,
+        # 以前这里跑 `auth_service.extract_browser_cookies_all_platforms()`，那个方法只写
+        # `cache/cached_<browser>_<platform>.txt`，**从头到尾没碰过真相源** —— 用户点完
+        # "立即刷新"看到"提取完成 ✅"，而 yt-dlp 读的 bin/cookies_*.txt 还是旧的那份。
+        # 改走 CookieSentinel 的强制刷新：两个平台各自过 `_commit_to_truth_source()`，
+        # 不过校验就保留旧文件（2.2.1 的弱回退）。
+        #
+        # 另外它必须待在 QThread 里：提取要读被浏览器锁着的 DPAPI 数据库，慢时十几秒；
+        # 以前那条裸 `threading.Thread` 还在非 Qt 线程里直接建 `InfoBar` 和刷状态卡，
+        # 在非主线程操作 QWidget 是未定义行为，表现从提示不出现到直接崩溃都有。
+        worker = CookieRefreshWorker(self)  # platform=None：浏览器提取一次覆盖两个平台
+        self._active_workers.add(worker)
+
+        def on_finished(success: bool, message: str, _need_admin: bool = False):
+            from ..auth.auth_service import PLATFORM_LABELS
+            from ..auth.cookie_sentinel import cookie_sentinel
+
+            self.browserRefreshCard.button.setEnabled(True)
+
+            # 逐平台报账：真相源在 + 最近一次没被闸门拒 才算 ✅
+            summary = " | ".join(
+                "{}: {}".format(
+                    label,
+                    "✅"
+                    if cookie_sentinel.get_cookie_path_for_platform(plat).exists()
+                    and not cookie_sentinel.get_commit_warning(plat)
+                    else "❌",
+                )
+                for plat, label in PLATFORM_LABELS.items()
             )
 
-        def _do_refresh_all_platforms():
+            if success:
+                InfoBar.success(
+                    self.tr("提取完成"), f"{summary}\n{message}", duration=5000, parent=self
+                )
+            else:
+                InfoBar.error(
+                    self.tr("提取失败"), f"{summary}\n{message}", duration=8000, parent=self
+                )
+
+            # 成败都要刷状态卡：提取"成功"但闸门拒了新 Cookie 时真相源其实没变，
+            # 只有状态卡上那条 commit_warning 说得出为什么。
             try:
-                results = auth_service.extract_browser_cookies_all_platforms(progress_callback)
-
-                yt_ok = results.get("youtube") is not None
-                x_ok = results.get("twitter") is not None
-                msg = f"YouTube: {'✅' if yt_ok else '❌'} | X: {'✅' if x_ok else '❌'}"
-
-                if yt_ok or x_ok:
-                    InfoBar.success(self.tr("提取完成"), msg, duration=5000, parent=self)
-                else:
-                    InfoBar.error(
-                        self.tr("提取失败"),
-                        self.tr("未提取到任何有效 Cookie。"),
-                        duration=8000,
-                        parent=self,
-                    )
                 self._update_cookie_status()
             except Exception as e:
-                InfoBar.error(self.tr("提取异常"), str(e), duration=8000, parent=self)
-            finally:
-                self.browserRefreshCard.button.setEnabled(True)
+                from ..utils.logger import logger
 
-        # 使用后台线程避免阻塞 UI
-        import threading
+                logger.error(f"更新Cookie状态显示失败: {e}")
 
-        thread = threading.Thread(
-            target=_do_refresh_all_platforms, daemon=True, name="BrowserCookieExtract"
-        )
-        thread.start()
+            # 同样成败都清解析缓存，理由见 _do_cookie_refresh 里那段注释。
+            self._invalidate_parse_cache_quietly("浏览器 Cookie 提取完成")
+
+            self._active_workers.discard(worker)
+            worker.deleteLater()
+
+        worker.finished.connect(on_finished, Qt.ConnectionType.QueuedConnection)
+        worker.start()
 
     def _on_webview2_login_clicked(self, platform: str):
         """WebView2 登录按钮点击 - 启动浏览器登录流程"""
         from ..auth.auth_service import AuthSourceType, auth_service
+        from ..auth.webview2_runtime import (
+            WEBVIEW2_DOWNLOAD_URL,
+            is_webview2_runtime_available,
+        )
+        from .dialogs.webview2_missing_dialog import (
+            WebView2Action,
+            WebView2MissingDialog,
+        )
+
+        # P0.4 登录前预检：缺少 WebView2 运行时则不进入登录流程，也不禁用任何按钮
+        available, _reason = is_webview2_runtime_available()
+        if not available:
+            dialog = WebView2MissingDialog(self.window(), platform)
+            dialog.exec()
+            action = dialog.action
+
+            if action == WebView2Action.DOWNLOAD:
+                QDesktopServices.openUrl(QUrl(WEBVIEW2_DOWNLOAD_URL))
+                InfoBar.info(
+                    self.tr("已打开下载页面"),
+                    self.tr("请安装 Microsoft Edge WebView2 运行时后重试登录"),
+                    duration=6000,
+                    parent=self,
+                )
+            elif action == WebView2Action.BROWSER_EXTRACT:
+                # 切换到「自动从本地浏览器提取」模式（Edge）
+                self.cookieModeCard.comboBox.blockSignals(True)
+                self.browserCard.comboBox.blockSignals(True)
+                self.cookieModeCard.comboBox.setCurrentIndex(0)  # 自动提取
+                self.browserCard.comboBox.setCurrentIndex(0)  # Edge
+                self.cookieModeCard.comboBox.blockSignals(False)
+                self.browserCard.comboBox.blockSignals(False)
+                # 手动触发可见性/来源更新（信号被屏蔽，需显式调用）
+                self._on_cookie_mode_changed(0)
+            # CANCEL: 不执行任何操作
+
+            return
 
         # 保证处于 WebView2 模式
         auth_service.set_source(AuthSourceType.WEBVIEW2, auto_refresh=False)
@@ -3375,11 +3555,9 @@ class SettingsPage(QWidget):
         account = auth_service.get_current_webview2_account(platform=platform)
         account_name = account.localized_name if account else self.tr("默认账号")
 
-        # 同时禁用两个平台的登录按钮
-        self.youtubeAuthCard.set_login_button_enabled(False)
-        self.twitterAuthCard.set_login_button_enabled(False)
-
+        # P0.5 只禁用当前触发平台的登录按钮，避免另一平台误锁
         card = self.youtubeAuthCard if platform == "youtube" else self.twitterAuthCard
+        card.set_login_button_enabled(False)
         card.set_content(
             self.tr("正在后台提取登录态（{}），必要时会自动显示登录窗口...").format(account_name)
         )
@@ -3392,9 +3570,8 @@ class SettingsPage(QWidget):
 
             def _on_webview2_finished(success: bool, message: str, need_admin: bool = False):
                 self._webview2_login_in_progress = None
-                # 恢复两个平台的按钮状态
-                self.youtubeAuthCard.set_login_button_enabled(True)
-                self.twitterAuthCard.set_login_button_enabled(True)
+                # P0.5 只恢复当前触发平台
+                card.set_login_button_enabled(True)
 
                 if success:
                     card.set_content(self.tr("✔ 登录成功，Cookie 已提取"))
@@ -3462,8 +3639,8 @@ class SettingsPage(QWidget):
         from ..auth.auth_service import auth_service
 
         dialog = WebView2AccountNameDialog(self)
-        dialog.yesButton.setText("创建")
-        dialog.cancelButton.setText("取消")
+        dialog.yesButton.setText(self.tr("创建"))
+        dialog.cancelButton.setText(self.tr("取消"))
         if not dialog.exec():
             return
 
@@ -3519,8 +3696,8 @@ class SettingsPage(QWidget):
             ),
             self,
         )
-        box.yesButton.setText("删除")
-        box.cancelButton.setText("取消")
+        box.yesButton.setText(self.tr("删除"))
+        box.cancelButton.setText(self.tr("取消"))
         if not box.exec():
             return
 
@@ -3556,9 +3733,11 @@ class SettingsPage(QWidget):
             browser_name = auth_service.current_source_display
 
             box = MessageBox(
-                f"{browser_name} 需要管理员权限",
-                f"{browser_name} 使用了 App-Bound 加密保护，\n"
-                f"需要以管理员身份运行程序才能提取 Cookie。\n\n"
+                self.tr("{name} 需要管理员权限").format(name=browser_name),
+                self.tr(
+                    "{name} 使用了 App-Bound 加密保护，\n"
+                    "需要以管理员身份运行程序才能提取 Cookie。\n\n"
+                ).format(name=browser_name)
                 + self.tr("点击「以管理员身份重启」后将自动完成提取。\n\n")
                 + self.tr("或者您可以：\n")
                 + self.tr("• 切换到 Firefox/LibreWolf 浏览器（无需管理员权限）\n")
@@ -3623,6 +3802,12 @@ class SettingsPage(QWidget):
 
                 logger.error(f"更新Cookie状态显示失败: {e}")
 
+            # 4. 无论成功失败都清掉解析缓存。成功提交会重写 .meta（缓存指纹读的正是
+            #    它），本来就会自然失效；这一手真正救的是被校验闸门拒掉的弱回退路径
+            #    ——那时 .meta 不动，旧缓存会继续被复用。VR 模式更是压根没有
+            #    cookiefile，指纹恒为 "-"，只能靠这里清。
+            self._invalidate_parse_cache_quietly(f"Cookie 已刷新({platform or 'all'})")
+
             # 清理worker
             self._active_workers.discard(worker)
             worker.deleteLater()
@@ -3661,7 +3846,9 @@ class SettingsPage(QWidget):
                     AuthSourceType.FILE, file_path=file_path, auto_refresh=False
                 )
 
-                self.cookieFileCard.setContent(f"已导入: {status.cookie_count} 个 Cookie")
+                self.cookieFileCard.setContent(
+                    self.tr("已导入: {n} 个 Cookie").format(n=status.cookie_count)
+                )
                 InfoBar.info(
                     self.tr("导入成功"),
                     self.tr("已导入 {} 个 Cookie 到 {} 平台").format(
@@ -3693,7 +3880,12 @@ class SettingsPage(QWidget):
             from ..auth.auth_service import auth_service
 
             acc = auth_service.get_current_webview2_account(platform=platform)
-            cookie_path_str = acc.cached_cookie_path if acc else cookie_sentinel.cookie_path
+            # 没有登录账号时退回该平台的真相源，而不是一律 cookies_youtube.txt
+            cookie_path_str = (
+                acc.cached_cookie_path
+                if acc
+                else cookie_sentinel.get_cookie_path_for_platform(platform)
+            )
         else:
             cookie_path_str = cookie_sentinel.cookie_path
 
@@ -3724,19 +3916,25 @@ class SettingsPage(QWidget):
 
         current_source = auth_service.current_source
         info = cookie_sentinel.get_status_info(platform)
+        # 写入闸门最近一次的拒绝原因。刷新看起来"成功"但真相源没变，只有这里说得出为什么
+        commit_warning = info.get("commit_warning")
 
         if current_source == AuthSourceType.NONE:
             return self.tr("⚪ 未启用 Cookie 验证")
 
         if not info["exists"]:
             if current_source == AuthSourceType.WEBVIEW2:
-                return self.tr("🔑 WebView2 模式 — 尚未登录，请点击「启动安全登录」按钮")
+                text = self.tr("🔑 WebView2 模式 — 尚未登录，请点击「启动安全登录」按钮")
             elif current_source == AuthSourceType.FILE:
-                return self.tr("❌ Cookie 文件不存在，请重新选择文件")
+                text = self.tr("❌ Cookie 文件不存在，请重新选择文件")
             else:
-                return self.tr("❌ 尚无 Cookie — 请点击「立即刷新」从 {} 提取").format(
+                text = self.tr("❌ 尚无 Cookie — 请点击「立即刷新」从 {} 提取").format(
                     auth_service.current_source_display
                 )
+            # 一次都没写成功过：闸门原因是"为什么刷新了还是没有文件"的唯一解释
+            if commit_warning:
+                text += "\n⚠️ " + self.tr("上次获取的 Cookie 未通过校验：{}").format(commit_warning)
+            return text
 
         # === 有 Cookie 文件时的详细状态 ===
         age = info["age_minutes"]
@@ -3749,6 +3947,11 @@ class SettingsPage(QWidget):
         # 决定主 emoji 和来源文字
         if not cookie_valid:
             emoji = "❌"
+            source_text = actual_display
+        elif commit_warning:
+            # 旧文件还好着，但最近一次刷新被闸门挡了 —— 绝不能显示成 ✔，
+            # 否则用户点完刷新看到对勾，会以为新 Cookie 已经生效
+            emoji = "⚠️"
             source_text = actual_display
         elif info.get("using_fallback") or info.get("source_mismatch"):
             emoji = "⚠️"
@@ -3787,6 +3990,12 @@ class SettingsPage(QWidget):
         if info.get("fallback_warning"):
             status_text += f"\n⚠️ {info['fallback_warning']}"
 
+        # 弱回退：新 Cookie 没过闸门，真相源仍是上面那份旧文件（2.2.1）
+        if commit_warning:
+            status_text += "\n⚠️ " + self.tr("新 Cookie 不可用，仍在使用 {} 的旧文件：{}").format(
+                age_str, commit_warning
+            )
+
         return status_text
 
     def _update_cookie_status(self):
@@ -3795,16 +4004,26 @@ class SettingsPage(QWidget):
             yt_text = self._get_status_text_for_platform("youtube")
             self.youtubeAuthCard.cookieStatusCard.setContent(yt_text)
         except Exception as e:
-            self.youtubeAuthCard.cookieStatusCard.setContent(f"状态获取失败: {e}")
+            self.youtubeAuthCard.cookieStatusCard.setContent(
+                self.tr("状态获取失败: {err}").format(err=e)
+            )
 
         try:
             tw_text = self._get_status_text_for_platform("twitter")
             self.twitterAuthCard.cookieStatusCard.setContent(tw_text)
         except Exception as e:
-            self.twitterAuthCard.cookieStatusCard.setContent(f"状态获取失败: {e}")
+            self.twitterAuthCard.cookieStatusCard.setContent(
+                self.tr("状态获取失败: {err}").format(err=e)
+            )
 
     def _on_check_updates_startup_changed(self, checked: bool) -> None:
-        config_manager.set("check_updates_on_startup", checked)
+        config_manager.set("check_updates_on_startup", bool(checked))
+        InfoBar.info(
+            self.tr("设置已更新"),
+            self.tr("已开启启动时自动检查更新") if checked else self.tr("已关闭启动时自动检查更新"),
+            duration=5000,
+            parent=self,
+        )
 
     def _on_cookie_cleaning_changed(self, checked: bool) -> None:
         from ..core.config_manager import config_manager
@@ -3826,9 +4045,12 @@ class SettingsPage(QWidget):
         channel_map = {0: "stable", 1: "nightly", 2: "master"}
         mode = channel_map.get(index, "stable")
         config_manager.set("ytdlp_channel", mode)
+        # 立刻重新检查。以前只说一句「下次更新时生效」就完了 —— 而"下次"可能是 24
+        # 小时后的启动检查，中间 yt-dlp 卡片一直显示旧频道的比较结果，用户以为没生效。
+        dependency_manager.check_update("yt-dlp")
         InfoBar.info(
             self.tr("设置已更新"),
-            self.tr("yt-dlp 更新频道已切换为: {} (下次更新时生效)").format(
+            self.tr("yt-dlp 更新频道已切换为: {}，正在重新检查版本").format(
                 self.ytDlpChannelCard.comboBox.currentText()
             ),
             duration=5000,
@@ -3921,14 +4143,14 @@ class SettingsPage(QWidget):
 
                 logger.exception("Swallowed exception in settings")
 
-        if is_frozen():
-            p = find_bundled_executable(
-                "yt-dlp.exe",
-                "yt-dlp/yt-dlp.exe",
-                "yt_dlp/yt-dlp.exe",
-            )
-            if p is not None:
-                return self.tr("已就绪（内置）")
+        # 同 _ffmpeg_status_text：自带目录优先，且不按 is_frozen() 分叉。
+        p = find_bundled_executable(
+            "yt-dlp.exe",
+            "yt-dlp/yt-dlp.exe",
+            "yt_dlp/yt-dlp.exe",
+        )
+        if p is not None:
+            return self.tr("已就绪（内置）")
 
         which = shutil.which("yt-dlp") or shutil.which("yt-dlp.exe")
         if which:
@@ -3995,7 +4217,7 @@ class SettingsPage(QWidget):
                 )
             try:
                 self.ffmpegCard.setValue(path)
-                self.ffmpegCard.setContent(f"自定义: {path}")
+                self.ffmpegCard.setContent(self.tr("自定义: {path}").format(path=path))
             except Exception:
                 from ...utils.logger import logger
 
@@ -4021,9 +4243,9 @@ class SettingsPage(QWidget):
                 logger.exception("Swallowed exception in settings")
 
         # Auto-detect priority: bundled (_internal) > PATH
-        bundled = (
-            find_bundled_executable("ffmpeg.exe", "ffmpeg/ffmpeg.exe") if is_frozen() else None
-        )
+        # 不按 is_frozen() 分叉：`assets/bin/ffmpeg/ffmpeg.exe` 在源码运行时也会被
+        # prepare_yt_dlp_env() 注入子进程 PATH，挡掉只会让这里的状态和实际用的不一致。
+        bundled = find_bundled_executable("ffmpeg.exe", "ffmpeg/ffmpeg.exe")
         if bundled is not None:
             return self.tr("已就绪（内置）")
 
@@ -4036,8 +4258,12 @@ class SettingsPage(QWidget):
         )
 
     def _resolve_js_runtime_bundled(self, runtime_id: str) -> Path | None:
-        if not is_frozen():
-            return None
+        """自带目录里的 JS runtime。
+
+        **不加 `is_frozen()` 闸门**：`assets/bin/deno/deno.exe` 在源码运行时也在，
+        yt-dlp 子进程（`youtube_service._maybe_configure_youtube_js_runtime`）确实会用它。
+        这里挡掉会让设置页把内置 runtime 报成「未找到」，与实际运行的东西不一致。
+        """
         if runtime_id == "deno":
             return find_bundled_executable("deno.exe", "js/deno.exe", "deno/deno.exe")
         if runtime_id == "node":
@@ -4311,7 +4537,9 @@ class SettingsPage(QWidget):
         ]
         InfoBar.info(
             self.tr("语言设置"),
-            self.tr("已选择字幕语言: {}").format(", ".join(names)),
+            # "偏好"而不是"已选择字幕语言"：真正下载哪条轨要看视频上有什么，
+            # 这里承诺不了具体代码。
+            self.tr("字幕语言偏好: {}").format(", ".join(names)),
             duration=3000,
             parent=self,
         )
@@ -4343,12 +4571,27 @@ class SettingsPage(QWidget):
         )
 
     def _update_vr_hardware_status(self) -> None:
-        """更新 VR 硬件状态 Banner"""
-        self.vrHardwareStatusCard.setContent(self.tr("检测中..."))
-        QThread.msleep(100)  # Give UI a chance to update
+        """「刷新硬件检测」按钮的入口：先把卡片打成「检测中…」，探测推到下一格事件循环。
 
-        # 强制刷新硬件检测缓存，确保能检测到最新的环境变化
-        hardware_manager.refresh_hardware_status()
+        真正的探测在 `_render_vr_hardware_status()` 里，它会跑 `ffmpeg -encoders`
+        子进程（实测约 80ms，冷启动更久）。原实现在这里同步跑，前面垫一句
+        `QThread.msleep(100)`，注释写的是「Give UI a chance to update」——
+        **而 msleep 阻塞的正是那个要去重绘的线程**：事件循环在 msleep 期间一格都不转，
+        「检测中…」到探测结束都画不出来，那 100ms 是纯粹的白等。要让 UI 有机会更新，
+        办法是把后续工作交回事件循环（singleShot），不是把线程睡住。
+        """
+        self.vrHardwareStatusCard.setContent(self.tr("检测中..."))
+        QTimer.singleShot(0, lambda: self._render_vr_hardware_status(force_refresh=True))
+
+    def _render_vr_hardware_status(self, *, force_refresh: bool = False) -> None:
+        """探测硬件并刷新 VR 状态 Banner。**同步，会起子进程，别在构造期调。**
+
+        `force_refresh` 只给「刷新」按钮用：它清掉 `environment_checker` 的缓存，
+        好让用户插了显卡 / 换了 ffmpeg 之后能重测。构造期不需要 —— 那时缓存要么是空的
+        （下面这几个 getter 自己会填），要么就是本次启动刚填的，清掉纯属多跑一遍子进程。
+        """
+        if force_refresh:
+            hardware_manager.refresh_hardware_status()
 
         mem_gb = hardware_manager.get_system_memory_gb()
         has_gpu = hardware_manager.has_dedicated_gpu()

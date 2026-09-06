@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from fluentytdl.utils.logger import logger
-from fluentytdl.utils.paths import get_clean_env
+from fluentytdl.utils.paths import find_bundled_executable, get_clean_env
 
 if TYPE_CHECKING:
     pass
@@ -61,20 +61,25 @@ class EnvironmentChecker:
         self.check_all()
 
     def check_ffmpeg(self) -> bool:
-        """检查 FFmpeg 是否可用，返回最优引用方式 (优先使用内置)"""
+        """检查 FFmpeg 是否可用，返回最优引用方式 (优先使用内置)。
+
+        用 `find_bundled_executable()` 而不是自己拼 `sys.argv[0]` 的同级目录：自带工具
+        是按组件分子目录放的（``bin/ffmpeg/ffmpeg.exe`` / dev 下 ``assets/bin/ffmpeg/``），
+        而旧代码只找 ``bin/ffmpeg.exe`` 这一层，于是"内置优先"在两种模式下都从未命中，
+        一路掉到系统 PATH —— 拿到的可能是缺编码器的 essentials 构建，而 yt-dlp 子进程
+        用的却是自带的 full 构建。两边不一致比单纯找不到更难查。
+        """
         import shutil
 
-        # 1. 优先检查应用内置目录 (bin, tools, assets/bin)
-        # 这确保了如果应用自带了 Full 版本，会优先使用它，而不是系统 PATH 中可能的 Essentials 版本
-        app_root = Path(sys.argv[0]).parent
-        search_paths = [app_root / "bin", app_root / "tools", app_root / "assets" / "bin", app_root]
-
-        for folder in search_paths:
-            p = folder / ("ffmpeg.exe" if sys.platform == "win32" else "ffmpeg")
-            if p.exists():
-                self._ffmpeg_exe = str(p.absolute())
-                logger.info(f"使用内置 FFmpeg: {self._ffmpeg_exe}")
-                return True
+        # 1. 优先检查应用内置目录（自带 full 构建，编码器齐全）
+        bundled = find_bundled_executable(
+            "ffmpeg/ffmpeg.exe" if sys.platform == "win32" else "ffmpeg/ffmpeg",
+            "ffmpeg.exe" if sys.platform == "win32" else "ffmpeg",
+        )
+        if bundled is not None:
+            self._ffmpeg_exe = str(bundled.absolute())
+            logger.info(f"使用内置 FFmpeg: {self._ffmpeg_exe}")
+            return True
 
         # 2. 最后检查 PATH (最通用且便携的方式)
         path = shutil.which("ffmpeg")
@@ -86,7 +91,15 @@ class EnvironmentChecker:
         return False
 
     def check_ffprobe(self) -> bool:
-        """检查 FFprobe 是否可用"""
+        """检查 FFprobe 是否可用（与 ffmpeg 同序：自带 → PATH）。"""
+        bundled = find_bundled_executable(
+            "ffmpeg/ffprobe.exe" if sys.platform == "win32" else "ffmpeg/ffprobe",
+            "ffprobe.exe" if sys.platform == "win32" else "ffprobe",
+        )
+        if bundled is not None:
+            self._ffprobe_exe = str(bundled.absolute())
+            return True
+
         try:
             env = get_clean_env()
             subprocess.run(

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QT_TRANSLATE_NOOP, QCoreApplication, Qt, Signal
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -67,54 +67,82 @@ def _analyze_format_tags(r: dict) -> list[tuple[str, str]]:
 
 # ── VR 场景化预设定义 ─────────────────────────────────────────
 #
-# 设计原则：用户不关心 Equirectangular 还是 Mesh，他们只关心self.tr("我用什么设备看")。
+# 设计原则：用户不关心 Equirectangular 还是 Mesh，他们只关心“我用什么设备看”。
 # VP9 优先于 AV1：Quest 2（最大存量设备）不支持 AV1 硬解。
+#
+# 标题/说明是**未翻译的源串**：本表在模块级构建，没有 self 可以 tr()，而且被
+# selection_dialog / download_config_window 跨文件消费。用 QT_TRANSLATE_NOOP 在声明处
+# 标记，显示时统一走 vr_preset_text() —— 这样运行时切语言能跟随（ISSUE #88）。
+# 比较用的键永远是 p[0] 的 id，任何地方都不要拿标题去比对。
 #
 
 VR_PRESETS: list[tuple[str, str, str, str, dict[str, Any]]] = [
     # (id, title, description, format_selector, post_args)
     (
         "vr_headset",
-        "\U0001f941 VR \u5934\u663e\u539f\u751f (\u63a8\u8350)",
-        "Quest / Pico / Vision Pro \u7b49\u5934\u663e\u7528\u6237\u3002"
-        "\u6700\u9ad8\u753b\u8d28\uff0c\u4fdd\u7559\u539f\u59cb\u6295\u5f71\uff0cVP9/AV1 \u7f16\u7801\uff0cMKV \u5c01\u88c5\u3002",
+        QT_TRANSLATE_NOOP("VRPresets", "🥁 VR 头显原生 (推荐)"),
+        QT_TRANSLATE_NOOP(
+            "VRPresets",
+            "Quest / Pico / Vision Pro 等头显用户。"
+            "最高画质，保留原始投影，VP9/AV1 编码，MKV 封装。",
+        ),
         "bv*[vcodec^=vp9]+ba/bv*[vcodec^=av01]+ba/bv*+ba/b",
         {"merge_output_format": "mkv"},
     ),
     (
         "vr_compat",
-        "\U0001f4f1 \u901a\u7528\u517c\u5bb9",
-        "\u624b\u673a / \u7535\u8111 / PotPlayer / \u65e7\u8bbe\u5907\u3002"
-        "\u5f3a\u5236 MP4 + H.264 \u4f18\u5148\uff0c\u82e5\u6e90\u4e3a EAC \u683c\u5f0f\u5c06\u81ea\u52a8\u8f6c\u7801\uff08\u8017\u65f6\u8f83\u957f\uff09\u3002",
+        QT_TRANSLATE_NOOP("VRPresets", "📱 通用兼容"),
+        QT_TRANSLATE_NOOP(
+            "VRPresets",
+            "手机 / 电脑 / PotPlayer / 旧设备。"
+            "强制 MP4 + H.264 优先，若源为 EAC 格式将自动转码（耗时较长）。",
+        ),
         "bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/bv*+ba/b",
         {"merge_output_format": "mp4", "__vr_convert_eac": True},
     ),
     (
         "vr_3d_cinema",
-        "\U0001f453 3D \u5f71\u9662",
-        "\u53ea\u770b 3D \u7acb\u4f53\u6548\u679c\uff08VR180 \u4e3a\u4e3b\uff09\u3002"
-        "\u4f18\u5148\u7b5b\u9009\u7acb\u4f53 3D \u6d41 (TB/SBS)\u3002",
+        QT_TRANSLATE_NOOP("VRPresets", "👓 3D 影院"),
+        QT_TRANSLATE_NOOP(
+            "VRPresets",
+            "只看 3D 立体效果（VR180 为主）。优先筛选立体 3D 流 (TB/SBS)。",
+        ),
         "bv*+ba/b",
         {"merge_output_format": "mkv", "__vr_prefer_stereo": True},
     ),
     (
         "vr_panorama",
-        "\U0001f310 \u5168\u666f\u6f2b\u6e38",
-        "\u98ce\u666f / \u7eaa\u5f55\u7247 / 2D \u5168\u666f\u89c6\u9891\u3002"
-        "\u4f18\u5148\u7b5b\u9009 Mono 360\u00b0 \u6d41\u3002",
+        QT_TRANSLATE_NOOP("VRPresets", "🌐 全景漫游"),
+        QT_TRANSLATE_NOOP(
+            "VRPresets",
+            "风景 / 纪录片 / 2D 全景视频。优先筛选 Mono 360° 流。",
+        ),
         "bv*+ba/b",
         {"__vr_prefer_mono": True},
     ),
     (
         "vr_audio",
-        "\U0001f3b5 \u4ec5\u97f3\u9891",
-        "\u4ec5\u63d0\u53d6 VR \u89c6\u9891\u97f3\u8f68\uff0c\u8f6c\u7801\u4e3a MP3 (320kbps)\u3002",
+        QT_TRANSLATE_NOOP("VRPresets", "🎵 仅音频"),
+        QT_TRANSLATE_NOOP("VRPresets", "仅提取 VR 视频音轨，转码为 MP3 (320kbps)。"),
         "bestaudio/best",
         {"extract_audio": True, "audio_format": "mp3", "audio_quality": "320K"},
     ),
 ]
 
-_VR_PLAYBACK_HINT = "\U0001f4a1 \u64ad\u653e\u63d0\u793a\uff1a\u8bf7\u5728\u64ad\u653e\u5668\u624b\u52a8\u9009\u62e9 VR \u6a21\u5f0f\uff08180\u00b0/360\u00b0/TB/SBS\uff09"
+
+def vr_preset_text(source: str) -> str:
+    """把 ``VR_PRESETS`` 里的源串翻译成当前语言。
+
+    参数永远是变量，所以不影响 lupdate 提取 —— 源串已在上面的声明处标记。
+    """
+    return QCoreApplication.translate("VRPresets", source)
+
+
+#: 预设列表底部的播放提示。源串在此标记，读取处用 ``self.tr()`` 查表。
+_VR_PLAYBACK_HINT = QT_TRANSLATE_NOOP(
+    "VRPresetWidget",
+    "💡 播放提示：请在播放器手动选择 VR 模式（180°/360°/TB/SBS）",
+)
 
 
 # ── QSS ──────────────────────────────────────────────────────
@@ -274,7 +302,7 @@ class VRPresetWidget(QWidget):
             container = CardWidget(self)
             h_layout = QHBoxLayout(container)
 
-            rb = RadioButton(title, container)
+            rb = RadioButton(vr_preset_text(title), container)
             rb.setProperty("preset_id", pid)
             rb.setProperty("format_str", fmt)
             rb.setProperty("extra_args", args)
@@ -282,7 +310,7 @@ class VRPresetWidget(QWidget):
             self.btn_group.addButton(rb, i)
             self.radios.append(rb)
 
-            desc_label = CaptionLabel(desc, container)
+            desc_label = CaptionLabel(vr_preset_text(desc), container)
             desc_label.setTextColor(QColor(96, 96, 96), QColor(210, 210, 210))
             desc_label.setWordWrap(True)
 
@@ -292,7 +320,7 @@ class VRPresetWidget(QWidget):
             self.v_layout.addWidget(container)
 
         # 播放提示
-        hint_label = CaptionLabel(_VR_PLAYBACK_HINT, self.content_widget)
+        hint_label = CaptionLabel(self.tr(_VR_PLAYBACK_HINT), self.content_widget)
         hint_label.setTextColor(QColor(96, 96, 96), QColor(210, 210, 210))
         hint_label.setWordWrap(True)
         self.v_layout.addWidget(hint_label)
@@ -330,8 +358,19 @@ class VRFormatTableWidget(QWidget):
 
     selectionChanged = Signal()
 
-    _VCOLS = ["\u7c7b\u578b", "\u8d28\u91cf", "\u7acb\u4f53", "\u6295\u5f71", "\u8be6\u60c5"]
-    _ACOLS = ["\u7c7b\u578b", "\u8d28\u91cf", "\u8be6\u60c5"]
+    #: 表头源串。类属性里没有 self，所以在声明处标记，setHorizontalHeaderLabels 时再 tr()。
+    _VCOLS = [
+        QT_TRANSLATE_NOOP("VRFormatTableWidget", "类型"),
+        QT_TRANSLATE_NOOP("VRFormatTableWidget", "质量"),
+        QT_TRANSLATE_NOOP("VRFormatTableWidget", "立体"),
+        QT_TRANSLATE_NOOP("VRFormatTableWidget", "投影"),
+        QT_TRANSLATE_NOOP("VRFormatTableWidget", "详情"),
+    ]
+    _ACOLS = [
+        QT_TRANSLATE_NOOP("VRFormatTableWidget", "类型"),
+        QT_TRANSLATE_NOOP("VRFormatTableWidget", "质量"),
+        QT_TRANSLATE_NOOP("VRFormatTableWidget", "详情"),
+    ]
 
     def __init__(self, info: dict[str, Any], parent=None):
         super().__init__(parent)
@@ -345,10 +384,10 @@ class VRFormatTableWidget(QWidget):
         self.mode_combo = ComboBox(self)
         self.mode_combo.addItems(
             [
-                "\u97f3\u89c6\u9891\uff08\u53ef\u7ec4\u88c5\uff09",
-                "\u97f3\u89c6\u9891\uff08\u6574\u5408\u6d41\uff09",
-                "\u4ec5\u89c6\u9891",
-                "\u4ec5\u97f3\u9891",
+                self.tr("音视频（可组装）"),
+                self.tr("音视频（整合流）"),
+                self.tr("仅视频"),
+                self.tr("仅音频"),
             ]
         )
         self.mode_combo.setCurrentIndex(0)
@@ -366,15 +405,15 @@ class VRFormatTableWidget(QWidget):
         filter_row.setContentsMargins(0, 0, 0, 0)
         filter_row.setSpacing(12)
 
-        self._filter_3d = CheckBox("\u4ec5 3D \u7acb\u4f53", self)
+        self._filter_3d = CheckBox(self.tr("仅 3D 立体"), self)
         self._filter_3d.stateChanged.connect(self._on_filter_changed)
         filter_row.addWidget(self._filter_3d)
 
-        self._filter_8k = CheckBox("\u4ec5 8K+", self)
+        self._filter_8k = CheckBox(self.tr("仅 8K+"), self)
         self._filter_8k.stateChanged.connect(self._on_filter_changed)
         filter_row.addWidget(self._filter_8k)
 
-        self._filter_no_av1 = CheckBox("\u6392\u9664 AV1", self)
+        self._filter_no_av1 = CheckBox(self.tr("排除 AV1"), self)
         self._filter_no_av1.stateChanged.connect(self._on_filter_changed)
         filter_row.addWidget(self._filter_no_av1)
 
@@ -391,7 +430,7 @@ class VRFormatTableWidget(QWidget):
         from fluentytdl.ui.components.platforms.youtube import FormatExpandCard
 
         self.video_container = FormatExpandCard(
-            FluentIcon.VIDEO, "\u89c6\u9891\u6d41", self.split_container
+            FluentIcon.VIDEO, self.tr("视频流"), self.split_container
         )
         self._build_video_table()
         self.video_container.set_content(self.video_table)
@@ -399,7 +438,7 @@ class VRFormatTableWidget(QWidget):
 
         # Audio Section
         self.audio_container = FormatExpandCard(
-            FluentIcon.MUSIC, "\u97f3\u9891\u6d41", self.split_container
+            FluentIcon.MUSIC, self.tr("音频流"), self.split_container
         )
         self._build_audio_table()
         self.audio_container.set_content(self.audio_table)
@@ -461,7 +500,7 @@ class VRFormatTableWidget(QWidget):
     def _build_video_table(self):
         self.video_table = TableWidget(self.video_container)
         self.video_table.setColumnCount(len(self._VCOLS))
-        self.video_table.setHorizontalHeaderLabels(self._VCOLS)
+        self.video_table.setHorizontalHeaderLabels([self.tr(c) for c in self._VCOLS])
         self.video_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.video_table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.video_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
@@ -499,7 +538,7 @@ class VRFormatTableWidget(QWidget):
     def _build_audio_table(self):
         self.audio_table = TableWidget(self.audio_container)
         self.audio_table.setColumnCount(len(self._ACOLS))
-        self.audio_table.setHorizontalHeaderLabels(self._ACOLS)
+        self.audio_table.setHorizontalHeaderLabels([self.tr(c) for c in self._ACOLS])
         self.audio_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.audio_table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.audio_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
@@ -1279,8 +1318,8 @@ class VRFormatSelectorWidget(QWidget):
 
         # 模式切换标签
         self.mode_seg = SegmentedWidget(self)
-        self.mode_seg.addItem("simple", "\u7b80\u6613\u6a21\u5f0f")
-        self.mode_seg.addItem("pro", "\u4e13\u4e1a\u6a21\u5f0f")
+        self.mode_seg.addItem("simple", self.tr("简易模式"))
+        self.mode_seg.addItem("pro", self.tr("专业模式"))
         self.mode_seg.setCurrentItem("simple")
         self.mode_seg.currentItemChanged.connect(self._on_mode_switch)
         layout.addWidget(self.mode_seg)

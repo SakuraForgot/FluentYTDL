@@ -49,6 +49,7 @@ from ....download.extract_manager import AsyncExtractManager
 from ....download.workers import InfoExtractWorker, VRInfoExtractWorker
 from ....models.mappers import VideoInfoMapper
 from ....models.video_info import VideoInfo
+from ....observability import FlowTrace, new_flow
 from ....processing import subtitle_service
 from ....utils.container_compat import (
     choose_lossless_merge_container,
@@ -57,7 +58,7 @@ from ....utils.container_compat import (
 from ....utils.filesystem import sanitize_filename
 from ....utils.image_loader import ImageLoader
 from ....utils.logger import logger
-from ....youtube.youtube_service import YoutubeServiceOptions, YtDlpAuthOptions
+from ....youtube.youtube_service import YoutubeServiceOptions
 from ...models.playlist_model import PlaylistModelRoles
 
 # ---- 字幕容器兼容性辅助函数 ----
@@ -677,7 +678,13 @@ class PlaylistFormatDialog(FramelessDialog):
     """
 
     def __init__(
-        self, info: dict[str, Any], parent=None, *, vr_mode: bool = False, mode: str = "default"
+        self,
+        info: dict[str, Any],
+        parent=None,
+        *,
+        vr_mode: bool = False,
+        mode: str = "default",
+        trace: FlowTrace | None = None,
     ):
         super().__init__(parent=parent)
         self._mode = mode
@@ -712,7 +719,7 @@ class PlaylistFormatDialog(FramelessDialog):
         elif vr_mode:
             self.selector = VRFormatSelectorWidget(info, self)
         else:
-            self.selector = VideoFormatSelectorWidget(info, self)
+            self.selector = VideoFormatSelectorWidget(info, self, trace=trace)
 
         # 独立窗口不再受父弹窗尺寸挤压，手风琴可以给到正常高度
         if hasattr(self.selector, "video_table"):
@@ -805,7 +812,11 @@ class PlaylistFormatDialog(FramelessDialog):
         if hasattr(self.selector, "get_selection_result"):
             result = self.selector.get_selection_result()
             if isinstance(result, dict):
-                container = result.get("merge_output_format")
+                # `get_selection_result()` 返回 {format, extra_opts}，容器在 extra_opts 里。
+                # 原先直接读顶层 `merge_output_format`，永远拿到 None —— 于是字幕选择器的
+                # 容器兼容提示形同废设：选 WebM 输出 + 软嵌入字幕既不警告、也不自动切外挂，
+                # 用户只会看到那句"将根据字幕需求自动选择最佳容器"。
+                container = (result.get("extra_opts") or {}).get("merge_output_format")
 
         dialog = SubtitlePickerDialog(
             info, container, initial_result=self.sub_override_result, parent=self
@@ -814,7 +825,7 @@ class PlaylistFormatDialog(FramelessDialog):
             self.sub_override_result = dialog.get_result()
             n = len(self.sub_override_result.selected_tracks)
             if n > 0:
-                self.sub_override_btn.setText(f"已选 {n} 种字幕 ✓")
+                self.sub_override_btn.setText(self.tr("已选 {n} 种字幕 ✓").format(n=n))
             else:
                 self.sub_override_btn.setText(self.tr("选择字幕..."))
 
@@ -866,11 +877,21 @@ class PlaylistFormatDialog(FramelessDialog):
 class SelectionDialog(MessageBoxBase):
     """智能解析与格式选择弹窗"""
 
-    def __init__(self, url: str, parent=None, *, vr_mode: bool = False, mode: str = "default"):
+    def __init__(
+        self,
+        url: str,
+        parent=None,
+        *,
+        vr_mode: bool = False,
+        mode: str = "default",
+        flow: FlowTrace | None = None,
+    ):
         super().__init__(parent)
         self.url = url
         self._vr_mode = vr_mode or (mode == "vr")
         self._mode = mode  # default, vr, subtitle, cover
+        # 本对话框这一轮操作的链标识，见 `DownloadConfigWindow.__init__` 的同名字段。
+        self.trace: FlowTrace = flow if flow is not None else new_flow(stage="parse")
         self.video_info: dict[str, Any] | None = None
         self.video_info_dto: VideoInfo | None = None
         self._is_playlist = False
@@ -991,30 +1012,41 @@ class SelectionDialog(MessageBoxBase):
         self.contentWidget.hide()
 
         # 失败重试区（默认隐藏）：用于self.tr("需要 Cookies / 不是机器人验证")场景
+        #
+        # 以前这里挂着一个「Edge / Chrome / Firefox Cookies」下拉框，选中后给 yt-dlp 加
+        # `--cookies-from-browser`。那是 CLAUDE.md §4.3 明令禁止的做法：yt-dlp 会自己去开
+        # 浏览器的 DPAPI 数据库，Windows 上直接撞文件锁，而且整条路径完全绕过两个真相源
+        # （bin/cookies_youtube.txt / bin/cookies_twitter.txt），选了也不会写回去。
+        # 现在只留两个动作：直接重试，或先刷新真相源再重试。
         self.retryWidget = QWidget(self)
         self.retryWidget.setAttribute(Qt.WidgetAttribute.WA_StyledBackground)
 
-        bg_color = "#2b2b2b"
+        bg_color = "#2b2b2b" if isDarkTheme() else "#f5f5f5"
         self.retryWidget.setStyleSheet(f"background-color: {bg_color}; border: none;")
         self.retryLayout = QVBoxLayout(self.retryWidget)
         self.retryLayout.setContentsMargins(0, 0, 0, 0)
         self.retryLayout.setSpacing(8)
 
         self.retryHint = CaptionLabel(
-            self.tr("检测到需要身份验证时，可选择从浏览器注入 Cookies 后重试解析。"),
+            self.tr("检测到需要身份验证。可先刷新 Cookie，再重试解析。"),
             self.retryWidget,
         )
+        self.retryHint.setWordWrap(True)
         self.retryLayout.addWidget(self.retryHint)
 
-        self.cookies_combo = ComboBox(self.retryWidget)
-        self.cookies_combo.addItems(
-            [self.tr("不使用 Cookies"), "Edge Cookies", "Chrome Cookies", "Firefox Cookies"]
-        )
-        self.retryLayout.addWidget(self.cookies_combo)
+        retry_btn_row = QHBoxLayout()
+        retry_btn_row.setContentsMargins(0, 0, 0, 0)
+        retry_btn_row.setSpacing(8)
+
+        self.refreshCookieBtn = PushButton(self.tr("刷新 Cookie 后重试"), self.retryWidget)
+        self.refreshCookieBtn.clicked.connect(self._on_refresh_cookie_retry_clicked)
+        retry_btn_row.addWidget(self.refreshCookieBtn, 1)
 
         self.retryBtn = PrimaryPushButton(self.tr("重试解析"), self.retryWidget)
         self.retryBtn.clicked.connect(self._on_retry_clicked)
-        self.retryLayout.addWidget(self.retryBtn)
+        retry_btn_row.addWidget(self.retryBtn, 1)
+
+        self.retryLayout.addLayout(retry_btn_row)
 
         self.viewLayout.addWidget(self.retryWidget)
         self.retryWidget.hide()
@@ -1163,9 +1195,9 @@ class SelectionDialog(MessageBoxBase):
         # Start with no cookies; user can retry with cookies.
         self._current_options = None
         if self._vr_mode:
-            w = VRInfoExtractWorker(self.url)
+            w = VRInfoExtractWorker(self.url, flow=self.trace)
         else:
-            w = InfoExtractWorker(self.url, self._current_options)
+            w = InfoExtractWorker(self.url, self._current_options, flow=self.trace)
         w.finished.connect(self.on_parse_success)
         w.error.connect(self.on_parse_error)
         self.worker = w
@@ -1332,6 +1364,7 @@ class SelectionDialog(MessageBoxBase):
             from fluentytdl.ui.components.dialogs.cookie_repair_dialog import CookieRepairDialog
 
             from ....auth.auth_service import AuthSourceType, auth_service
+            from ....utils.validators import UrlValidator
 
             current_source = auth_service.current_source
             source_map = {
@@ -1339,17 +1372,21 @@ class SelectionDialog(MessageBoxBase):
                 AuthSourceType.FILE: "file",
             }
             auth_source_str = source_map.get(current_source, "browser")
+            # 认证失败提示要说对平台：X 的链接不该提示去重新登录 YouTube
+            platform = "twitter" if UrlValidator.is_x_url(self.url) else "youtube"
+            platform_label = "X (Twitter)" if platform == "twitter" else "YouTube"
 
             dialog = CookieRepairDialog(
-                raw_error, parent=self.window(), auth_source=auth_source_str
+                raw_error, parent=self.window(), auth_source=auth_source_str, platform=platform
             )
 
+            # 按钮文案由 CookieRepairDialog 按 auth_source 自己决定 —— 这里以前写的是
+            # `dialog.repair_btn`，而这个属性并不存在，登录/文件模式下必然 AttributeError，
+            # 认证失败的修复引导因此从来没能弹出来过。
             if current_source == AuthSourceType.WEBVIEW2:
-                dialog.setWindowTitle(self.tr("需要重新登录 YouTube"))
-                dialog.repair_btn.setText(self.tr("重新登录"))
+                dialog.setWindowTitle(self.tr("需要重新登录 {}").format(platform_label))
             elif current_source == AuthSourceType.FILE:
                 dialog.setWindowTitle(self.tr("Cookie 文件需要更新"))
-                dialog.repair_btn.setText(self.tr("重新导入"))
 
             def on_auto_repair():
                 if current_source == AuthSourceType.WEBVIEW2:
@@ -1369,14 +1406,23 @@ class SelectionDialog(MessageBoxBase):
                         ctrl.show_settings_page()
                     self.reject()
                 else:
-                    from ....auth.cookie_sentinel import cookie_sentinel
+                    # 浏览器提取会读被锁的 DPAPI 数据库，主线程直接调就是"点了修复后卡死"。
+                    # 统一走 CookieRefreshWorker，结果用 QueuedConnection 回主线程。
+                    from ..common.cookie_refresh_worker import CookieRefreshWorker
 
-                    success, msg = cookie_sentinel.force_refresh_with_uac()
-                    dialog.show_repair_result(success, msg)
-                    if success:
-                        from PySide6.QtCore import QTimer
+                    # 只刷这条链接对应的平台：另一个平台的真相源没坏，没必要动
+                    worker = CookieRefreshWorker(self, platform=platform)
+                    self._cookie_repair_worker = worker  # 防止被 GC，QThread 必须活到 finished
 
-                        QTimer.singleShot(1500, self.start_extraction)
+                    def _on_repaired(success: bool, msg: str, _needs_admin: bool) -> None:
+                        dialog.show_repair_result(success, msg)
+                        if success:
+                            from PySide6.QtCore import QTimer
+
+                            QTimer.singleShot(1500, self.start_extraction)
+
+                    worker.finished.connect(_on_repaired, Qt.ConnectionType.QueuedConnection)
+                    worker.start()
 
             dialog.repair_requested.connect(on_auto_repair)
 
@@ -1409,6 +1455,39 @@ class SelectionDialog(MessageBoxBase):
             if "cookies" in lower or "not a bot" in lower or "sign in" in lower:
                 self.retryWidget.show()
 
+    def _on_refresh_cookie_retry_clicked(self) -> None:
+        """先刷新当前链接对应平台的真相源，成功后自动重试解析。
+
+        刷新必须在 QThread 里：浏览器提取要读被锁的 DPAPI 数据库、WebView2 模式要等登录
+        窗口关闭，在 Qt 主线程直接调就是用户报的"点了之后卡死"。
+        """
+        from ....utils.validators import UrlValidator
+        from ..common.cookie_refresh_worker import CookieRefreshWorker
+
+        platform = "twitter" if UrlValidator.is_x_url(self.url) else "youtube"
+
+        self.refreshCookieBtn.setEnabled(False)
+        self.refreshCookieBtn.setText(self.tr("正在刷新 Cookie..."))
+
+        # 只刷这条链接对应的平台：另一个平台的真相源没坏，没必要动
+        worker = CookieRefreshWorker(self, platform=platform)
+        self._cookie_refresh_worker = worker  # 防止被 GC，QThread 必须活到 finished
+
+        def _on_refreshed(success: bool, msg: str, _needs_admin: bool = False) -> None:
+            self.refreshCookieBtn.setEnabled(True)
+            self.refreshCookieBtn.setText(self.tr("刷新 Cookie 后重试"))
+            if success:
+                self._on_retry_clicked()
+            else:
+                from ..common.custom_info_bar import InfoBar
+
+                InfoBar.error(
+                    self.tr("刷新 Cookie 失败"), msg, duration=8000, parent=self.window()
+                )
+
+        worker.finished.connect(_on_refreshed, Qt.ConnectionType.QueuedConnection)
+        worker.start()
+
     def _on_retry_clicked(self) -> None:
         # Cancel any in-flight parsing before restarting.
         self._is_closing = False
@@ -1425,21 +1504,9 @@ class SelectionDialog(MessageBoxBase):
                 pass
             self._extract_manager = None
 
-        # Build options based on user choice
-        idx = self.cookies_combo.currentIndex()
-        cookies_from_browser: str | None = None
-        if idx == 1:
-            cookies_from_browser = "edge"
-        elif idx == 2:
-            cookies_from_browser = "chrome"
-        elif idx == 3:
-            cookies_from_browser = "firefox"
-
+        # 重试不再构造 auth 选项：Cookie 一律由 yt_dlp_cli 从两个真相源注入 `--cookies`，
+        # 这里再塞 `--cookies-from-browser` 只会撞 DPAPI 文件锁（CLAUDE.md §4.3）。
         options: YoutubeServiceOptions | None = None
-        if cookies_from_browser:
-            options = YoutubeServiceOptions(
-                auth=YtDlpAuthOptions(cookies_from_browser=cookies_from_browser)
-            )
 
         self._current_options = options
 
@@ -1454,7 +1521,7 @@ class SelectionDialog(MessageBoxBase):
             self._error_label = None
 
         # Restart worker
-        w = InfoExtractWorker(self.url, self._current_options)
+        w = InfoExtractWorker(self.url, self._current_options, flow=self.trace)
         w.finished.connect(self.on_parse_success)
         w.error.connect(self.on_parse_error)
         self.worker = w
@@ -1539,27 +1606,29 @@ class SelectionDialog(MessageBoxBase):
                 stereo = vr_summary.get("primary_stereo", "unknown")
                 proj = vr_summary.get("primary_projection", "unknown")
 
+                # 字典每次调用都重建，所以 self.tr() 写在声明处也能跟随语言切换。
                 stereo_map = {
-                    "stereo_tb": "\U0001f453 \u7acb\u4f53 3D \u89c6\u9891 (\u4e0a\u4e0b\u5e03\u5c40)",
-                    "stereo_sbs": "\U0001f453 \u7acb\u4f53 3D \u89c6\u9891 (\u5de6\u53f3\u5e03\u5c40)",
-                    "mono": "\U0001f310 2D \u5168\u666f\u89c6\u9891",
+                    "stereo_tb": self.tr("👓 立体 3D 视频 (上下布局)"),
+                    "stereo_sbs": self.tr("👓 立体 3D 视频 (左右布局)"),
+                    "mono": self.tr("🌐 2D 全景视频"),
                 }
                 proj_map = {
-                    "equirectangular": "Equirectangular \u6295\u5f71",
-                    "mesh": "Mesh \u6295\u5f71 (\u9c7c\u773c)",
-                    "eac": "EAC \u6295\u5f71 (\u7acb\u65b9\u4f53)",
+                    "equirectangular": self.tr("Equirectangular 投影"),
+                    "mesh": self.tr("Mesh 投影 (鱼眼)"),
+                    "eac": self.tr("EAC 投影 (立方体)"),
                 }
 
-                title_text = stereo_map.get(stereo, "\U0001f941 VR \u89c6\u9891")
-                proj_text = proj_map.get(proj, "\u672a\u77e5\u6295\u5f71")
+                title_text = stereo_map.get(stereo, self.tr("🥁 VR 视频"))
+                proj_text = proj_map.get(proj, self.tr("未知投影"))
 
                 b_title = BodyLabel(title_text, banner)
                 b_title.setStyleSheet("font-weight: 600; font-size: 14px;")
                 b_layout.addWidget(b_title)
 
                 hint = CaptionLabel(
-                    f"\u6295\u5f71\u7c7b\u578b: {proj_text}  \u2022  "
-                    f"\u64ad\u653e\u65f6\u8bf7\u5728\u64ad\u653e\u5668\u624b\u52a8\u9009\u62e9 VR \u6a21\u5f0f",
+                    self.tr("投影类型: {proj}  •  播放时请在播放器手动选择 VR 模式").format(
+                        proj=proj_text
+                    ),
                     banner,
                 )
                 b_layout.addWidget(hint)
@@ -1567,9 +1636,10 @@ class SelectionDialog(MessageBoxBase):
                 # EAC warning
                 if vr_summary.get("eac_only"):
                     warn = CaptionLabel(
-                        "\u26a0\ufe0f \u8be5\u89c6\u9891\u4ec5\u6709 EAC \u6295\u5f71\u6d41\uff0c"
-                        "\u666e\u901a\u64ad\u653e\u5668\u53ef\u80fd\u65e0\u6cd5\u6b63\u786e\u663e\u793a\u3002"
-                        "\u5efa\u8bae\u4f7f\u7528 VR \u5934\u663e\u6216\u4e13\u4e1a\u64ad\u653e\u5668\u3002",
+                        self.tr(
+                            "⚠️ 该视频仅有 EAC 投影流，普通播放器可能无法正确显示。"
+                            "建议使用 VR 头显或专业播放器。"
+                        ),
                         banner,
                     )
                     warn.setStyleSheet("color: #DC3545;")
@@ -1597,7 +1667,9 @@ class SelectionDialog(MessageBoxBase):
             self._format_selector = VRFormatSelectorWidget(info, self.contentWidget)
             self.contentLayout.addWidget(self._format_selector)
         else:
-            self._format_selector = VideoFormatSelectorWidget(info, self.contentWidget)
+            self._format_selector = VideoFormatSelectorWidget(
+                info, self.contentWidget, trace=self.trace
+            )
             self.contentLayout.addWidget(self._format_selector)
 
         if self._mode not in ("subtitle", "cover"):
@@ -1613,7 +1685,9 @@ class SelectionDialog(MessageBoxBase):
         if isinstance(entries, list):
             count = len(entries)
 
-        self.titleLabel.setText(f"播放列表：{title}（{count} 条）")
+        self.titleLabel.setText(
+            self.tr("播放列表：{title}（{count} 条）").format(title=title, count=count)
+        )
 
         # show playlist title
         self.titleLabel.show()
@@ -1651,9 +1725,11 @@ class SelectionDialog(MessageBoxBase):
 
         self.preset_combo = ComboBox(self.contentWidget)
         if self._vr_mode:
-            # VR 模式使用场景化预设
+            # VR 模式使用场景化预设。标题是 VRPresets 上下文的源串，显示时才翻译。
+            from fluentytdl.ui.components.platforms.vr import vr_preset_text
+
             for pid, title, _, _, _ in VR_PRESETS:
-                self.preset_combo.addItem(title, userData=pid)
+                self.preset_combo.addItem(vr_preset_text(title), userData=pid)
         else:
             # 普通模式使用分辨率预设
             self.preset_combo.addItems(
@@ -1719,7 +1795,9 @@ class SelectionDialog(MessageBoxBase):
         from ....core.config_manager import config_manager
 
         concurrency = int(config_manager.get("playlist_extract_concurrency", 3))
-        self._extract_manager = AsyncExtractManager(max_concurrent=concurrency, parent=self)
+        self._extract_manager = AsyncExtractManager(
+            max_concurrent=concurrency, parent=self, flow=self.trace
+        )
 
         self.contentLayout.addWidget(self._scroll_area)
 
@@ -2636,7 +2714,7 @@ class SelectionDialog(MessageBoxBase):
         selected_rows = [i for i, r in enumerate(self._playlist_rows) if r.get("selected")]
         pending = [i for i in selected_rows if i not in self._detail_loaded]
         if pending:
-            self.yesButton.setText(f"下载（剩余 {len(pending)} 个解析中...）")
+            self.yesButton.setText(self.tr("下载（剩余 {n} 个解析中...）").format(n=len(pending)))
         else:
             self.yesButton.setText(self.tr("下载"))
 
@@ -2644,7 +2722,9 @@ class SelectionDialog(MessageBoxBase):
         if hasattr(self, "progressLabel"):
             total = len(self._playlist_rows)
             done = len(self._detail_loaded)
-            self.progressLabel.setText(f"详情补全：{done}/{total}")
+            self.progressLabel.setText(
+                self.tr("详情补全：{done}/{total}").format(done=done, total=total)
+            )
             try:
                 if hasattr(self, "progressRing"):
                     self.progressRing.setVisible(done < total)
@@ -2780,7 +2860,7 @@ class SelectionDialog(MessageBoxBase):
         if not info:
             return
 
-        dialog = PlaylistFormatDialog(info, self, vr_mode=self._vr_mode)
+        dialog = PlaylistFormatDialog(info, self, vr_mode=self._vr_mode, trace=self.trace)
         if dialog.exec():
             sel = dialog.get_selection()
             if sel and sel.get("format"):
@@ -2961,6 +3041,7 @@ class SelectionDialog(MessageBoxBase):
                 subtitle_opts = subtitle_service.apply(
                     video_id=(dto.video_id if dto is not None else self.video_info.get("id", "")),
                     video_info=self.video_info,
+                    trace=self.trace,
                 )
                 ydl_opts.update(subtitle_opts)
 
@@ -2985,7 +3066,7 @@ class SelectionDialog(MessageBoxBase):
                     )
 
                 # 确保容器格式兼容字幕嵌入
-                ensure_subtitle_compatible_container(ydl_opts)
+                ensure_subtitle_compatible_container(ydl_opts, trace=self.trace)
 
                 logger.debug("get_selected_tasks: subtitle_opts = {}", subtitle_opts)
                 logger.debug(
@@ -3224,7 +3305,9 @@ class SelectionDialog(MessageBoxBase):
                             data["override_text"] = str(best.get("text") or "")
                             aw = self._action_widget_by_row.get(r)
                             if aw is not None:
-                                aw.qualityButton.setText(f"已选择: {data['override_text']}")
+                                aw.qualityButton.setText(
+                                    self.tr("已选择: {text}").format(text=data["override_text"])
+                                )
                 else:
                     # keep dialog open for manual adjustments
                     return []
@@ -3613,6 +3696,7 @@ class SelectionDialog(MessageBoxBase):
                         else self.video_info.get("id", "")
                     ),
                     video_info=self.video_info,
+                    trace=self.trace,
                 )
                 opts.update(subtitle_opts)
 
@@ -3626,7 +3710,7 @@ class SelectionDialog(MessageBoxBase):
                     else:
                         opts["embedsubtitles"] = False
 
-                ensure_subtitle_compatible_container(opts)
+                ensure_subtitle_compatible_container(opts, trace=self.trace)
 
             return opts
 
@@ -3652,6 +3736,7 @@ class SelectionDialog(MessageBoxBase):
                     else self.video_info.get("id", "")
                 ),
                 video_info=self.video_info,
+                trace=self.trace,
             )
             opts.update(subtitle_opts)
 
@@ -3665,6 +3750,6 @@ class SelectionDialog(MessageBoxBase):
                 else:
                     opts["embedsubtitles"] = False
 
-            ensure_subtitle_compatible_container(opts)
+            ensure_subtitle_compatible_container(opts, trace=self.trace)
 
         return opts

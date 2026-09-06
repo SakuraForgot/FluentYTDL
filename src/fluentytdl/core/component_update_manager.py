@@ -355,6 +355,14 @@ class ComponentUpdateManager(QObject):
         # 会驱动两次 apply 流程。_DownloadWorker 每次下载都新建临时目录，所以
         # "同一个归档路径" 必然意味着同一次下载 —— 据此去重，而不是去猜调用者。
         self._requested_archives: set[str] = set()
+        # 本轮 app 更新检查是否为「自动/静默」触发。静默时 UI 不弹任何 InfoBar，
+        # 有更新才写进消息中心。emit 是同步的，所以槽里读这个标记是安全的。
+        self._app_check_silent: bool = False
+
+    @property
+    def is_silent_check(self) -> bool:
+        """当前这轮 app 更新检查是否由自动（启动/定时）逻辑触发。"""
+        return self._app_check_silent
 
     @property
     def manifest(self) -> dict | None:
@@ -397,8 +405,13 @@ class ComponentUpdateManager(QObject):
         # 先获取清单
         self.fetch_manifest()
 
-    def check_app_update(self) -> None:
-        """仅检查 app-core 更新。"""
+    def check_app_update(self, silent: bool = False) -> None:
+        """仅检查 app-core 更新。
+
+        ``silent=True`` 表示自动（启动/定时）检查：UI 侧读 :attr:`is_silent_check`
+        决定不弹「已是最新」「检查失败」这类提示，只有真有更新才进消息中心。
+        """
+        self._app_check_silent = silent
         channel = _get_update_channel()
 
         if channel == "locked":
@@ -461,6 +474,7 @@ class ComponentUpdateManager(QObject):
                 "sha256": app_core.get("sha256", ""),
                 "size": app_core.get("size", 0),
                 "is_prerelease": False,
+                "silent": self._app_check_silent,
             }
         )
 

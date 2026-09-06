@@ -11,6 +11,8 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from ..utils.logger import logger
+from .catalog import QT_TRANSLATE_NOOP, localize
 from .models import (
     FALLBACK_CODE,
     Diagnosis,
@@ -26,31 +28,64 @@ _HTTP_STATUS_RE = re.compile(r"HTTP Error (\d{3})", re.IGNORECASE)
 _EXTRACTOR_RE = re.compile(r"ERROR:\s*\[([^\]]+)\]\s*(.*)", re.IGNORECASE)
 
 #: 兜底文案用的 HTTP 状态码释义。规则表命不中时才走到这里。
+#: 值一律用 ``QT_TRANSLATE_NOOP("Diagnostics", ...)`` 标记、取用时 ``localize()``：
+#: 这些串会直接进错误对话框标题，漏标就是英文界面下的中文残留（ISSUE #88）。
 HTTP_STATUS_TRANSLATIONS = {
-    400: "请求格式错误 (Bad Request)",
-    401: "需要身份验证 (Unauthorized)",
-    403: "访问被拒绝 (Forbidden)",
-    404: "页面/资源不存在 (Not Found)",
-    410: "资源已永久删除 (Gone)",
-    412: "前提条件失败 (Precondition Failed)",
-    429: "请求过于频繁 (Too Many Requests)",
-    500: "服务器内部错误 (Internal Server Error)",
-    502: "网关错误 (Bad Gateway)",
-    503: "服务暂时不可用 (Service Unavailable)",
-    504: "网关超时 (Gateway Timeout)",
+    400: QT_TRANSLATE_NOOP("Diagnostics", "请求格式错误 (Bad Request)"),
+    401: QT_TRANSLATE_NOOP("Diagnostics", "需要身份验证 (Unauthorized)"),
+    403: QT_TRANSLATE_NOOP("Diagnostics", "访问被拒绝 (Forbidden)"),
+    404: QT_TRANSLATE_NOOP("Diagnostics", "页面/资源不存在 (Not Found)"),
+    410: QT_TRANSLATE_NOOP("Diagnostics", "资源已永久删除 (Gone)"),
+    412: QT_TRANSLATE_NOOP("Diagnostics", "前提条件失败 (Precondition Failed)"),
+    429: QT_TRANSLATE_NOOP("Diagnostics", "请求过于频繁 (Too Many Requests)"),
+    500: QT_TRANSLATE_NOOP("Diagnostics", "服务器内部错误 (Internal Server Error)"),
+    502: QT_TRANSLATE_NOOP("Diagnostics", "网关错误 (Bad Gateway)"),
+    503: QT_TRANSLATE_NOOP("Diagnostics", "服务暂时不可用 (Service Unavailable)"),
+    504: QT_TRANSLATE_NOOP("Diagnostics", "网关超时 (Gateway Timeout)"),
 }
 
+#: extractor id → 展示名。只有含 CJK 的项需要标记，专名（YouTube / Vimeo …）本就无需翻译；
+#: ``localize()`` 对未标记的源串原样返回，所以两类可以混在同一张表里。
 EXTRACTOR_NAMES = {
     "youtube": "YouTube",
-    "bilibili": "哔哩哔哩",
+    "bilibili": QT_TRANSLATE_NOOP("Diagnostics", "哔哩哔哩"),
     "twitter": "X (Twitter)",
     "niconico": "NicoNico",
     "twitch": "Twitch",
-    "tiktok": "抖音/TikTok",
+    "tiktok": QT_TRANSLATE_NOOP("Diagnostics", "抖音/TikTok"),
     "instagram": "Instagram",
     "facebook": "Facebook",
     "vimeo": "Vimeo",
 }
+
+#: 兜底文案模板。**先翻译再 format** —— 拼接后再翻译，源串会带上运行期内容，永远匹配不到译文。
+_FALLBACK_HTTP_UNKNOWN = QT_TRANSLATE_NOOP("Diagnostics", "未知 HTTP 状态码")
+_FALLBACK_HTTP_TITLE = QT_TRANSLATE_NOOP("Diagnostics", "网页请求失败 (HTTP {code})")
+_FALLBACK_HTTP_BODY = QT_TRANSLATE_NOOP(
+    "Diagnostics", "服务器返回了错误状态：{desc}。这可能是因为节点被风控或目标网站故障。"
+)
+_FALLBACK_EXTRACTOR_TITLE = QT_TRANSLATE_NOOP("Diagnostics", "{extractor} 解析失败")
+_FALLBACK_EXTRACTOR_BODY = QT_TRANSLATE_NOOP(
+    "Diagnostics", "提取组件在处理 {extractor} 的链接时遇到问题：\n{detail}"
+)
+
+#: 进程无任何输出时的占位（会出现在 technical_detail / raw_error 展示区）。
+_EMPTY_OUTPUT = QT_TRANSLATE_NOOP("Diagnostics", "未知错误，无输出")
+
+#: 伴随信号补充说明。``models.Diagnosis.extra_notes`` 声明"已本地化"，这里必须 localize()。
+_NOTE_YTDLP_OUTDATED = QT_TRANSLATE_NOOP(
+    "Diagnostics", "⚠️ 检测到核心组件 (yt-dlp) 版本过旧，建议立即更新以排除兼容性问题。"
+)
+_NOTE_STALE_TOOLCHAIN = QT_TRANSLATE_NOOP(
+    "Diagnostics",
+    "⚠️ 同时检测到 nsig/签名提取失败，这通常意味着 yt-dlp 已落后于站点改版。"
+    "建议优先更新核心组件，而不是更换代理节点。",
+)
+_NOTE_JS_RUNTIME_MISSING = QT_TRANSLATE_NOOP(
+    "Diagnostics",
+    "⚠️ 同时检测到缺少 JS Runtime（Deno/Node/Bun/QuickJS）。这会导致 YouTube "
+    "缺失大量格式，且更新 yt-dlp 无法解决 —— 请先装好 JS Runtime 再排查其他问题。",
+)
 
 
 def strip_ansi(text: str) -> str:
@@ -88,9 +123,7 @@ def parse_level(line: str) -> tuple[Level | None, str]:
     return None, stripped
 
 
-def match_rule(
-    rule_set: RuleSet, level: Level, component: str, message: str
-) -> LoadedRule | None:
+def match_rule(rule_set: RuleSet, level: Level, component: str, message: str) -> LoadedRule | None:
     """在规则表里找出该行的最佳匹配。
 
     ``rule_set.rules`` 已按 priority 降序排列，因此首个命中即最高优先级 ——
@@ -119,17 +152,19 @@ def parse_events(stderr: str, rule_set: RuleSet | None = None) -> list[Diagnosti
 
         level, body = parse_level(line)
         if level is None:
-            # 非 ERROR:/WARNING: 前缀的行也可能携带过滤器跳过信息
-            skip_rule = _match_skip_line(rule_set, line)
-            if skip_rule is not None:
+            # 无 ERROR:/WARNING: 前缀的行照样可能是唯一的原因说明。
+            # 先试 bareLine 规则（规则表已按 priority 降序，首个命中即最高），
+            # 再回落到既有的过滤器跳过通道。
+            bare_rule = _match_bare_line(rule_set, line) or _match_skip_line(rule_set, line)
+            if bare_rule is not None:
                 events.append(
                     DiagnosticEvent(
-                        code=skip_rule.code,
+                        code=bare_rule.code,
                         level="warning",
                         component="download",
                         raw_line=line,
                         line_no=idx,
-                        priority=skip_rule.priority,
+                        priority=bare_rule.priority,
                     )
                 )
             continue
@@ -138,6 +173,11 @@ def parse_events(stderr: str, rule_set: RuleSet | None = None) -> list[Diagnosti
         _video_id, message = split_video_id(rest)
 
         rule = match_rule(rule_set, level, component, message or rest)
+        if rule is not None and rule.demote_to_warning and level == "error":
+            # 子请求失败的 `ERROR:` 行降级成 warning 事件，详见 `LoadedRule.demote_to_warning`。
+            # 只改事件级别，不动 priority —— priority 要留着在**同一行**上压过更泛化的
+            # 规则（字幕 429 压 `rate_limited_429`），而级别决定它在跨行仲裁里的分层。
+            level = "warning"
         events.append(
             DiagnosticEvent(
                 code=rule.code if rule else rule_set.fallback_code,
@@ -150,6 +190,23 @@ def parse_events(stderr: str, rule_set: RuleSet | None = None) -> list[Diagnosti
         )
 
     return events
+
+
+def _match_bare_line(rule_set: RuleSet, line: str) -> LoadedRule | None:
+    """显式声明 ``bareLine`` 的规则：允许匹配没有级别前缀的整行。
+
+    ``[info] There are no subtitles for the requested languages`` 是这条通道的
+    由来 —— 它既不是 WARNING 也不是 ERROR，却是"字幕开着却一个文件都没写"最直接
+    的一句解释。走整行匹配而不是 ``match_rule``：这类行没有级别、也没有可靠的
+    ``[component]`` 结构可拆。
+    """
+    line_lower = line.lower()
+    for rule in rule_set.rules:  # 已按 priority 降序
+        if not rule.bare_line:
+            continue
+        if rule.find_match(line, line_lower):
+            return rule
+    return None
 
 
 def _match_skip_line(rule_set: RuleSet, line: str) -> LoadedRule | None:
@@ -180,12 +237,94 @@ def pick_primary(events: list[DiagnosticEvent]) -> DiagnosticEvent | None:
     )
 
 
+def _is_warning_only_primary(
+    exit_code: int, primary: DiagnosticEvent, rule: LoadedRule | None
+) -> bool:
+    """rc != 0，但唯一的候选主因只是一条警告级规则。
+
+    判据刻意分两层：
+
+    - ``primary.level == "warning"`` —— `pick_primary` 的排序键让任何 error 级事件
+      压过任何 warning 级事件，所以这一条等价于"全场没有 error 级事件"；
+    - ``rule.severity == "warning"`` —— 按**规则**的严重级而不是**行**的级别判。
+      `pot_token_required` 是 ``severity: fatal`` 且 ``appliesTo: both``，它以
+      ``WARNING:`` 行出现时仍然是真正的失败原因，必须继续被采纳。
+
+    rc == 0 时一律返回 False：成功任务的警告扫描（字幕三码）就靠这条路。
+    """
+    if exit_code == 0:
+        return False
+    if primary.level != "warning":
+        return False
+    return rule is not None and rule.severity == "warning"
+
+
+#: SABR 只解释"挑不到格式"这一类主因。403 / 429 / 需要登录都有自己的正解，
+#: 不许被它顶掉 —— 那些场景下格式选择根本没轮到。
+_SABR_SYMPTOM_CODES = ("format_unavailable", "no_formats_found")
+
+
+def _apply_sabr_override(diag: Diagnosis, rule_set: RuleSet) -> None:
+    """SABR 强制流：把"所选格式不可用"纠正成"YouTube 限制了可下载的流"。
+
+    yt-dlp 打出 ``Some tv client https formats have been skipped as they are
+    missing a url. YouTube is forcing SABR streaming for this client.`` 之后，
+    带下载 URL 的格式全被丢掉，选片器于是挑不到东西，最终只留一句
+    ``ERROR: Requested format is not available``。规则表照文本匹配会判成
+    `format_unavailable`（"换一档画质通常就能下载"）——**画质本身存在，换档位
+    不可能有用**，这条引导把用户送进死胡同。
+
+    ``sabr_formats_skipped`` 是 warning 级规则（`_is_warning_only_primary` 拦着
+    它自己抢主因），所以纠正只能在这里做：它作为伴随信号进 `diag.events`，
+    由本函数改写主因。
+    """
+    if not diag.has_event("sabr_formats_skipped"):
+        return
+    if diag.code not in _SABR_SYMPTOM_CODES and not (
+        # 只有"连兜底都没抽出东西"的 unknown 才让 SABR 接管；兜底已经抽出
+        # HTTP 码 / extractor 名时那个判词信息量更大，不能被顶掉
+        diag.code == FALLBACK_CODE
+        and not diag.override_title
+        # 且必须真有一条 error 级事件。`_is_warning_only_primary` 拒绝采纳纯警告
+        # 主因之后也会落到兜底，从那里接管等于把那道护栏绕了过去 —— 下载已经完成
+        # 只是 Windows 删不掉 `.part-Frag` 的 rc != 0，会被报成"YouTube 限流了流"。
+        and any(ev.level == "error" for ev in diag.events)
+    ):
+        return
+
+    rule = rule_set.by_code("sabr_formats_skipped")
+    diag.code = "sabr_formats_skipped"
+    diag.category = rule.category if rule else "toolchain"
+    # 规则里写 warning 是为了不抢主因；一旦成为主因，它描述的就是一次真失败。
+    diag.severity = "recoverable"
+    diag.fix_action = rule.fix_action if rule else "enable_pot_provider"
+    if rule is not None:
+        diag.retry = rule.retry
+    # 兜底路径可能已经写过文案，不清掉就还是旧判词
+    diag.override_title = ""
+    diag.override_message = ""
+    # 刻意不 return：调用方后面的 stale_toolchain 分支若同时看到 nsig /
+    # ytdlp_outdated，应当把 fix_action 再升级成 update_component。
+
+
 def _apply_companion_signals(diag: Diagnosis, rule_set: RuleSet) -> None:
     """伴随信号增强：主因之外的事件可以改写引导方向。
 
     典型场景：``WARNING: nsig extraction failed`` 后跟 ``ERROR: HTTP Error 403``。
     单看 403 会把用户引去换代理节点，但真正的处置是先更新 yt-dlp。
+
+    **缺 JS runtime 必须先于"组件过旧"判定**：yt-dlp 缺 runtime 时的警告里带
+    "some formats may be missing"，措辞和 nsig 失败高度相似，但处置完全相反 ——
+    一个是装 Deno，一个是更新 yt-dlp。把它放在最前面并 return，避免下面的
+    stale_toolchain 分支把用户引向更新组件这条死路。
     """
+    if diag.has_event("js_runtime_missing") and diag.code != "js_runtime_missing":
+        diag.extra_notes.append(localize(_NOTE_JS_RUNTIME_MISSING))
+        diag.fix_action = "install_js_runtime"
+        return
+
+    _apply_sabr_override(diag, rule_set)
+
     stale_toolchain = any(
         diag.has_event(code)
         for code in ("nsig_extraction_failed", "signature_extraction_failed", "ytdlp_outdated")
@@ -198,14 +337,9 @@ def _apply_companion_signals(diag: Diagnosis, rule_set: RuleSet) -> None:
         return
 
     if diag.has_event("ytdlp_outdated"):
-        diag.extra_notes.append(
-            "⚠️ 检测到核心组件 (yt-dlp) 版本过旧，建议立即更新以排除兼容性问题。"
-        )
+        diag.extra_notes.append(localize(_NOTE_YTDLP_OUTDATED))
     else:
-        diag.extra_notes.append(
-            "⚠️ 同时检测到 nsig/签名提取失败，这通常意味着 yt-dlp 已落后于站点改版。"
-            "建议优先更新核心组件，而不是更换代理节点。"
-        )
+        diag.extra_notes.append(localize(_NOTE_STALE_TOOLCHAIN))
     diag.fix_action = "update_component"
 
 
@@ -214,22 +348,23 @@ def _build_fallback(diag: Diagnosis, clean_msg: str) -> None:
     http_match = _HTTP_STATUS_RE.search(clean_msg)
     if http_match:
         code_int = int(http_match.group(1))
-        desc = HTTP_STATUS_TRANSLATIONS.get(code_int, "未知 HTTP 状态码")
-        diag.override_title = f"网页请求失败 (HTTP {code_int})"
-        diag.override_message = (
-            f"服务器返回了错误状态：{desc}。这可能是因为节点被风控或目标网站故障。"
-        )
+        desc = localize(HTTP_STATUS_TRANSLATIONS.get(code_int, _FALLBACK_HTTP_UNKNOWN))
+        # 先翻译模板再 format：反过来会让源串带上运行期的状态码，永远匹配不到译文。
+        diag.override_title = localize(_FALLBACK_HTTP_TITLE).format(code=code_int)
+        diag.override_message = localize(_FALLBACK_HTTP_BODY).format(desc=desc)
         diag.category = "network"
 
     ext_match = _EXTRACTOR_RE.search(clean_msg)
     if ext_match and not http_match:
         extractor_raw = ext_match.group(1).strip()
         err_detail = ext_match.group(2).strip()
-        extractor_name = EXTRACTOR_NAMES.get(extractor_raw.lower(), extractor_raw)
-        message = f"提取组件在处理 {extractor_name} 的链接时遇到问题：\n{err_detail}"
+        extractor_name = localize(EXTRACTOR_NAMES.get(extractor_raw.lower(), extractor_raw))
+        message = localize(_FALLBACK_EXTRACTOR_BODY).format(
+            extractor=extractor_name, detail=err_detail
+        )
         if len(message) > 300:
             message = message[:297] + "..."
-        diag.override_title = f"{extractor_name} 解析失败"
+        diag.override_title = localize(_FALLBACK_EXTRACTOR_TITLE).format(extractor=extractor_name)
         diag.override_message = message
         if not diag.component:
             diag.component = extractor_raw
@@ -240,13 +375,22 @@ def diagnose(
     stderr: str,
     parsed_json: dict[str, Any] | None = None,
     rule_set: RuleSet | None = None,
+    *,
+    phase: str = "",
 ) -> Diagnosis:
-    """核心诊断入口：退出码 + stderr → 结构化 Diagnosis。"""
+    """核心诊断入口：退出码 + stderr → 结构化 Diagnosis。
+
+    Args:
+        phase: 失败发生在哪个阶段（`parse` / `select` / `download`，取值来自
+            `observability.STAGES` 闭集）。只有 `DownloadWorker` 这条路能算出它
+            （靠 executor 见过哪些输出行），所以写成 keyword-only + 默认空串 ——
+            展示层重算诊断的那几个调用点不用改。
+    """
     rule_set = rule_set or get_rule_set()
-    raw_tail = stderr or "未知错误，无输出"
+    raw_tail = stderr or localize(_EMPTY_OUTPUT)
     clean_msg = strip_ansi(raw_tail)
 
-    diag = Diagnosis(exit_code=exit_code, raw_tail=raw_tail)
+    diag = Diagnosis(exit_code=exit_code, raw_tail=raw_tail, phase=phase)
 
     # 1. JSON 快照层：yt-dlp 结构化错误优先于文本匹配
     if isinstance(parsed_json, dict):
@@ -267,15 +411,27 @@ def diagnose(
 
     if primary is not None and primary.code != rule_set.fallback_code:
         rule = rule_set.by_code(primary.code)
-        diag.code = primary.code
-        diag.component = primary.component
-        if rule is not None:
-            diag.category = rule.category
-            diag.severity = rule.severity
-            diag.fix_action = rule.fix_action
-            diag.retry = rule.retry
-        _apply_companion_signals(diag, rule_set)
-        return diag
+        if _is_warning_only_primary(exit_code, primary, rule):
+            # 任务真的失败了（rc != 0），可全场只有警告级线索 —— 拿它当主因等于
+            # 张口就错。`pick_primary` 让 error 压过 warning，所以走到这里就意味着
+            # **一条 ERROR: 行都没有**；而 `executor` 的两级体积校验会在没有 ERROR:
+            # 行的情况下照样抛 `YtDlpExecutionError`（Windows 上 `.part-Frag` 删不掉
+            # 就是这条路）。去掉 `--no-warnings` 之后，那一刻顶上来的很可能只是一条
+            # 字幕限流警告 —— 把"字幕没下到"报成整个任务的失败主因，比不报更糟。
+            # 落到兜底后 `_apply_companion_signals` 照旧跑，伴随信号不丢。
+            logger.debug(
+                "[diagnostics] rc={} 只有警告级线索 {}，不采纳为主因", exit_code, primary.code
+            )
+        else:
+            diag.code = primary.code
+            diag.component = primary.component
+            if rule is not None:
+                diag.category = rule.category
+                diag.severity = rule.severity
+                diag.fix_action = rule.fix_action
+                diag.retry = rule.retry
+            _apply_companion_signals(diag, rule_set)
+            return diag
 
     # 3. 兜底
     diag.code = FALLBACK_CODE

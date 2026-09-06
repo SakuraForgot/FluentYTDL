@@ -32,6 +32,20 @@ VALID_RETRY_KINDS = frozenset({"never", "immediate", "backoff", "after_fix"})
 #: 兜底错误码，任何未命中规则的错误都归到这里，保证 100% 有归属。
 FALLBACK_CODE = "unknown"
 
+#: 字幕类警告码。任务**成功**之后还要扫一遍输出，就是为了捞这几个 —— 字幕下不到
+#: 从来不会让 yt-dlp 返回非零，所以它们永远进不了 ``rc != 0`` 那条诊断入口。
+#:
+#: 刻意不做"所有 warning 都扫"：成功的下载里 ``nsig extraction failed`` 之类的警告
+#: 极其常见（priority 还更高），一并冒出来只会训练用户忽略提示。
+#: ``tests/test_error_rules_integrity.py`` 会断言这里每个码都真的存在且是 warning。
+SUBTITLE_WARNING_CODES = frozenset(
+    {
+        "subtitles_no_language_match",
+        "subtitle_download_rate_limited",
+        "subtitle_pot_required",
+    }
+)
+
 
 def as_severity(value: str) -> Severity:
     """把规则表 / 序列化数据里的裸字符串收窄成 ``Severity``。
@@ -153,6 +167,9 @@ class Diagnosis:
     #: 兜底路径下引擎直接给出的文案，非空时优先于 catalog。
     override_title: str = ""
     override_message: str = ""
+    #: 失败发生在哪个阶段（`parse` / `select` / `download`，取值来自
+    #: `observability.STAGES`）。空串表示调用方算不出来（展示层重算诊断的场景）。
+    phase: str = ""
 
     # ---- 文案（惰性取自 catalog，语言切换后自动跟随）----
 
@@ -172,6 +189,7 @@ class Diagnosis:
         if self.extra_notes:
             return base + "\n" + "\n".join(self.extra_notes)
         return base
+
     @property
     def recovery_hint(self) -> str:
         from .catalog import hint_for
@@ -180,7 +198,12 @@ class Diagnosis:
 
     @property
     def technical_detail(self) -> str:
-        return f"exit_code={self.exit_code}\n{self.raw_tail}"
+        # `phase` 回答"死在哪一步" —— 用户在任务卡上只看到"正在拉取元数据"，
+        # 光一个 exit_code=1 说不出失败是发生在解析、选片还是下载途中。
+        head = f"exit_code={self.exit_code}"
+        if self.phase:
+            head += f" phase={self.phase}"
+        return f"{head}\n{self.raw_tail}"
 
     def has_event(self, code: str) -> bool:
         """事件流中是否出现过某个码（用于伴随信号判断）。"""
@@ -201,6 +224,7 @@ class Diagnosis:
             "extra_notes": list(self.extra_notes),
             "override_title": self.override_title,
             "override_message": self.override_message,
+            "phase": self.phase,
             # 展开后的文案，供不想再走 catalog 的消费方直接读取
             "user_title": self.user_title,
             "user_message": self.user_message,
@@ -228,4 +252,5 @@ class Diagnosis:
             extra_notes=[str(n) for n in (data.get("extra_notes") or [])],
             override_title=str(data.get("override_title", "")),
             override_message=str(data.get("override_message", "")),
+            phase=str(data.get("phase", "")),
         )

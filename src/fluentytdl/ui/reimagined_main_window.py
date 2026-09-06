@@ -2,29 +2,27 @@ from __future__ import annotations
 
 import os
 from enum import Enum
+from functools import partial
 from typing import Any
 
-from PySide6.QtCore import Qt, QThread, QTimer
+from PySide6.QtCore import QEvent, QPoint, QSize, Qt, QTimer
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
     QApplication,
-    QFrame,
-    QHBoxLayout,
     QMenu,
-    QScrollArea,
     QSystemTrayIcon,
-    QVBoxLayout,
-    QWidget,
 )
 from qfluentwidgets import (
+    Action,
     FluentIcon,
     FluentWindow,
-    InfoBar,
+    InfoBadge,
+    InfoBadgeManager,
     InfoBarPosition,
     MessageBox,
     NavigationItemPosition,
+    PushButton,
     SplashScreen,
-    SubtitleLabel,
     SystemThemeListener,
     ToolTipFilter,
     ToolTipPosition,
@@ -32,6 +30,11 @@ from qfluentwidgets import (
 )
 
 from fluentytdl.ui.components.common.clipboard_monitor import ClipboardMonitor
+from fluentytdl.ui.components.common.custom_info_bar import InfoBar
+from fluentytdl.ui.components.common.interruptible_navigation import (
+    install_interruptible_navigation,
+)
+from fluentytdl.ui.components.common.responsive_command_bar import ResponsiveCommandBar
 from fluentytdl.ui.components.dialogs.download_config_window import DownloadConfigWindow
 
 from ..core.config_manager import config_manager
@@ -41,7 +44,7 @@ from ..utils.logger import logger
 from .channel_parse_page import ChannelParsePage
 from .cover_download_page import CoverDownloadPage
 from .help_window import HelpWindow
-from .pages.history_page import HistoryPage
+from .models.task_row import TaskRow
 from .parse_page import ParsePage
 from .quick_add_panel import QuickAddPanel
 from .settings_page import SettingsPage
@@ -49,6 +52,90 @@ from .subtitle_download_page import SubtitleDownloadPage
 from .unified_task_list_page import UnifiedTaskListPage
 from .vr_parse_page import VRParsePage
 from .welcome_wizard import WelcomeWizardDialog
+
+TITLE_BAR_BADGE_POSITION = "fluentytdl.titleBarBadge"
+
+# 窗口最小宽度。这不只是个初始尺寸 —— 页面里每一行的**最小宽**都必须能塞进这个宽度，
+# 否则 `QHBoxLayout` 只能去压别人，而被压过最小宽的控件会被 `QWidget.setGeometry`
+# 反弹回去，表现就是控件互相错叠（见 `unified_task_list_page._reserve_pivot_widths`）。
+# 顶栏那一行的回归覆盖在 `tests/test_task_header_layout.py`。
+MIN_WINDOW_WIDTH = 1150
+
+
+@InfoBadgeManager.register(TITLE_BAR_BADGE_POSITION)
+class TitleBarBadgeManager(InfoBadgeManager):
+    """把未读徽章画在标题栏按钮的右上角「内侧」。
+
+    默认的 `InfoBadgePosition.TOP_RIGHT` 把徽章中心对齐到目标控件的右上角顶点，
+    即 `y = target.top() - badge.height() // 2`。标题栏只有 48px 高，按钮 32px
+    垂直居中后 `top() == 8`，减掉半个徽章高度仍是负数，上半截会被标题栏裁掉。
+    铃铛图标只有 16px 而按钮宽 46px，右上角有足够留白，所以直接把徽章放进按钮内部。
+    """
+
+    def position(self) -> QPoint:
+        geo = self.target.geometry()
+        return QPoint(geo.right() - self.badge.width() - 3, geo.top() + 3)
+
+
+TASK_NAV_BADGE_POSITION = "fluentytdl.taskNavBadge"
+
+# 「任务」导航徽标的显示上限。折叠态导航项只有 40px 宽，两位数已经贴满图标了。
+_NAV_BADGE_MAX = 99
+
+
+@InfoBadgeManager.register(TASK_NAV_BADGE_POSITION)
+class TaskNavBadgeManager(InfoBadgeManager):
+    """把活跃任务数钉在导航项右侧，**可见性由我们说了算**。
+
+    库自带的 `InfoBadgePosition.NAVIGATION_ITEM`（`NavigationItemInfoBadgeManager`）
+    不能直接用来做「为 0 就隐藏」的徽标：它在 `QEvent.Show` 时无条件
+    `badge.show()`，`position()` 里又会 `setVisible(target.isVisible())`；而基类会在
+    目标 Resize / Move 时重新调 `position()` —— 于是侧边栏每展开或折叠一次，
+    刚因为「活跃数为 0」而隐藏的徽标就会被重新点亮。这里复刻它的几何，但可见性
+    只认 `wanted`（由 `_on_task_counts_changed` 设置）。
+    """
+
+    def __init__(self, target, badge):
+        super().__init__(target, badge)
+        # 我们自己的意愿：活跃数 > 0 才允许显示。导航项自身不可见时（折叠动画中间态）
+        # 仍然要跟着藏起来，所以最终可见性是 `wanted and target.isVisible()`。
+        self.wanted = False
+
+    def _sync_visibility(self) -> None:
+        self.badge.setVisible(self.wanted and self.target.isVisible())
+
+    def eventFilter(self, obj, e: QEvent):
+        if obj is self.target and e.type() in (
+            QEvent.Type.Show,
+            QEvent.Type.Resize,
+            QEvent.Type.Move,
+        ):
+            self._sync_visibility()
+        return super().eventFilter(obj, e)
+
+    def position(self) -> QPoint:
+        """几何与库自带的 `NavigationItemInfoBadgeManager.position()` 保持一致。
+
+        刻意不自创坐标：这样折叠 / 展开、树形子项缩进的手感都和其他 qfluentwidgets
+        应用一样，我们只接管可见性。
+        """
+        target = self.target
+        # 折叠态导航项只有 40px 宽，徽标压到图标右上角
+        if getattr(target, "isCompacted", False):
+            geo = target.geometry()
+            x = geo.right() - self.badge.width() - 2
+            if x < geo.left():
+                # 「99+」比折叠项本身还宽，右对齐会把它甩到面板左边界外面去（x 变负数）。
+                # 退化成居中，让溢出对称地分到两侧。
+                x = geo.left() + (geo.width() - self.badge.width()) // 2
+            return QPoint(x, geo.top() + 2)
+        # 展开态：贴右边内缩；非叶子项右侧有展开箭头，得多让 35px 出来
+        dx = 10 if getattr(target, "isLeaf", lambda: True)() else 35
+        return QPoint(
+            target.geometry().right() - self.badge.width() - dx,
+            # 垂直对齐**第一行**而不是整体居中：树形项展开后自身会变高
+            target.y() + 18 - self.badge.height() // 2,
+        )
 
 
 class DeletionPolicy(Enum):
@@ -66,101 +153,6 @@ class DeletionPolicy(Enum):
         if "delete" in s or "remove" in s:
             return cls.DELETE_FILES
         return cls.ALWAYS_ASK
-
-
-class TaskListPage(QWidget):
-    """通用的任务列表页面"""
-
-    def __init__(self, title: str, icon: FluentIcon, parent=None):
-        super().__init__(parent)
-        self.setObjectName(title.lower().replace(" ", "_"))
-        self.page_title = title
-
-        self.v_layout = QVBoxLayout(self)
-        self.v_layout.setContentsMargins(20, 20, 20, 20)
-        self.v_layout.setSpacing(10)
-
-        # 保存游离的后台删除线程
-        self._delete_workers: list[QThread] = []
-
-        # === 工具栏 ===
-        self.tool_bar = QHBoxLayout()
-        self.title_label = SubtitleLabel(self.page_title, self)
-        self.tool_bar.addWidget(self.title_label)
-        self.tool_bar.addStretch(1)
-
-        # 占位：具体按钮由外部添加或子类实现
-        self.action_layout = QHBoxLayout()
-        self.tool_bar.addLayout(self.action_layout)
-
-        self.v_layout.addLayout(self.tool_bar)
-
-        # === 列表区域 ===
-        self.scroll_area = QScrollArea(self)
-        self.scroll_area.setWidgetResizable(True)
-        self.scroll_area.setFrameShape(QFrame.Shape.NoFrame)
-        self.scroll_area.setStyleSheet("background: transparent;")
-
-        self.scroll_widget = QWidget()
-        self.scroll_widget.setStyleSheet("background: transparent;")
-        self.scroll_layout = QVBoxLayout(self.scroll_widget)
-        self.scroll_layout.setContentsMargins(0, 0, 0, 0)
-        self.scroll_layout.setSpacing(8)
-        self.scroll_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
-
-        self.scroll_area.setWidget(self.scroll_widget)
-        self.v_layout.addWidget(self.scroll_area)
-
-    def add_card(self, card: QWidget):
-        self.scroll_layout.addWidget(card)
-        card.show()
-
-    def remove_card(self, card: QWidget):
-        self.scroll_layout.removeWidget(card)
-        card.setParent(None)  # Important to detach
-
-    def count(self) -> int:
-        return self.scroll_layout.count()
-
-    def set_selection_mode(self, enabled: bool):
-        for i in range(self.scroll_layout.count()):
-            item = self.scroll_layout.itemAt(i)
-            if item and item.widget():
-                w = item.widget()
-                set_selection_mode = getattr(w, "set_selection_mode", None)
-                if callable(set_selection_mode):
-                    set_selection_mode(enabled)
-
-    def get_selected_cards(self) -> list[QWidget]:
-        selected = []
-        for i in range(self.scroll_layout.count()):
-            item = self.scroll_layout.itemAt(i)
-            if item and item.widget():
-                w = item.widget()
-                is_selected = getattr(w, "is_selected", None)
-                if callable(is_selected) and is_selected():
-                    selected.append(w)
-        return selected
-
-    def select_all(self):
-        for i in range(self.scroll_layout.count()):
-            item = self.scroll_layout.itemAt(i)
-            if item and item.widget():
-                w = item.widget()
-                select_box = getattr(w, "selectBox", None)
-                set_checked = getattr(select_box, "setChecked", None)
-                if callable(set_checked):
-                    set_checked(True)
-
-    def deselect_all(self):
-        for i in range(self.scroll_layout.count()):
-            item = self.scroll_layout.itemAt(i)
-            if item and item.widget():
-                w = item.widget()
-                select_box = getattr(w, "selectBox", None)
-                set_checked = getattr(select_box, "setChecked", None)
-                if callable(set_checked):
-                    set_checked(False)
 
 
 class MainWindow(FluentWindow):
@@ -181,25 +173,56 @@ class MainWindow(FluentWindow):
             title += self.tr(" (管理员)")
         self.setWindowTitle(title)
 
-        self.resize(1150, 780)
+        # 窗口图标：main.py 只设了 QApplication 级别的图标 —— `QWidget.windowIcon()` 会
+        # 继承它（所以启动图和托盘一直是对的），但 `windowIconChanged` 信号从没发过，
+        # 而 `FluentTitleBar.iconLabel` 只在那个信号里才填 pixmap，于是标题栏左上角
+        # 软件名旁边一直是个 18x18 的空白。这里显式设一次，图标才会真的画出来。
+        # 素材缺失时不要设空 QIcon —— 那会把继承来的 app 图标一并清掉，
+        # 连带 SplashScreen（下面用的 `self.windowIcon()`）和任务栏图标都变空白。
+        app_icon = load_app_icon()
+        if not app_icon.isNull():
+            self.setWindowIcon(app_icon)
+        else:
+            logger.warning("应用图标资源缺失，标题栏与启动图将没有图标")
+
+        self.resize(MIN_WINDOW_WIDTH, 780)
         # 锁定最小宽度，防止两个 bug 导致的自动变宽：
         # 1. 切换到英文时文本变宽触发的布局最小宽度增长
         # 2. NavigationPanel 展开/收起动画触发的 setFixedWidth 棘轮效应
         # 用户仍可手动拖拽边缘把窗口拉宽，只阻止自动增长
-        self.setMinimumWidth(1150)
+        self.setMinimumWidth(MIN_WINDOW_WIDTH)
 
         # 居中
         desktop = QApplication.screens()[0].availableGeometry()
         w, h = desktop.width(), desktop.height()
         self.move(w // 2 - self.width() // 2, h // 2 - self.height() // 2)
 
+        # === 启动图：必须在建页面之前 show 出来 ===
+        #
+        # 下面那一串页面构造是启动耗时的大头（qfluentwidgets 的 SettingCard 很重，
+        # 光 SettingsPage 就有 70 多张卡，每张都要 adjustSize + 套样式表），实测约 1.3 秒，
+        # 而它**造不快也没法异步** —— QWidget 只能在主线程建。这段时间里事件循环还没开始
+        # 转，Windows 给的反馈就是一个转圈的鼠标，用户眼里是「点了图标没反应」。
+        #
+        # 所以先把窗口和启动图摆出来，再去建页面：等待时长没变，但从「疑似没启动成功」
+        # 变成「看得见它在启动」。`processEvents()` 那一格是必须的 —— 只 show() 不给事件
+        # 循环喘息，启动图一个像素都不会画出来（和被删掉的那句 `QThread.msleep(100)`
+        # 犯的是同一个错，见 `settings_page._update_vr_hardware_status`）。
+        #
+        # **原实现在 `__init__` 快结束时才 `SplashScreen(...)` 紧接着 `finish()`**，
+        # 中间什么都没有：既没 show 也没让出事件循环，等于造一个控件再立刻关掉 ——
+        # 用户从来没见过这张启动图，只白花了构造它的时间。
+        self.splashScreen = SplashScreen(self.windowIcon(), self)
+        self.splashScreen.setIconSize(QSize(106, 106))
+        self.show()
+        QApplication.processEvents()
+
         # 活跃的子窗口列表 (防止GC回收)
         self._active_sub_windows = []
 
         # === 初始化页面 ===
-        # 统一任务列表页面（替代原有的四个分页）
+        # 统一任务列表页面（下载中 + 历史记录合流，替代原有的四个分页与「下载历史」页）
         self.task_page = UnifiedTaskListPage(self)
-        self.history_page = HistoryPage(self)
 
         self.parse_page = ParsePage(self)
         self.quick_parse_page = QuickAddPanel(self)
@@ -229,10 +252,6 @@ class MainWindow(FluentWindow):
         self.themeListener = SystemThemeListener(self)
         self.themeListener.start()
 
-        # 启动动画
-        self.splashScreen = SplashScreen(self.windowIcon(), self)
-        self.splashScreen.finish()
-
         # 信号连接
         self.parse_page.parse_requested.connect(
             lambda url: self.show_selection_dialog(url, smart_detect=False, playlist_flat=True)
@@ -242,9 +261,6 @@ class MainWindow(FluentWindow):
         self.channel_parse_page.parse_requested.connect(self._show_channel_dialog)
         self.subtitle_page.parse_requested.connect(self.show_subtitle_selection_dialog)
         self.cover_page.parse_requested.connect(self.show_cover_selection_dialog)
-        self.history_page.reparse_requested.connect(
-            lambda url: self.show_selection_dialog(url, smart_detect=True)
-        )
         self.settings_interface.clipboardAutoDetectChanged.connect(
             self.set_clipboard_monitor_enabled
         )
@@ -254,28 +270,51 @@ class MainWindow(FluentWindow):
         self.task_page.card_resume_requested.connect(self.on_pause_resume_task)
         self.task_page.card_folder_requested.connect(self.on_open_target_folder)
         self.task_page.route_to_parse.connect(lambda: self.switchTo(self.parse_page))
+        # 「重新解析」原本是历史页的专属能力，历史页删除后由任务列表的右键菜单承接。
+        self.task_page.reparse_requested.connect(
+            lambda url: self.show_selection_dialog(url, smart_detect=True)
+        )
+        # 分桶计数变化 → 刷新「任务」导航项上的活跃数徽标
+        self.task_page.counts_changed.connect(self._on_task_counts_changed)
 
         # 批量操作命令栏信号
         self.task_page.batch_start_requested.connect(self.on_batch_start)
         self.task_page.batch_pause_requested.connect(self.on_batch_pause)
         self.task_page.batch_delete_requested.connect(self.on_batch_delete)
+        self.task_page.batch_downgrade_requested.connect(self.on_batch_downgrade)
 
-        # 历史记录实时更新
-        from ..storage.history_service import on_history_added
-
-        on_history_added(self._on_history_record_added)
+        # 注：历史记录的「实时更新」曾经挂在 history_service.on_history_added 上，
+        # 但那两个 on_history_* 函数体是 `pass` 空桩，回调从未被触发过。
+        # 已移除死连接；合流后历史行就是任务列表里的行，实时刷新由模型自己承担。
 
         # === 标题栏扩展 ===
         self.init_title_bar()
 
         # === 软件更新通知 ===
         from ..core.component_update_manager import component_update_manager
+        from ..notification import install_update_notifier
 
+        # 「有更新」统一写进消息中心（小铃铛），不再各处弹 InfoBar
+        install_update_notifier()
         component_update_manager.app_update_available.connect(self._on_app_update_available)
         component_update_manager.apply_requested.connect(self._on_update_apply_requested)
 
         # === 首次启动检测 ===
         QTimer.singleShot(1000, self.check_first_run)
+
+        # === Cookie 启动分级提醒 ===
+        # 订阅信号而不是 QTimer 猜时序：以前是「启动 5 秒后去问 cookie 状态」，
+        # 静默刷新慢一点就必然读到旧状态，于是"开局始终弹出需要获取 cookie"。
+        # 现在没有信号就没有提醒；sentinel 的 finally 保证每次启动恰好发一次。
+        # 发出方是后台线程，必须 QueuedConnection 把 slot 拉回 Qt 主线程。
+        from ..auth.cookie_sentinel import cookie_sentinel
+
+        cookie_sentinel.startupHealthReady.connect(
+            self.check_cookie_status, Qt.ConnectionType.QueuedConnection
+        )
+
+        # === 启动更新检查（错峰执行，避免启动瞬间卡顿）===
+        QTimer.singleShot(3000, self.settings_interface.schedule_startup_update_check)
 
         # === 管理员模式：自动刷新 Cookie ===
         if self._is_admin:
@@ -288,6 +327,12 @@ class MainWindow(FluentWindow):
         from fluentytdl.download.download_manager import download_manager
 
         download_manager.worker_error.connect(self.on_worker_error)
+        download_manager.worker_warning.connect(self.on_worker_warning)
+
+        # === 收起启动图，露出真正的界面 ===
+        # 放在 `__init__` 的最后一行：此刻页面、导航、托盘、信号全部就位，
+        # 用户看到界面的第一眼就是可用的界面。
+        self.splashScreen.finish()
 
     def _restore_tasks_to_ui(self) -> None:
         """将 DownloadManager 中恢复的 Worker 同步到 DownloadListModel"""
@@ -295,7 +340,7 @@ class MainWindow(FluentWindow):
         for worker in download_manager.active_workers:
             title = getattr(worker, "v_title", "") or ""
             thumb = getattr(worker, "v_thumbnail", "") or ""
-            self.task_page.model.add_task(worker, title, thumb)
+            self.task_page.add_task(worker, title, thumb)
             restored += 1
         if restored > 0:
             logger.info(f"[MainWindow] 已恢复 {restored} 个未完成任务到 UI")
@@ -303,16 +348,14 @@ class MainWindow(FluentWindow):
             QTimer.singleShot(500, download_manager.pump)
 
     def _on_app_update_available(self, info: dict) -> None:
-        """主窗口顶部弹出 InfoBar，提示软件更新可用。"""
+        """记录一行日志即可 —— 用户可见的提醒由消息中心（小铃铛）负责。
+
+        以前这里也弹一条 InfoBar，而设置页的 `AppUpdateSettingCard._on_update_available`
+        同样弹一条，同一件事会出现两条提示；启动自动检查时它还会和 5 个组件的检查结果
+        一起炸出来。现在统一走 `notification/update_notifier.py` 写进消息中心。
+        """
         version = info.get("version", "?")
-        is_pre = info.get("is_prerelease", False)
-        prefix = self.tr("预发布版本") if is_pre else self.tr("新版本")
-        InfoBar.info(
-            self.tr("软件更新"),
-            f"{prefix} {version} 已可用，前往设置页面更新",
-            duration=10000,
-            parent=self,
-        )
+        logger.info(f"[MainWindow] 检测到软件更新: {version}")
 
     def _on_update_apply_requested(self) -> None:
         """后端已批准更新，执行优雅退出。
@@ -330,6 +373,8 @@ class MainWindow(FluentWindow):
     def init_navigation(self):
         # 减小侧边栏展开时的宽度，避免留白过多
         self.navigationInterface.setExpandWidth(190)
+        # 展开/收起动画换成可打断实现，否则动画途中的反向操作会被丢弃或跳变
+        install_interruptible_navigation(self.navigationInterface)
         # 1. 新建任务
         self.addSubInterface(
             self.parse_page,
@@ -378,21 +423,14 @@ class MainWindow(FluentWindow):
             position=NavigationItemPosition.TOP,
         )
 
-        # 3. 任务列表（统一页面，内部使用 Pivot 过滤）
-        self.addSubInterface(
+        # 3. 任务（下载中 + 历史合流的单入口；分桶由页面内部的 Pivot 承担）
+        self.task_nav_item = self.addSubInterface(
             self.task_page,
             FluentIcon.DOWNLOAD,
-            self.tr("任务列表"),
+            self.tr("任务"),
             position=NavigationItemPosition.TOP,
         )
-
-        # 4. 下载历史
-        self.addSubInterface(
-            self.history_page,
-            FluentIcon.HISTORY,
-            self.tr("下载历史"),
-            position=NavigationItemPosition.TOP,
-        )
+        self._init_task_nav_badge()
 
         self.addSubInterface(
             self.settings_interface,
@@ -401,88 +439,98 @@ class MainWindow(FluentWindow):
             position=NavigationItemPosition.BOTTOM,
         )
 
+    def _init_task_nav_badge(self) -> None:
+        """给「任务」导航项挂一枚活跃数徽标。
+
+        代替被放弃的全局状态栏（`init_status_bar` 至今是空桩）：合流之后列表里既有
+        正在下载的行也有历史行，用户在别的页面时唯一想知道的就是「还有几个在跑」。
+
+        父控件取导航项**自己的父控件** —— `InfoBadgeManager.position()` 返回的是
+        `target.geometry()` 坐标系里的点，也就是导航项父控件的局部坐标；挂到别处
+        （比如 `navigationInterface`）会整体偏移一个面板边距。
+        """
+        item = self.task_nav_item
+        # `attension` 级别的底色就是 `themeColor()`，而且是在 `paintEvent` 里现取的 ——
+        # 用户改强调色 / 切明暗时徽标自己就跟上了，不能用 `custom()` 把颜色写死。
+        self.task_nav_badge = InfoBadge.attension(
+            0, item.parent(), target=item, position=TASK_NAV_BADGE_POSITION
+        )
+        self.task_nav_badge.hide()
+
+    def _on_task_counts_changed(self, counts: dict) -> None:
+        """按「下载中」桶的数量刷新导航徽标；为 0 就藏起来。
+
+        用 `active` 而不是 `all`：合流后 `all` 里绝大多数是历史行，把上千条已完成
+        永久钉在导航栏上没有信息量。徽标语义 = 「还有几个没下完」。
+        """
+        badge = getattr(self, "task_nav_badge", None)
+        if badge is None:
+            return
+
+        active = int(counts.get("active", 0) or 0)
+        manager = badge.manager
+        if manager is not None:
+            manager.wanted = active > 0
+        if active <= 0:
+            badge.hide()
+            return
+
+        # 折叠态的导航项只有 40px 宽，三位数就把图标盖住了 —— 上限 99，超出写「99+」。
+        # 不能截成 `99`：那看起来是个精确数字，而实际可能是 1234。
+        badge.setText(str(active) if active <= _NAV_BADGE_MAX else f"{_NAV_BADGE_MAX}+")
+        # 1 位数 → 2 位数时宽度会变，必须重新 adjustSize + 重新定位（同 notif_badge）
+        badge.adjustSize()
+        if manager is not None:
+            badge.move(manager.position())
+        badge.show()
+        badge.raise_()
+
     def init_page_actions(self):
-        """为统一任务页面设置操作按钮"""
+        """把任务页顶部的全局动作装进一个 `CommandBar`。
+
+        原来是 5 颗并排的 `TransparentToolButton`：窗口一窄只能互相挤扁，而 `CommandBar`
+        自带溢出（放不下就收进「更多」菜单），并且 `CommandButton` 会自己从 `action.toolTip()`
+        接管提示（内置 `CommandToolTipFilter`），不必再逐颗 `installEventFilter`。
+
+        「批量操作」开关整体删除 —— 常驻多选之后没有模式可切，选中任意一行批量条就会滑入。
+
+        两颗清空动作的标签都带「（当前筛选）」：它们的作用域已经从「source 全表」收敛为
+        「当前筛选可见项」，标签不写清楚就会出现「在『已完成』页签下点清空全部，
+        结果正在下载的任务也被取消」这种事故。
+        """
         page = self.task_page
 
-        # 全部开始/暂停按钮 (Secondary Actions)
-        start_all = TransparentToolButton(FluentIcon.PLAY, self)
-        start_all.setToolTip(self.tr("全部开始"))
-        start_all.installEventFilter(
-            ToolTipFilter(start_all, showDelay=300, position=ToolTipPosition.BOTTOM)
-        )
-        start_all.clicked.connect(self.on_start_all)
+        bar = ResponsiveCommandBar(page)
+        # 破坏性动作单独分到分隔符右边，避免和「开始 / 暂停 / 打开目录」混在一起误点
+        entries = [
+            (FluentIcon.PLAY, self.tr("全部开始"), self.on_start_all),
+            (FluentIcon.PAUSE, self.tr("全部暂停"), self.on_pause_all),
+            (FluentIcon.FOLDER, self.tr("打开下载目录"), self.on_open_download_dir),
+            None,
+            (
+                FluentIcon.DELETE,
+                self.tr("清空已完成/已失败记录（当前筛选）"),
+                self.on_clear_completed,
+            ),
+            (FluentIcon.BROOM, self.tr("清空全部任务（当前筛选）"), self.on_clear_all),
+        ]
+        for entry in entries:
+            if entry is None:
+                bar.addSeparator()
+                continue
+            icon, text, slot = entry
+            # 必须是**不可勾选**的 Action：CommandButton 会镜像 action.isCheckable()，
+            # 可勾选的话这些一次性动作会变成按下不弹起的开关。
+            action = Action(icon, text, self)
+            action.triggered.connect(slot)
+            bar.addAction(action)
 
-        pause_all = TransparentToolButton(FluentIcon.PAUSE, self)
-        pause_all.setToolTip(self.tr("全部暂停"))
-        pause_all.installEventFilter(
-            ToolTipFilter(pause_all, showDelay=300, position=ToolTipPosition.BOTTOM)
-        )
-        pause_all.clicked.connect(self.on_pause_all)
-
-        # 打开目录
-        open_dir = TransparentToolButton(FluentIcon.FOLDER, self)
-        open_dir.setToolTip(self.tr("打开下载目录"))
-        open_dir.installEventFilter(
-            ToolTipFilter(open_dir, showDelay=300, position=ToolTipPosition.BOTTOM)
-        )
-        open_dir.clicked.connect(self.on_open_download_dir)
-
-        # 清空已完成
-        clear_completed = TransparentToolButton(FluentIcon.DELETE, self)
-        clear_completed.setToolTip(self.tr("清空已完成/已失败记录"))
-        clear_completed.installEventFilter(
-            ToolTipFilter(clear_completed, showDelay=300, position=ToolTipPosition.BOTTOM)
-        )
-        clear_completed.clicked.connect(self.on_clear_completed)
-
-        # 清空全部
-        clear_all = TransparentToolButton(FluentIcon.BROOM, self)
-        clear_all.setToolTip(self.tr("清空全部任务"))
-        clear_all.installEventFilter(
-            ToolTipFilter(clear_all, showDelay=300, position=ToolTipPosition.BOTTOM)
-        )
-        clear_all.clicked.connect(self.on_clear_all)
-
-        # 批量操作按钮
-        from qfluentwidgets import TransparentPushButton
-
-        batch_btn = TransparentPushButton(FluentIcon.CHECKBOX, self.tr("批量操作"), page)
-        batch_btn.setToolTip(self.tr("进入或退出批量模式"))
-        batch_btn.installEventFilter(
-            ToolTipFilter(batch_btn, showDelay=300, position=ToolTipPosition.BOTTOM)
-        )
-
-        def toggle_batch():
-            is_batch = getattr(page, "_is_batch_mode", False)
-            page.set_selection_mode(not is_batch)
-
-        def _on_selection_mode_changed(is_batch: bool):
-            if is_batch:
-                batch_btn.setIcon(FluentIcon.CANCEL)
-                batch_btn.setText(self.tr("退出批量"))
-            else:
-                batch_btn.setIcon(FluentIcon.CHECKBOX)
-                batch_btn.setText(self.tr("批量操作"))
-
-        batch_btn.clicked.connect(toggle_batch)
-        page.selection_mode_changed.connect(_on_selection_mode_changed)
-
-        # 添加到布局 (分组)
+        # `ResponsiveCommandBar` 补上了 `sizeHint()`（库里的 `CommandBar` 没有），所以
+        # **不要**再调 `resizeToSuitableWidth()` —— 那是 `setFixedWidth`，会把最小宽一起
+        # 钉死，行内放不下时布局只能去压别人，压出来的就是控件互相错叠。
         page.action_layout.setSpacing(0)
-
-        # 2. 全局控制
-        page.action_layout.addWidget(start_all)
-        page.action_layout.addWidget(pause_all)
-        page.action_layout.addWidget(open_dir)
-        page.action_layout.addWidget(clear_completed)
-        page.action_layout.addWidget(clear_all)
-
-        # 分隔
-        page.action_layout.addSpacing(16)
-
-        # 3. 批量模式触发器 (靠右)
-        page.action_layout.addWidget(batch_btn)
+        page.action_layout.addWidget(bar)
+        self.task_command_bar = bar
 
     def init_status_bar(self):
         # FluentWindow 没有原生 statusBar，我们手动添加到底部
@@ -631,6 +679,7 @@ class MainWindow(FluentWindow):
         playlist_flat: bool = False,
         target_tab: str | None = None,
         preloaded_info: dict | None = None,
+        flow=None,
     ):
         """通用方法：显示非阻塞的任务配置窗口"""
         try:
@@ -644,13 +693,19 @@ class MainWindow(FluentWindow):
                 playlist_flat=playlist_flat,
                 target_tab=target_tab,
                 preloaded_info=preloaded_info,
+                flow=flow,
             )
 
-            # 连接信号
-            window.downloadRequested.connect(self.add_tasks)
+            # 连接信号。用 partial 把窗口的 flow 绑进槽，而不是加进信号签名 ——
+            # 智能检测切换模式会开新窗口，flow 传下去这一整串操作才是时间线上的一条链。
+            window.downloadRequested.connect(partial(self.add_tasks, flow=window.trace))
             window.windowClosed.connect(self._cleanup_sub_window)
-            window.request_vr_switch.connect(self.handle_vr_switch_request)
-            window.request_normal_switch.connect(self.handle_normal_switch_request)
+            window.request_vr_switch.connect(
+                partial(self.handle_vr_switch_request, flow=window.trace)
+            )
+            window.request_normal_switch.connect(
+                partial(self.handle_normal_switch_request, flow=window.trace)
+            )
 
             # 添加到活跃列表防止GC
             self._active_sub_windows.append(window)
@@ -688,6 +743,7 @@ class MainWindow(FluentWindow):
         playlist_flat: bool = False,
         target_tab: str | None = None,
         preloaded_info: dict | None = None,
+        flow=None,
     ):
         self._remember_recent_target_url(url)
         self._show_config_window(
@@ -697,6 +753,7 @@ class MainWindow(FluentWindow):
             playlist_flat=playlist_flat,
             target_tab=target_tab,
             preloaded_info=preloaded_info,
+            flow=flow,
         )
 
     def show_vr_selection_dialog(
@@ -704,6 +761,7 @@ class MainWindow(FluentWindow):
         url: str,
         smart_detect: bool = True,
         preloaded_info: dict | None = None,
+        flow=None,
     ):
         self._remember_recent_target_url(url)
         self._show_config_window(
@@ -712,6 +770,7 @@ class MainWindow(FluentWindow):
             vr_mode=True,
             smart_detect=smart_detect,
             preloaded_info=preloaded_info,
+            flow=flow,
         )
 
     def _show_channel_dialog(self, url: str, target_tab: str = "all") -> None:
@@ -724,19 +783,24 @@ class MainWindow(FluentWindow):
             normalized, smart_detect=False, playlist_flat=True, target_tab=target_tab
         )
 
-    def handle_vr_switch_request(self, url: str, preloaded_info: dict | None = None):
+    def handle_vr_switch_request(self, url: str, preloaded_info: dict | None = None, flow=None):
         """响应智能检测的 VR 切换请求。
 
         preloaded_info 是切换前那一轮已完成解析的结果，仅用于新窗口的首屏预览；
         VR 格式必须由 android_vr 重新解析，不能沿用。
+
+        `flow` 沿用旧窗口的操作链：对用户来说「粘贴链接 → 检测到 VR → 换窗口 → 下载」
+        是一次操作，日志里不该断成两条。
         """
         logger.info(f"Switching to VR mode for URL: {url}")
-        self.show_vr_selection_dialog(url, smart_detect=True, preloaded_info=preloaded_info)
+        self.show_vr_selection_dialog(
+            url, smart_detect=True, preloaded_info=preloaded_info, flow=flow
+        )
 
-    def handle_normal_switch_request(self, url: str, preloaded_info: dict | None = None):
+    def handle_normal_switch_request(self, url: str, preloaded_info: dict | None = None, flow=None):
         """响应智能检测的普通模式切换请求"""
         logger.info(f"Switching to Normal mode for URL: {url}")
-        self.show_selection_dialog(url, smart_detect=True, preloaded_info=preloaded_info)
+        self.show_selection_dialog(url, smart_detect=True, preloaded_info=preloaded_info, flow=flow)
 
     def show_subtitle_selection_dialog(self, url: str):
         self._remember_recent_target_url(url)
@@ -752,13 +816,18 @@ class MainWindow(FluentWindow):
             return
         config_manager.set("recent_target_url", value)
 
-    def add_tasks(self, tasks):
-        """添加下载任务到统一任务列表"""
+    def add_tasks(self, tasks, flow=None):
+        """添加下载任务到统一任务列表
+
+        `flow` 是发起这批任务的那个配置窗口的操作链标识（由 `_show_config_window`
+        用 `partial` 绑好）。`downloadRequested` 的签名保持 `Signal(list)` 不变 ——
+        往信号里塞一个非 Qt 类型只会逼所有调用点跟着改。
+        """
         logger.info(f"[DEBUG] Delegating {len(tasks)} tasks to Controller")
         if self.controller:
-            created_workers = self.controller.handle_add_tasks(tasks)
+            created_workers = self.controller.handle_add_tasks(tasks, flow=flow)
             for worker, t_title, t_thumb in reversed(created_workers):
-                self.task_page.model.add_task(worker, t_title, str(t_thumb) if t_thumb else "")
+                self.task_page.add_task(worker, t_title, str(t_thumb) if t_thumb else "")
         else:
             logger.error("AppController not provided to MainWindow!")
 
@@ -808,7 +877,7 @@ class MainWindow(FluentWindow):
                 self._quick_add_tooltip = None
 
             for worker, t_title, t_thumb in created_workers:
-                self.task_page.model.add_task(worker, t_title, str(t_thumb) if t_thumb else "")
+                self.task_page.add_task(worker, t_title, str(t_thumb) if t_thumb else "")
             self.switchTo(self.task_page)
 
         self.controller.handle_quick_add_tasks(
@@ -816,14 +885,19 @@ class MainWindow(FluentWindow):
         )
 
     def on_open_target_folder(self, row: int):
-        task = self.task_page.model.get_task(row)
-        if not task:
-            return
-        worker = task.get("worker")
-        if not worker:
-            return
+        """在资源管理器里定位该行的产物。**历史行同样可用**。
 
-        out_file = getattr(worker, "_final_filepath", "")
+        路径优先级：`effective_output_path`（worker 的实时路径优先于 DB 快照）→
+        worker 的 `_final_filepath` → opts 里的输出目录 → 全局下载目录。
+        原实现在没有 worker 时直接 return，融合后那会让「打开文件夹」对绝大多数
+        已完成行（都是分页补进来的历史行）失效。
+        """
+        row_obj = self.task_page.task_row(row)
+        if not isinstance(row_obj, TaskRow):
+            return
+        worker = row_obj.worker
+
+        out_file = row_obj.effective_output_path or getattr(worker, "_final_filepath", "")
         if out_file and os.path.exists(out_file):
             import subprocess
 
@@ -831,24 +905,50 @@ class MainWindow(FluentWindow):
                 subprocess.run(["explorer", "/select,", os.path.normpath(out_file)])
             else:
                 os.startfile(os.path.dirname(out_file))
+            return
+
+        # Fallback to output folder
+        home_dir = ""
+        if worker is not None:
+            paths = getattr(worker, "opts", None) or {}
+            home_dir = (paths.get("paths") or {}).get("home", "")
+        if not home_dir and out_file:
+            # 历史行没有 opts，但快照里的文件路径本身就带着目录 —— 文件被删了，
+            # 目录通常还在。
+            home_dir = os.path.dirname(out_file)
+        if not home_dir:
+            home_dir = config_manager.get("download_dir") or os.getcwd()
+        if home_dir and os.path.exists(home_dir):
+            os.startfile(home_dir)
+
+    def _dispatch_remove(self, row_obj: TaskRow, force_delete_files: bool) -> None:
+        """一行的删除派发：有 worker 走 worker 通道，历史行走快照通道。
+
+        `controller.handle_remove_task` 在 `worker` 为空时直接 return —— 融合后
+        列表里绝大多数终态行是分页补进来的历史行，不派发就等于「删不掉」。
+        """
+        if not self.controller:
+            return
+        if row_obj.worker is not None:
+            self.controller.handle_remove_task(
+                row_obj.worker, force_delete_files=force_delete_files
+            )
         else:
-            # Fallback to output folder
-            paths = worker.opts.get("paths", {})
-            home_dir = paths.get("home", config_manager.get("download_dir") or os.getcwd())
-            if os.path.exists(home_dir):
-                os.startfile(home_dir)
+            self.controller.handle_remove_snapshots(
+                [(row_obj.db_id, row_obj.output_path)], force_delete_files=force_delete_files
+            )
 
     def on_remove_task(self, row: int):
-        task = self.task_page.model.get_task(row)
-        if not task:
+        row_obj = self.task_page.task_row(row)
+        if not isinstance(row_obj, TaskRow):
             return
-        worker = task.get("worker")
-        if not worker:
-            return
+        worker = row_obj.worker
 
         try:
-            state = worker.effective_state
+            state = row_obj.effective_state
 
+            # 历史行永远不活跃：未完成态由 `load_unfinished_tasks()` 注入成活任务，
+            # 分页只补终态，两边不交叉（见 `storage/task_db.py` 的状态划分）。
             is_active = state in ("running", "queued", "paused", "downloading")
 
             # ── 读取设置页的删除策略 ──
@@ -857,31 +957,22 @@ class MainWindow(FluentWindow):
 
             # ── 快速通道：策略为 self.tr("仅移除记录") 且非活跃任务 ──
             if policy == DeletionPolicy.KEEP_FILES and not is_active:
-                if self.controller:
-                    self.controller.handle_remove_task(worker, force_delete_files=False)
-                self.task_page.model.remove_task(row)
+                self._dispatch_remove(row_obj, False)
+                self.task_page.remove_row(row)
                 return
 
             # ── 快速通道：策略为 self.tr("彻底删除") 且非活跃任务 ──
             if policy == DeletionPolicy.DELETE_FILES and not is_active:
-                if self.controller:
-                    self.controller.handle_remove_task(worker, force_delete_files=True)
-                self.task_page.model.remove_task(row)
+                self._dispatch_remove(row_obj, True)
+                self.task_page.remove_row(row)
                 return
 
             # ── 中途取消的活跃任务：必须强制清理缓存 ──
             if is_active:
-                if policy == DeletionPolicy.KEEP_FILES:
+                if policy in (DeletionPolicy.KEEP_FILES, DeletionPolicy.DELETE_FILES):
                     # 即使策略是保留文件，中途取消也必须清理 .part/.ytdl 缓存残骸
-                    if self.controller:
-                        self.controller.handle_remove_task(worker, force_delete_files=True)
-                    self.task_page.model.remove_task(row)
-                    return
-
-                if policy == DeletionPolicy.DELETE_FILES:
-                    if self.controller:
-                        self.controller.handle_remove_task(worker, force_delete_files=True)
-                    self.task_page.model.remove_task(row)
+                    self._dispatch_remove(row_obj, True)
+                    self.task_page.remove_row(row)
                     return
 
                 # AlwaysAsk: 提示用户中途取消的双项选择
@@ -900,15 +991,13 @@ class MainWindow(FluentWindow):
                 if not box.exec():
                     return
 
-                force_delete = chk.isChecked()
-                if self.controller:
-                    self.controller.handle_remove_task(worker, force_delete_files=force_delete)
-                self.task_page.model.remove_task(row)
+                self._dispatch_remove(row_obj, chk.isChecked())
+                self.task_page.remove_row(row)
                 return
 
             # ── 已完成/已出错任务：迅雷/IDM 风格双按钮弹窗 ──
-            title = task.get("title") or self.tr("删除任务")
-            final_path = getattr(worker, "output_path", getattr(worker, "_final_filepath", ""))
+            title = row_obj.effective_title or self.tr("删除任务")
+            final_path = row_obj.effective_output_path or getattr(worker, "_final_filepath", "")
             has_local_file = bool(final_path and os.path.exists(str(final_path)))
 
             if has_local_file:
@@ -937,14 +1026,13 @@ class MainWindow(FluentWindow):
                     return
                 force_delete = False
 
-            if self.controller:
-                self.controller.handle_remove_task(worker, force_delete_files=force_delete)
-            self.task_page.model.remove_task(row)
+            self._dispatch_remove(row_obj, force_delete)
+            self.task_page.remove_row(row)
 
         except Exception as e:
             logger.exception(f"Critical error in on_remove_task: {e}")
             try:
-                self.task_page.model.remove_task(row)
+                self.task_page.remove_row(row)
             except Exception:
                 pass
 
@@ -1025,219 +1113,409 @@ class MainWindow(FluentWindow):
 
     def on_pause_resume_task(self, row: int):
         # 暂停/继续任务逻辑委托给 Controller
-        task_data = self.task_page.model.get_task(row)
-        if not task_data:
+        row_obj = self.task_page.task_row(row)
+        if not isinstance(row_obj, TaskRow) or not self.controller:
             return
 
-        worker = task_data.get("worker")
-        if not worker:
+        new_worker = self._start_or_toggle(row_obj)
+        if new_worker:
+            # 已结束的 QThread 不能重启，controller 会重建 worker → 必须换行绑定；
+            # 历史行则是第一次拿到 worker（就地升级成活任务）。
+            self.task_page.rebind_worker(row, new_worker)
+
+    def _start_or_toggle(self, row_obj: TaskRow, notify: bool = True) -> object | None:
+        """一行的「开始 / 暂停」派发；返回需要重新绑定到该行的新 worker（没有则 None）。
+
+        历史行没有 worker，`handle_pause_resume_task` 会直接 return None ——
+        对用户就是「点了播放键没反应」。这里改走快照重下：opts 从 `tasks` 表按
+        `db_id` 现读，`restore_db_id` 复用同一个主键，所以是就地升级而不是多出一行。
+
+        `notify=False` 给批量用：50 行都缺 opts 会弹 50 个 InfoBar，批量侧自己汇总成一条。
+        """
+        if not self.controller:
+            return None
+        if row_obj.worker is not None:
+            return self.controller.handle_pause_resume_task(row_obj.worker)
+
+        worker = self.controller.handle_start_snapshot(
+            row_obj.db_id,
+            row_obj.url,
+            title=row_obj.effective_title,
+            thumbnail=row_obj.effective_thumbnail,
+        )
+        if worker is None and notify:
+            InfoBar.warning(
+                title=self.tr("无法直接重新下载"),
+                content=self.tr("这条记录缺少下载参数，请用右键菜单的「重新解析」重建任务"),
+                duration=4000,
+                position=InfoBarPosition.TOP_RIGHT,
+                parent=self,
+            )
+        return worker
+
+    # === 批量动作：统一的作用域、确认与分块执行 ===
+
+    # 分块节奏。启动每 tick 只处理 2 个 —— 每个都要新建 QThread 并写一次 SQLite；
+    # 暂停 / 删除 / 清空轻一些，5 个。间隔 50ms 是留给事件循环处理 QThread 信号和重绘的窗口。
+    # **不要调大这几个数**：分块不是为了「显得流畅」，而是为了避免批量写 SQLite 时
+    # 长期阻塞主线程引发 Segfault。
+    _CHUNK_START = 2
+    _CHUNK_BULK = 5
+    _CHUNK_INTERVAL_MS = 50
+
+    def _run_chunked(self, items: list, chunk_size: int, handler, on_done=None) -> None:
+        """把 items 切块交给 handler，块与块之间让出事件循环，全部处理完再调 on_done。
+
+        所有批量动作（开始 / 暂停 / 删除 / 清空）都走这一个执行器。原来只有开始和删除分块，
+        两个清空是同步一把梭的 —— 几百条记录时会长时间冻结 UI 并踩到同一个 SQLite 阻塞问题。
+
+        `items` 本身不被消耗（内部复制一份），调用方可以继续拿它做事后反查。
+        """
+        pending = list(items)
+
+        def process_chunk():
+            if not pending:
+                if on_done is not None:
+                    on_done()
+                return
+            chunk = pending[:chunk_size]
+            del pending[:chunk_size]
+            handler(chunk)
+            QTimer.singleShot(self._CHUNK_INTERVAL_MS, process_chunk)
+
+        QTimer.singleShot(0, process_chunk)
+
+    def _rows_at(self, rows: list[int]) -> list[TaskRow]:
+        """**source** 行号 → 行对象列表（页面持有模型，这里只是转发）。"""
+        return self.task_page.task_rows(rows)
+
+    def _visible_source_rows(self) -> list[int]:
+        """当前筛选可见的全部行，映射为 **source** 行号。
+
+        全局动作（全部开始 / 全部暂停 / 两个清空）一律以此为作用域。原来两个清空直接扫
+        source 全表，于是在「已完成」页签下点「清空全部任务」会把正在下载的任务一起取消 ——
+        看到的和删掉的不是同一批东西。
+        """
+        return self.task_page.visible_source_rows()
+
+    def _scope_text(self, count: int, from_selection: bool) -> str:
+        """确认框里的「作用域」短语。
+
+        同一个 handler 既服务右键菜单 / 批量条（作用域 = 选中集合），也服务顶部 CommandBar
+        （作用域 = 当前筛选可见项），不写清楚就会出现「我只选了 3 个，怎么全没了」。
+        """
+        if from_selection:
+            return self.tr("已选择的 {n} 项").format(n=count)
+        return self.tr("当前筛选「{name}」的 {n} 项").format(
+            name=self.task_page.current_filter_label(), n=count
+        )
+
+    def _confirm(self, title: str, content: str) -> bool:
+        return bool(MessageBox(title, content, self).exec())
+
+    def _remove_rows(self, row_objs: list[TaskRow], delete_files: bool = False) -> None:
+        """分块移除一批行，全部落地之后再把对应行从模型里摘掉。
+
+        每一块内部按来源分流：有 worker 的交给 `handle_batch_remove`（要停线程、清沙盒），
+        历史行交给 `handle_remove_snapshots`（只删 DB 行 + 可选删文件）。
+        混选是常态 —— 融合后「已完成」页签里既有本次会话刚下完的活任务，也有分页补进来的
+        历史行，用户框选时不会区分。
+
+        行号必须**事后反查**：分块执行期间新任务可能插到 row 0，事前记下的行号会整体平移。
+        反查用 `id(row_obj)`，而 `row_objs` 列表在整个过程中一直持有强引用，所以 id 不会
+        被回收复用（反查本身由页面的 `remove_row_objects` 负责）。
+        """
+        if not self.controller or not row_objs:
             return
 
-        if self.controller:
-            new_worker = self.controller.handle_pause_resume_task(worker)
-            if new_worker:
-                task_data["worker"] = new_worker
-                self.task_page.model._bind_worker_signals(new_worker, task_data)
-                idx = self.task_page.model.index(row, 0)
-                self.task_page.model.dataChanged.emit(idx, idx, [Qt.ItemDataRole.UserRole])
+        def handle_chunk(chunk: list[TaskRow]) -> None:
+            live = [r.worker for r in chunk if r.worker is not None]
+            snaps = [(r.db_id, r.output_path) for r in chunk if r.worker is None]
+            if live:
+                self.controller.handle_batch_remove(live, force_delete_files=delete_files)
+            if snaps:
+                self.controller.handle_remove_snapshots(snaps, force_delete_files=delete_files)
+
+        self._run_chunked(
+            row_objs,
+            self._CHUNK_BULK,
+            handle_chunk,
+            on_done=lambda: self.task_page.remove_row_objects(row_objs),
+        )
 
     def on_batch_start(self, rows: list[int]):
-        """批量开始任务"""
-        self.task_page.set_selection_mode(False)
-
-        workers_to_start = []
+        """批量开始。`rows` 是 **source** 行号（页面侧已经从 proxy 映射过）。"""
         row_map = {}
+        startable: list[TaskRow] = []
         for row in rows:
-            task = self.task_page.model.get_task(row)
-            if task and task.get("worker"):
-                w = task["worker"]
-                workers_to_start.append(w)
-                row_map[w] = row
+            row_obj = self.task_page.task_row(row)
+            if not isinstance(row_obj, TaskRow):
+                continue
+            # 历史行也算 —— `error` / `cancelled` 的重下正是这个按钮的语义。
+            # 跳过的三种：running / queued 已经在跑或在排队，completed 重下会覆盖
+            # 用户已经拿到的文件（沿用 `handle_batch_start` 原有的跳过集合）。
+            if row_obj.effective_state in ("running", "queued", "completed"):
+                continue
+            startable.append(row_obj)
+            row_map[id(row_obj)] = row
 
-        if not self.controller or not workers_to_start:
+        if not self.controller or not startable:
             return
 
-        # 采用切片（Chunking）方式异步执行，防止批量写入 SQLite 时长期阻塞主线程导致 Segfault
-        def process_chunk():
-            if not workers_to_start:
+        failed: list[TaskRow] = []
+
+        def start_chunk(chunk: list[TaskRow]):
+            # 已结束的 QThread 不能重启，controller 会**重建** worker → UI 必须换行绑定，
+            # 否则那一行永远停在旧对象的终态上
+            for row_obj in chunk:
+                new_worker = self._start_or_toggle(row_obj, notify=False)
+                if new_worker is None:
+                    if row_obj.worker is None:
+                        # 历史行缺 ydl_opts，重下不了 —— 逐条弹窗会刷屏，末尾汇总一条
+                        failed.append(row_obj)
+                    continue
+                row = row_map.get(id(row_obj))
+                if row is not None:
+                    self.task_page.rebind_worker(row, new_worker)
+            # 每块结束后推一次队列：`start_worker` 只在有空位时立刻起线程，
+            # 其余进 `_pending_workers`。原 `handle_batch_start` 在批次末尾 pump 一次，
+            # 分块之后改成每块一次（pump 本身是幂等的）。
+            download_manager.pump()
+
+        def report():
+            if not failed:
                 return
+            InfoBar.warning(
+                title=self.tr("{n} 项无法直接重新下载").format(n=len(failed)),
+                content=self.tr("这些记录缺少下载参数，请用右键菜单的「重新解析」重建任务"),
+                duration=4000,
+                position=InfoBarPosition.TOP_RIGHT,
+                parent=self,
+            )
 
-            chunk = []
-            # 每次处理 2 个，让出控制权让事件循环处理 QThread 和 UI 绘制
-            for _ in range(min(2, len(workers_to_start))):
-                chunk.append(workers_to_start.pop(0))
+        self._run_chunked(startable, self._CHUNK_START, start_chunk, on_done=report)
 
-            recreated_workers = self.controller.handle_batch_start(chunk)
-            for old_w, new_w in recreated_workers:
-                r = row_map.get(old_w)
-                if r is not None:
-                    t = self.task_page.model.get_task(r)
-                    if t:
-                        t["worker"] = new_w
-                        self.task_page.model._bind_worker_signals(new_w, t)
-                        idx = self.task_page.model.index(r, 0)
-                        self.task_page.model.dataChanged.emit(idx, idx, [Qt.ItemDataRole.UserRole])
+    def on_batch_downgrade(self, rows: list[int]):
+        """降低画质重试。`rows` 是 **source** 行号。
 
-            if workers_to_start:
-                QTimer.singleShot(50, process_chunk)
+        这是 `download_card._maybe_handle_format_unavailable` 的替代入口。原实现挂在
+        worker 的错误回调上、由每张卡片自己弹窗；虚拟化之后没有卡片了，改成右键菜单里
+        的显式动作 —— 顺带治好了原来的毛病：一批任务同时失败会**逐个**弹模态框。
 
-        QTimer.singleShot(0, process_chunk)
+        「手动调整」那一支不在这里重复实现：它就是菜单里的「重新解析」
+        （`show_selection_dialog(url, smart_detect=True)`），能重挑格式也能换档位。
+        单选时把它做成确认框的取消按钮，多选时那个入口没有意义（一次只能解析一个 url）。
+        """
+        row_map: dict[int, int] = {}
+        row_objs: list[TaskRow] = []
+        for row in rows:
+            row_obj = self.task_page.task_row(row)
+            if not isinstance(row_obj, TaskRow):
+                continue
+            # 只对 `error` 行开放。降档的前提是「片源没有这个严格档位所以直接失败了」，
+            # 其余状态（暂停、排队、已完成）要么还有机会跑，要么已经拿到文件。
+            if row_obj.effective_state != "error":
+                continue
+            row_objs.append(row_obj)
+            row_map[id(row_obj)] = row
+
+        if not self.controller or not row_objs:
+            return
+
+        single = len(row_objs) == 1
+        box = MessageBox(
+            self.tr("降低画质重试"),
+            self.tr(
+                "即将把{scope}的画质预设降低一档后重新下载。\n\n严格档位（如 1080p 严格）在片源没有该档位时会直接失败，降一档通常就能下成。"
+            ).format(scope=self._scope_text(len(row_objs), from_selection=True)),
+            self,
+        )
+        box.yesButton.setText(self.tr("自动降档重试"))
+        # 取消键在单选时兼作「手动调整」的入口 —— 对齐 download_card 原来的两个按钮
+        box.cancelButton.setText(self.tr("手动调整") if single else self.tr("取消"))
+        if not box.exec():
+            if single and row_objs[0].url:
+                self.show_selection_dialog(row_objs[0].url, smart_detect=True)
+            return
+
+        skipped: list[str] = []
+        done: list[int] = []
+
+        def downgrade_chunk(chunk: list[TaskRow]):
+            for row_obj in chunk:
+                new_worker, reason, new_height = self.controller.handle_downgrade_quality(
+                    row_obj.db_id,
+                    row_obj.url,
+                    title=row_obj.effective_title,
+                    thumbnail=row_obj.effective_thumbnail,
+                    worker=row_obj.worker,
+                )
+                if new_worker is None:
+                    skipped.append(reason)
+                    continue
+                done.append(new_height)
+                # 重建 worker 之后这一行必须换绑，否则它永远停在旧对象的终态上
+                row = row_map.get(id(row_obj))
+                if row is not None:
+                    self.task_page.rebind_worker(row, new_worker)
+            download_manager.pump()
+
+        def report():
+            if done:
+                # 多选时各行原档位可能不同，降完也就不是同一个值 —— 去重后一起报
+                heights = " / ".join(f"{h}p" for h in dict.fromkeys(sorted(done, reverse=True)))
+                InfoBar.success(
+                    title=self.tr("已降档重试 {n} 项").format(n=len(done)),
+                    content=self.tr("新档位：{heights}").format(heights=heights),
+                    duration=4000,
+                    position=InfoBarPosition.TOP_RIGHT,
+                    parent=self,
+                )
+            if not skipped:
+                return
+            if skipped.count("lowest") == len(skipped):
+                # 全是「已经最低档」—— 这条提示照搬 download_card 的原文案
+                InfoBar.warning(
+                    title=self.tr("无法继续降档"),
+                    content=self.tr("已是最低预设档位，建议用「重新解析」手动调整格式。"),
+                    duration=4000,
+                    position=InfoBarPosition.TOP_RIGHT,
+                    parent=self,
+                )
+                return
+            InfoBar.warning(
+                title=self.tr("{n} 项无法降档").format(n=len(skipped)),
+                content=self.tr(
+                    "这些任务不是严格画质档位（或已是最低档），请用「重新解析」手动调整"
+                ),
+                duration=4000,
+                position=InfoBarPosition.TOP_RIGHT,
+                parent=self,
+            )
+
+        self._run_chunked(row_objs, self._CHUNK_START, downgrade_chunk, on_done=report)
 
     def on_batch_pause(self, rows: list[int]):
-        workers_to_pause = []
-        for row in rows:
-            task = self.task_page.model.get_task(row)
-            if task and task.get("worker"):
-                workers_to_pause.append(task["worker"])
-
-        if self.controller and workers_to_pause:
-            self.controller.handle_batch_pause(workers_to_pause)
-
-        self.task_page.set_selection_mode(False)
+        # 历史行没有线程可暂停，直接过滤掉（不是错误，混选时是常态）
+        workers = [r.worker for r in self._rows_at(rows) if r.worker is not None]
+        if not self.controller or not workers:
+            return
+        self._run_chunked(workers, self._CHUNK_BULK, self.controller.handle_batch_pause)
 
     def on_batch_delete(self, rows: list[int], delete_files: bool = False):
-        if not rows:
+        """删除选中任务。`rows` 是 **source** 行号。"""
+        row_objs = self._rows_at(rows)
+        if not row_objs:
             return
 
-        # ── 分类任务 ──
-        workers_to_delete = []
-        workers_to_delete_set = set()
-
-        for row in rows:
-            task = self.task_page.model.get_task(row)
-            if not task:
-                continue
-            worker = task.get("worker")
-            if not worker:
-                continue
-
-            workers_to_delete.append(worker)
-            workers_to_delete_set.add(id(worker))
-
-        if not workers_to_delete:
+        scope = self._scope_text(len(row_objs), from_selection=True)
+        if delete_files:
+            content = self.tr("即将删除{scope}，并一并删除它们已下载的本地文件。\n此操作不可撤销。")
+        else:
+            content = self.tr("即将删除{scope}的任务记录。\n(不会删除本地文件)")
+        if not self._confirm(self.tr("删除任务"), content.format(scope=scope)):
             return
 
-        # 采用切片（Chunking）方式异步执行，防止批量删除 SQLite/Model 节点时阻塞主线程
-        def process_chunk():
-            if not workers_to_delete:
-                # 任务处理完后，从模型中动态反查要删除的行号（需从底往上删避免索引越界）
-                rows_to_remove = []
-                for i in range(self.task_page.model.rowCount() - 1, -1, -1):
-                    t = self.task_page.model.get_task(i)
-                    if t and id(t.get("worker")) in workers_to_delete_set:
-                        rows_to_remove.append(i)
-                for row in rows_to_remove:
-                    try:
-                        self.task_page.model.remove_task(row)
-                    except Exception:
-                        pass
-                self.task_page.set_selection_mode(False)
-                return
-
-            chunk = []
-            for _ in range(min(5, len(workers_to_delete))):
-                chunk.append(workers_to_delete.pop(0))
-
-            if self.controller:
-                self.controller.handle_batch_remove(chunk, force_delete_files=delete_files)
-
-            if workers_to_delete:
-                QTimer.singleShot(50, process_chunk)
-            else:
-                # 触发模型移除
-                QTimer.singleShot(0, process_chunk)
-
-        QTimer.singleShot(0, process_chunk)
+        self._remove_rows(row_objs, delete_files=delete_files)
 
     def on_start_all(self):
-        rows = []
-        for row in range(self.task_page.proxy_model.rowCount()):
-            src_idx = self.task_page.proxy_model.mapToSource(
-                self.task_page.proxy_model.index(row, 0)
-            )
-            rows.append(src_idx.row())
+        rows = self._visible_source_rows()
+        if not rows:
+            return
+        self._notify_scope(self.tr("开始"), len(rows))
         self.on_batch_start(rows)
 
     def on_pause_all(self):
-        rows = []
-        for row in range(self.task_page.proxy_model.rowCount()):
-            src_idx = self.task_page.proxy_model.mapToSource(
-                self.task_page.proxy_model.index(row, 0)
-            )
-            rows.append(src_idx.row())
+        rows = self._visible_source_rows()
+        if not rows:
+            return
+        self._notify_scope(self.tr("暂停"), len(rows))
         self.on_batch_pause(rows)
 
+    def _notify_scope(self, verb: str, count: int) -> None:
+        """开始 / 暂停是非破坏性动作，不弹模态，但作用域仍然要说清楚。
+
+        否则「全部开始」在筛选下只作用于可见项这件事完全不可见 —— 用户会以为它没生效。
+        """
+        InfoBar.info(
+            title=self.tr("{verb}任务").format(verb=verb),
+            content=self.tr("作用域：{scope}").format(
+                scope=self._scope_text(count, from_selection=False)
+            ),
+            duration=2000,
+            position=InfoBarPosition.TOP_RIGHT,
+            parent=self,
+        )
+
     def on_clear_completed(self):
-        clearable_rows = []
-        for i in range(self.task_page.model.rowCount()):
-            task = self.task_page.model.get_task(i)
-            if not task:
+        """清空**当前筛选下**的已完成 / 已失败 / 已取消记录。"""
+        rows = self._visible_source_rows()
+        clearable: list[TaskRow] = []
+        n_completed = 0
+        n_error = 0
+        for row_obj in self._rows_at(rows):
+            # 历史行是这里的**主力**：融合后「已完成」页签下绝大多数行都来自分页，
+            # 按 worker 过滤等于「清空按钮对旧记录无效」。
+            state = row_obj.effective_state
+            if state == "completed":
+                n_completed += 1
+            elif state in ("error", "cancelled"):
+                n_error += 1
+            else:
                 continue
-            worker = task.get("worker")
-            if worker and worker.effective_state in ("completed", "error", "cancelled"):
-                clearable_rows.append(i)
+            clearable.append(row_obj)
 
-        if not clearable_rows:
+        if not clearable:
+            InfoBar.info(
+                title=self.tr("没有可清空的记录"),
+                content=self.tr("当前筛选「{name}」下没有已完成或已失败的任务").format(
+                    name=self.task_page.current_filter_label()
+                ),
+                duration=2000,
+                position=InfoBarPosition.TOP_RIGHT,
+                parent=self,
+            )
             return
-
-        n_completed = sum(
-            1
-            for r in clearable_rows
-            if self.task_page.model.get_task(r).get("worker").effective_state == "completed"
-        )
-        n_error = sum(
-            1
-            for r in clearable_rows
-            if self.task_page.model.get_task(r).get("worker").effective_state
-            in ("error", "cancelled")
-        )
 
         parts = []
         if n_completed:
-            parts.append(f"{n_completed} 个已完成")
+            parts.append(self.tr("{n} 个已完成").format(n=n_completed))
         if n_error:
-            parts.append(f"{n_error} 个已失败/已取消")
+            parts.append(self.tr("{n} 个已失败/已取消").format(n=n_error))
 
-        if MessageBox(
+        content = self.tr(
+            "作用域：{scope}。\n即将清空其中 {parts} 的任务记录。\n(不会删除本地文件)"
+        )
+        if not self._confirm(
             self.tr("清空记录"),
-            f"确定要清空 {'、'.join(parts)} 的任务记录吗？\n(不会删除本地文件)",
-            self,
-        ).exec():
-            workers_to_remove = []
-            for row in clearable_rows:
-                task = self.task_page.model.get_task(row)
-                if task and task.get("worker"):
-                    workers_to_remove.append(task["worker"])
-
-            if self.controller and workers_to_remove:
-                self.controller.handle_batch_remove(workers_to_remove, force_delete_files=False)
-
-            for row in sorted(clearable_rows, reverse=True):
-                self.task_page.model.remove_task(row)
-
-    def on_clear_all(self):
-        if self.task_page.model.rowCount() == 0:
+            content.format(
+                scope=self._scope_text(len(rows), from_selection=False),
+                parts="、".join(parts),
+            ),
+        ):
             return
 
-        if MessageBox(
+        self._remove_rows(clearable, delete_files=False)
+
+    def on_clear_all(self):
+        """清空**当前筛选下**的全部任务。"""
+        rows = self._visible_source_rows()
+        row_objs = self._rows_at(rows)
+        if not row_objs:
+            return
+
+        # 整条消息必须是**单个**字面量：pylupdate 对隐式拼接的相邻字符串提取不可靠，
+        # 拆成两段有可能整条漏出 assets/locales/*.ts。
+        content = self.tr(
+            "作用域：{scope}。\n即将清空这些任务的记录，其中正在下载的会被一并取消。\n(不会删除本地文件)"
+        )
+        if not self._confirm(
             self.tr("清空全部任务"),
-            self.tr(
-                "确定要清空所有任务记录吗？\n如果任务正在下载中，也会被一并取消。(不会删除本地文件)"
-            ),
-            self,
-        ).exec():
-            all_rows = list(range(self.task_page.model.rowCount()))
-            workers_to_remove = []
-            for row in all_rows:
-                task = self.task_page.model.get_task(row)
-                if task and task.get("worker"):
-                    workers_to_remove.append(task["worker"])
+            content.format(scope=self._scope_text(len(row_objs), from_selection=False)),
+        ):
+            return
 
-            if self.controller and workers_to_remove:
-                self.controller.handle_batch_remove(workers_to_remove, force_delete_files=False)
-
-            for row in sorted(all_rows, reverse=True):
-                self.task_page.model.remove_task(row)
+        self._remove_rows(row_objs, delete_files=False)
 
     def on_open_download_dir(self):
         # 打开默认下载目录
@@ -1245,15 +1523,32 @@ class MainWindow(FluentWindow):
         if os.path.exists(path):
             os.startfile(path)
 
-    def _on_history_record_added(self, record) -> None:
-        """历史记录新增时实时更新历史页面"""
-        try:
-            self.history_page.add_record(record)
-        except Exception:
-            pass
-
     def init_title_bar(self):
-        # 在标题栏添加帮助按钮
+        """整理标题栏：右侧放「帮助」和「消息」按钮，左侧把图标和软件名撑开一点。
+
+        `FluentTitleBar` 的布局是 `hBoxLayout = [iconLabel, titleLabel, stretch, vBoxLayout]`
+        —— 最小化/最大化/关闭并不直接挂在 hBoxLayout 上，而是嵌在
+        `vBoxLayout > buttonLayout` 里，所以 hBoxLayout.count() 恒为 4。
+        按 `count() - 3` 算插入位置会得到索引 1，把按钮塞进窗口图标和标题之间
+        （3.6.9 的症状）。
+
+        也不能塞进 `buttonLayout`：它 `setAlignment(Qt.AlignTop)`，而系统按钮是 46x32、
+        贴着 48px 标题栏的顶边，跟着它对齐会比标题文字高出 8px（看起来"太靠上"）。
+        正确的位置是 `hBoxLayout` 里 `vBoxLayout` 之前 —— 那里有完整的 48px 高度，
+        `AlignVCenter` 才能和标题文字落在同一条中线上。
+
+        这里还顺手统一了三件事，否则五个按钮并排会明显"不是一套"：
+
+        * 系统按钮改成垂直居中（见下面的 `vBoxLayout` stretch），不再高出 8px；
+        * 帮助/铃铛的图标缩到 12px，去贴合系统按钮那 10px 的字形；
+        * 左上角的图标和软件名往右挪，别贴着导航栏。
+        """
+        # 系统按钮的字形只有 10px：最小化是 `drawLine(18, 16, 28, 16)` 的 10px 横线，
+        # 最大化是 `drawRect(18, 11, 10, 10)`，关闭是 close.svg 里 3.263/15.875 的 X
+        # 渲染到 46x32 上约 9.5px。TransparentToolButton 默认 16px，并排放着大一号，
+        # 这就是"格格不入"的来源。12px 与它们同一个重量级，又不至于让铃铛小得看不清。
+        glyph_size = QSize(12, 12)
+
         # Parent MUST be titleBar to ensure correct z-order and event handling
         self.help_btn = TransparentToolButton(FluentIcon.HELP, self.titleBar)
         self.help_btn.setToolTip(self.tr("帮助中心"))
@@ -1262,8 +1557,8 @@ class MainWindow(FluentWindow):
         )
         self.help_btn.clicked.connect(self.show_help_window)
         self.help_btn.setFixedSize(46, 32)
+        self.help_btn.setIconSize(glyph_size)
 
-        # 在标题栏添加通知按钮
         self.notif_btn = TransparentToolButton(FluentIcon.RINGER, self.titleBar)
         self.notif_btn.setToolTip(self.tr("消息中心"))
         self.notif_btn.installEventFilter(
@@ -1271,11 +1566,50 @@ class MainWindow(FluentWindow):
         )
         self.notif_btn.clicked.connect(self.show_notification_panel)
         self.notif_btn.setFixedSize(46, 32)
+        self.notif_btn.setIconSize(glyph_size)
 
-        from qfluentwidgets import InfoBadge, InfoBadgePosition
+        # 系统按钮默认贴着标题栏顶边：`vBoxLayout = [buttonLayout, stretch]`，那个 stretch
+        # 把 32px 高的按钮组顶到 48px 标题栏的最上面，于是它们比标题文字和帮助/铃铛高 8px。
+        # 在最前面再插一个 stretch，按钮组就被夹在两个 stretch 中间，五个按钮同一条中线。
+        v_box_layout = getattr(self.titleBar, "vBoxLayout", None)
+        insert_stretch = getattr(v_box_layout, "insertStretch", None)
+        if callable(insert_stretch):
+            insert_stretch(0, 1)
 
+        # 插进 hBoxLayout 的最后一项（承载系统按钮的 vBoxLayout）之前：
+        # 前面有 stretch，所以会靠右；AlignVCenter 让它和标题文字同一条中线。
+        layout = getattr(self.titleBar, "hBoxLayout", None) or self.titleBar.layout()
+
+        # 顺手把左上角撑开：hBoxLayout 的 margins 和 spacing 默认都是 0，图标贴在
+        # 窗口最左边缘、标题紧接着图标，挤成一团。而 `FluentWindow.resizeEvent` 已经把
+        # 整个标题栏右移了 46px 给导航栏的返回按钮让位，图标就正好卡在导航栏边上。
+        # 左边留 20px，图标与标题之间再留 12px。
+        # 右边保持 0 —— 系统按钮必须贴着窗口右上角（Windows 的惯例，也便于点击）。
+        icon_label = getattr(self.titleBar, "iconLabel", None)
+        set_margins = getattr(layout, "setContentsMargins", None)
+        index_of = getattr(layout, "indexOf", None)
+        insert_spacing = getattr(layout, "insertSpacing", None)
+        if icon_label is not None and callable(set_margins) and callable(index_of):
+            set_margins(20, 0, 0, 0)
+            icon_index = index_of(icon_label)
+            if icon_index >= 0 and callable(insert_spacing):
+                insert_spacing(icon_index + 1, 12)
+
+        insert_widget = getattr(layout, "insertWidget", None)
+        count = getattr(layout, "count", None)
+        if callable(insert_widget) and callable(count):
+            count_value = count()
+            index = max(count_value - 1, 0) if isinstance(count_value, int) else 0
+            align = Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+            insert_widget(index, self.help_btn, 0, align)
+            insert_widget(index + 1, self.notif_btn, 0, align)
+            # 和系统按钮组之间留一点视觉间隔
+            if callable(insert_spacing):
+                insert_spacing(index + 2, 6)
+
+        # 未读徽章：必须在按钮进入布局之后创建，才能拿到正确 z-order
         self.notif_badge = InfoBadge.error(
-            0, self.titleBar, target=self.notif_btn, position=InfoBadgePosition.TOP_RIGHT
+            0, self.titleBar, target=self.notif_btn, position=TITLE_BAR_BADGE_POSITION
         )
         self.notif_badge.hide()
 
@@ -1286,25 +1620,16 @@ class MainWindow(FluentWindow):
         # 初始化徽章
         self._on_unread_count_changed(notification_center.get_unread_count())
 
-        # 查找插入位置：尝试插在系统按钮组的最左边
-        layout = self.titleBar.layout()
-        # Insert the buttons to the left of the system buttons (min/max/close)
-        # Assuming system buttons are the last three widgets in the title bar layout
-        insert_widget = getattr(layout, "insertWidget", None) if layout else None
-        count = getattr(layout, "count", None) if layout else None
-        if callable(insert_widget) and callable(count):
-            count_value = count()
-            if isinstance(count_value, int):
-                insert_widget(count_value - 3, self.notif_btn, 0, Qt.AlignmentFlag.AlignRight)
-                insert_widget(count_value - 3, self.help_btn, 0, Qt.AlignmentFlag.AlignRight)
-
-        # 给 help_btn 设置右边距，让它离系统按钮远一点
-        self.help_btn.setContentsMargins(0, 0, 10, 0)
-
     def _on_unread_count_changed(self, count: int):
         if count > 0:
             self.notif_badge.setNum(count if count < 100 else 99)
+            # 1 位数 → 2 位数时宽度会变，必须重新 adjustSize + 重新定位
+            self.notif_badge.adjustSize()
+            manager = getattr(self.notif_badge, "manager", None)
+            if manager is not None:
+                self.notif_badge.move(manager.position())
             self.notif_badge.show()
+            self.notif_badge.raise_()
         else:
             self.notif_badge.hide()
 
@@ -1322,9 +1647,28 @@ class MainWindow(FluentWindow):
                 pass
 
         view = NotificationFlyoutView(self)
+        view.detachRequested.connect(self.detach_notification_panel)
         self._notif_flyout = Flyout.make(
             view, self.notif_btn, self, aniType=FlyoutAnimationType.PULL_UP
         )
+
+    def detach_notification_panel(self):
+        """把消息列表甩进独立窗口。
+
+        必须**先关浮窗再开窗口**：`Flyout` 是靠失焦关闭的，反过来的话新窗口一拿到
+        焦点浮窗才消失，用户看到的是浮窗闪了一下 —— 分不清是打开了还是出错了。
+        """
+        from .notification_panel import NotificationWindow
+
+        flyout = getattr(self, "_notif_flyout", None)
+        if flyout is not None:
+            try:
+                flyout.close()
+            except RuntimeError:
+                pass
+            self._notif_flyout = None
+
+        NotificationWindow.show_singleton(self)
 
     def show_help_window(self):
         if not getattr(self, "_help_window", None):
@@ -1358,13 +1702,12 @@ class MainWindow(FluentWindow):
             config_manager.set("welcome_guide_shown_for_version", __version__)
             config_manager.set("has_shown_welcome_guide", True)
 
-        # 检查Cookie状态（延迟5秒，让启动时的静默刷新完成）
-        QTimer.singleShot(5000, lambda: self.check_cookie_status(is_startup=True))
+        # 注：Cookie 状态检查不在这里触发。它由 cookie_sentinel.startupHealthReady
+        # 驱动（连接见 __init__），不再用 QTimer 猜静默刷新什么时候结束。
 
     def on_admin_mode_cookie_refresh(self):
         """管理员模式启动后自动刷新Cookie"""
         from ..auth.auth_service import AuthSourceType, auth_service
-        from ..auth.cookie_sentinel import cookie_sentinel
         from ..utils.logger import logger
 
         # 只在配置了浏览器来源时刷新
@@ -1383,9 +1726,6 @@ class MainWindow(FluentWindow):
         browser_name = auth_service.current_source_display
         logger.info(f"[AdminMode] 以管理员身份自动刷新Cookie: {browser_name}")
 
-        # 显示提示
-        from qfluentwidgets import InfoBar
-
         InfoBar.info(
             self.tr("管理员模式"),
             f"正在以管理员权限提取 {browser_name} Cookie...",
@@ -1393,10 +1733,15 @@ class MainWindow(FluentWindow):
             parent=self,
         )
 
-        # 执行刷新
-        try:
-            success, message = cookie_sentinel.force_refresh_with_uac()
+        # 提取要读被锁的 DPAPI 数据库，秒级到十几秒不等。以前是主线程直接调 ——
+        # 启动后窗口刚出来就假死，正是用户报的"开局卡住"之一。改走 QThread。
+        from .components.common.cookie_refresh_worker import CookieRefreshWorker
 
+        # platform=None：浏览器提取一次就能覆盖两个平台
+        worker = CookieRefreshWorker(self)
+        self._admin_cookie_worker = worker  # QThread 必须活到 finished
+
+        def _on_done(success: bool, message: str, _needs_admin: bool) -> None:
             if success:
                 InfoBar.info(
                     self.tr("Cookie提取成功"),
@@ -1408,124 +1753,159 @@ class MainWindow(FluentWindow):
                 QTimer.singleShot(1000, lambda: self.switchTo(self.settings_interface))
             else:
                 InfoBar.warning(self.tr("Cookie提取失败"), message, duration=8000, parent=self)
-        except Exception as e:
-            logger.exception(self.tr("[AdminMode] Cookie刷新异常"))
-            InfoBar.error(self.tr("Cookie提取异常"), str(e), duration=5000, parent=self)
 
-    def check_cookie_status(self, is_startup: bool = False):
+        worker.finished.connect(_on_done, Qt.ConnectionType.QueuedConnection)
+        worker.start()
+
+    def check_cookie_status(self, health: dict | None = None) -> None:
         """
-        统一 Cookie 有效性检查（适用于所有验证模式）
+        Cookie 启动分级提醒 —— 由 `cookie_sentinel.startupHealthReady` 驱动。
 
-        三层检查:
-        1. cookie_sentinel.exists → Cookie 文件是否存在
-        2. cookie_sentinel.is_stale → Cookie 是否已过期（基于 SID/HSID expires）
-        3. auth_service.last_status.valid → 关键字段完整性（SID/HSID/SSID 等）
+        `health` 为 None 时现场采样一次，所以这个方法既能连信号也能手动调。
 
-        当检测到问题时，弹出 CookieRepairDialog 引导用户修复。
+        分级规则（用户要求"静默 + 消息提醒"，启动路径上不弹任何模态框）：
+
+        - `enabled=False` → **完全跳过**。只用 X 的用户不会再被 YouTube 的缺失状态
+          误伤，这正是"开局始终弹出需要获取 cookie"的病根。
+        - 缺失 / 失效 → `InfoBar.warning` + 「去刷新」。
+        - 有效但闸门刚拒过新 Cookie → `InfoBar.info`，告诉用户刷新没生效、仍在用旧文件
+          （2.2.1 弱回退机制的可见半边）。
+        - 有效但 24 小时内过期 → `InfoBar.info` + 「去刷新」。
+        - 有效且干净 → 只记日志，静默。
+
+        每个平台最多一条横幅。
         """
         try:
-            from ..auth.auth_service import AuthSourceType, auth_service
+            from ..auth.auth_service import PLATFORM_LABELS
             from ..auth.cookie_sentinel import cookie_sentinel
-            from ..utils.admin_utils import is_admin
 
-            current_source = auth_service.current_source
+            if health is None:
+                health = cookie_sentinel.get_startup_health()
 
-            # 未启用验证，无需检查
-            if current_source == AuthSourceType.NONE:
-                return
+            for platform, info in health.items():
+                label = PLATFORM_LABELS.get(platform, platform)
 
-            source_name = auth_service.current_source_display
+                if not info.get("enabled"):
+                    logger.debug(f"[MainWindow] {label} 未启用 Cookie，跳过启动提醒")
+                    continue
 
-            # ── 统一有效性检查（适用于 WebView2 / 浏览器 / 手动导入） ──
-            # 只检查两层：
-            #   1. cookie_sentinel.exists → Cookie 文件是否存在
-            #   2. auth_service.last_status.valid → 关键字段完整性 + 过期检查
-            #      (_validate_cookies 会先过滤掉已过期的 Cookie，再检查 SID/HSID 等是否存在)
-            is_invalid = False
-            reason = ""
+                commit_warning = info.get("commit_warning")
 
-            if not cookie_sentinel.exists:
-                is_invalid = True
-                if current_source == AuthSourceType.WEBVIEW2:
-                    reason = self.tr("尚未登录获取 Cookie")
-                elif current_source == AuthSourceType.FILE:
-                    reason = self.tr("尚未导入 Cookie 文件")
+                if not info.get("exists") or not info.get("valid"):
+                    # 闸门的拒绝原因比"Cookie 无效"更具体，优先展示
+                    reason = commit_warning or info.get("reason") or self.tr("Cookie 无效")
+                    logger.warning(f"[MainWindow] {label} Cookie 不可用: {reason}")
+                    self._show_cookie_health_tip(platform, label, reason, is_warning=True)
+                elif commit_warning:
+                    logger.warning(f"[MainWindow] {label} 新 Cookie 被拒绝，仍在使用旧文件")
+                    self._show_cookie_health_tip(
+                        platform,
+                        label,
+                        self.tr("新 Cookie 不可用，仍在使用旧文件。原因：") + commit_warning,
+                        is_warning=False,
+                    )
+                elif info.get("expiring_soon"):
+                    self._show_cookie_health_tip(
+                        platform, label, self._format_expiry_hint(info), is_warning=False
+                    )
                 else:
-                    reason = f"尚未从 {source_name} 提取 Cookie"
-            elif not auth_service.last_status.valid:
-                is_invalid = True
-                reason = auth_service.last_status.message or self.tr("Cookie 无效")
-
-            if is_invalid:
-                logger.warning(f"[MainWindow] Cookie 无效 ({source_name}): {reason}")
-
-                if is_startup and not cookie_sentinel.exists:
-                    # 第一次运行不主动弹强打扰对话框，给个横幅引导即可
-                    from qfluentwidgets import InfoBar, InfoBarPosition
-
-                    action = (
-                        self.tr("登录")
-                        if current_source == AuthSourceType.WEBVIEW2
-                        else self.tr("导入")
-                    )
-                    InfoBar.warning(
-                        self.tr("Cookie 未准备就绪"),
-                        f"为了保证下载稳定，建议您先前往设置页进行{action}以获取 Cookie",
-                        duration=10000,
-                        position=InfoBarPosition.TOP_RIGHT,
-                        parent=self,
-                    )
-                    return
-
-                # Chromium 浏览器非管理员 → 特殊处理：提示以管理员重启
-                from ..auth.auth_service import ADMIN_REQUIRED_BROWSERS
-
-                if current_source in ADMIN_REQUIRED_BROWSERS and not is_admin():
-                    from qfluentwidgets import MessageBox
-
-                    box = MessageBox(
-                        f"{source_name} 需要管理员权限",
-                        f"检测到您使用 {source_name} 作为 Cookie 来源。\n\n"
-                        f"Chromium 内核浏览器使用了加密保护，\n"
-                        f"需要以管理员身份运行程序才能提取 Cookie。\n\n"
-                        + self.tr("是否以管理员身份重启程序？\n\n")
-                        + self.tr("提示：您也可以切换到 Firefox/LibreWolf 浏览器，\n")
-                        + self.tr("或使用「登录获取」方式，无需管理员权限。"),
-                        self,
-                    )
-                    box.yesButton.setText(self.tr("以管理员身份重启"))
-                    box.cancelButton.setText(self.tr("稍后再说"))
-
-                    if box.exec():
-                        from ..utils.admin_utils import restart_as_admin
-
-                        restart_as_admin(f"提取 {source_name} Cookie")
-                else:
-                    # 所有模式通用：使用 CookieRepairDialog 引导修复
-                    self._show_cookie_repair(current_source, source_name, reason)
-            else:
-                logger.info(
-                    f"[MainWindow] Cookie 有效 ({source_name}，"
-                    f"{auth_service.last_status.cookie_count} 个 Cookie)"
-                )
+                    logger.info(f"[MainWindow] {label} Cookie 有效，启动静默")
 
         except Exception as e:
-            logger.error(f"[MainWindow] Cookie状态检查失败: {e}")
+            logger.error(f"[MainWindow] Cookie 状态检查失败: {e}")
+
+    def _format_expiry_hint(self, info: dict) -> str:
+        """把 expiry_seconds 说成人话。拿不到具体秒数时给个不撒谎的兜底。"""
+        remaining = info.get("expiry_seconds")
+        if not remaining or remaining <= 0:
+            return self.tr("Cookie 即将过期，建议尽快刷新")
+
+        hours = int(remaining // 3600)
+        if hours >= 1:
+            return self.tr("Cookie 将在约 {} 小时后过期，建议提前刷新").format(hours)
+        return self.tr("Cookie 将在约 {} 分钟后过期，建议立即刷新").format(
+            max(1, int(remaining // 60))
+        )
+
+    def _show_cookie_health_tip(
+        self, platform: str, label: str, content: str, is_warning: bool
+    ) -> None:
+        """一个平台一条 Cookie 横幅，带「去刷新」出口。"""
+        title = (
+            self.tr("{} Cookie 需要处理").format(label)
+            if is_warning
+            else self.tr("{} Cookie 提醒").format(label)
+        )
+        show = InfoBar.warning if is_warning else InfoBar.info
+
+        bar = show(
+            title=title,
+            content=content,
+            # 竖排：这些原因文本往往一两句话，横排会被截在第一行
+            orient=Qt.Orientation.Vertical,
+            isClosable=True,
+            position=InfoBarPosition.TOP_RIGHT,
+            # 比默认 1s 长得多：这是用户唯一能知道"为什么下载会失败"的地方
+            duration=12000 if is_warning else 8000,
+            parent=self,
+        )
+
+        def go_refresh() -> None:
+            bar.close()
+            self.switchTo(self.settings_interface)
+
+        btn = PushButton(self.tr("去刷新"))
+        btn.clicked.connect(go_refresh)
+        bar.addWidget(btn)
+
+    def on_worker_warning(self, warn_data: dict) -> None:
+        """任务**成功**了但有该说的话（目前只有字幕三码）：只弹 InfoBar。
+
+        刻意不复用 `on_worker_error`：那条路是 `WorkerErrorDialog.exec()` 模态框，
+        把"视频已经下好了、只是少一个 .vtt"升级成一次强制打断，比原来的静默失败更烦人。
+        载荷格式与 `worker_error` 相同（都是 `Diagnosis.to_dict()`）。
+        """
+        title = warn_data.get("user_title") or self.tr("字幕未完全下载")
+        content = warn_data.get("user_message") or ""
+        bar = InfoBar.warning(
+            title=title,
+            content=content,
+            # 竖排：这段正文有两三句，横排会被 TextWrap 截在第一行
+            orient=Qt.Orientation.Vertical,
+            isClosable=True,
+            position=InfoBarPosition.TOP_RIGHT,
+            # 12s 而非默认 1s：这条提示是用户唯一能知道"为什么没有字幕"的地方
+            duration=12000,
+            parent=self,
+        )
+
+        fix_action = warn_data.get("fix_action")
+        if not fix_action:
+            return
+
+        def run_fix() -> None:
+            from fluentytdl.ui.components.settings.fix_registry import execute_fix_action
+
+            bar.close()
+            execute_fix_action(fix_action, self)
+
+        btn = PushButton(warn_data.get("recovery_hint") or self.tr("去处理"))
+        btn.clicked.connect(run_fix)
+        bar.addWidget(btn)
 
     def on_worker_error(self, err_data: dict) -> None:
         """
         处理后台下载任务发出的错误（支持重试所有挂起任务）
         """
-        print(f"[DEBUG] on_worker_error called with err_data: {err_data}")
+        logger.debug("on_worker_error: code={}", err_data.get("code"))
         if getattr(self, "_worker_error_dialog_showing", False):
-            print("[DEBUG] Dialog already showing, skipping.")
+            logger.debug("WorkerErrorDialog 已在显示，跳过本次")
             return
 
         self._worker_error_dialog_showing = True
         try:
             from fluentytdl.ui.components.dialogs.worker_error_dialog import WorkerErrorDialog
 
-            print("[DEBUG] Creating WorkerErrorDialog...")
             dlg = WorkerErrorDialog(err_data, self)
 
             def handle_retry_all():
@@ -1562,74 +1942,27 @@ class MainWindow(FluentWindow):
                 # 触发后也尝试重试任务
                 handle_retry_all()
 
+            def handle_fix(action: str) -> None:
+                """通用修复动作（启用 POT 引擎、安装 JS Runtime、检查代理……）。
+
+                和 `on_worker_warning` 里那条 InfoBar 走同一个 `execute_fix_action`，
+                按钮文案由 `recovery_hint` 提供，不在这里重写。
+                """
+                if not action:
+                    return
+                from fluentytdl.ui.components.settings.fix_registry import execute_fix_action
+
+                execute_fix_action(action, self)
+
             dlg.retry_all_requested.connect(handle_retry_all)
             dlg.go_settings_requested.connect(handle_go_settings)
             dlg.fetch_cookie_requested.connect(handle_fetch_cookie)
             dlg.update_ytdlp_requested.connect(handle_update_ytdlp)
+            dlg.fix_requested.connect(handle_fix)
 
-            print("[DEBUG] Executing WorkerErrorDialog...")
             dlg.exec()
-            print("[DEBUG] WorkerErrorDialog closed.")
         except Exception as e:
-            print(f"[ERROR] Exception in on_worker_error: {e}")
-            import traceback
-
-            traceback.print_exc()
+            logger.error(f"[MainWindow] on_worker_error 异常: {e}")
+            logger.exception(e)
         finally:
             self._worker_error_dialog_showing = False
-
-    def _show_cookie_repair(self, source_type, source_name: str, reason: str) -> None:
-        """
-        弹出 Cookie 修复引导（复用 CookieRepairDialog）
-
-        根据当前验证模式自动调整引导文案和按钮行为。
-        """
-        from fluentytdl.ui.components.dialogs.cookie_repair_dialog import CookieRepairDialog
-
-        from ..auth.auth_service import AuthSourceType
-        from ..auth.cookie_sentinel import cookie_sentinel
-
-        # 映射 auth_source 字符串
-        source_map = {
-            AuthSourceType.WEBVIEW2: "webview2",
-            AuthSourceType.FILE: "file",
-        }
-        auth_source_str = source_map.get(source_type, "browser")
-
-        dialog = CookieRepairDialog(reason, parent=self, auth_source=auth_source_str)
-
-        # 根据模式定制按钮文案
-        if dialog._auth_source == "webview2":
-            dialog.yesButton.setText(self.tr("重新登录"))
-        elif dialog._auth_source == "local":
-            dialog.yesButton.setText(self.tr("重新导入"))
-        elif dialog._auth_source == "browser":
-            dialog.yesButton.setText(self.tr("重新提取"))
-            dialog.setWindowTitle(self.tr("Cookie 文件需要更新"))
-        else:
-            dialog.yesButton.setText(self.tr("重新提取"))
-
-        # 自动修复信号
-        def on_auto_repair():
-            if source_type == AuthSourceType.WEBVIEW2:
-                # WebView2 → 跳转到设置页面的登录区域
-                dialog.accept()
-                self.switchTo(self.settings_interface)
-            elif source_type == AuthSourceType.FILE:
-                # 手动导入 → 跳转到设置页面
-                dialog.accept()
-                self.switchTo(self.settings_interface)
-            else:
-                # 浏览器提取 → 直接自动修复
-                success, message = cookie_sentinel.force_refresh_with_uac()
-                dialog.show_repair_result(success, message)
-
-        dialog.repair_requested.connect(on_auto_repair)
-
-        # 手动导入信号 → 跳转设置页
-        def on_manual_import():
-            self.switchTo(self.settings_interface)
-
-        dialog.manual_import_requested.connect(on_manual_import)
-
-        dialog.exec()

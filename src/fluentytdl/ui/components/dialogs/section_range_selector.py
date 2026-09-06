@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QPoint, QRect, Qt, Signal
+from PySide6.QtCore import QEasingCurve, QPoint, QPropertyAnimation, QRect, Qt, Signal
 from PySide6.QtGui import QMouseEvent, QPainter, QPalette
 from PySide6.QtWidgets import QHBoxLayout, QVBoxLayout, QWidget
 from qfluentwidgets import CaptionLabel, ComboBox, LineEdit, SwitchButton
 
 from ....core.section_download import SectionCutMode, TimeRange, parse_time_range
+
+_QWIDGETSIZE_MAX = 16777215
 
 
 def _format_time(seconds: float) -> str:
@@ -100,10 +102,16 @@ class SectionRangeSelector(QWidget):
     enabledChanged = Signal(bool)
     selectionChanged = Signal()
 
+    # 选项区展开/收起的时长。外层窗口的几何动画必须用同一个时长和缓动曲线，
+    # 否则 Qt 会在动画中途按布局最小高度把窗口顶回去，出现抖动。
+    OPTIONS_ANIM_MS = 220
+    OPTIONS_ANIM_EASING = QEasingCurve.Type.InOutQuad
+
     def __init__(self, duration: float, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._duration = max(0.0, float(duration))
         self._updating = False
+        self._options_anim: QPropertyAnimation | None = None
         self._init_ui()
 
     def _init_ui(self) -> None:
@@ -160,11 +168,69 @@ class SectionRangeSelector(QWidget):
         self.status_label = CaptionLabel("", self.options)
         options.addWidget(self.status_label)
         root.addWidget(self.options)
+        # 收起态用 maximumHeight=0 而不是仅 hide()：展开动画靠这个属性推进，
+        # 布局用 qSmartMinSize 把子控件的最小高度限制在 maximumHeight 内，
+        # 于是外层窗口的最小高度会跟着动画一起长高，而不是一步跳满。
+        self.options.setMaximumHeight(0)
         self.options.hide()
 
+    def options_extra_height(self) -> int:
+        """选项区完全展开后，外层需要额外腾出的垂直空间（含根布局间距）。"""
+        content = self._options_content_height()
+        if content <= 0:
+            return 0
+        root = self.layout()
+        spacing = root.spacing() if root is not None else 0
+        return content + max(0, spacing)
+
+    def _options_content_height(self) -> int:
+        height = self.options.sizeHint().height()
+        if height <= 0:
+            height = self.options.minimumSizeHint().height()
+        return max(0, height)
+
+    def _animate_options(self, expand: bool) -> None:
+        if self._options_anim is not None:
+            self._options_anim.stop()
+            self._options_anim = None
+
+        visible = self.options.isVisible()
+        content_h = self._options_content_height()
+        if expand:
+            start = self.options.height() if visible else 0
+            end = content_h
+            self.options.setMaximumHeight(start)
+            self.options.show()
+        else:
+            start = self.options.height() if visible else content_h
+            end = 0
+
+        if start == end:
+            self._finish_options_anim(expand)
+            return
+
+        anim = QPropertyAnimation(self.options, b"maximumHeight", self)
+        anim.setDuration(self.OPTIONS_ANIM_MS)
+        anim.setStartValue(start)
+        anim.setEndValue(end)
+        anim.setEasingCurve(self.OPTIONS_ANIM_EASING)
+        anim.finished.connect(lambda: self._finish_options_anim(expand))
+        self._options_anim = anim
+        anim.start()
+
+    def _finish_options_anim(self, expanded: bool) -> None:
+        if expanded:
+            # 放开上限，之后状态文本换行等自然重排不会被裁掉
+            self.options.setMaximumHeight(_QWIDGETSIZE_MAX)
+        else:
+            self.options.hide()
+            self.options.setMaximumHeight(0)
+        self._options_anim = None
+
     def _on_enabled_changed(self, enabled: bool) -> None:
-        self.options.setVisible(enabled)
+        # 先通知外层：窗口的几何动画要和下面的高度动画同一帧起步
         self.enabledChanged.emit(enabled)
+        self._animate_options(enabled)
         self.selectionChanged.emit()
 
     def _on_timeline_changed(self, start: float, end: float) -> None:

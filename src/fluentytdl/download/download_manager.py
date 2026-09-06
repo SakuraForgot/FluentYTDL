@@ -10,10 +10,123 @@ from typing import Any
 from PySide6.QtCore import QObject, Qt, Signal
 
 from ..core.config_manager import config_manager
+from ..observability import NO_ID, FlowTrace, emit_event, new_flow
 from ..storage.db_writer import db_writer
-from ..storage.task_db import task_db
+from ..storage.task_db import UNFINISHED_STATES, task_db
 from ..utils.logger import logger
 from .workers import DownloadWorker
+
+#: 从这两个状态迁出是非法的：任务已经收尾，不该再冒出新状态。
+#:
+#: **刻意不复用 `task_db.TERMINAL_STATES`** —— 那个集合含 `error`，而 `workers.py` 的
+#: 两条规则驱动重试路径都在 `force_update("error", ...)` 之后紧跟
+#: `force_update("parsing", ...)`，`error → parsing` 在同一个 worker 上完全合法。
+#:
+#: 也刻意做成"只封这两个"的黑名单，而不是穷举白名单：过严的迁移表会刷出一片假告警，
+#: 而假告警只会训练读日志的人忽略告警 —— 那比没有这张表更糟。未知状态一律放行。
+_SEALED_TRANSITION_SOURCES = frozenset({"completed", "cancelled"})
+
+
+def _emit_transition(worker: DownloadWorker, to_state: str, pct: float) -> None:
+    """状态迁移的**唯一**权威产生点（硬规则 1）。
+
+    为什么是这里：它同时具备三个条件 —— 有 `db_id`、下一句就要写 `task_db`、
+    处在"UI 状态 → 持久状态"的边界。落在这里的一条 `transition` 表达的是
+    **"这个状态已被系统接受"**，而不是"某个组件想让 UI 显示什么"。
+
+    **必须按状态变化去重。** `unified_status` 每个进度 tick 都带着
+    `state="downloading"` 触发本闭包，无条件 emit 会让 `count(kind=transition)`
+    随进度刷新翻上十几倍，所有基于事件的统计当场失效。
+
+    `from` 不能读 `worker._final_state`：`_on_clean_update()` 在 emit 信号**之前**
+    就把它改成了新值，而本闭包是 `QueuedConnection`，跑到这里时看到的已经是新值。
+    所以基线单独存一份 `_last_transition_state`。
+    """
+    prev = getattr(worker, "_last_transition_state", None)
+    if to_state == prev:
+        return
+    worker._last_transition_state = to_state
+    emit_event(
+        "transition",
+        trace=worker.trace,
+        level="WARNING" if prev in _SEALED_TRANSITION_SOURCES else "INFO",
+        # `from` 是 Python 关键字，只能走 `fields` 这条显式入口。
+        fields={"from": prev or NO_ID, "to": to_state, "pct": round(pct, 1)},
+    )
+
+
+#: 上个会话遗留的 state → 本次启动该给那个 run 补记的 outcome。
+#:
+#: **为什么终态审计只能在启动时做。** 被任务管理器强杀 / 断电的进程不可能 emit 自己的
+#: 终态 —— 再同步的 sink 也写不出一条从未产生的事件。唯一还补得上这一笔的地方就是下次
+#: 启动的恢复审计，而 `load_unfinished_tasks()` 本来就在逐行核对 `tasks` 表，只是一声不响。
+#:
+#: 两组的语义分得很开，不能合并：上一组是**执行到一半被打断**（`processing` 在 FFmpeg
+#: 合并期间发射，是发射次数最多的状态）；下一组是**从未真正开跑**，只是队列态被恢复 ——
+#: `suspend_pending()` 只挂起 `not isRunning() and not isFinished()` 的 worker，所以
+#: `quality_guard` 本质是 `queued` 的变体。
+#:
+#: `paused` 与 `error` 都不在表里，是刻意的：前者关机前本就是稳定态，后者的 run 早在上个
+#: 会话由错误边界给过 `outcome=failed`，再补一条就成了同一个 run 两个终态（破硬规则 4）。
+_INTERRUPTED_PRIOR_STATES = frozenset({"downloading", "parsing", "processing", "running"})
+_RESTORED_PENDING_PRIOR_STATES = frozenset({"queued", "quality_guard"})
+
+
+def _emit_recovery_audit(row: dict[str, Any], flow: FlowTrace | None) -> None:
+    """给上个会话没善终的 run 补一条迟到的 `outcome`。
+
+    **这是全项目唯一不走 `TaskTrace.finish()` 的 outcome 产生点**，两个理由都是硬的：
+
+    1. 没有活着的 trace 可以 `finish()`。run A 的 `TaskTrace` 随上个进程一起死了；
+       这里是从库里的 `last_run_id` 把它的身份**重建**出来，不是给一个活对象收尾。
+    2. `restored_pending` 必须能表达 `run=-`。那种任务从没 `start()` 过，
+       `_on_run_started` 也就从没落过 `last_run_id`；而 `TaskTrace.__post_init__` 见到
+       空 run_id 会**铸一个新的**，日志里于是凭空多出一个从未执行过的 run。`run=-` 才是实话。
+
+    exactly-once 不受影响：这一条是 run A **唯一**的 outcome（它自己那次根本没写出来），
+    随后恢复出的 run B 有它自己的终态边界。
+
+    identity 里的 `run` 取落库值、`flow` 取本轮启动的 `flow`：事件因此读作
+    `task=42 run=A outcome=interrupted`，指向刚死的那个 run，同时和随后在同一个 restore
+    flow 下铸出的 run B 挂进时间线的同一条链，闭环。
+    """
+    state = str(row.get("state") or "")
+    if state in _INTERRUPTED_PRIOR_STATES:
+        outcome = "interrupted"
+    elif state in _RESTORED_PENDING_PRIOR_STATES:
+        outcome = "restored_pending"
+    else:
+        return
+
+    audit = FlowTrace(
+        flow_id=flow.flow_id if flow is not None else "",
+        session_id=flow.session_id if flow is not None else "",
+        stage="startup",
+        task_id=str(row.get("id") or NO_ID),
+        # `interrupted` 正常都拿得到 run A；拿不到只说明是加列之前的老库行 —— 那也照发，
+        # 让"这个任务被打断过"这件事可见，比为了字段齐整而沉默有用。
+        run_id=str(row.get("last_run_id") or "") or NO_ID,
+    )
+    emit_event(
+        "outcome",
+        trace=audit,
+        level="WARNING" if outcome == "interrupted" else "INFO",
+        outcome=outcome,
+        # 字段形状与 `TaskTrace.finish()` 对齐，让 `kind=outcome` 在 JSONL 里 schema 恒定
+        # （`jq 'select(.kind=="outcome") | .degraded'` 不该时有时无）。三个都空 ——
+        # 被强杀的 run 没留下任何"已容忍"或"降级"的证据，凭空填就是编造。
+        recovered=False,
+        recovery=None,
+        degraded=False,
+        missing=[],
+        previous_state=state,
+        reason="unclean_shutdown" if outcome == "interrupted" else None,
+        # 上个会话 / 操作链只当**字段**记，不占 identity：identity 必须与写这条日志的进程
+        # 一致，否则 session Y 的日志里混进 session X 的事件，按 session 分组当场就乱。
+        # 当字段一样够用 —— bug 包据此反查得到 run A 原来那条 flow 的 JSONL。
+        previous_session=str(row.get("last_session_id") or "") or None,
+        previous_flow=str(row.get("last_flow_id") or "") or None,
+    )
 
 
 class DownloadManager(QObject):
@@ -22,6 +135,14 @@ class DownloadManager(QObject):
     status_msg = Signal(str)
     completed = Signal(str)
     worker_error = Signal(dict)
+    #: 任务**成功**了但有该说的话（目前只有字幕三码）。载荷同 `worker_error`，都是
+    #: `Diagnosis.to_dict()`；分成两个信号是因为去向不同 —— 错误弹模态框，这个只弹
+    #: InfoBar，绝不能打断用户。
+    worker_warning = Signal(dict)
+
+    # 启动恢复的单页大小。未完成任务通常只有几十条，分页只是为了给「几千条卡在
+    # paused」的极端库设一个每次查询的上界，不是为了惰性加载 —— 这里必须全取。
+    _RESTORE_PAGE = 500
 
     def __init__(self) -> None:
         super().__init__()
@@ -30,9 +151,42 @@ class DownloadManager(QObject):
         self.load_unfinished_tasks()
 
     def load_unfinished_tasks(self) -> None:
-        """从 TaskDB 加载未能完成的会话（崩溃或退出留下的）"""
-        tasks = task_db.get_all_tasks()
-        # tasks 是按照 created_at DESC 排序的，反转以按先后顺序加载
+        """从 TaskDB 加载未能完成的会话（崩溃或退出留下的）。
+
+        只查「未完成 + error」这几种状态，**不再 `get_all_tasks()`**：终态行归列表的
+        `fetchMore()` 分页负责（见 `storage/task_db.py` 里的状态所有权划分），
+        而 `get_all_tasks` 会把几万条已完成记录整表物化成 dict 再逐条 `continue` 掉
+        —— 启动耗时和内存都白花在这上面。
+
+        `error` 例外地也在这里恢复：它要在 UI 上以「可重试」的壳出现（下面会
+        `restore_state("error")` 但既不入队也不 start），并且过期的 error 行在这里
+        才有机会按 `failed_task_retention_days` 清掉。分页那边撞上同一个 `db_id`
+        会被 `_by_db_id` 去重，不会列两次。
+        """
+        tasks: list[dict[str, Any]] = []
+        page_key: tuple[float, int] | None = None
+        while True:
+            page = task_db.query_tasks(
+                states=UNFINISHED_STATES + ("error",),
+                limit=self._RESTORE_PAGE,
+                before_key=page_key,
+            )
+            if not page:
+                break
+            tasks.extend(page)
+            page_key = task_db.page_key(page[-1])
+            if len(page) < self._RESTORE_PAGE:
+                break
+
+        # tasks 是按 updated_at 倒序的，反转以按先后顺序加载（`add_task` 插在 row 0，
+        # 所以先加载的最终排在下面）。这和分页补进来的历史行同一个排序键，
+        # 融合后整个列表才是单调的。
+        #
+        # 这一整轮恢复算**一个 flow**：它本身就是一次用户操作链（启动），而且 P1-B 的
+        # 恢复审计要把 `outcome=interrupted` 挂在同一条链上，才能和随后铸出的新 run
+        # 在时间线里串起来。
+        restore_flow = new_flow(stage="startup") if tasks else None
+
         for row in reversed(tasks):
             state = row.get("state", "queued")
             if state in ("completed", "cancelled"):
@@ -50,6 +204,12 @@ class DownloadManager(QObject):
                 # 不自动重试，仅保持 error 状态展示在 UI
                 pass  # 将在下方创建 Worker 壳
 
+            # 恢复审计必须在**下面那次状态降级之前**：那里会把 running/downloading/
+            # parsing/processing/queued 一律改写成 paused，改完就再也看不出上个会话
+            # 究竟死在哪个阶段 —— 而"死在哪个阶段"正是 interrupted 与 restored_pending
+            # 的分界。读的是 `row`（原始持久值），降级只动局部变量和库，不动它。
+            _emit_recovery_audit(row, restore_flow)
+
             opts = json.loads(row.get("ydl_opts_json", "{}"))
 
             # skip_download 任务（纯字幕/封面提取）不应跨会话恢复：
@@ -61,8 +221,11 @@ class DownloadManager(QObject):
                 )
                 continue
 
-            # 如果重启前是运行、解析或排队状态，一律自动降级为暂停，不自动恢复下载
-            if state in ("running", "downloading", "parsing", "queued"):
+            # 如果重启前是运行、解析、后处理或排队状态，一律自动降级为暂停，不自动恢复下载。
+            # `processing`（FFmpeg 合并 / 嵌字幕 / 封面）必须在列：它以前不在这个元组里，
+            # 也不在 `UNFINISHED_STATES` 里，于是合并期间关软件的任务两条加载路径都捞不到，
+            # 直接从 UI 消失。
+            if state in ("running", "downloading", "parsing", "processing", "queued"):
                 state = "paused"
                 task_db.update_task_status(
                     row["id"], state, row.get("progress", 0.0), "⏸️ 下载已暂停 (应用重启)"
@@ -72,9 +235,9 @@ class DownloadManager(QObject):
             if state == "error":
                 cached = {"title": row.get("title", ""), "thumbnail": row.get("thumbnail_url", "")}
                 worker = self.create_worker(
-                    row["url"], opts, cached_info=cached, restore_db_id=row["id"]
+                    row["url"], opts, cached_info=cached, restore_db_id=row["id"], flow=restore_flow
                 )
-                worker._final_state = "error"
+                worker.restore_state("error")
                 worker.progress_val = row.get("progress", 0.0)
                 worker.status_text = row.get("status_text", "")
                 worker.v_title = row.get("title", "")
@@ -85,11 +248,11 @@ class DownloadManager(QObject):
             cached = {"title": row.get("title", ""), "thumbnail": row.get("thumbnail_url", "")}
 
             worker = self.create_worker(
-                row["url"], opts, cached_info=cached, restore_db_id=row["id"]
+                row["url"], opts, cached_info=cached, restore_db_id=row["id"], flow=restore_flow
             )
 
             # 手工同步 Worker 上下文使其与 DB 呈现一致
-            worker._final_state = state
+            worker.restore_state(state)
             worker.progress_val = row.get("progress", 0.0)
             worker.status_text = row.get("status_text", "")
             worker.v_title = row.get("title", "")
@@ -181,8 +344,10 @@ class DownloadManager(QObject):
         opts: dict[str, Any],
         cached_info: dict[str, Any] | None = None,
         restore_db_id: int = 0,
+        *,
+        flow: FlowTrace | None = None,
     ) -> DownloadWorker:
-        worker = DownloadWorker(url, opts, cached_info=cached_info)
+        worker = DownloadWorker(url, opts, cached_info=cached_info, flow=flow)
 
         # 1. 登记入库，建立 Worker 的持久化主键
         if restore_db_id > 0:
@@ -196,8 +361,27 @@ class DownloadManager(QObject):
                 t_thumb = cached_info.get("thumbnail", "")
                 db_writer.enqueue_metadata(db_id, t_title, str(t_thumb) if t_thumb else "")
 
+        # 2. 把 flow → task 钉进日志。解析/选择阶段的事件只带 `flow=k72f task=-`，
+        # 这条 identity 是**事后**从 task 反查回解析段的唯一线索（bug 包据此收集）。
+        # 必须在 db_id 赋值之后：在此之前 trace 的 task_id 还是占位符。
+        worker.trace.bind_task_id(worker.db_id)
+
         # 3. 建立单写者“过桥”连接 (强制在 QObject 的宿主线程即主线程执行写操作)
+        def _on_run_started():
+            # `QThread.started` 每次 `start()` 恰好一次 —— 也就是一个 run 恰好一次。
+            # 挂在这里而不是 worker 内部：DB 写入归本层，`workers.py` 不碰 storage。
+            # 只有真正跑起来的 run 才落库，恢复出来当壳用的 worker（error 行、排队行）
+            # 不会污染 `last_run_id`，否则下次启动的恢复审计会给一个从未执行的 run
+            # 记 `outcome=interrupted`。
+            trace = worker.trace
+            db_writer.enqueue_run_identity(
+                worker.db_id, trace.session_id, trace.run_id, trace.flow_id
+            )
+
         def _on_unified_status(state: str, pct: float, msg: str):
+            # 先落 transition 再写库：两句都在主线程、同一个 tick 内完成，顺序不影响
+            # 结果，但"日志里看到已接受 → 库里才有"读起来才是因果顺序。
+            _emit_transition(worker, state, pct)
             db_writer.enqueue_status(worker.db_id, state, pct, msg)
 
         def _on_output_ready(path: str):
@@ -223,6 +407,7 @@ class DownloadManager(QObject):
             self.task_updated.emit()
             self.worker_error.emit(err)
 
+        worker.started.connect(_on_run_started, Qt.ConnectionType.QueuedConnection)
         worker.unified_status.connect(_on_unified_status, Qt.ConnectionType.QueuedConnection)
         worker.output_path_ready.connect(_on_output_ready, Qt.ConnectionType.QueuedConnection)
 
@@ -233,6 +418,8 @@ class DownloadManager(QObject):
         worker.completed.connect(_on_completed)
         worker.cancelled.connect(self.task_updated.emit)
         worker.error.connect(_on_error)
+        # 只转发，不 task_updated：任务状态没变（还是 completed），刷列表纯属白刷。
+        worker.task_warning.connect(self.worker_warning.emit)
         return worker
 
     def _on_worker_finished(self, worker: DownloadWorker) -> None:

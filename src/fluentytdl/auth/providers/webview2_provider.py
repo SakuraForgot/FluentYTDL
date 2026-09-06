@@ -25,6 +25,7 @@ from pathlib import Path
 from typing import Any
 
 from ...utils.logger import logger
+from ..webview2_runtime import WEBVIEW2_DOWNLOAD_URL, is_webview2_runtime_available
 
 # ==================== 常量 ====================
 
@@ -195,13 +196,29 @@ def _webview_subprocess(
     if start_hidden:
         window_kwargs["hidden"] = True
 
+    # **外层 except 不能省。** 内层 TypeError 只兼容"旧版 pywebview 不认 hidden 参数"，
+    # 而缺 WebView2 Runtime 时 create_window / start 抛的是 WebViewException 之类的
+    # 其它异常 —— 不接住它，子进程就直接死了，队列里永远不会有消息，父进程干等 330 秒。
+    # 那正是用户报的"点击登录卡死"。
     try:
-        window = webview.create_window(**window_kwargs)
-        _log("create_window 成功")
-    except TypeError:
-        window_kwargs.pop("hidden", None)
-        window = webview.create_window(**window_kwargs)
-        _log("create_window 成功 (fallback, 无 hidden)")
+        try:
+            window = webview.create_window(**window_kwargs)
+            _log("create_window 成功")
+        except TypeError:
+            window_kwargs.pop("hidden", None)
+            window = webview.create_window(**window_kwargs)
+            _log("create_window 成功 (fallback, 无 hidden)")
+    except Exception as exc:
+        import traceback
+
+        tb = traceback.format_exc()
+        error_msg = (
+            f"创建登录窗口失败: {exc}\n"
+            f"这通常意味着系统缺少 Microsoft Edge WebView2 运行时。\n{tb}"
+        )
+        _log(error_msg)
+        _send_and_close({"error": error_msg, "code": "webview2_unavailable"})
+        return
 
     # ── 后台轮询线程 ──
     def _background_poll(win):
@@ -334,12 +351,26 @@ def _webview_subprocess(
     window.events.closed += _on_closed
 
     _log("调用 webview.start() ...")
-    webview.start(
-        func=_background_poll,
-        args=(window,),
-        private_mode=False,
-        storage_path=cache_dir,
-    )
+    try:
+        webview.start(
+            func=_background_poll,
+            args=(window,),
+            private_mode=False,
+            storage_path=cache_dir,
+        )
+    except Exception as exc:
+        # 缺 WebView2 Runtime 时异常最常在这里抛出（EdgeChromium 后端初始化失败）。
+        # 必须回传，否则父进程无从得知子进程已经死了。
+        import traceback
+
+        tb = traceback.format_exc()
+        error_msg = (
+            f"启动登录窗口失败: {exc}\n"
+            f"这通常意味着系统缺少 Microsoft Edge WebView2 运行时。\n{tb}"
+        )
+        _log(error_msg)
+        _send_and_close({"error": error_msg, "code": "webview2_unavailable"})
+        return
     _log("webview.start() 已返回（子进程即将退出）")
 
 
@@ -416,6 +447,19 @@ class WebView2CookieProvider:
         reveal_after_seconds: int = 8,
     ) -> list[dict[str, Any]] | None:
         """启动 WebView2 登录窗口并提取 Cookie。"""
+        # **服务层兜底预检。** UI 层（settings_page）也会先探测一次并给出可操作的
+        # 引导，但这里必须再挡一道：下载失败自动修复等路径不经过 UI，直接调到这里。
+        available, _version = is_webview2_runtime_available()
+        if not available:
+            msg = (
+                "未检测到 Microsoft Edge WebView2 运行时，无法使用登录模式。\n"
+                "请前往以下地址安装后重试，或在设置中改用「浏览器提取」/「手动导入」：\n"
+                + WEBVIEW2_DOWNLOAD_URL
+            )
+            logger.warning("[WebView2] 预检失败：缺少 WebView2 运行时，已跳过子进程启动")
+            self._set_error_status(msg)
+            return None
+
         login_url = X_HOME if platform == "twitter" else YOUTUBE_HOME
 
         cache_dir = storage_path or str(
@@ -452,10 +496,15 @@ class WebView2CookieProvider:
                 f"[WebView2] 子进程已启动 (PID: {process.pid}, session={session_label})，等待用户登录..."
             )
 
-            try:
-                result = cookie_queue.get(timeout=timeout + 30)
-            except Exception:
-                result = None
+            # **边等队列边查子进程存活。** 旧实现是一句
+            # `cookie_queue.get(timeout=timeout + 30)`：子进程一旦静默死亡（缺
+            # WebView2 运行时是最常见的原因），队列里永远不会有消息，这里就要阻塞
+            # 满 330 秒 —— 期间 CookieSentinel 的更新锁被握着、登录按钮被禁用，
+            # 用户看到的就是整个 Cookie 子系统卡死。
+            #
+            # 换成 1 秒粒度的轮询后，子进程崩溃在秒级就能返回。正常登录路径不受
+            # 影响：用户真的在登录时子进程活着，循环只是空转。
+            result = self._wait_for_result(cookie_queue, process, timeout + 30)
 
             if result is None:
                 logger.warning("[WebView2] 未收到子进程响应 (超时)")
@@ -489,6 +538,49 @@ class WebView2CookieProvider:
                 process.join(timeout=5)
                 if process.is_alive():
                     process.kill()
+
+    @staticmethod
+    def _wait_for_result(
+        cookie_queue: multiprocessing.Queue,
+        process: multiprocessing.Process,
+        deadline_seconds: float,
+    ) -> dict | None:
+        """等待子进程回传，同时监控它是否还活着。
+
+        返回 None 表示真超时（子进程还活着但一直没给结果，通常是用户没登录）。
+
+        子进程死亡后**仍要再取一次队列**：`_send_and_close()` 把数据放进队列后
+        子进程可能立刻退出，此时 `is_alive()` 已为 False 但数据还在管道里。
+        直接返回错误会把一次成功的登录判成失败。
+        """
+        import queue as _queue
+
+        deadline = time.monotonic() + deadline_seconds
+
+        while time.monotonic() < deadline:
+            try:
+                return cookie_queue.get(timeout=1.0)
+            except _queue.Empty:
+                if not process.is_alive():
+                    # 子进程已退出，最后捞一次残留数据
+                    try:
+                        return cookie_queue.get(timeout=0.5)
+                    except Exception:
+                        pass
+                    logger.warning("[WebView2] 子进程意外退出且未回传任何结果")
+                    return {
+                        "error": (
+                            "登录窗口意外退出。\n"
+                            "最常见的原因是系统缺少 Microsoft Edge WebView2 运行时，"
+                            "可前往以下地址安装后重试：\n" + WEBVIEW2_DOWNLOAD_URL
+                        ),
+                        "code": "webview2_unavailable",
+                    }
+            except Exception as e:
+                logger.warning(f"[WebView2] 读取子进程队列异常: {e}")
+                return None
+
+        return None
 
     @staticmethod
     def _set_error_status(message: str) -> None:

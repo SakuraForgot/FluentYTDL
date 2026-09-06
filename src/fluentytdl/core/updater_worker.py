@@ -21,11 +21,38 @@ except ImportError:
     HAS_PSUTIL = False
 
 
+#: 从 worker 传回父进程的**稳定错误码**。父进程把它当 code 直接放进
+#: `download_error` 信号（进日志），UI 侧负责翻成本地化文案 —— 所以这里绝不能放
+#: 给人看的句子（CLAUDE.md §5）。人类可读的细节走 `detail` 字段，只进日志。
+ERR_BAD_INPUT = "worker_bad_input"
+ERR_MISSING_PARAMS = "worker_missing_params"
+ERR_HASH_MISMATCH = "worker_hash_mismatch"
+ERR_DOWNLOAD_FAILED = "worker_download_failed"
+
+#: yt-dlp 安装完会清理 exe 所在目录，这里是**不许删**的名字。
+#:
+#: `yt-dlp-plugins/` 必须留下：编译版 yt-dlp 只从 exe 旁边这个目录加载 POT 插件
+#: （CLAUDE.md §4 规则 6）。以前它会被一起删掉，而 `_sync_pot_plugins_locked()` 的
+#: 记忆化在 `target_dir.exists()` 检查**之前**就返回缓存值了 —— 指纹是
+#: `(exe 路径, 源文件指纹)`，清理不改变其中任何一项，所以装完再调 sync 也修不回来。
+#: 只能从源头不删。
+_PURGE_KEEP_NAMES = ("manifest.json", "yt-dlp-plugins")
+
+
+class HashMismatch(Exception):
+    """下载内容的 sha256 与预期不符。"""
+
+
 def print_message(msg_type: str, **kwargs):
     # msg_type: "progress", "done", "error", "status"
     msg = {"type": msg_type}
     msg.update(kwargs)
     print(json.dumps(msg), flush=True)
+
+
+def print_error(code: str, detail: str = ""):
+    """`code` 给父进程和日志，`detail` 只用于日志排查。"""
+    print_message("error", code=code, msg=code, detail=detail)
 
 
 def build_opener(
@@ -164,7 +191,7 @@ def run_worker():
         raw_input = sys.stdin.read()
         config = json.loads(raw_input)
     except Exception as e:
-        print_message("error", msg=f"Invalid JSON input: {e}")
+        print_error(ERR_BAD_INPUT, str(e))
         return 1
 
     key = config.get("key")
@@ -178,7 +205,7 @@ def run_worker():
     proxy_mode = config.get("proxy_mode")
 
     if not all([key, url, target_exe_str]):
-        print_message("error", msg="Missing required parameters")
+        print_error(ERR_MISSING_PARAMS)
         return 1
 
     target_exe = Path(target_exe_str)
@@ -227,8 +254,8 @@ def run_worker():
             if expected_sha256:
                 actual_sha256 = sha256_hash.hexdigest()
                 if actual_sha256.upper() != expected_sha256.upper():
-                    raise ValueError(
-                        f"Hash mismatch: expected {expected_sha256}, got {actual_sha256}"
+                    raise HashMismatch(
+                        f"expected {expected_sha256[:16]}…, got {actual_sha256[:16]}…"
                     )
 
         dest_dir = target_exe.parent
@@ -249,13 +276,18 @@ def run_worker():
             manifest_path = dest_dir / "manifest.json"
             try:
                 with open(manifest_path, "w", encoding="utf-8") as f:
+                    # `version` 只写**裸版本号**。以前 `expected_version` 传进来时
+                    # 已经带着 " (nightly)"，写进去就成了二次编码
+                    # （`"2026.08.20.234504 (nightly)"`），频道信息一份在括号里一份
+                    # 在 `channel` 键里，读的时候还得猜信哪个。
                     json.dump({"version": expected_version, "channel": expected_channel}, f)
             except Exception:
                 pass
 
             try:
+                keep = {target_exe.name, *_PURGE_KEEP_NAMES}
                 for item in dest_dir.iterdir():
-                    if item.name not in (target_exe.name, "manifest.json"):
+                    if item.name not in keep:
                         if item.is_file():
                             item.unlink(missing_ok=True)
                         elif item.is_dir():
@@ -266,8 +298,16 @@ def run_worker():
         print_message("done")
         return 0
 
+    except HashMismatch as e:
+        print_error(ERR_HASH_MISMATCH, str(e))
+        if tmp_path and os.path.exists(tmp_path):
+            try:
+                os.remove(tmp_path)
+            except Exception:
+                pass
+        return 1
     except Exception as e:
-        print_message("error", msg=str(e))
+        print_error(ERR_DOWNLOAD_FAILED, f"{type(e).__name__}: {e}")
         if tmp_path and os.path.exists(tmp_path):
             try:
                 os.remove(tmp_path)

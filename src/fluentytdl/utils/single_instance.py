@@ -84,8 +84,8 @@ class SingleInstanceChecker(QObject):
 
         dummy.show()
 
-        w = MessageBox("提示", "FluentYTDL 已经在运行中。", dummy)
-        w.yesButton.setText("确定")
+        w = MessageBox(self.tr("提示"), self.tr("FluentYTDL 已经在运行中。"), dummy)
+        w.yesButton.setText(self.tr("确定"))
         w.cancelButton.hide()
         w.exec()
 

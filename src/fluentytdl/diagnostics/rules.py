@@ -53,6 +53,20 @@ class LoadedRule:
     fix_action: str | None
     component: str  # 空串表示不限定组件
     patterns: tuple[LoadedPattern, ...]
+    # 允许匹配没有 `ERROR:` / `WARNING:` 前缀的裸行。yt-dlp 有一类关键信息只走
+    # `[info]`（如 `There are no subtitles for the requested languages`），
+    # `parse_events` 的正常通道拿不到 level，会整行丢弃。默认关闭：绝大多数规则
+    # 一旦放开裸行匹配就会被进度行、文件名里的偶然字样命中。
+    bare_line: bool = False
+    # 命中 `ERROR:` 行时把事件降级成 warning。给"子请求失败但任务照旧"的那类行用：
+    # yt-dlp 对单条字幕轨的失败打的是
+    # `ERROR: Unable to download video subtitles for 'zh-Hans-en-GB': HTTP Error 429`，
+    # 前缀描述的是**那一次子请求**，不是整个任务 —— 它照样会继续下别的语言并正常收尾。
+    # 不降级的话，这类行会带着自己的高 priority 进入 error 层，把真正的失败原因
+    # （`bot_check_sign_in`、`video_unavailable` 之类）挤下去。降级后它落在 warning
+    # 层，`pick_primary` 的"error 压 warning"就成了免费的护栏：任务真失败时永远轮不到
+    # 它当主因，任务成功时（`_scan_subtitle_warnings` 用 rc=0 调用）又能正常冒出来。
+    demote_to_warning: bool = False
 
     def applies_to_level(self, level: Level) -> bool:
         if self.applies_to == "both":
@@ -167,6 +181,8 @@ def _parse_rule(raw: Any) -> LoadedRule | None:
         fix_action=fix_action or None,
         component=str(raw.get("component", "") or "").lower(),
         patterns=patterns,
+        bare_line=bool(raw.get("bareLine")),
+        demote_to_warning=bool(raw.get("demoteToWarning")),
     )
 
 
@@ -198,9 +214,7 @@ def _merge(base: list[LoadedRule], extra: list[LoadedRule]) -> list[LoadedRule]:
     return merged
 
 
-def load_rule_set(
-    packaged_path: Path | None = None, override_path: Path | None = None
-) -> RuleSet:
+def load_rule_set(packaged_path: Path | None = None, override_path: Path | None = None) -> RuleSet:
     """加载并合并规则表。任何一层失败都不会抛异常。"""
     packaged_path = packaged_path or _packaged_rules_path()
     override_path = override_path or _override_rules_path()
@@ -223,7 +237,9 @@ def load_rule_set(
     if not rules:
         # 内置规则缺失是部署事故（打包漏了 assets），但不能让下载流程崩掉：
         # 引擎会退化成纯兜底（HTTP 码 + extractor 名提取），仍然可用。
-        logger.warning("[diagnostics] 未加载到任何内置规则，诊断将退化为兜底模式: {}", packaged_path)
+        logger.warning(
+            "[diagnostics] 未加载到任何内置规则，诊断将退化为兜底模式: {}", packaged_path
+        )
 
     override = _read_json(override_path)
     if override is not None:

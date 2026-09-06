@@ -80,7 +80,9 @@ class ParsePage(QWidget):
         self.inputLayout = QHBoxLayout()
 
         self.urlInput = LineEdit(self)
-        self.urlInput.setPlaceholderText("https://www.youtube.com/... 或 https://x.com/...")
+        self.urlInput.setPlaceholderText(
+            self.tr("https://www.youtube.com/... 或 https://x.com/...")
+        )
         self.urlInput.setClearButtonEnabled(True)
         self.urlInput.setMinimumWidth(560)
         self.urlInput.returnPressed.connect(self.on_parse_clicked)

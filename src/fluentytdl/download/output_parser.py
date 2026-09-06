@@ -33,7 +33,18 @@ class DownloadProgress:
 class ParsedLine:
     """单行解析结果。"""
 
-    type: str  # "progress" | "destination" | "merge" | "postprocess" | "status" | "subtitle" | "unknown"
+    type: str
+    """行类别，取值：
+
+    `progress` | `ffmpeg_progress` | `destination` | `merge` | `postprocess` |
+    `subtitle` | `status` | `warning` | `error` | `info` | `unknown`
+
+    `error` / `info` 是后加的：`ERROR:` 行以前和
+    `[info] There are no subtitles for the requested languages` 一样落进 `unknown`
+    兜底，而 `unknown` 在 `executor` 里没有任何分支 —— 那句"为什么没有字幕"就是这么
+    消失的（见 `FluentYTDL-字幕下载问题排查报告.md`）。
+    """
+
     progress: DownloadProgress | None = None
     path: str | None = None  # 目标文件路径
     message: str | None = None  # 状态消息
@@ -69,6 +80,22 @@ class YtDlpOutputParser:
     # stderror warnings from yt-dlp
     _RE_WARNING = re.compile(r"^WARNING:\s*(.*)", re.IGNORECASE)
 
+    # ERROR: [youtube] xxx: Video unavailable
+    # `--no-warnings` 压不住 ERROR，但以前没有分支接它，一样落进 unknown 被丢掉
+    _RE_ERROR = re.compile(r"^ERROR:\s*(.*)", re.IGNORECASE)
+
+    # [info] Downloading 1 format(s): 315+251
+    _RE_INFO = re.compile(r"^\[info\]\s*(.*)", re.IGNORECASE)
+
+    # [info] Writing video subtitles to: D:\path\Title.en-GB.vtt
+    # [info] Writing video thumbnail 41 to: D:\path\Title.webp
+    # 显式锚在 ` to: ` 上：Windows 路径自带盘符冒号，`split(":", 1)` 只是碰巧没出事
+    _RE_WRITING_TO = re.compile(
+        r"\bWriting\s+(?P<kind>video\s+subtitles|video\s+thumbnail(?:\s+\S+)?)\s+to:\s*"
+        r"(?P<path>\S.*?)\s*$",
+        re.IGNORECASE,
+    )
+
     # [download] Destination: path/to/file.mp4
     _RE_DEST = re.compile(r"^\[download\]\s+Destination:\s+(?P<path>.+)$")
 
@@ -95,6 +122,7 @@ class YtDlpOutputParser:
         "FFmpegExtractAudio": "提取音频",
         "FFmpegVideoConvertor": "转换视频格式",
         "FFmpegEmbedSubtitle": "嵌入字幕",
+        "FFmpegSubtitlesConvertor": "转换字幕格式",
         "SponsorBlock": "跳过赞助片段",
         "ModifyChapters": "修改章节",
     }
@@ -104,34 +132,40 @@ class YtDlpOutputParser:
         if not line:
             return ParsedLine(type="unknown")
 
-        # 0. Warning
+        # 0. Warning / Error
         wm = self._RE_WARNING.match(line)
         if wm:
             return ParsedLine(type="warning", message=wm.group(1).strip())
+
+        em = self._RE_ERROR.match(line)
+        if em:
+            return ParsedLine(type="error", message=em.group(1).strip())
 
         # 1. 结构化进度行 (FLUENTYTDL|...)
         if line.startswith(self.PROGRESS_PREFIX):
             return self._parse_structured_progress(line)
 
-        # 2. 字幕下载提示
-        if "Writing video subtitles to:" in line:
-            parts = line.split(":", 1)
-            path = parts[1].strip() if len(parts) > 1 else None
+        # 2. 字幕 / 封面落盘路径
+        #    两者都复用 `subtitle` 类型：executor 靠它把路径记进 `dest_paths`，
+        #    而 `dest_paths` 是字幕后处理第 1 级定位的唯一来源。
+        wt = self._RE_WRITING_TO.search(line)
+        if wt:
             return ParsedLine(
                 type="subtitle",
-                path=path,
+                path=wt.group("path").strip().strip('"'),
                 message=line,
             )
 
-        # 2.5 封面下载提示
-        if "Writing video thumbnail" in line and "to:" in line:
-            parts = line.split("to:", 1)
-            path = parts[1].strip() if len(parts) > 1 else None
-            return ParsedLine(
-                type="subtitle",  # 复用 subtitle 类型以复用 executor 中的路径跟踪逻辑
-                path=path,
-                message=line,
-            )
+        # 2.5 其余 `[info]` 行
+        #     必须排在上面两条之后 —— 它们本身就是 `[info]` 前缀。
+        #     `[info] There are no subtitles for the requested languages` 走这条：
+        #     以前它落进末尾的 `unknown`，而 executor 没有 `unknown` 分支，于是
+        #     "字幕为什么是空的"这个唯一线索被静默丢弃。
+        #     `message` 刻意保留 `[info]` 前缀（不像 warning/error 那样剥掉）：
+        #     `clean_logger:157` 靠 `startswith("[info]")` 撑着"正在获取流媒体元数据"
+        #     这个界面状态，剥掉前缀会把它一起弄没。
+        if self._RE_INFO.match(line):
+            return ParsedLine(type="info", message=line)
 
         # 3. 字幕转换
         if "[FFmpegSubtitlesConvertor]" in line:

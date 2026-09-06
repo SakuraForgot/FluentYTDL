@@ -222,8 +222,16 @@ def resolve_format_with_guard(
     intent_preset_id: str | None,
     download_type: str = "video_audio",
     source_path: str = "",
+    trace: Any = None,
 ) -> tuple[str, dict, QualityIntent, QualityVerdict | None]:
-    """统一格式解析 + 质量意图锚定 + 预检。"""
+    """统一格式解析 + 质量意图锚定 + 预检。
+
+    Args:
+        trace: 可选的 `FlowTrace` / `TaskTrace`。**必须显式传**：这个函数跑在 GUI 线程上，
+            而 `current_flow()` 是 per-thread ContextVar、在 GUI 线程上恒为 None ——
+            靠它取 flow 会让每条事件都变成 `flow=-` 的孤儿。缺省不传只是少了标识，
+            事件照发（观测永远 best-effort）。
+    """
 
     fallback_policy = str(config_manager.get("quality_guard_mode", "warn"))
 
@@ -250,6 +258,40 @@ def resolve_format_with_guard(
         verdict = QualityGuard.preflight_quality_check(formats_list, intent)
 
     extra_opts["__fluentytdl_quality_intent"] = intent.to_dict()
+
+    # ── 画质意图与预检裁决落日志 ──
+    # 这两样以前只存在于内存和 UI 里：`QualityIntent` 被塞进 `extra_opts` 一路带到
+    # worker，`QualityVerdict` 只在 `QualityGuardManager.on_quality_warning()` 连续
+    # 三次超阈值时才写一行日志。于是"我明明选了 1080p 结果下到 720p"在日志里毫无痕迹。
+    from ..observability import emit_event
+
+    emit_event(
+        "expect",
+        trace=trace,
+        stage="select",
+        subsystem="quality_guard",
+        fmt=format_str,
+        **intent.to_dict(),
+    )
+    if verdict is not None:
+        # 用 `decision` 而不是 `actual`：这是**预检**（拿可用 formats 对目标做的判断），
+        # 不是下载完的事实。`kind=actual` 每个 run 只该有产物那一条，混进来就没法
+        # 靠 `count(kind=actual)` 判断验证有没有跑过。
+        emit_event(
+            "decision",
+            trace=trace,
+            level="WARNING" if not verdict.passed else "INFO",
+            stage="preflight",
+            subsystem="quality_guard",
+            passed=verdict.passed,
+            target_height=intent.target_height,
+            actual_height=verdict.actual_height,
+            actual_format_id=verdict.actual_format_id,
+            actual_vcodec=verdict.actual_vcodec,
+            deviation=verdict.deviation or None,
+            deviation_severity=verdict.deviation_severity,
+            fallback_policy=fallback_policy,
+        )
 
     return format_str, extra_opts, intent, verdict
 

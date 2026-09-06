@@ -1,7 +1,71 @@
 {
-  "version": 1,
+  "version": 2,
   "fallbackCode": "unknown",
   "rules": [
+    {
+      "code": "sabr_formats_skipped",
+      "category": "toolchain",
+      "severity": "warning",
+      "appliesTo": "warning",
+      "priority": 99,
+      "retry": { "policy": "after_fix" },
+      "fix": "enable_pot_provider",
+      "patterns": [
+        { "kind": "substr", "value": "forcing SABR streaming" },
+        { "kind": "substr", "value": "formats have been skipped as they are missing a url" }
+      ]
+    },
+    {
+      "code": "subtitle_download_rate_limited",
+      "category": "network",
+      "severity": "warning",
+      "appliesTo": "both",
+      "demoteToWarning": true,
+      "priority": 98,
+      "retry": { "policy": "never" },
+      "fix": "switch_proxy",
+      "patterns": [
+        {
+          "kind": "regex",
+          "value": "Unable to download .{0,40}(?:subtitles|captions).{0,80}(?:429|Too Many Requests)"
+        }
+      ]
+    },
+    {
+      "code": "subtitle_pot_required",
+      "category": "auth",
+      "severity": "warning",
+      "appliesTo": "both",
+      "demoteToWarning": true,
+      "priority": 97,
+      "retry": { "policy": "never" },
+      "fix": "enable_pot_provider",
+      "patterns": [
+        {
+          "kind": "regex",
+          "value": "(?:subtitles?|captions?|subs)\\b.{0,80}(?:po[ _-]?token|potoken)"
+        },
+        {
+          "kind": "regex",
+          "value": "(?:po[ _-]?token|potoken).{0,80}(?:subtitles?|captions?|subs)\\b"
+        }
+      ]
+    },
+    {
+      "code": "js_runtime_missing",
+      "category": "toolchain",
+      "severity": "warning",
+      "appliesTo": "warning",
+      "priority": 96,
+      "retry": { "policy": "never" },
+      "fix": "install_js_runtime",
+      "patterns": [
+        { "kind": "substr", "value": "No supported JavaScript runtime" },
+        { "kind": "substr", "value": "without a JS runtime has been deprecated" },
+        { "kind": "substr", "value": "--js-runtimes" },
+        { "kind": "substr", "value": "wiki/EJS" }
+      ]
+    },
     {
       "code": "nsig_extraction_failed",
       "category": "toolchain",
@@ -12,7 +76,7 @@
       "fix": "update_component",
       "patterns": [
         { "kind": "substr", "value": "nsig extraction failed" },
-        { "kind": "substr", "value": "Some formats may be missing" }
+        { "kind": "regex", "value": "(?:nsig|signature)[^\\n]{0,80}some formats may be missing" }
       ]
     },
     {
@@ -655,6 +719,22 @@
       "patterns": [
         { "kind": "substr", "value": "has already been downloaded" },
         { "kind": "substr", "value": "has already been recorded in the archive" }
+      ]
+    },
+    {
+      "code": "subtitles_no_language_match",
+      "category": "media",
+      "severity": "warning",
+      "appliesTo": "warning",
+      "priority": 28,
+      "retry": { "policy": "never" },
+      "fix": null,
+      "bareLine": true,
+      "patterns": [
+        {
+          "kind": "substr",
+          "value": "There are no subtitles for the requested languages"
+        }
       ]
     }
   ]

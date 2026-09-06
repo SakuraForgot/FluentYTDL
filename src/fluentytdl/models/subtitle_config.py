@@ -10,6 +10,36 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Literal
 
+# ── ydl_opts 里的私有键 ────────────────────────────────────────
+# 都以 `__fluentytdl_` 开头，`utils/quick_opts.py` 的透传逻辑按前缀整体放行。
+
+SUBTITLE_PREFS_KEY = "__fluentytdl_subtitle_prefs"
+"""**意图**：用户想要哪些语言（`["zh-Hans", "en"]` 这样的偏好，不是真实字幕键）。
+
+生产端（配置窗口 / 快速下载）只声明意图，由 `workers.py` 在拿到 info dict 之后
+解析成真实字幕键写进 `subtitleslangs`。
+
+直接把偏好写进 `subtitleslangs` 是本次修复的病根：`--sub-langs` 的每一项被
+yt-dlp 当成**锚定正则**，裸 `en` 匹配不到真实键 `en-GB`，一个 `.vtt` 都不会写出来。
+"""
+
+SUBTITLE_RESOLUTION_KEY = "__fluentytdl_subtitle_resolution"
+"""**结果**：偏好解析成了什么。用于日志、UI 提示和"为什么没有字幕"的追责。
+
+结构见 `processing/subtitle_service.build_resolution_meta()`。
+"""
+
+SUBTITLE_CONFIG_KEY = "__fluentytdl_subtitle_config"
+"""**上下文**：解析偏好时要遵守哪些设置（`SubtitleConfig.to_dict()` 的产物）。
+
+只有 `SUBTITLE_PREFS_KEY` 时无法迟解析出与"已解析行"一致的结果：`writeautomaticsub`
+是个布尔，表达不了 `type_preference` —— 而默认的 `MANUAL_AND_ASR` **排除自动翻译**，
+正是 `zh-Hans` 匹配不上 `zh-Hans-en-GB` 的原因。缺了它，未解析的行会下载到用户设置
+明确排除的轨道，与解析过的行行为不一致。
+
+`max_languages` 同理（封顶数量）。两者都由 `workers.py` 侧的迟解析读取。
+"""
+
 
 class SubtitleTypePreference(str, Enum):
     MANUAL_ONLY = "manual_only"

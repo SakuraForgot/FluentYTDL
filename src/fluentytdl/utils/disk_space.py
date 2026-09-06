@@ -2,6 +2,12 @@
 FluentYTDL 磁盘空间检测模块
 
 下载前检查目标磁盘空间，避免下载到 99% 时报错磁盘已满。
+
+**本模块只报告事实，从不阻止下载。** 唯一的消费者是 `download/executor.py` 在 `Popen`
+之前落的那条 `kind=signal stage=preflight`：磁盘剩多少、够不够。之所以不把
+`ensure_space_available()` 接上去当拦路虎，是因为预估体积在开跑前根本不可靠
+（DASH 分流 + 合并产物 + 后处理临时文件都算不准），拿它拦下载只会误杀。
+真正的判定留给 yt-dlp 自己的写盘错误，而这条 signal 负责让那个错误**有上下文**。
 """
 
 from __future__ import annotations
@@ -43,6 +49,12 @@ class SpaceCheckResult:
     required_bytes: int  # 需要的空间 (bytes)
     available_bytes: int  # 可用空间 (bytes)
     message: str  # 人类可读消息
+    #: 探测本身失败时的原因（路径不存在 / 无权限）。空串表示探测成功。
+    #:
+    #: **"探不出来"和"确实不够"必须分得开。** 两种情况都会给出
+    #: `sufficient=False, available_bytes=0`，可前者是我们瞎了，后者是磁盘真满了 ——
+    #: 拿同一个 code 记进日志，"下载失败是不是因为磁盘满"就永远答不上来。
+    error: str = ""
 
     @property
     def required_gb(self) -> float:
@@ -117,6 +129,7 @@ def check_disk_space(
             required_bytes=required_bytes,
             available_bytes=0,
             message=f"无法检查磁盘空间: {e}",
+            error=type(e).__name__,
         )
 
     # 加上安全余量

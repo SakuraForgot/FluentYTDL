@@ -1,20 +1,35 @@
+"""章节（片段）下载：选项构造、CLI 参数、进度解析。
+
+**导入路径必须是 `src` 在 `sys.path` 上 + `from fluentytdl...`**，不能把仓库根塞进
+`sys.path` 再 `from src.fluentytdl...`。后者会让整个包**以两个模块名各加载一遍**
+（`fluentytdl.*` 和 `src.fluentytdl.*`），于是出现两个 `config_manager`、两个
+`task_db`、两个 `SESSION_ID`，`utils/logger.py` 的模块体也跑两遍 ——
+第二遍的 `logger.remove()` 会把第一遍装好的 sink 全撤掉，`sys.excepthook` /
+`threading.excepthook` 最终指向哪份副本取决于收集顺序。
+"""
+
 import os
 import sys
+import tempfile
 from io import BytesIO
+from pathlib import Path
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+# logger / config_manager 在 import 期就会落地文件，先把数据目录挪到临时目录
+os.environ.setdefault("FLUENTYTDL_DATA_DIR_OVERRIDE", tempfile.mkdtemp(prefix="fytdl-section-"))
 
-from src.fluentytdl.core.section_download import (
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
+
+from fluentytdl.core.section_download import (  # noqa: E402
     SectionCutMode,
     build_section_cli_args,
     build_section_opts,
     parse_time_range,
     section_filename_suffix,
 )
-from src.fluentytdl.download.executor import _iter_process_output
-from src.fluentytdl.download.output_parser import YtDlpOutputParser
-from src.fluentytdl.utils.clean_logger import CleanLogger
-from src.fluentytdl.youtube.yt_dlp_cli import ydl_opts_to_cli_args
+from fluentytdl.download.executor import _iter_process_output  # noqa: E402
+from fluentytdl.download.output_parser import YtDlpOutputParser  # noqa: E402
+from fluentytdl.utils.clean_logger import CleanLogger  # noqa: E402
+from fluentytdl.youtube.yt_dlp_cli import ydl_opts_to_cli_args  # noqa: E402
 
 
 def test_section_modes_build_expected_yt_dlp_options():

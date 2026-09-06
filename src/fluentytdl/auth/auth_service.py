@@ -17,7 +17,6 @@ import json
 import shutil
 import sys
 import tempfile
-from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from enum import Enum
@@ -70,7 +69,7 @@ class AuthSourceType(str, Enum):
     NONE = "none"  # 不使用身份验证
     # Chromium 内核浏览器（v130+ 需要管理员权限）
     EDGE = "edge"  # Microsoft Edge
-    CHROME = "chrome"  # Google Chrome
+    CHROME = "chrome"  # Google Chrome —— 已停止支持，见 LEGACY_SOURCES
     CHROMIUM = "chromium"  # Chromium
     BRAVE = "brave"  # Brave
     OPERA = "opera"  # Opera
@@ -81,40 +80,75 @@ class AuthSourceType(str, Enum):
     FIREFOX = "firefox"  # Firefox
     LIBREWOLF = "librewolf"  # LibreWolf
     # 其它第三方定制
-    CENT = "centbrowser"  # 百分浏览器
+    CENT = "centbrowser"  # 百分浏览器 —— 已停止支持，见 LEGACY_SOURCES
     # WebView2 登录获取
     WEBVIEW2 = "webview2"  # 动态本地注入登录
     # 其他
     FILE = "file"  # 手动导入的 cookies.txt
 
 
-# 浏览器类型列表（用于 UI 展示和逻辑判断）
-# Chromium 内核 v130+ 都需要管理员权限提取 Cookie
-BROWSER_SOURCES = [
-    AuthSourceType.EDGE,
-    AuthSourceType.CHROME,
-    AuthSourceType.CHROMIUM,
-    AuthSourceType.BRAVE,
-    AuthSourceType.OPERA,
-    AuthSourceType.OPERA_GX,
-    AuthSourceType.VIVALDI,
-    AuthSourceType.ARC,
-    AuthSourceType.FIREFOX,
-    AuthSourceType.LIBREWOLF,
-    AuthSourceType.CENT,
+#: 已停止支持的提取源。**枚举值故意保留**：老配置里存着 `"chrome"` / `"centbrowser"`，
+#: 删掉成员会让 `AuthSourceType(source_value)` 直接抛 ValueError，用户升级后启动即报错。
+#: 保留成员 + `_load_config()` 里一次性迁到 EDGE，是唯一不炸老配置的删除方式。
+#:
+#: - Chrome：v127+ 的 App-Bound Encryption 拒绝任何非本进程解密，rookiepy 在管理员
+#:   权限下也拉不出来，留着只会让用户以为"选了就能用"。
+#: - 百分浏览器：靠一份 110 行的 DPAPI + AES-GCM 自建提取器硬扛，维护成本与收益完全
+#:   不成比例，已随本次改动删除。
+LEGACY_SOURCES = {AuthSourceType.CHROME, AuthSourceType.CENT}
+
+
+#: 浏览器下拉框的**唯一**顺序来源：`(AuthSourceType, 展示名)`，索引即下拉框索引。
+#:
+#: 以前这份顺序在 UI 层被手抄了五份（`settings_page` 四处 + `download_config_window` 一处），
+#: 每份都是写死 11 项的位置列表。加减一个浏览器要同步改五处，漏一处就会整体错位 ——
+#: 用户选 "Firefox"、程序实际去提取 Arc，而且不报任何错。删 Chrome / 百分浏览器正是这种
+#: 改动，所以先把五份收敛成一份，再删。
+#:
+#: 浏览器名都是专名（Microsoft Edge、Brave……），不进 `self.tr()`。
+BROWSER_COMBO_ITEMS: list[tuple[AuthSourceType, str]] = [
+    (AuthSourceType.EDGE, "Microsoft Edge"),
+    (AuthSourceType.CHROMIUM, "Chromium"),
+    (AuthSourceType.BRAVE, "Brave"),
+    (AuthSourceType.OPERA, "Opera"),
+    (AuthSourceType.OPERA_GX, "Opera GX"),
+    (AuthSourceType.VIVALDI, "Vivaldi"),
+    (AuthSourceType.ARC, "Arc"),
+    (AuthSourceType.FIREFOX, "Firefox"),
+    (AuthSourceType.LIBREWOLF, "LibreWolf"),
 ]
+
+#: 浏览器类型列表（用于逻辑判断）。**由下拉框列表派生**，保证"下拉框里选得到"和
+#: "代码认它是浏览器源"永远是同一集合。
+BROWSER_SOURCES = [source for source, _ in BROWSER_COMBO_ITEMS]
+
+#: 展示名列表，直接喂给 ComboBox.addItems()
+BROWSER_COMBO_LABELS = [label for _, label in BROWSER_COMBO_ITEMS]
+
+
+def browser_source_at(index: int) -> AuthSourceType:
+    """下拉框索引 → 提取源。越界一律回落 Edge，不抛异常。"""
+    if 0 <= index < len(BROWSER_COMBO_ITEMS):
+        return BROWSER_COMBO_ITEMS[index][0]
+    return AuthSourceType.EDGE
+
+
+def browser_combo_index(source: AuthSourceType) -> int:
+    """提取源 → 下拉框索引。不在列表里（含 LEGACY_SOURCES）一律回 0（Edge）。"""
+    for i, (candidate, _) in enumerate(BROWSER_COMBO_ITEMS):
+        if candidate is source:
+            return i
+    return 0
 
 # 需要管理员权限的浏览器（Chromium 内核 v130+）
 ADMIN_REQUIRED_BROWSERS = [
     AuthSourceType.EDGE,
-    AuthSourceType.CHROME,
     AuthSourceType.CHROMIUM,
     AuthSourceType.BRAVE,
     AuthSourceType.OPERA,
     AuthSourceType.OPERA_GX,
     AuthSourceType.VIVALDI,
     AuthSourceType.ARC,
-    AuthSourceType.CENT,
 ]
 
 # 各平台需要的 Cookie 域名
@@ -129,6 +163,13 @@ YOUTUBE_REQUIRED_COOKIES = {"SID", "HSID", "SSID", "SAPISID", "APISID"}
 
 # X (Twitter) 登录验证关键 Cookie (仅做存在性检查)
 X_REQUIRED_COOKIES = {"auth_token", "ct0"}
+
+# Cookie 子系统的两个真相源对应的展示名。都是专名，无需 tr()。
+# 单点定义，避免各处再手写 `"YouTube" if platform == "youtube" else "X (Twitter)"`。
+PLATFORM_LABELS = {
+    "youtube": "YouTube",
+    "twitter": "X (Twitter)",
+}
 
 
 @dataclass
@@ -545,12 +586,15 @@ class AuthService:
 
         return self._last_status
 
-    def validate_file(self, file_path: str) -> AuthStatus:
+    def validate_file(self, file_path: str, platform: str = "youtube") -> AuthStatus:
         """
         验证 Cookie 文件
 
         Args:
             file_path: cookies.txt 路径
+            platform: 目标平台（youtube / twitter）。必须传对 —— 用 "youtube" 去校验
+                X 的文件时，YOUTUBE_ALLOWED_NAMES 白名单会把 auth_token / ct0 全部剥光，
+                结果永远是"文件为空或格式无效"。
 
         Returns:
             验证结果
@@ -567,13 +611,13 @@ class AuthService:
             from .cookie_cleaner import CookieCleaner
 
             cookies = CookieCleaner.clean(
-                cookies, "youtube", config_manager.get("cookie_cleaning_enabled", True)
+                cookies, platform, config_manager.get("cookie_cleaning_enabled", True)
             )
 
             if not cookies:
                 return AuthStatus(valid=False, message="文件为空或格式无效")
 
-            validation = self._validate_cookies(cookies, "youtube")
+            validation = self._validate_cookies(cookies, platform)
 
             return AuthStatus(
                 valid=validation["valid"],
@@ -588,7 +632,11 @@ class AuthService:
     def import_manual_cookie_file(self, file_path: str, platform: str = "youtube") -> AuthStatus:
         """
         全量导入并接管 Cookies 文件
-        读取 -> 格式化 -> 清洗 -> 覆盖 bin/cookies.txt 与缓存
+
+        读取 → 清洗 → 写平台缓存 → 过闸门写 bin/cookies_<platform>.txt。
+
+        以前这里无视 platform，一律写 `cookie_sentinel.cookie_path`（永远是
+        cookies_youtube.txt）—— 用户导入一份 X 的 Cookie，结果覆盖掉了 YouTube 真相源。
         """
         try:
             path = Path(file_path)
@@ -611,15 +659,15 @@ class AuthService:
             cache_file = self.cache_dir / f"cached_file_{platform}.txt"
             self._write_netscape_file(cookies, cache_file)
 
-            # 通知 Sentinel 一步到位更新 bin/cookies.txt
+            # 真相源只经闸门写入（弱回退：不过校验就保留旧文件）
             from .cookie_sentinel import cookie_sentinel
 
-            cookie_sentinel.cookie_path.parent.mkdir(parents=True, exist_ok=True)
-            self._write_netscape_file(cookies, cookie_sentinel.cookie_path)
-            cookie_sentinel._save_meta("file", len(cookies))
+            ok, reason = cookie_sentinel._commit_to_truth_source(cache_file, platform, "file")
+            if not ok:
+                return AuthStatus(valid=False, message=f"导入未生效: {reason}")
 
             # 最后自我更新状态
-            self._update_status_from_file(str(cache_file))
+            self._update_status_from_file(str(cache_file), platform)
             return self._last_status
 
         except Exception as e:
@@ -627,39 +675,6 @@ class AuthService:
             return AuthStatus(valid=False, message=f"导入底层异常: {e}")
 
     # ==================== 内部方法 ====================
-
-    def extract_browser_cookies_all_platforms(
-        self, callback: Callable[[str, str], None] | None = None
-    ) -> dict[str, str | None]:
-        """
-        一次性从当前浏览器提取所有平台的 Cookie
-
-        Args:
-            callback: 进度回调 (platform_label, status_msg) 供 UI 显示进度
-
-        Returns:
-            {"youtube": cookie_file_path_or_none, "twitter": cookie_file_path_or_none}
-        """
-        results = {}
-
-        for platform, label in [("youtube", "YouTube"), ("twitter", "X (Twitter)")]:
-            if callback:
-                callback(label, "正在提取...")
-            try:
-                path = self._extract_and_cache(
-                    browser=self._current_source.value,
-                    platform=platform,
-                    force_refresh=True,
-                )
-                results[platform] = path
-                if callback:
-                    callback(label, f"✅ 提取成功 ({self._last_status.cookie_count} 个)")
-            except Exception as e:
-                results[platform] = None
-                if callback:
-                    callback(label, f"❌ 提取失败: {e}")
-
-        return results
 
     def _extract_and_cache(
         self,
@@ -694,35 +709,11 @@ class AuthService:
         cookies = None
 
         try:
-            if browser == "centbrowser":
-                import os
-
-                # 百分浏览器的默认配置路径
-                local_appdata = os.environ.get("LOCALAPPDATA", "")
-                cent_user_data_dir = Path(local_appdata) / "CentBrowser" / "User Data"
-
-                if not cent_user_data_dir.exists():
-                    raise FileNotFoundError(f"未找到百分浏览器数据目录: {cent_user_data_dir}")
-
-                key_path = str(cent_user_data_dir / "Local State")
-                db_path_network = cent_user_data_dir / "Default" / "Network" / "Cookies"
-                db_path_legacy = cent_user_data_dir / "Default" / "Cookies"
-
-                if db_path_network.exists():
-                    db_path = str(db_path_network)
-                elif db_path_legacy.exists():
-                    db_path = str(db_path_legacy)
-                else:
-                    raise FileNotFoundError("未找到百分浏览器的 Cookie 数据库文件。")
-
-                logger.info(f"使用自建提取器提取 CentBrowser Cookie: {db_path}")
-                cookies = self._extract_centbrowser_manual(key_path, db_path, domains)
-            else:
-                # 原生支持组直接提取
-                extractor = getattr(rookiepy, browser, None)
-                if extractor is None:
-                    raise RuntimeError(f"rookiepy 不支持 {browser}")
-                cookies = extractor(domains)
+            # 原生支持组直接提取
+            extractor = getattr(rookiepy, browser, None)
+            if extractor is None:
+                raise RuntimeError(f"rookiepy 不支持 {browser}")
+            cookies = extractor(domains)
 
             logger.info(f"从 {browser} 提取到 {len(cookies)} 个 Cookie")
 
@@ -810,120 +801,6 @@ class AuthService:
         )
 
         return str(cache_file)
-
-    def _extract_centbrowser_manual(
-        self, key_path: str, db_path: str, domains: list[str]
-    ) -> list[dict]:
-        import base64
-        import ctypes
-        import ctypes.wintypes
-        import json
-        import sqlite3
-
-        try:
-            from yt_dlp.aes import aes_gcm_decrypt_and_verify
-            from yt_dlp.utils import bytes_to_intlist, intlist_to_bytes
-        except ImportError as e:
-            raise RuntimeError(f"未能导入 yt-dlp 依赖项，CentBrowser 提取需要：{e}") from e
-
-        # DPAPI hook
-        class DATA_BLOB(ctypes.Structure):
-            _fields_ = [
-                ("cbData", ctypes.wintypes.DWORD),
-                ("pbData", ctypes.POINTER(ctypes.c_char)),
-            ]
-
-        def dpapi_decrypt(encrypted_data: bytes) -> bytes | None:
-            CryptUnprotectData = ctypes.windll.crypt32.CryptUnprotectData
-            CryptUnprotectData.argtypes = [
-                ctypes.POINTER(DATA_BLOB),
-                ctypes.POINTER(ctypes.c_wchar_p),
-                ctypes.POINTER(DATA_BLOB),
-                ctypes.c_void_p,
-                ctypes.c_void_p,
-                ctypes.wintypes.DWORD,
-                ctypes.POINTER(DATA_BLOB),
-            ]  # pyright: ignore
-            CryptUnprotectData.restype = ctypes.wintypes.BOOL
-            blob_in = DATA_BLOB()
-            blob_in.cbData = len(encrypted_data)
-            blob_in.pbData = ctypes.cast(
-                ctypes.c_char_p(encrypted_data), ctypes.POINTER(ctypes.c_char)
-            )
-            blob_out = DATA_BLOB()
-            if CryptUnprotectData(
-                ctypes.byref(blob_in), None, None, None, None, 0, ctypes.byref(blob_out)
-            ):
-                out_data = ctypes.string_at(blob_out.pbData, blob_out.cbData)
-                ctypes.windll.kernel32.LocalFree(blob_out.pbData)
-                return out_data
-            return None
-
-        with open(key_path, encoding="utf-8") as f:
-            local_state = json.load(f)
-
-        encrypted_key = base64.b64decode(local_state["os_crypt"]["encrypted_key"])
-        decrypted_key = dpapi_decrypt(encrypted_key[5:])
-        if not decrypted_key:
-            raise RuntimeError("DPAPI 解密失败 (可能当前非提取设备，或需要特定的系统支持)")
-
-        cookies = []
-        with sqlite3.connect(f"file:{db_path}?mode=ro", uri=True) as conn:
-            conn.row_factory = sqlite3.Row
-            cursor = conn.cursor()
-
-            cursor.execute(
-                "SELECT host_key, name, path, encrypted_value, is_secure, expires_utc, is_httponly, samesite FROM cookies"
-            )
-
-            for row in cursor.fetchall():
-                host_key = row["host_key"]
-                if domains and not any(host_key.endswith(d) for d in domains):
-                    continue
-
-                encrypted_value = row["encrypted_value"]
-                if not encrypted_value or not encrypted_value.startswith(b"v10"):
-                    continue
-
-                nonce = encrypted_value[3:15]
-                ciphertext = encrypted_value[15:-16]
-                tag = encrypted_value[-16:]
-
-                try:
-                    pt_ints = aes_gcm_decrypt_and_verify(
-                        bytes_to_intlist(ciphertext),
-                        bytes_to_intlist(decrypted_key),
-                        bytes_to_intlist(tag),
-                        bytes_to_intlist(nonce),
-                    )
-                    plaintext_bytes = intlist_to_bytes(pt_ints)
-
-                    if len(plaintext_bytes) > 32 and not plaintext_bytes.isascii():
-                        try:
-                            plaintext = plaintext_bytes[32:].decode("utf-8")
-                        except UnicodeDecodeError:
-                            continue
-                    else:
-                        plaintext = plaintext_bytes.decode("utf-8", errors="ignore")
-
-                    cookies.append(
-                        {
-                            "domain": host_key,
-                            "name": row["name"],
-                            "path": row["path"],
-                            "value": plaintext,
-                            "secure": bool(row["is_secure"]),
-                            "expires": int(max(0, (row["expires_utc"] / 1000000) - 11644473600))
-                            if row["expires_utc"]
-                            else 0,
-                            "http_only": bool(row["is_httponly"]),
-                            "same_site": row["samesite"] if "samesite" in row.keys() else 0,
-                        }
-                    )
-                except Exception:
-                    continue
-
-        return cookies
 
     def _write_netscape_file(self, cookies: list[dict], output_path: Path) -> None:
         """将 Cookie 写入 Netscape 格式文件"""
@@ -1086,7 +963,20 @@ class AuthService:
                     self._current_webview2_account_ids = {"youtube": legacy_id}
                 else:
                     self._current_webview2_account_ids = {}
+
+            # 已停止支持的提取源一次性迁到 Edge 并写回 —— 只迁一次。
+            # 不能靠 UI 兜底：下拉框选不中 chrome 时会停在索引 0，配置里却还是 chrome，
+            # 下次启动照旧走 Chrome 分支提取失败。
+            migrated_from = None
+            if self._current_source in LEGACY_SOURCES:
+                migrated_from = self._current_source.value
+                self._current_source = AuthSourceType.EDGE
+
             logger.info(f"已加载验证配置: {self.current_source_display}")
+
+            if migrated_from:
+                logger.info(f"提取源 {migrated_from} 已停止支持，已自动迁移到 Edge")
+                self._save_config()
 
             # 尝试恢复上次的验证状态
             self._restore_last_status()
@@ -1284,17 +1174,21 @@ class AuthService:
         try:
             from fluentytdl.auth.cookie_sentinel import cookie_sentinel
 
-            target_path = cookie_sentinel.get_cookie_path_for_platform(platform)
-            target_path.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(src, target_path)
-            self._update_status_from_file(str(src), platform)
-            cookie_sentinel._save_meta(
-                f"webview2:{account.account_id}", self._last_status.cookie_count, platform
+            # 经过真相源写入闸门：新账号 Cookie 不可用时不强制替换（弱回退）
+            ok, reason = cookie_sentinel._commit_to_truth_source(
+                src, platform, f"webview2:{account.account_id}"
             )
-            logger.info(
-                f"已切换到 WebView2 账号 {account.localized_name}，并同步 Cookie 到 {target_path}"
-            )
-            return True
+            if ok:
+                logger.info(
+                    f"已切换到 WebView2 账号 {account.localized_name}，并同步 Cookie 到 "
+                    f"{cookie_sentinel.get_cookie_path_for_platform(platform)}"
+                )
+            else:
+                logger.warning(
+                    f"WebView2 账号 {account.localized_name} 的 Cookie 未通过校验，"
+                    f"已保留原有 {platform} 真相源: {reason}"
+                )
+            return ok
         except Exception as e:
             logger.warning(f"同步当前 WebView2 账号 Cookie 到统一文件失败: {e}")
             return False
@@ -1473,42 +1367,6 @@ class AuthService:
                         self._last_status.message += " (缓存可能过期)"
         except Exception as e:
             logger.debug(f"恢复状态失败: {e}")
-
-    def startup_refresh(self) -> AuthStatus:
-        """
-        启动时自动刷新 Cookie
-
-        在应用启动时调用，自动获取 Cookie 并验证有效性。
-
-        Returns:
-            刷新后的状态
-        """
-        if self._current_source == AuthSourceType.NONE:
-            # 如果当前是 NONE，切换到默认的 Edge
-            self._current_source = AuthSourceType.EDGE
-            self._save_config()
-
-        if self._current_source == AuthSourceType.FILE:
-            # 文件模式不自动刷新，只检查文件
-            if self._current_file_path and Path(self._current_file_path).exists():
-                self._update_status_from_file(self._current_file_path)
-            else:
-                self._last_status = AuthStatus(valid=False, message="Cookie 文件不存在，请重新选择")
-            return self._last_status
-
-        # 浏览器模式：自动刷新
-        logger.info(f"启动时自动刷新 Cookie ({self.current_source_display})...")
-        try:
-            cookie_path = self.get_cookie_file_for_ytdlp("youtube", force_refresh=True)
-            if cookie_path:
-                logger.info(f"Cookie 刷新成功: {self._last_status.message}")
-            else:
-                logger.warning(f"Cookie 刷新失败: {self._last_status.message}")
-        except Exception as e:
-            logger.error(f"启动刷新失败: {e}")
-            self._last_status = AuthStatus(valid=False, message=f"刷新失败: {e}")
-
-        return self._last_status
 
     # ==================== 高级：多账户管理 ====================
 

@@ -5,7 +5,7 @@
 - 音轨语言偏好评分（等差间距 + BCP-47 别名匹配）
 - 视频流打分（分辨率 + 编解码器兼容性）
 - 容器格式决策（感知字幕嵌入需求）
-- BCP-47 语言工具函数（供 youtube_service.py format_sort 复用）
+- BCP-47 语言工具函数（薄委托到 `utils/bcp47.py`，供 youtube_service.py format_sort 复用）
 """
 
 from __future__ import annotations
@@ -13,54 +13,13 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from .bcp47 import expand_for_sort as bcp47_expand_for_sort  # noqa: F401  (re-export)
+from .bcp47 import matches as _bcp47_match
 from .container_compat import choose_lossless_merge_container
 
-# ── BCP-47 别名映射 ───────────────────────────────────────────
-# key: 用户偏好写法（小写）  value: YouTube/yt-dlp 实际可能使用的等价 tag 集合
-_BCP47_ALIASES: dict[str, set[str]] = {
-    "zh-hans": {"zh-cn", "zh-sg", "zh-simplified", "zh"},
-    "zh-hant": {"zh-tw", "zh-hk", "zh-mo", "zh-traditional"},
-    "zh": {"zh-hans", "zh-hant", "zh-cn", "zh-tw", "zh-sg", "zh-hk"},
-    "en": {"en-us", "en-gb", "en-au", "en-ca"},
-}
-
-
-def _bcp47_match(pref: str, lang: str) -> bool:
-    """
-    判断音轨语言标注 lang 是否符合用户偏好 pref。
-
-    匹配规则（优先级从高到低）：
-    1. 完全相等（大小写不敏感）
-    2. lang 以 pref+"-" 开头（前缀匹配：zh 命中 zh-Hans）
-    3. 查别名表（zh-hans 命中 zh-cn、zh-sg 等）
-    """
-    if not pref or not lang:
-        return False
-    pref_lower = pref.strip().lower()
-    lang_lower = lang.strip().lower()
-    if pref_lower == lang_lower:
-        return True
-    if lang_lower.startswith(pref_lower + "-"):
-        return True
-    return lang_lower in _BCP47_ALIASES.get(pref_lower, set())
-
-
-def bcp47_expand_for_sort(lang: str) -> list[str]:
-    """
-    将单个语言偏好展开为 yt-dlp format_sort lang: 条目列表（含别名）。
-
-    用于 youtube_service.py 旧路径的 format_sort 拼装，替代原来分散的
-    手工别名追加逻辑，确保与 _bcp47_match 使用同一数据源。
-
-    示例：
-      bcp47_expand_for_sort("zh-Hans") → ["lang:zh-hans","lang:zh-cn","lang:zh-sg",...]
-      bcp47_expand_for_sort("orig")    → ["lang:orig"]
-    """
-    norm = lang.strip().lower()
-    result = [f"lang:{norm}"]
-    for alias in _BCP47_ALIASES.get(norm, set()):
-        result.append(f"lang:{alias}")
-    return result
+# BCP-47 匹配与别名表已迁到 utils/bcp47.py（字幕路径也要用同一套语义）。
+# 这里保留两个旧名字作为薄委托：`_bcp47_match` 供本模块的音轨打分使用，
+# `bcp47_expand_for_sort` 供 youtube_service.py 的 format_sort 拼装使用。
 
 
 # ── 打分上下文 ────────────────────────────────────────────────
@@ -159,6 +118,35 @@ def score_audio_format(f: dict[str, Any], ctx: ScoringContext) -> int:
     return affinity_bonus + dub_bonus + abr
 
 
+def rank_audio_formats(
+    rows: list[dict[str, Any]], ctx: ScoringContext
+) -> list[tuple[dict[str, Any], int]]:
+    """按得分降序排列候选音轨，附带各自得分。**与 `max(rows, key=score)` 完全等价。**
+
+    `sorted()` 是稳定排序，并列时仍然取原始顺序里的第一条 —— 和 `max()` 的语义一样，
+    所以拿 `rank_audio_formats(...)[0]` 换掉 `max(...)` 不改变任何选择结果。
+
+    存在的理由是**可观测**：`max()` 只吐出赢家，而"为什么是它赢"必须看到亚军和分差。
+    同语言的两条流谁赢由配音加权（原音 +50000 / 人工配音 +10000 / AI 配音 −50000）、
+    mp4 亲和加分和码率决定，这些在命令行和界面上一律看不见 —— 用户能看到的只有
+    "怎么给我下了个 AI 配音"。让打分函数自己 emit 是不行的：它在候选集上逐条跑，
+    一个多语言视频有十几条音轨，那会是十几行噪音。**排名交给调用点一次记完。**
+    """
+    return sorted(((r, score_audio_format(r, ctx)) for r in rows), key=lambda pair: -pair[1])
+
+
+def format_ranking(ranked: list[tuple[dict[str, Any], int]], limit: int = 4) -> list[str]:
+    """把排名压成 `format_id:lang:score` 的紧凑串，供 `kind=decision` 事件携带。
+
+    只留前 `limit` 名：赢家和它的直接对手才有解释价值，第八名不重要。
+    """
+    out = []
+    for row, score in ranked[:limit]:
+        lang = str(row.get("language") or "-").lower()
+        out.append(f"{row.get('format_id')}:{lang}:{score}")
+    return out
+
+
 # ── 视频打分（保留旧函数签名供其他模块按需调用）────────────────
 
 
@@ -173,11 +161,16 @@ def is_mkv_heavy_stream(f: dict[str, Any]) -> bool:
 
 
 def score_video_format(f: dict[str, Any], is_simple_mode: bool = True) -> int:
-    """
-    对单条视频流评分（旧接口，内部仍使用）。
+    """对单条视频流评分。**当前全项目没有调用点。**
 
-    简易模式下大幅惩罚 VP9/AV1 流（避免触发 FFmpeg 转封装假死），
-    并奖励 H.264 + mp4 组合以保证最大播放兼容性。
+    原 docstring 写的是"旧接口，内部仍使用"，那句话已经不成立了：真正在挑视频流的
+    `_pick_best_video()` / `resolve_global_format()` 都是按 `(height, vbr)` 取 max，
+    压根不过这里。所以下面这套简易模式偏好 —— 大幅惩罚 VP9/AV1（避免触发 FFmpeg
+    转封装假死）、奖励 H.264 + mp4 —— **实际从未生效过**：简易模式下选到 VP9 再转一遍
+    的情况仍会发生（另见 `_emit_format_decision()` 里关于 `prefer_ext` 的那段）。
+
+    保留不删，是因为它记录的是一个明确的意图，接上去是个待定的行为变更（会改变
+    既有用户的画质选择结果），不该在纯观测的改动里顺手做掉。
     """
     score = 0
     h = int(f.get("height") or 0)

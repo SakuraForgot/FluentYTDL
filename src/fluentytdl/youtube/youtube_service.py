@@ -151,20 +151,28 @@ class YoutubeService:
         text = (message or "").lower()
         return "the page needs to be reloaded" in text
 
-    def _try_refresh_cookie_for_reload_error(self) -> bool:
-        """For WebView2 mode, force-refresh cookie once to recover transient session mismatch."""
+    def _try_refresh_cookie_for_reload_error(self, url: str = "") -> bool:
+        """For WebView2 mode, force-refresh cookie once to recover transient session mismatch.
+
+        只刷这条链接对应的平台。不带 platform 调用时，`force_refresh_with_uac()` 会同时
+        占用两个平台并在 WebView2 模式下弹出**两个**登录窗 —— 解析一条 X 链接失败，
+        用户却要先把 YouTube 也登录一遍。
+        """
         try:
             from ..auth.auth_service import AuthSourceType, auth_service
             from ..auth.cookie_sentinel import cookie_sentinel
+            from ..utils.url_router import UrlRouter
 
             if auth_service.current_source != AuthSourceType.WEBVIEW2:
                 return False
+
+            platform = "twitter" if UrlRouter.detect_platform(url) == "twitter" else "youtube"
 
             self._emit_log(
                 "warning",
                 "检测到 'The page needs to be reloaded'，正在自动刷新 WebView2 Cookie 并重试一次...",
             )
-            ok, msg = cookie_sentinel.force_refresh_with_uac()
+            ok, msg = cookie_sentinel.force_refresh_with_uac(platform=platform)
             if ok:
                 self._emit_log("info", "自动刷新 WebView2 Cookie 成功，准备重试解析")
                 return True
@@ -206,9 +214,10 @@ class YoutubeService:
             net.fragment_retries = network_retries
 
         ydl_opts: dict[str, Any] = {
-            # Base
-            "quiet": True,
-            "no_warnings": True,
+            # `quiet` / `no_warnings` 曾经在这里，是**死配置**：`ydl_opts_to_cli_args()`
+            # 里没有它们的映射，全项目也没有一处 `YoutubeDL(...)` 会读这个 dict，
+            # 所以它们从未变成过命令行参数。删掉，免得下一个读代码的人以为
+            # "解析路径是静默的" —— 解析路径本来就看得见警告，P0-B 的 `signal` 靠的就是它。
             # For single-video parsing we must NOT ignore errors; otherwise yt-dlp may return None/False
             # and we lose the real failure reason (e.g. cookies required).
             "ignoreerrors": False,
@@ -352,20 +361,32 @@ class YoutubeService:
                         cookiefile = sentinel_cookie_file
                         has_valid_cookie = True
 
-                        # 显示状态信息
-                        age = cookie_sentinel.age_minutes
+                        # 显示状态信息 —— 全部按 cookie_target 取，
+                        # 以前用的是 `age_minutes` / `is_stale` / `get_status_info()` 三个
+                        # 无参属性，它们一律默认 youtube：解析 X 链接时日志会报 YouTube
+                        # 真相源的年龄和来源，排查 X 问题的人被直接带偏。
+                        age = cookie_sentinel.get_age_minutes(cookie_target)
                         age_str = f"{int(age)}分钟前" if age is not None else "未知"
-                        status_emoji = "⚠️" if cookie_sentinel.is_stale else "✅"
+                        status_emoji = "⚠️" if cookie_sentinel.get_is_stale(cookie_target) else "✅"
+                        status_info = cookie_sentinel.get_status_info(cookie_target)
 
                         self._emit_log(
                             "info",
-                            f"{status_emoji} Cookie Sentinel: {cookie_sentinel.get_status_info()['source']} "
+                            f"{status_emoji} Cookie Sentinel: {status_info['source']} "
                             f"(更新于 {age_str}, {yt_cookie_count} 个 {cookie_target.title()} Cookie)",
                         )
+
+                        # 闸门刚拒过新 Cookie：当前用的是旧文件，下载失败时这行是唯一线索
+                        if status_info.get("commit_warning"):
+                            self._emit_log(
+                                "warning",
+                                f"⚠️ {cookie_target} 新 Cookie 未通过校验，仍在使用旧真相源: "
+                                f"{status_info['commit_warning']}",
+                            )
                     else:
                         self._emit_log(
                             "warning",
-                            "Cookie Sentinel 文件存在但未发现 YouTube 相关 Cookie",
+                            f"Cookie Sentinel 文件存在但未发现 {cookie_target.title()} 相关 Cookie",
                         )
                 else:
                     self._emit_log(
@@ -617,79 +638,41 @@ class YoutubeService:
             except Exception:
                 runtime_path_ok = None
 
-        # yt-dlp uses these runtime ids; quickjs binary is usually "qjs"
-        runtime_candidates: list[tuple[str, list[str]]] = [
-            ("deno", ["deno"]),
-            ("node", ["node"]),
-            ("bun", ["bun"]),
-            ("quickjs", ["qjs", "quickjs"]),
-        ]
-
-        def is_available(runtime_id: str) -> bool:
-            if runtime_path_ok and preferred == runtime_id:
-                return True
-
-            # Frozen build: prefer bundled runtimes under assets/bin
-            if is_frozen():
-                if runtime_id == "deno":
-                    return (
-                        find_bundled_executable(
-                            "deno.exe",
-                            "js/deno.exe",
-                            "deno/deno.exe",
-                        )
-                        is not None
-                    )
-                if runtime_id == "node":
-                    return (
-                        find_bundled_executable(
-                            "node.exe",
-                            "js/node.exe",
-                            "node/node.exe",
-                        )
-                        is not None
-                    )
-                if runtime_id == "bun":
-                    return (
-                        find_bundled_executable(
-                            "bun.exe",
-                            "js/bun.exe",
-                            "bun/bun.exe",
-                        )
-                        is not None
-                    )
-                if runtime_id == "quickjs":
-                    return (
-                        find_bundled_executable(
-                            "qjs.exe",
-                            "js/qjs.exe",
-                            "quickjs/qjs.exe",
-                        )
-                        is not None
-                    )
-
-            for rid, names in runtime_candidates:
-                if rid != runtime_id:
-                    continue
-                return any(shutil.which(n) for n in names)
-            return False
+        # runtime_id → (自带目录里的候选相对路径, PATH 上的候选可执行名)
+        # yt-dlp 用这些 runtime id；quickjs 的可执行文件通常叫 "qjs"。
+        runtime_candidates: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
+            "deno": (("deno.exe", "js/deno.exe", "deno/deno.exe"), ("deno",)),
+            "node": (("node.exe", "js/node.exe", "node/node.exe"), ("node",)),
+            "bun": (("bun.exe", "js/bun.exe", "bun/bun.exe"), ("bun",)),
+            "quickjs": (("qjs.exe", "js/qjs.exe", "quickjs/qjs.exe"), ("qjs", "quickjs")),
+        }
 
         def bundled_runtime_path(runtime_id: str) -> str | None:
-            if not is_frozen():
+            """自带目录里的 runtime，找不到返回 None。
+
+            **不能再用 `is_frozen()` 设闸**：`assets/bin/deno/deno.exe` 在源码运行时
+            同样存在，而 `prepare_yt_dlp_env()` 也照样把它注入子进程 PATH。加了闸门
+            只会让 dev 和发行版走两条不同的代码路径 —— 开发时永远测不到发行版的分支，
+            还会在 deno 明明就在自带目录里时警告"未检测到任何受支持的 JS runtime"。
+            """
+            entry = runtime_candidates.get(runtime_id)
+            if entry is None:
                 return None
-            if runtime_id == "deno":
-                p = find_bundled_executable("deno.exe", "js/deno.exe", "deno/deno.exe")
-                return str(p) if p is not None else None
-            if runtime_id == "node":
-                p = find_bundled_executable("node.exe", "js/node.exe", "node/node.exe")
-                return str(p) if p is not None else None
-            if runtime_id == "bun":
-                p = find_bundled_executable("bun.exe", "js/bun.exe", "bun/bun.exe")
-                return str(p) if p is not None else None
-            if runtime_id == "quickjs":
-                p = find_bundled_executable("qjs.exe", "js/qjs.exe", "quickjs/qjs.exe")
-                return str(p) if p is not None else None
-            return None
+            p = find_bundled_executable(*entry[0])
+            return str(p) if p is not None else None
+
+        def is_available(runtime_id: str) -> bool:
+            """自定义路径 → 自带目录 → 系统 PATH，与 `locate_runtime_tool()` 同序。
+
+            自带目录未命中时必须继续看 PATH：早先的版本在冻结分支里直接 return，
+            结果是发行版完全无视用户装在 PATH 上的 runtime。
+            """
+            if runtime_path_ok and preferred == runtime_id:
+                return True
+            if bundled_runtime_path(runtime_id):
+                return True
+            entry = runtime_candidates.get(runtime_id)
+            return bool(entry and any(shutil.which(n) for n in entry[1]))
 
         # If user specifies a runtime explicitly, honor it.
         if preferred in {"deno", "node", "bun", "quickjs"}:
@@ -708,13 +691,12 @@ class YoutubeService:
             return
 
         # Auto mode:
-        # - If we ship a bundled deno, use it.
-        if is_frozen():
-            deno = bundled_runtime_path("deno")
-            if deno:
-                ydl_opts["js_runtimes"] = {"deno": {"path": deno}}
-                self._emit_log("info", f"已启用内置 JS runtime: deno ({deno})")
-                return
+        # - If we ship a bundled deno, use it (dev 与发行版同路径，见 bundled_runtime_path)。
+        deno = bundled_runtime_path("deno")
+        if deno:
+            ydl_opts["js_runtimes"] = {"deno": {"path": deno}}
+            self._emit_log("info", f"已启用内置 JS runtime: deno ({deno})")
+            return
 
         # - If deno exists on PATH, do nothing (yt-dlp default enables deno).
         if any(shutil.which(n) for n in ["deno"]):
@@ -1070,8 +1052,7 @@ class YoutubeService:
 
         # 构建无 cookies 的 android_vr 解析选项
         vr_opts: dict[str, Any] = {
-            "quiet": True,
-            "no_warnings": True,
+            # 同上：`quiet` / `no_warnings` 没有 CLI 映射，是死配置，已删。
             "ignoreerrors": False,
             "skip_download": True,
             "extractor_args": {
@@ -1294,13 +1275,14 @@ class YoutubeService:
     def _parse_cache_ttl() -> float:
         """解析结果的保留时长（秒）。0 表示不保留，读写一并停掉。
 
-        默认值必须与 config_manager.DEFAULT_CONFIG 保持一致（1800 = 半小时），
-        设置页「解析结果保留时间」写的就是这个键。
+        默认值必须与 config_manager.DEFAULT_CONFIG 保持一致（0 = 不保留），
+        设置页「解析结果保留时间」写的就是这个键。缺键和脏值都退到 0：这一层
+        的失效条件还不完备（换出口 IP 撞不掉键），拿不准时宁可多跑一次子进程。
         """
         try:
-            ttl = float(config_manager.get("parse_cache_ttl_seconds", 1800))
+            ttl = float(config_manager.get("parse_cache_ttl_seconds", 0))
         except (TypeError, ValueError):
-            ttl = 1800.0
+            ttl = 0.0
         return max(0.0, ttl)
 
     @staticmethod
@@ -1458,8 +1440,15 @@ class YoutubeService:
                     break
                 self._parse_cache.pop(same_mode[0], None)
 
-    def invalidate_parse_cache(self, reason: str = "") -> None:
-        """清空弹窗解析缓存（用户手动重试 / Cookie 重新注入等场景调用）。"""
+    def invalidate_parse_cache(self, reason: str = "") -> int:
+        """清空弹窗解析缓存（用户手动重试 / Cookie 重新注入等场景调用）。
+
+        返回清掉的条目数，供设置页的「立即清空」区分"清了 N 条"和"本来就是空的"。
+
+        粒度只有"全清"：键是 sha256 指纹，URL 不可反查，按 URL 精细失效得先另建
+        一份正向索引。这也是"画质不达标自动失效"暂时没接的前置条件——全局清会把
+        无关链接的条目一起冲掉。
+        """
         with self._parse_cache_lock:
             n = len(self._parse_cache)
             self._parse_cache.clear()
@@ -1467,6 +1456,7 @@ class YoutubeService:
             self._emit_log(
                 "info", f"[ParseCache] 已清空 {n} 条缓存" + (f" ({reason})" if reason else "")
             )
+        return n
 
     def extract_info_for_dialog_sync(
         self,
@@ -1563,7 +1553,7 @@ class YoutubeService:
                 raise
             msg = str(exc)
 
-            if self._is_page_reload_error(msg) and self._try_refresh_cookie_for_reload_error():
+            if self._is_page_reload_error(msg) and self._try_refresh_cookie_for_reload_error(url):
                 info = run_dump_single_json(
                     url,
                     tuned,
@@ -1648,8 +1638,7 @@ class YoutubeService:
 
         # 构建 android_vr 专用选项（不使用 cookies）
         vr_opts: dict[str, Any] = {
-            "quiet": True,
-            "no_warnings": True,
+            # 同上：`quiet` / `no_warnings` 没有 CLI 映射，是死配置，已删。
             "ignoreerrors": False,
             "skip_download": True,
             "extractor_args": {

@@ -6,6 +6,7 @@ from loguru import logger
 from PySide6.QtCore import QThread, Signal
 
 from ..models.quick_download_params import QuickDownloadParams
+from ..observability import FlowTrace, bind_current_flow, new_flow
 from ..utils.quick_opts import quick_params_to_opts
 from ..youtube.youtube_service import YoutubeService
 
@@ -29,14 +30,28 @@ class QuickAddWorker(QThread):
         params: QuickDownloadParams,
         max_playlist_items: int = 500,
         controller: AppController | None = None,
+        *,
+        flow: FlowTrace | None = None,
     ):
         super().__init__()
         self.urls = urls
         self.params = params
         self.max_playlist_items = max_playlist_items
         self._controller = controller
+        # 快速下载是第五条解析路径：它不走那四个解析 worker，直接同步调
+        # `extract_info_for_dialog_sync`。没有 trace 的话，这一整批任务在时间线上
+        # 就是「凭空出现的 task」，前面的解析一个字都看不到。
+        self.trace: FlowTrace = flow if flow is not None else new_flow(stage="parse")
 
     def run(self):
+        bind_current_flow(self.trace)
+        self.trace.enter(
+            "parse",
+            worker="QuickAddWorker",
+            mode="quick",
+            url_count=len(self.urls),
+            max_playlist_items=self.max_playlist_items,
+        )
         try:
             tasks = []
             service = YoutubeService()

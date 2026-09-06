@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from PySide6.QtCore import QMutex, QMutexLocker, QObject, QRunnable, QThreadPool, Signal, Slot
 
+from ..observability import FlowTrace
 from ..utils.logger import logger
 from ..youtube.youtube_service import YoutubeServiceOptions
 from .workers import EntryDetailWorker
@@ -21,6 +22,7 @@ class MetadataFetchRunnable(QRunnable):
         vr_mode: bool,
         signals: AsyncExtractorSignals,
         read_cache: bool = True,
+        flow: FlowTrace | None = None,
     ):
         super().__init__()
         self.task_id = task_id
@@ -32,6 +34,7 @@ class MetadataFetchRunnable(QRunnable):
             options=options,
             vr_mode=vr_mode,
             read_cache=read_cache,
+            flow=flow,
         )
         self.signals = signals
 
@@ -67,9 +70,19 @@ class AsyncExtractManager(QObject):
     and cancellation of active tasks.
     """
 
-    def __init__(self, max_concurrent: int = 3, parent: QObject | None = None):
+    def __init__(
+        self,
+        max_concurrent: int = 3,
+        parent: QObject | None = None,
+        *,
+        flow: FlowTrace | None = None,
+    ):
         super().__init__(parent)
         self.signals = AsyncExtractorSignals()
+        # 持有的是**发起方对话框**那条链，不是每个条目自己一条：一个播放列表的几十次
+        # 逐行深解析属于同一次用户操作。缺省 None 时每个 worker 自铸，事件仍能成组，
+        # 只是和前面的列表解析连不上。
+        self._flow = flow
 
         self.max_concurrent = max_concurrent
         self._thread_pool = QThreadPool()
@@ -104,7 +117,7 @@ class AsyncExtractManager(QObject):
 
             logger.info(f"AsyncExtractManager starting task {task_id}")
             runnable = MetadataFetchRunnable(
-                task_id, url, options, vr_mode, self.signals, read_cache
+                task_id, url, options, vr_mode, self.signals, read_cache, self._flow
             )
             runnable.setAutoDelete(True)
             self._active_tasks[task_id] = runnable

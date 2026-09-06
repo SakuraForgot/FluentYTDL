@@ -33,7 +33,12 @@ def svc():
     from fluentytdl.core.config_manager import config_manager
 
     original_pot = config_manager.config.get("pot_provider_enabled", False)
+    original_ttl = config_manager.config.get("parse_cache_ttl_seconds")
     config_manager.config["pot_provider_enabled"] = False
+    # 默认保留时间是 0（不保留），会让 `_parse_cache_put` 全部变成 no-op。本文件测的是
+    # 分桶/隔离/键指纹这些**机制**，所以显式钉一个非零时长把功能打开。
+    # 默认值本身由 `test_default_retention_is_off` 单独守。
+    config_manager.config["parse_cache_ttl_seconds"] = 1800
     s = YoutubeService()
     s.invalidate_parse_cache()
     try:
@@ -41,6 +46,7 @@ def svc():
     finally:
         s.invalidate_parse_cache()
         config_manager.config["pot_provider_enabled"] = original_pot
+        config_manager.config["parse_cache_ttl_seconds"] = original_ttl
 
 
 def _key(svc, url, mode):
@@ -127,6 +133,17 @@ def test_invalidate_clears_every_bucket(svc):
         svc._parse_cache_put(_key(svc, f"https://youtu.be/{mode}", mode), {"m": mode})
     svc.invalidate_parse_cache("test")
     assert svc._parse_cache_buckets() == {}
+
+
+def test_invalidate_returns_the_number_of_entries_dropped(svc):
+    """设置页的「立即清空」靠这个返回值区分"清掉 N 条"和"本来就是空的"——
+    空缓存上点一下弹"已清空 0 条"是在骗用户。"""
+    assert svc.invalidate_parse_cache("empty") == 0
+
+    for mode in ALL_MODES:
+        svc._parse_cache_put(_key(svc, f"https://youtu.be/{mode}", mode), {"m": mode})
+    assert svc.invalidate_parse_cache("test") == len(ALL_MODES)
+    assert svc.invalidate_parse_cache("again") == 0
 
 
 def test_no_write_while_pot_warming(svc, monkeypatch):
@@ -366,26 +383,36 @@ def test_extract_video_info_forwards_read_cache(svc, stub_ytdlp):
     assert svc.extract_video_info(url, read_cache=False)["id"] == "fresh"
 
 
-# ── 保留时间：默认半小时 + 设置页可控 ─────────────────────────────────────────
+# ── 保留时间：默认关闭 + 设置页可控 ───────────────────────────────────────────
 
 
-def test_default_retention_is_half_an_hour():
-    """设置页「解析结果保留时间」的默认档。改这个值要连带改
-    `YoutubeService._parse_cache_ttl()` 的兜底默认，两处必须一致。"""
+def test_default_retention_is_off():
+    """默认不保留。改这个值要连带改 `YoutubeService._parse_cache_ttl()` 的兜底默认，
+    两处必须一致。
+
+    为什么默认关：缓存键里没有出口 IP 这一维——`proxy_mode == "system"` 和 TUN 模式下
+    `build_ydl_options()` 压根不设 `ydl_opts["proxy"]`，在 V2RayN 里换节点对键的贡献是零，
+    整个保留窗口内必然命中旧条目。cookie 那边也有洞：提交被校验闸门拒掉（弱回退）时
+    `.meta` 不动，指纹不变；`vr` mode 更是没有 cookiefile，指纹恒为 `"-"`。失效条件不
+    完备之前默认关掉，想要的人在设置页自己开。
+    """
     from fluentytdl.core.config_manager import ConfigManager
 
-    assert ConfigManager.DEFAULT_CONFIG["parse_cache_ttl_seconds"] == 1800
+    assert ConfigManager.DEFAULT_CONFIG["parse_cache_ttl_seconds"] == 0
 
 
 def test_ttl_fallback_matches_the_config_default(svc, monkeypatch):
-    """配置里缺键或存了脏值时，服务层兜底也必须是半小时，不能退回旧的 300。"""
+    """配置里缺键或存了脏值时，服务层兜底也必须是 0（不保留）。
+
+    拿不准时宁可多跑一次子进程：陈旧结果的代价（画质不对、403 直链）远高于一次解析。
+    """
     from fluentytdl.core.config_manager import config_manager
 
     monkeypatch.delitem(config_manager.config, "parse_cache_ttl_seconds", raising=False)
-    assert svc._parse_cache_ttl() == 1800.0
+    assert svc._parse_cache_ttl() == 0.0
 
     config_manager.config["parse_cache_ttl_seconds"] = "不是数字"
-    assert svc._parse_cache_ttl() == 1800.0
+    assert svc._parse_cache_ttl() == 0.0
 
 
 def test_zero_retention_stops_both_read_and_write(svc):
@@ -469,3 +496,68 @@ def test_migration_survives_a_garbage_value():
     merged = _migrate({"parse_cache_ttl_seconds": "不是数字"})
     assert merged["parse_cache_ttl_seconds"] == "不是数字"
     assert merged["parse_cache_ttl_migrated"] is True
+
+
+# ── 第二次一次性迁移（1800 → 0，默认关闭） ────────────────────────────────────
+#
+# 同样的道理：上一版的默认 1800 已经躺在所有存过盘的安装里。下面这组走
+# `_migrate_both()`——**必须按 `_load()` 的真实顺序连着跑两次迁移**，因为
+# `_migrate_parse_cache_ttl_off()` 判定读的是 `merged` 而不是 `data`：旧的 300 安装
+# 刚被上一步抬成 1800，只跑新迁移或只读 `data` 都会让它卡在 1800 上。
+
+
+def _migrate_both(data: dict) -> dict:
+    """复刻 `_load()` 里两次迁移的调用顺序。"""
+    from fluentytdl.core.config_manager import ConfigManager
+
+    merged = {**ConfigManager.DEFAULT_CONFIG, **data}
+    ConfigManager._migrate_parse_cache_ttl(data, merged)
+    ConfigManager._migrate_parse_cache_ttl_off(data, merged)
+    return merged
+
+
+def test_off_migration_drops_the_previous_default():
+    """磁盘上的 1800 是上一版的默认值，降到 0。"""
+    merged = _migrate_both({"parse_cache_ttl_seconds": 1800, "parse_cache_ttl_migrated": True})
+    assert merged["parse_cache_ttl_seconds"] == 0
+    assert merged["parse_cache_ttl_off_migrated"] is True
+
+
+def test_off_migration_also_catches_installs_still_on_300():
+    """更老的安装（存着 300、没跑过第一次迁移）必须一路降到 0，而不是停在 1800。
+
+    这是把判定写成读 `merged` 的唯一理由：第一步刚把 300 抬成 1800，若第二步去读
+    `data`（还是 300）就撞不上，恰好漏掉最该被关掉的那批人。
+    """
+    merged = _migrate_both({"parse_cache_ttl_seconds": 300})
+    assert merged["parse_cache_ttl_seconds"] == 0
+    assert merged["parse_cache_ttl_migrated"] is True
+    assert merged["parse_cache_ttl_off_migrated"] is True
+
+
+def test_off_migration_runs_only_once():
+    """用户被降过一次后又在设置页挑回「30 分钟」，下次启动不能再被静默降掉。"""
+    merged = _migrate_both(
+        {
+            "parse_cache_ttl_seconds": 1800,
+            "parse_cache_ttl_migrated": True,
+            "parse_cache_ttl_off_migrated": True,
+        }
+    )
+    assert merged["parse_cache_ttl_seconds"] == 1800
+
+
+def test_off_migration_leaves_hand_picked_values_alone():
+    """只认 1800 这一个旧默认值；用户在设置页挑过的其它档一概不动。"""
+    merged = _migrate_both({"parse_cache_ttl_seconds": 900, "parse_cache_ttl_migrated": True})
+    assert merged["parse_cache_ttl_seconds"] == 900
+    assert merged["parse_cache_ttl_off_migrated"] is True
+
+
+def test_off_migration_survives_a_garbage_value():
+    """理由同 `test_migration_survives_a_garbage_value`：抛一次会把整份配置打回默认。"""
+    merged = _migrate_both(
+        {"parse_cache_ttl_seconds": "不是数字", "parse_cache_ttl_migrated": True}
+    )
+    assert merged["parse_cache_ttl_seconds"] == "不是数字"
+    assert merged["parse_cache_ttl_off_migrated"] is True

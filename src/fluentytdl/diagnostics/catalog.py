@@ -42,7 +42,9 @@ _FIX_HINTS: dict[str, str] = {
     "switch_proxy": QT_TRANSLATE_NOOP("Diagnostics", "检查代理设置"),
     "change_download_dir": QT_TRANSLATE_NOOP("Diagnostics", "更换下载路径"),
     "update_component": QT_TRANSLATE_NOOP("Diagnostics", "去更新组件"),
+    "install_js_runtime": QT_TRANSLATE_NOOP("Diagnostics", "去安装 JS Runtime"),
     "refresh_pot": QT_TRANSLATE_NOOP("Diagnostics", "重启 POT 服务"),
+    "enable_pot_provider": QT_TRANSLATE_NOOP("Diagnostics", "去启用 POT 引擎"),
     "retry_now": QT_TRANSLATE_NOOP("Diagnostics", "立即重试"),
     "open_download_dir": QT_TRANSLATE_NOOP("Diagnostics", "打开下载目录"),
 }
@@ -66,12 +68,50 @@ def known_codes() -> frozenset[str]:
     return frozenset(_ENTRIES)
 
 
+#: 完全无法识别时的标题。引擎兜底能抽出 HTTP 码 / extractor 名的话，那个标题信息量更大，
+#: 这里只兜住"连兜底都没抽出东西"的情况。
+_GENERIC_UNKNOWN_TITLE = QT_TRANSLATE_NOOP("Diagnostics", "发生未知错误")
+
+#: 无法识别时给出的通用处置步骤（识别成功时不显示，由 fix_action 引导取代）。
+_GENERIC_SUGGESTION = QT_TRANSLATE_NOOP(
+    "Diagnostics", "1. 请重试\n2. 查看日志文件\n3. 将此错误反馈给开发者"
+)
+
+
+def generic_unknown_title() -> str:
+    """完全无法识别的错误标题，已本地化。"""
+    return _translate(_GENERIC_UNKNOWN_TITLE)
+
+
+def generic_suggestion() -> str:
+    """无法识别时的通用处置步骤，已本地化。"""
+    return _translate(_GENERIC_SUGGESTION)
+
+
+def localize(source: str) -> str:
+    """把 ``Diagnostics`` 上下文里的源串翻译成当前语言。
+
+    给引擎那类"源串在别处用 QT_TRANSLATE_NOOP 标记、这里只做运行期查表"的调用方用。
+    """
+    return _translate(source)
+
+
 _ENTRIES: dict[str, tuple[str, str]] = {
     FALLBACK_CODE: (
         QT_TRANSLATE_NOOP("Diagnostics", "解析或下载失败"),
         QT_TRANSLATE_NOOP("Diagnostics", "系统遇到无法完全识别的错误，请查看错误原始日志。"),
     ),
     # ---- 工具链 ----
+    "js_runtime_missing": (
+        QT_TRANSLATE_NOOP("Diagnostics", "缺少 JS Runtime"),
+        QT_TRANSLATE_NOOP(
+            "Diagnostics",
+            "yt-dlp 找不到可用的 JavaScript 运行时（Deno/Node/Bun/QuickJS）。"
+            "没有它就无法解出 YouTube 的挑战参数，会缺失大量高画质格式。"
+            "注意这不是 yt-dlp 版本过旧，更新组件不会解决 —— 需要安装 Deno，"
+            "或在设置页的「JS Runtime」里指定可执行文件路径。",
+        ),
+    ),
     "nsig_extraction_failed": (
         QT_TRANSLATE_NOOP("Diagnostics", "nsig 提取失败"),
         QT_TRANSLATE_NOOP(
@@ -89,9 +129,7 @@ _ENTRIES: dict[str, tuple[str, str]] = {
     ),
     "ytdlp_outdated": (
         QT_TRANSLATE_NOOP("Diagnostics", "核心组件版本过旧"),
-        QT_TRANSLATE_NOOP(
-            "Diagnostics", "当前 yt-dlp 版本已明显落后，建议先更新再排查其他问题。"
-        ),
+        QT_TRANSLATE_NOOP("Diagnostics", "当前 yt-dlp 版本已明显落后，建议先更新再排查其他问题。"),
     ),
     "pot_provider_unavailable": (
         QT_TRANSLATE_NOOP("Diagnostics", "POT 服务不可用"),
@@ -117,9 +155,7 @@ _ENTRIES: dict[str, tuple[str, str]] = {
     ),
     "ffmpeg_not_found": (
         QT_TRANSLATE_NOOP("Diagnostics", "缺少核心组件 (FFmpeg)"),
-        QT_TRANSLATE_NOOP(
-            "Diagnostics", "视频合并或封面处理需要 FFmpeg，但系统未找到该工具。"
-        ),
+        QT_TRANSLATE_NOOP("Diagnostics", "视频合并或封面处理需要 FFmpeg，但系统未找到该工具。"),
     ),
     "ffmpeg_failed": (
         QT_TRANSLATE_NOOP("Diagnostics", "FFmpeg 处理失败"),
@@ -169,9 +205,7 @@ _ENTRIES: dict[str, tuple[str, str]] = {
     ),
     "age_restricted": (
         QT_TRANSLATE_NOOP("Diagnostics", "年龄限制 (需要登录验证)"),
-        QT_TRANSLATE_NOOP(
-            "Diagnostics", "该视频有年龄限制，必须使用已验证年龄的账号才能访问。"
-        ),
+        QT_TRANSLATE_NOOP("Diagnostics", "该视频有年龄限制，必须使用已验证年龄的账号才能访问。"),
     ),
     "private_video": (
         QT_TRANSLATE_NOOP("Diagnostics", "私人视频"),
@@ -203,9 +237,7 @@ _ENTRIES: dict[str, tuple[str, str]] = {
     ),
     "video_removed": (
         QT_TRANSLATE_NOOP("Diagnostics", "视频已被删除"),
-        QT_TRANSLATE_NOOP(
-            "Diagnostics", "该视频已被平台或上传者永久删除，也可能是账号已被封禁。"
-        ),
+        QT_TRANSLATE_NOOP("Diagnostics", "该视频已被平台或上传者永久删除，也可能是账号已被封禁。"),
     ),
     "video_unavailable": (
         QT_TRANSLATE_NOOP("Diagnostics", "视频不可用"),
@@ -216,9 +248,7 @@ _ENTRIES: dict[str, tuple[str, str]] = {
     ),
     "livestream_not_started": (
         QT_TRANSLATE_NOOP("Diagnostics", "直播尚未开始"),
-        QT_TRANSLATE_NOOP(
-            "Diagnostics", "该直播还没开始推流，请等到开播后再下载。"
-        ),
+        QT_TRANSLATE_NOOP("Diagnostics", "该直播还没开始推流，请等到开播后再下载。"),
     ),
     "livestream_ended": (
         QT_TRANSLATE_NOOP("Diagnostics", "直播已结束"),
@@ -229,15 +259,11 @@ _ENTRIES: dict[str, tuple[str, str]] = {
     ),
     "not_premiered_yet": (
         QT_TRANSLATE_NOOP("Diagnostics", "首映未开始"),
-        QT_TRANSLATE_NOOP(
-            "Diagnostics", "该视频处于首映等待状态，尚未正式开播。"
-        ),
+        QT_TRANSLATE_NOOP("Diagnostics", "该视频处于首映等待状态，尚未正式开播。"),
     ),
     "playlist_unavailable": (
         QT_TRANSLATE_NOOP("Diagnostics", "播放列表不可用"),
-        QT_TRANSLATE_NOOP(
-            "Diagnostics", "该播放列表不存在、已被删除，或被设置为私有。"
-        ),
+        QT_TRANSLATE_NOOP("Diagnostics", "该播放列表不存在、已被删除，或被设置为私有。"),
     ),
     "channel_unavailable": (
         QT_TRANSLATE_NOOP("Diagnostics", "频道页不可用"),
@@ -255,9 +281,7 @@ _ENTRIES: dict[str, tuple[str, str]] = {
     ),
     "url_unsupported": (
         QT_TRANSLATE_NOOP("Diagnostics", "链接无效或不支持"),
-        QT_TRANSLATE_NOOP(
-            "Diagnostics", "提供的链接格式不正确，或者当前组件不支持解析该网站。"
-        ),
+        QT_TRANSLATE_NOOP("Diagnostics", "提供的链接格式不正确，或者当前组件不支持解析该网站。"),
     ),
     "format_unavailable": (
         QT_TRANSLATE_NOOP("Diagnostics", "所选格式不可用"),
@@ -273,18 +297,49 @@ _ENTRIES: dict[str, tuple[str, str]] = {
             "页面里没有找到任何可下载的音视频流。若链接本身能正常播放，多半是解析组件已过时。",
         ),
     ),
+    "sabr_formats_skipped": (
+        QT_TRANSLATE_NOOP("Diagnostics", "YouTube 限制了可下载的流"),
+        QT_TRANSLATE_NOOP(
+            "Diagnostics",
+            "YouTube 对本次使用的客户端强制了 SABR 流式传输，带下载链接的格式被丢弃，"
+            "选片器因此挑不到任何格式。这不是画质不存在，换档位没有用。"
+            "启用 POT 引擎（bgutil）或更新 yt-dlp 后重试。",
+        ),
+    ),
     "input_filter_skipped": (
         QT_TRANSLATE_NOOP("Diagnostics", "已按过滤条件跳过"),
         QT_TRANSLATE_NOOP(
             "Diagnostics",
-            "该条目不符合设定的过滤条件（上传日期、文件大小、数量上限等），已被跳过。"
-            "这不是错误。",
+            "该条目不符合设定的过滤条件（上传日期、文件大小、数量上限等），已被跳过。这不是错误。",
         ),
     ),
     "already_downloaded": (
         QT_TRANSLATE_NOOP("Diagnostics", "已下载过"),
+        QT_TRANSLATE_NOOP("Diagnostics", "该视频已存在于下载记录中，本次已跳过。这不是错误。"),
+    ),
+    # ---- 字幕（一律 severity=warning：字幕是 best-effort，任务照旧成功） ----
+    "subtitles_no_language_match": (
+        QT_TRANSLATE_NOOP("Diagnostics", "字幕未命中任何可用语言"),
         QT_TRANSLATE_NOOP(
-            "Diagnostics", "该视频已存在于下载记录中，本次已跳过。这不是错误。"
+            "Diagnostics",
+            "该视频没有你所选语言的字幕，视频本身已下载完成。可在字幕设置里改选语言，"
+            "或允许自动生成/自动翻译字幕。",
+        ),
+    ),
+    "subtitle_download_rate_limited": (
+        QT_TRANSLATE_NOOP("Diagnostics", "字幕下载被限流 (429)"),
+        QT_TRANSLATE_NOOP(
+            "Diagnostics",
+            "视频已下载完成，但字幕请求被服务端限流。稍后重试或更换节点即可补下字幕，"
+            "视频文件不受影响。",
+        ),
+    ),
+    "subtitle_pot_required": (
+        QT_TRANSLATE_NOOP("Diagnostics", "字幕需要 PO Token"),
+        QT_TRANSLATE_NOOP(
+            "Diagnostics",
+            "视频已下载完成，但自动生成/自动翻译字幕受 PO Token 保护。可在设置里启用 "
+            "POT 验证引擎（实验性），或改用人工字幕。",
         ),
     ),
     # ---- 网络 ----
@@ -292,23 +347,19 @@ _ENTRIES: dict[str, tuple[str, str]] = {
         QT_TRANSLATE_NOOP("Diagnostics", "请求过于频繁 (429)"),
         QT_TRANSLATE_NOOP(
             "Diagnostics",
-            "服务端对当前 IP 触发了限流。稍等一会儿或更换节点即可恢复，"
-            "程序会自动退避重试。",
+            "服务端对当前 IP 触发了限流。稍等一会儿或更换节点即可恢复，程序会自动退避重试。",
         ),
     ),
     "http_403_forbidden": (
         QT_TRANSLATE_NOOP("Diagnostics", "访问被拒绝 (403)"),
         QT_TRANSLATE_NOOP(
             "Diagnostics",
-            "服务端拒绝了下载请求。常见原因是节点 IP 被风控、播放地址已过期，"
-            "或核心组件版本过旧。",
+            "服务端拒绝了下载请求。常见原因是节点 IP 被风控、播放地址已过期，或核心组件版本过旧。",
         ),
     ),
     "http_404_not_found": (
         QT_TRANSLATE_NOOP("Diagnostics", "资源不存在 (404)"),
-        QT_TRANSLATE_NOOP(
-            "Diagnostics", "目标地址已失效或资源已被移除。请确认链接是否仍然有效。"
-        ),
+        QT_TRANSLATE_NOOP("Diagnostics", "目标地址已失效或资源已被移除。请确认链接是否仍然有效。"),
     ),
     "http_server_5xx": (
         QT_TRANSLATE_NOOP("Diagnostics", "服务器故障 (5xx)"),
@@ -406,14 +457,11 @@ _ENTRIES: dict[str, tuple[str, str]] = {
         QT_TRANSLATE_NOOP("Diagnostics", "找不到文件"),
         QT_TRANSLATE_NOOP(
             "Diagnostics",
-            "预期的文件或可执行程序不存在。可能是中间文件被安全软件清理，"
-            "或组件安装不完整。",
+            "预期的文件或可执行程序不存在。可能是中间文件被安全软件清理，或组件安装不完整。",
         ),
     ),
     "out_of_memory": (
         QT_TRANSLATE_NOOP("Diagnostics", "内存不足"),
-        QT_TRANSLATE_NOOP(
-            "Diagnostics", "系统无法为处理进程分配足够内存，请关闭部分程序后重试。"
-        ),
+        QT_TRANSLATE_NOOP("Diagnostics", "系统无法为处理进程分配足够内存，请关闭部分程序后重试。"),
     ),
 }

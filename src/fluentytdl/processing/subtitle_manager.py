@@ -1,19 +1,19 @@
 """
-FluentYTDL 字幕管理模块
+FluentYTDL 字幕轨道解析
 
-提供字幕下载、格式转换、双语合成等功能：
-- 多语言字幕选择
-- 格式转换 (SRT, ASS, VTT)
-- 双语字幕合成
-- 字幕嵌入
+从 yt-dlp 的 info 字典里读出可用字幕轨道，并给出可读的名字：
+- 区分人工 / 自动生成(ASR) / 自动翻译三种来源
+- 语言代码 → 本地化显示名（含来源语种）
+- 供 UI 选择器与设置页共用的常用语言表
+
+真实的下载、格式转换、嵌入都由 yt-dlp CLI 自己完成（`--write-subs`
+/ `--convert-subs` / `--embed-subs`），本模块不碰进程也不碰文件。
 """
 
 from __future__ import annotations
 
-import subprocess
 from dataclasses import dataclass
 from enum import Enum
-from pathlib import Path
 from typing import Any
 
 from PySide6.QtCore import QT_TRANSLATE_NOOP
@@ -71,6 +71,24 @@ COMMON_SUBTITLE_LANGUAGES = [
 # 支持的字幕格式
 SUBTITLE_FORMATS = ["srt", "ass", "vtt", "lrc"]
 
+# 归一化索引：`LANGUAGE_NAMES` 的键是规范大小写（`zh-Hans`），yt-dlp 回来的键不保证
+_LANGUAGE_NAMES_LC = {code.lower(): name for code, name in LANGUAGE_NAMES.items()}
+
+
+def _lookup_language_name(code: str) -> str | None:
+    """逐级截断查 `LANGUAGE_NAMES`：`en-GB` 先查全串，miss 再查 `en`。
+
+    表里只有裸语种码，而真实字幕键几乎总带地区（`en-GB`）或文字（`zh-Hans`），
+    所以直接 `.get()` 是必然 miss —— 那正是选择器里中英文混排的成因。
+    """
+    parts = code.split("-")
+    while parts:
+        hit = _LANGUAGE_NAMES_LC.get("-".join(parts).lower())
+        if hit:
+            return hit
+        parts.pop()
+    return None
+
 
 class SubtitleSourceType(str, Enum):
     MANUAL = "manual"
@@ -106,14 +124,43 @@ class SubtitleTrack:
 
     @property
     def display_name(self) -> str:
-        """获取显示名称"""
+        """人类可读的轨道名：`英语`、`中文(简体)（由 en-GB 自动翻译）`。
+
+        以前这里是 `LANGUAGE_NAMES.get(self.lang_code, …)`，对**真实 YouTube 字幕键
+        必然 miss**（表里是裸语种码，键是 `en-GB` / `zh-Hans-en-GB`），miss 之后回落
+        到 yt-dlp 给的英文 `name` 或裸代码，同一张选择器表里中英文混排。现在先用
+        `bcp47.split_translated_key()` 拆出目标语种，再逐级截断查表。
+
+        来源语种直接写进名字：自动翻译的质量完全取决于源轨道，
+        `中文(简体)（由 en-GB 自动翻译）` 比笼统的 `[自动翻译]` 有用得多 ——
+        用户能据此判断"要不要干脆直接下英文人工字幕"。
+        """
         from PySide6.QtCore import QCoreApplication
 
-        name = LANGUAGE_NAMES.get(self.lang_code, self.lang_name or self.lang_code)
+        from ..utils import bcp47
 
-        # Translate the base language name
-        translated_name = QCoreApplication.translate("SubtitleManager", name)
+        target, source = bcp47.split_translated_key(self.lang_code)
+        table_name = _lookup_language_name(target)
+        if table_name:
+            translated_name = QCoreApplication.translate("SubtitleManager", table_name)
+        else:
+            # 表外语种：yt-dlp 的 name 通常是英文全名（`Welsh`），仍比裸代码好读。
+            # 复合键的 name 是 YouTube 拼的 `Welsh from English (United Kingdom)`，
+            # 来源已经在里面了 —— 不切掉就会和下面的"（由 … 自动翻译）"重复一遍。
+            fallback = self.lang_name or self.lang_code
+            translated_name = fallback.split(" from ")[0] if source else fallback
 
+        if self.source_type == SubtitleSourceType.MANUAL:
+            return translated_name
+
+        if source:
+            if self.source_type == SubtitleSourceType.AUTO_GENERATED:
+                suffix = QCoreApplication.translate("SubtitleManager", "（由 {0} 自动生成）")
+            else:
+                suffix = QCoreApplication.translate("SubtitleManager", "（由 {0} 自动翻译）")
+            return translated_name + suffix.format(source)
+
+        # 拆不出来源（非复合键的自动字幕）时保持原有措辞
         if self.source_type == SubtitleSourceType.AUTO_GENERATED:
             translated_name += QCoreApplication.translate("SubtitleManager", " [自动生成]")
         elif self.source_type == SubtitleSourceType.AUTO_TRANSLATED:
@@ -121,9 +168,19 @@ class SubtitleTrack:
         return translated_name
 
 
-def _lang_matches(lang1: str, lang2: str) -> bool:
-    """简易语种匹配，忽略区域"""
-    return lang1.split("-")[0].lower() == lang2.split("-")[0].lower()
+def _same_language(a: str, b: str) -> bool:
+    """两个 tag 是不是同一语种（忽略地区/文字差异）。
+
+    **双向**是刻意的，且与 `bcp47.matches()` 的单向语义不冲突：那里在回答"用户点名
+    要 X，这条 Y 算不算"（`en-GB` 不该被一条笼统的 `en` 顶替），这里在回答"这两个
+    标注指的是同一种语言吗"，没有谁点名谁。
+
+    比它取代的 `_lang_matches()`（按 `-` 切开比首段）**更严**：那个把 `zh-Hans` 和
+    `zh-Hant` 判成同一种语言，于是"简中原声 → 繁中翻译"的轨道会被误标成自动生成。
+    """
+    from ..utils import bcp47
+
+    return bcp47.matches(a, b) or bcp47.matches(b, a)
 
 
 def _detect_original_language(info: dict[str, Any]) -> str | None:
@@ -147,11 +204,26 @@ def _detect_original_language(info: dict[str, Any]) -> str | None:
 
 
 def _is_asr_track(lang_code: str, sub_list: Any, original_lang: str | None) -> bool:
-    """判断是否为 ASR 自动生成轨道"""
+    """判断这条自动字幕是 ASR 原声转写，还是从别的语言机翻过来的。
+
+    yt-dlp 把两者混在同一个 `automatic_captions` 里，只能靠键的形状分辨。复合键
+    （`en-en-GB` / `zh-Hans-en-GB`）自己就带着答案：来源语种写在后半段，目标 == 来源
+    即原声转写。这条判定比拿 `original_lang` 猜可靠得多 —— 顺带修掉原声是中文时、
+    每条 `zh-*-<来源>` 机翻轨都被误标成"自动生成"的老毛病（旧的 `_lang_matches()`
+    只比首段，`zh-Hans` 和 `zh-Hant` 在它眼里是同一种语言）。
+    """
+    from ..utils import bcp47
+
     if lang_code.endswith("-orig"):
         return True
 
-    if original_lang and _lang_matches(lang_code, original_lang):
+    target, source = bcp47.split_translated_key(lang_code)
+    if source and _same_language(target, source):
+        return True
+
+    # 非复合键（裸 `en`、`zh-Hans`）才需要拿视频原声语种来判。这里传整个 lang_code：
+    # 复合键匹配不上任何简单 tag，于是自然落空，不会把机翻轨误判回原声。
+    if original_lang and _same_language(lang_code, original_lang):
         return True
 
     if isinstance(sub_list, list) and sub_list:
@@ -221,15 +293,23 @@ def extract_subtitle_tracks(info: dict[str, Any]) -> list[SubtitleTrack]:
     return tracks
 
 
-def get_subtitle_languages(info: dict[str, Any]) -> list[dict[str, Any]]:
-    """
-    获取可用字幕语言列表（用于 UI 显示）
+# `get_subtitle_languages()` 在拿不到用户偏好时的排序回落
+_DEFAULT_SORT_PREFS = ["zh-Hans", "zh-Hant", "zh", "en", "ja", "ko"]
+
+
+def get_subtitle_languages(
+    info: dict[str, Any],
+    prefs: list[str] | None = None,
+) -> list[dict[str, Any]]:
+    """获取可用字幕语言列表（用于 UI 显示）。
 
     Args:
         info: 视频信息
+        prefs: 用户的字幕语言偏好，按优先级排列；None 时回落到 `_DEFAULT_SORT_PREFS`
 
     Returns:
-        [{"code": "en", "name": "英语", "auto": False}, ...]
+        `[{"code": "en-GB", "name": "英语", "auto": False, "ext": "vtt"}, ...]`
+        —— 命中偏好的语言在前，其余按代码字典序。
     """
     tracks = extract_subtitle_tracks(info)
 
@@ -245,67 +325,14 @@ def get_subtitle_languages(info: dict[str, Any]) -> list[dict[str, Any]]:
                 "ext": t.ext,
             }
 
-    # 排序：中文 > 英语 > 日语 > 其他
-    priority = ["zh-Hans", "zh-Hant", "zh", "en", "ja", "ko"]
+    # 排序按偏好命中度，而**不是**精确代码比对：`priority.index("en-GB")` 抛
+    # ValueError，真实 YouTube 键会整批落进兜底档，排出来的顺序和偏好毫无关系。
+    from ..utils import bcp47
 
-    def sort_key(item):
-        code = item["code"]
-        try:
-            return (0, priority.index(code))
-        except ValueError:
-            return (1, code)
+    order = prefs or _DEFAULT_SORT_PREFS
+
+    def sort_key(item: dict[str, Any]) -> tuple[int, int, str]:
+        idx, tier = bcp47.preference_rank(order, item["code"])
+        return idx, tier, item["code"]
 
     return sorted(seen.values(), key=sort_key)
-
-
-def convert_subtitle(
-    input_path: str | Path,
-    output_format: str,
-    output_path: str | Path | None = None,
-    ffmpeg_path: str | None = None,
-) -> Path:
-    """
-    转换字幕格式
-
-    Args:
-        input_path: 输入字幕文件
-        output_format: 目标格式 (srt, ass, vtt)
-        output_path: 输出路径，None 则自动生成
-        ffmpeg_path: ffmpeg 路径
-
-    Returns:
-        输出文件路径
-    """
-    input_path = Path(input_path)
-
-    if output_format not in SUBTITLE_FORMATS:
-        raise ValueError(f"不支持的字幕格式: {output_format}")
-
-    if output_path is None:
-        output_path = input_path.with_suffix(f".{output_format}")
-    else:
-        output_path = Path(output_path)
-
-    # 使用 ffmpeg 转换
-    ffmpeg = ffmpeg_path or "ffmpeg"
-    cmd = [
-        ffmpeg,
-        "-y",  # 覆盖输出
-        "-i",
-        str(input_path),
-        str(output_path),
-    ]
-
-    try:
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=60,
-        )
-        if result.returncode != 0:
-            raise RuntimeError(f"ffmpeg 转换失败: {result.stderr}")
-    except subprocess.TimeoutExpired as e:
-        raise RuntimeError("字幕转换超时") from e
-
-    return output_path

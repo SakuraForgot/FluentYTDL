@@ -62,6 +62,7 @@ from ....models.mappers import VideoInfoMapper
 from ....models.subtitle_config import PlaylistSubtitleOverride
 from ....models.video_info import VideoInfo
 from ....models.video_task import VideoTask
+from ....observability import FlowTrace, emit_event, new_flow
 from ....processing import subtitle_service
 from ....utils.filesystem import sanitize_filename
 from ....utils.image_loader import get_image_loader
@@ -329,6 +330,7 @@ class DownloadConfigWindow(FramelessWindow):
         playlist_flat: bool = False,
         target_tab: str | None = None,
         preloaded_info: dict[str, Any] | None = None,
+        flow: FlowTrace | None = None,
     ):
         # parent=None ensures independent window behavior (taskbar icon, not always-on-top of main)
         super().__init__(parent=None)
@@ -339,6 +341,13 @@ class DownloadConfigWindow(FramelessWindow):
         self._mode = mode
         self._smart_detect = smart_detect
         self._playlist_flat = playlist_flat
+        # 本窗口这一整轮操作的链标识：解析 → 选择 → 创建任务。在 `__init__` 铸造而不是
+        # 在 `start_extraction()` 里，是为了让「换 cookie 后重新解析」「切 tab 再拉一次」
+        # 都留在同一条链上 —— 用户眼里那本来就是同一次操作。
+        #
+        # `flow` 由调用方传入：智能检测切换 VR/普通模式会关掉本窗口再开一个，
+        # 传进来才不会把一次操作在时间线上劈成两条孤链。
+        self.trace: FlowTrace = flow if flow is not None else new_flow(stage="parse")
         # 智能模式切换时上一轮的解析结果。只用于渲染加载页的预览条，
         # 绝不参与格式选择/下载——VR 与普通模式的格式列表来源不同，必须以本轮解析为准。
         self._preloaded_info = preloaded_info if isinstance(preloaded_info, dict) else None
@@ -387,10 +396,19 @@ class DownloadConfigWindow(FramelessWindow):
         self.buttonLayout.setSpacing(12)
         self.buttonLayout.addStretch(1)
 
+        # 成功态的"重新解析"：解析成功但结果不满意（画质不达标、换过 Cookie/节点）时
+        # 唯一能绕过已保留结果的入口。以前只有 ERROR_COOKIE 态的重试面板能清缓存，
+        # 结果页压根没有出口，右键「重新解析」也照样命中缓存。
+        self.reparseButton = PushButton(self.tr("重新解析"), self)
+        self.reparseButton.setToolTip(self.tr("忽略已保留的解析结果，重新请求一次"))
+        self.reparseButton.setVisible(False)
+
         self.cancelButton = PushButton(self.tr("取消"), self)
         self.yesButton = PrimaryPushButton(self.tr("下载"), self)
         self.yesButton.setDisabled(True)
 
+        # 插在 addStretch 之前 → 靠左，与右侧的 取消/下载 分开
+        self.buttonLayout.insertWidget(0, self.reparseButton)
         self.buttonLayout.addWidget(self.cancelButton)
         self.buttonLayout.addWidget(self.yesButton)
 
@@ -402,6 +420,7 @@ class DownloadConfigWindow(FramelessWindow):
         # 连接按钮
         self.cancelButton.clicked.connect(self.close)
         self.yesButton.clicked.connect(self._on_download_clicked)
+        self.reparseButton.clicked.connect(self._on_reparse_clicked)
 
         # === 状态初始化 ===
         self._is_playlist = False
@@ -422,6 +441,7 @@ class DownloadConfigWindow(FramelessWindow):
         self._subtitle_choice_made = False
         self._subtitle_pick_result: SubtitlePickerResult | None = None
         self._section_selector: SectionRangeSelector | None = None
+        self._section_collapsed_min_h: int | None = None
         self._subtitle_state_before_section: tuple[bool, bool] | None = None
         self._playlist_sub_override: PlaylistSubtitleOverride | None = None
 
@@ -557,6 +577,8 @@ class DownloadConfigWindow(FramelessWindow):
         self._run_cookie_precheck()
 
         # ========== 身份验证重试面板 ==========
+        from ....auth.auth_service import BROWSER_COMBO_LABELS
+
         self.retryWidget = QWidget(self)
         self.retryLayout = QVBoxLayout(self.retryWidget)
         self.retryLayout.setContentsMargins(0, 8, 0, 0)
@@ -620,7 +642,7 @@ class DownloadConfigWindow(FramelessWindow):
         extract_lay.setSpacing(10)
         extract_hint = create_hint_label(
             self.tr("从本地已登录的浏览器中直接提取 Cookie。\n")
-            + self.tr("Chromium 内核浏览器 (Edge/Chrome) 可能需要管理员权限。"),
+            + self.tr("Chromium 内核浏览器 (Edge/Brave 等) 可能需要管理员权限。"),
             extract_panel,
         )
         extract_lay.addWidget(extract_hint)
@@ -629,20 +651,9 @@ class DownloadConfigWindow(FramelessWindow):
         extract_h.setContentsMargins(0, 0, 0, 0)
         extract_h.setSpacing(8)
         self._extractCombo = ComboBox(extract_row)
-        self._extractCombo.addItems(
-            [
-                "Microsoft Edge",
-                "Google Chrome",
-                "Firefox",
-                "Chromium",
-                "Brave",
-                "Opera",
-                "Opera GX",
-                "Vivaldi",
-                "LibreWolf",
-                self.tr("百分浏览器 (Cent)"),
-            ]
-        )
+        # 顺序与 auth_service.BROWSER_COMBO_ITEMS 严格一致 —— 这里以前是第五份手写列表，
+        # 而且顺序还和设置页的那份不一样（Firefox 在第 3 位），改动时最容易漏。
+        self._extractCombo.addItems(list(BROWSER_COMBO_LABELS))
         self._extractRetryBtn = PrimaryPushButton(self.tr("提取并重试"), extract_row)
         self._extractRetryBtn.clicked.connect(self._on_extract_retry_clicked)
         extract_h.addWidget(self._extractCombo, 1)
@@ -1092,7 +1103,7 @@ class DownloadConfigWindow(FramelessWindow):
             self.close()
         except Exception as e:
             logger.exception("_on_download_clicked 异常")
-            from qfluentwidgets import InfoBar
+            from ..common.custom_info_bar import InfoBar
 
             InfoBar.error(
                 self.tr("构建下载任务失败"),
@@ -1102,45 +1113,80 @@ class DownloadConfigWindow(FramelessWindow):
             )
 
     def _apply_dialog_size_for_mode(self) -> None:
-        if self._is_playlist:
-            w, h = 980, 760
-            y_offset = 30
-            x_offset = 25
-        elif self._vr_mode:
-            w, h = 880, 750
-            y_offset = 80
-            x_offset = 0
-        elif self._mode in ("subtitle", "cover"):
-            w, h = 760, 520
-            y_offset = 30
-            x_offset = 0
-        else:
-            # 单视频窗口已加高到 880，再上移就会顶到屏幕上沿（被 y<0 钳制），
-            # 所以这里不做垂直偏移，严格按视觉中心摆放。
-            w, h = 760, 880
-            y_offset = 0
-            x_offset = 0
-
+        w, h, y_offset, x_offset = self._mode_window_metrics()
         target_geo = self._get_target_geometry(w, h, y_offset, x_offset)
+        self._start_geometry_animation(target_geo, 250, lock_width=w)
 
+    def _mode_window_metrics(self) -> tuple[int, int, int, int]:
+        """当前模式的窗口尺寸与相对视觉中心的偏移：(宽, 高, y 偏移, x 偏移)。"""
+        if self._is_playlist:
+            return 980, 760, 30, 25
+        if self._vr_mode:
+            return 880, 750, 80, 0
+        if self._mode in ("subtitle", "cover"):
+            return 760, 520, 30, 0
+        # 单视频窗口已加高到 880，再上移就会顶到屏幕上沿（被 y<0 钳制），
+        # 所以这里不做垂直偏移，严格按视觉中心摆放。
+        return 760, 880, 0, 0
+
+    def _available_geometry(self):
+        from PySide6.QtGui import QGuiApplication
+
+        screen = self.screen() or QGuiApplication.primaryScreen()
+        return screen.availableGeometry()
+
+    def _start_geometry_animation(
+        self, target_geo, duration: int = 250, lock_width: int | None = None
+    ) -> None:
         from PySide6.QtCore import QEasingCurve, QPropertyAnimation
+
+        old = getattr(self, "geo_anim", None)
+        if old is not None:
+            old.stop()
 
         # 动画期间放开尺寸限制
         self.setMinimumSize(0, 0)
         self.setMaximumSize(16777215, 16777215)
 
-        self.geo_anim = QPropertyAnimation(self, b"geometry")
-        self.geo_anim.setDuration(250)
-        self.geo_anim.setStartValue(self.geometry())
-        self.geo_anim.setEndValue(target_geo)
-        self.geo_anim.setEasingCurve(QEasingCurve.Type.InOutQuad)
+        # 显式传 parent，否则动画对象只靠 self.geo_anim 这一个引用活着，
+        # 下一次赋值会在动画仍在跑时把它回收掉。
+        anim = QPropertyAnimation(self, b"geometry", self)
+        anim.setDuration(duration)
+        anim.setStartValue(self.geometry())
+        anim.setEndValue(target_geo)
+        anim.setEasingCurve(QEasingCurve.Type.InOutQuad)
 
-        def on_anim_finished():
-            self.setMinimumWidth(w)
-            self.setMaximumWidth(w + 60)
+        if lock_width is not None:
 
-        self.geo_anim.finished.connect(on_anim_finished)
-        self.geo_anim.start()
+            def on_anim_finished() -> None:
+                self.setMinimumWidth(lock_width)
+                self.setMaximumWidth(lock_width + 60)
+
+            anim.finished.connect(on_anim_finished)
+
+        self.geo_anim = anim
+        anim.start()
+
+    def _animate_height_keep_center(self, target_h: int, duration: int, min_h: int = 0) -> None:
+        """只改高度，窗口视觉中心保持不动（必要时贴合屏幕可用区域）。"""
+        from PySide6.QtCore import QRect
+
+        geo = self.geometry()
+        avail = self._available_geometry()
+        # 屏幕放不下时贴合可用高度，但绝不低于布局要求的高度：那只会让 Qt 在
+        # 动画结束后又把窗口撑回去，居中白算一遍。
+        target_h = max(1, int(min_h), min(int(target_h), avail.height()))
+        if target_h == geo.height():
+            return
+
+        # 用 round(delta/2) 而不是整除：反复开关时上移/下移的像素量完全对称，
+        # 窗口不会每来回一次就往上/下偏 1px。
+        y = geo.y() + round((geo.height() - target_h) / 2)
+        y = max(avail.top(), min(y, avail.bottom() - target_h + 1))
+        target_geo = QRect(geo.x(), y, geo.width(), target_h)
+        self._start_geometry_animation(
+            target_geo, duration, lock_width=self._mode_window_metrics()[0]
+        )
 
     def _get_target_geometry(self, w: int, h: int, y_offset: int, x_offset: int = 0):
         from PySide6.QtCore import QRect
@@ -1157,19 +1203,23 @@ class DownloadConfigWindow(FramelessWindow):
             geo = main_window.geometry()
             cx = geo.center().x()
             cy = geo.center().y()
+            screen = main_window.screen() or QGuiApplication.primaryScreen()
         else:
-            screen = QGuiApplication.primaryScreen().availableGeometry()
-            cx = screen.center().x()
-            cy = screen.center().y()
+            screen = self.screen() or QGuiApplication.primaryScreen()
+            geo = screen.availableGeometry()
+            cx = geo.center().x()
+            cy = geo.center().y()
+
+        avail = screen.availableGeometry()
 
         # 严格计算左上角坐标，并应用独立的水平偏移
         x = cx - w // 2 + x_offset
         # 根据独立的 y_offset 偏移视觉中心
         y = cy - h // 2 - y_offset
 
-        # 防止移出屏幕顶部
-        if y < 0:
-            y = 0
+        # 贴合屏幕可用区域：高度也要钳，否则窗口底部的按钮会被推到屏幕外面
+        h = min(h, avail.height())
+        y = max(avail.top(), min(y, avail.bottom() - h + 1))
 
         return QRect(x, y, w, h)
 
@@ -1217,6 +1267,59 @@ class DownloadConfigWindow(FramelessWindow):
         except Exception:
             pass
 
+    def _reconnect_shared_signals(self) -> None:
+        """重新连上被 `_stop_background_parsing()` 断开的单例信号。
+
+        `image_loader` 和 `dependency_manager` 都是全局单例，停后台解析时必须断开
+        （否则窗口销毁后回调成野指针），而窗口还要继续活下去的场景就得连回来。
+        `_reload_channel()` 和 `_on_reparse_clicked()` 都走这条路。
+        """
+        try:
+            self.image_loader.loaded.connect(self._on_thumb_loaded)
+            self.image_loader.loaded_with_url.connect(self._on_thumb_loaded_with_url)
+            self.image_loader.failed.connect(self._on_thumb_failed)
+        except Exception:
+            pass
+
+        try:
+            from ....core.dependency_manager import dependency_manager
+
+            dependency_manager.check_finished.connect(self._on_dep_check_finished)
+            dependency_manager.install_finished.connect(self._on_dep_install_finished)
+            dependency_manager.check_error.connect(self._on_dep_error)
+            dependency_manager.download_error.connect(self._on_dep_error)
+        except Exception:
+            pass
+
+    def _on_reparse_clicked(self) -> None:
+        """结果页的「重新解析」：显式丢掉已保留结果，重走一次子进程。
+
+        与 `_retry_parse_with_auth()` 的区别是它不碰 cookie 语义、不动 retryWidget，
+        只是清缓存后原样再跑一遍 `start_extraction()`。存在的理由是解析成功但结果不
+        可接受（画质不达标、刚换过节点）时，此前**没有任何**绕过缓存的入口。
+
+        频道模式要额外清掉 `_channel_caches`：那是窗口自己的一层内存缓存，
+        `_reload_channel()` 见到 `loaded` 就直接拼装渲染，不清的话点了没反应。
+        """
+        # 停掉在跑的后台解析/调度器，并把断开的单例信号连回来。
+        # `start_extraction()` 只 cancel 主 worker，管不到 scheduler 和 extract_manager。
+        self._stop_background_parsing()
+        self._is_closing = False
+        self._reconnect_shared_signals()
+
+        try:
+            from ....youtube.youtube_service import youtube_service
+
+            youtube_service.invalidate_parse_cache("用户在结果页要求重新解析")
+        except Exception:
+            pass
+
+        if self._is_channel:
+            for tab in self._channel_caches:
+                self._channel_caches[tab] = {"status": "unloaded", "data": None}
+
+        self.start_extraction()
+
     def _switch_to_state(
         self, state: WindowState, title: str = "", show_ring: bool = False
     ) -> None:
@@ -1228,6 +1331,8 @@ class DownloadConfigWindow(FramelessWindow):
         self.contentWidget.setVisible(state == WindowState.CONTENT)
         self.retryWidget.setVisible(state == WindowState.ERROR_COOKIE)
         self.networkDiagWidget.setVisible(state == WindowState.ERROR_NETWORK)
+        # 只有结果页才给"重新解析"：错误态已有各自的重试入口，加载态点它没有意义。
+        self.reparseButton.setVisible(state == WindowState.CONTENT)
 
         # Generic error uses viewLayout directly, but we hide others
         if state in (
@@ -1270,14 +1375,14 @@ class DownloadConfigWindow(FramelessWindow):
             target_tabs = (
                 ["videos", "shorts", "streams"] if self._target_tab == "all" else [self._target_tab]
             )
-            w = ChannelExtractWorker(self.url, target_tabs, self._current_options)
+            w = ChannelExtractWorker(self.url, target_tabs, self._current_options, flow=self.trace)
             w.progress.connect(self._on_channel_progress)
             w.finished_all.connect(self.on_channel_parse_success)
             w.error.connect(self.on_parse_error)
             self.worker = w
             w.start()
         elif self._vr_mode:
-            w = VRInfoExtractWorker(self.url)
+            w = VRInfoExtractWorker(self.url, flow=self.trace)
             w.finished.connect(self.on_parse_success)
             w.error.connect(self.on_parse_error)
             self.worker = w
@@ -1289,6 +1394,7 @@ class DownloadConfigWindow(FramelessWindow):
                 playlist_flat=self._playlist_flat,
                 # 封面模式不读缓存：选中的 thumbnails[].url 会直接变成下载任务的 URL
                 read_cache=self._mode != "cover",
+                flow=self.trace,
             )
             w.finished.connect(self.on_parse_success)
             w.error.connect(self.on_parse_error)
@@ -1360,6 +1466,9 @@ class DownloadConfigWindow(FramelessWindow):
             return
 
         # Calculate max tab count to update UI
+        # 只有 loaded / unsupported 才算"这个标签页有了最终答案"。`failed` 不许加进这个
+        # 元组 —— 加了的话一次网络超时就会把 `all` 标成 loaded，那个标签页在对话框余生
+        # 里都不会再被拉取（见 `_switch_channel_tab` 的 refetchable）。
         if all(
             self._channel_caches.get(t, {}).get("status") in ("loaded", "unsupported")
             for t in ["videos", "shorts", "streams"]
@@ -1531,17 +1640,26 @@ class DownloadConfigWindow(FramelessWindow):
                     _clear_layout(child_layout)
 
         _clear_layout(self.contentLayout)
+        # 裁切控件随内容一起被销毁，别留下悬空引用和上一轮量到的折叠高度
+        self._section_selector = None
+        self._section_collapsed_min_h = None
 
     def _run_cookie_precheck(self) -> None:
         """窗口打开时本地预检 Cookie 状态（零网络消耗）"""
         try:
             from ....auth.auth_service import AuthSourceType, auth_service
             from ....auth.cookie_sentinel import cookie_sentinel
+            from ....utils.url_router import url_router
 
             if auth_service.current_source == AuthSourceType.NONE:
                 return  # 未启用验证，不预检
 
-            if not cookie_sentinel.exists:
+            # 预检必须对着这条链接的真相源。以前用的是无参 `exists` / `get_status_info()`，
+            # 它们永远指向 cookies_youtube.txt —— 打开一个 X 视频的配置窗，却被告知
+            # "尚未获取 Cookie"，而 X 的真相源明明是好的。
+            platform = "twitter" if url_router.detect_platform(self.url) == "twitter" else "youtube"
+
+            if not cookie_sentinel.get_cookie_path_for_platform(platform).exists():
                 self._cookieWarningLabel.setText(
                     self.tr("⚠️ 尚未获取 Cookie — 解析可能因登录要求而失败。")
                     + self.tr("建议先在「设置 > 账户」中获取 Cookie。")
@@ -1549,12 +1667,20 @@ class DownloadConfigWindow(FramelessWindow):
                 self._cookieWarningLabel.show()
                 return
 
-            info = cookie_sentinel.get_status_info()
+            info = cookie_sentinel.get_status_info(platform)
 
             if not info.get("cookie_valid"):
                 msg = info.get("cookie_valid_msg", self.tr("Cookie 无效"))
                 self._cookieWarningLabel.setText(
                     f"⚠️ {msg}，解析可能失败。建议前往设置页刷新 Cookie。"
+                )
+                self._cookieWarningLabel.show()
+            elif info.get("commit_warning"):
+                # 弱回退：最近一次刷新被闸门挡下，用的还是旧文件
+                self._cookieWarningLabel.setText(
+                    self.tr("⚠️ 新 Cookie 未通过校验，仍在使用旧文件：{}").format(
+                        info["commit_warning"]
+                    )
                 )
                 self._cookieWarningLabel.show()
             elif info.get("expiring_soon"):
@@ -1688,7 +1814,7 @@ class DownloadConfigWindow(FramelessWindow):
         # === 决定显示哪个面板 ===
         # 优先看规则表给出的 fix_action —— 那是规则作者对"该怎么修"的明确指示；
         # 没有 fix_action 时才退回按 category 粗分。
-        if fix_action in ("update_component", "refresh_pot"):
+        if fix_action in ("update_component", "refresh_pot", "install_js_runtime"):
             self._switch_to_state(WindowState.ERROR_COOKIE)
             self._authSegment.setCurrentItem("update")
             self.networkDiagWidget.hide()
@@ -1824,9 +1950,9 @@ class DownloadConfigWindow(FramelessWindow):
         self._switch_to_state(WindowState.LOADING, self.tr("正在重试解析..."), show_ring=True)
 
         if self._vr_mode:
-            w = VRInfoExtractWorker(self.url)
+            w = VRInfoExtractWorker(self.url, flow=self.trace)
         else:
-            w = InfoExtractWorker(self.url, self._current_options)
+            w = InfoExtractWorker(self.url, self._current_options, flow=self.trace)
 
         w.finished.connect(self.on_parse_success)
         w.error.connect(self.on_parse_error)
@@ -1836,7 +1962,6 @@ class DownloadConfigWindow(FramelessWindow):
     def _on_webview2_retry_clicked(self) -> None:
         """WebView2 登录模式重试"""
         from ....auth.auth_service import AuthSourceType, auth_service
-        from ....auth.cookie_sentinel import cookie_sentinel
 
         self._reload_webview2_account_combo()
 
@@ -1862,25 +1987,19 @@ class DownloadConfigWindow(FramelessWindow):
         # 切换到 WebView2 模式
         auth_service.set_source(AuthSourceType.WEBVIEW2, auto_refresh=False)
 
-        # 在后台线程执行 WebView2 登录
-        from PySide6.QtCore import QThread
-        from PySide6.QtCore import Signal as QSignal
+        # 在后台线程执行 WebView2 登录（统一走 CookieRefreshWorker，不再自建 QThread）
+        from ..common.cookie_refresh_worker import CookieRefreshWorker
 
-        class _DLEWorker(QThread):
-            finished = QSignal(bool, str)
+        self._webview2_worker = CookieRefreshWorker(self, platform=platform)
 
-            def run(self):
-                try:
-                    success, msg = cookie_sentinel.force_refresh_with_uac(platform=platform)
-                    self.finished.emit(success, msg)
-                except Exception as e:
-                    self.finished.emit(False, str(e))
+        def _on_done(success: bool, msg: str, _need_admin: bool = False):
+            from ....auth.auth_service import PLATFORM_LABELS
 
-        self._webview2_worker = _DLEWorker(self)
-
-        def _on_done(success: bool, msg: str):
             self._dleRetryBtn.setEnabled(True)
-            self._dleRetryBtn.setText(self.tr("登录 YouTube 并重试"))
+            # 按钮文案跟着账号平台走：X 账号重试完不该变回"登录 YouTube 并重试"
+            self._dleRetryBtn.setText(
+                self.tr("登录 {} 并重试").format(PLATFORM_LABELS.get(platform, platform))
+            )
             if success:
                 try:
                     from ....auth.cookie_sentinel import cookie_sentinel
@@ -1890,7 +2009,11 @@ class DownloadConfigWindow(FramelessWindow):
                     self._dleStatusLabel.setText(
                         self.tr(
                             "✅ {} 登录成功，正在重新解析...\n账号文件: {}\n统一文件: {}"
-                        ).format(account_name, acc_cookie, cookie_sentinel.cookie_path)
+                        ).format(
+                            account_name,
+                            acc_cookie,
+                            cookie_sentinel.get_cookie_path_for_platform(platform),
+                        )
                     )
                 except Exception:
                     self._dleStatusLabel.setText(
@@ -1940,23 +2063,9 @@ class DownloadConfigWindow(FramelessWindow):
 
     def _on_extract_retry_clicked(self) -> None:
         """浏览器提取模式重试"""
-        from ....auth.auth_service import AuthSourceType, auth_service
-        from ....auth.cookie_sentinel import cookie_sentinel
+        from ....auth.auth_service import auth_service, browser_source_at
 
-        idx = self._extractCombo.currentIndex()
-        source_map = [
-            AuthSourceType.EDGE,
-            AuthSourceType.CHROME,
-            AuthSourceType.FIREFOX,
-            AuthSourceType.CHROMIUM,
-            AuthSourceType.BRAVE,
-            AuthSourceType.OPERA,
-            AuthSourceType.OPERA_GX,
-            AuthSourceType.VIVALDI,
-            AuthSourceType.LIBREWOLF,
-            AuthSourceType.CENT,
-        ]
-        source = source_map[idx] if 0 <= idx < len(source_map) else AuthSourceType.EDGE
+        source = browser_source_at(self._extractCombo.currentIndex())
         browser_name = self._extractCombo.currentText()
 
         self._extractRetryBtn.setEnabled(False)
@@ -1964,28 +2073,18 @@ class DownloadConfigWindow(FramelessWindow):
 
         auth_service.set_source(source, auto_refresh=True)
 
-        from PySide6.QtCore import QThread
-        from PySide6.QtCore import Signal as QSignal
+        # platform=None：浏览器读一次就能覆盖两个平台，没必要分两轮开锁
+        from ..common.cookie_refresh_worker import CookieRefreshWorker
 
-        class _ExtractWorker(QThread):
-            finished = QSignal(bool, str)
+        self._extract_worker = CookieRefreshWorker(self)
 
-            def run(self):
-                try:
-                    success, msg = cookie_sentinel.force_refresh_with_uac()
-                    self.finished.emit(success, msg)
-                except Exception as e:
-                    self.finished.emit(False, str(e))
-
-        self._extract_worker = _ExtractWorker(self)
-
-        def _on_done(success: bool, msg: str):
+        def _on_done(success: bool, msg: str, _need_admin: bool = False):
             self._extractRetryBtn.setEnabled(True)
             self._extractRetryBtn.setText(self.tr("提取并重试"))
             if success:
                 self._retry_parse_with_auth()
             else:
-                from qfluentwidgets import InfoBar
+                from ..common.custom_info_bar import InfoBar
 
                 InfoBar.error(
                     f"{browser_name} 提取失败",
@@ -2052,12 +2151,15 @@ class DownloadConfigWindow(FramelessWindow):
         self._updateStatusLabel.setText(self.tr("✅ 组件更新完成！正在自动重试..."))
         QTimer.singleShot(1000, self._retry_parse_with_auth)
 
-    def _on_dep_error(self, component: str, msg: str) -> None:
+    def _on_dep_error(self, component: str, code: str) -> None:
         if component != "yt-dlp" or getattr(self, "_is_closing", True):
             return
         self._updateRetryBtn.setEnabled(True)
         self._updateRing.hide()
-        self._updateStatusLabel.setText(f"❌ 更新异常: {msg}")
+        # 信号里是稳定 code（要进日志），翻译只能在这一层做
+        from ..settings.component_error_text import translate as translate_component_error
+
+        self._updateStatusLabel.setText(f"❌ 更新异常: {translate_component_error(code)}")
 
         from ....core.config_manager import config_manager
 
@@ -2142,7 +2244,7 @@ class DownloadConfigWindow(FramelessWindow):
         from ....utils.url_router import url_router
 
         platform = url_router.detect_platform(self.url) if self.url else "youtube"
-        self.selector_widget = VideoFormatSelectorWidget(info, self.contentWidget)
+        self.selector_widget = VideoFormatSelectorWidget(info, self.contentWidget, trace=self.trace)
 
         self.contentLayout.addWidget(self.selector_widget)
 
@@ -2164,8 +2266,35 @@ class DownloadConfigWindow(FramelessWindow):
         if not self._is_playlist and selector is not None:
             self.yesButton.setEnabled(selector.is_valid())
 
+    def _animate_for_section_expand(self, enabled: bool) -> None:
+        """裁切选项展开会抬高布局的最小高度。
+
+        窗口高度是固定值（单视频 880），布局一旦要求更多高度，Qt 只会保持左上角
+        不动、朝下把窗口撑开，底部的取消/下载按钮就被推出屏幕。这里同步长高并让
+        视觉中心保持不动：展开上移、收起下移，两端都是居中的。
+        """
+        selector = self._section_selector
+        if selector is None or self._is_playlist:
+            return
+
+        base_h = self._mode_window_metrics()[1]
+        if enabled:
+            # 折叠态的布局最小高度只能在选项区仍然收起时量出来，量到就缓存
+            self._section_collapsed_min_h = self.minimumSizeHint().height()
+            extra = selector.options_extra_height()
+        else:
+            extra = 0
+
+        # needed = 展开/收起后布局真正要求的高度，Qt 无论如何都会保证它，
+        # 所以它同时是屏幕钳位的下限，否则动画结束后窗口会被顶回去、丢掉居中。
+        needed = (self._section_collapsed_min_h or 0) + extra
+        self._animate_height_keep_center(
+            max(base_h, needed), SectionRangeSelector.OPTIONS_ANIM_MS, min_h=needed
+        )
+
     def _on_section_enabled_changed(self, enabled: bool) -> None:
         """Keep subtitles mutually exclusive with v1 clip downloads."""
+        self._animate_for_section_expand(enabled)
         if not hasattr(self, "subtitle_check") or not hasattr(self, "subtitle_pick_btn"):
             return
         if enabled:
@@ -2239,6 +2368,9 @@ class DownloadConfigWindow(FramelessWindow):
                 ("streams", self.tr("直播回放")),
             ]:
                 cache = self._channel_caches.get(tab, {})
+                # 只过滤 `unsupported`（该频道确实没有这个标签页）。`failed` 要**留在**
+                # 下拉框里，否则用户连重试的入口都没有 —— 那一次失败会被当成
+                # "这个频道没有直播回放"。
                 if cache.get("status") != "unsupported":
                     self._channel_tab_combo.addItem(name, userData=tab)
                     self._channel_tab_combo_mapper.append(tab)
@@ -2296,9 +2428,11 @@ class DownloadConfigWindow(FramelessWindow):
 
         self.preset_combo = ComboBox(self.contentWidget)
         if self._vr_mode:
-            # VR 模式使用场景化预设
+            # VR 模式使用场景化预设。标题是 VRPresets 上下文的源串，显示时才翻译。
+            from fluentytdl.ui.components.platforms.vr import vr_preset_text
+
             for pid, title, _, _, _ in VR_PRESETS:
-                self.preset_combo.addItem(title, userData=pid)
+                self.preset_combo.addItem(vr_preset_text(title), userData=pid)
         else:
             self.preset_combo.addItems(
                 [
@@ -2399,7 +2533,9 @@ class DownloadConfigWindow(FramelessWindow):
         from ....core.config_manager import config_manager
 
         concurrency = int(config_manager.get("playlist_extract_concurrency", 2))
-        self._extract_manager = AsyncExtractManager(max_concurrent=concurrency, parent=self)
+        self._extract_manager = AsyncExtractManager(
+            max_concurrent=concurrency, parent=self, flow=self.trace
+        )
 
         self.contentLayout.addWidget(list_view)
 
@@ -2613,37 +2749,26 @@ class DownloadConfigWindow(FramelessWindow):
         if self._playlist_model is not None:
             self._playlist_model.clear()
 
-        # 重新连接 image_loader 信号（_stop_background_parsing 断开了它们）
-        try:
-            self.image_loader.loaded.connect(self._on_thumb_loaded)
-            self.image_loader.loaded_with_url.connect(self._on_thumb_loaded_with_url)
-            self.image_loader.failed.connect(self._on_thumb_failed)
-        except Exception:
-            pass
-
-        # 重新连接 dependency_manager 信号
-        try:
-            from ....core.dependency_manager import dependency_manager
-
-            dependency_manager.check_finished.connect(self._on_dep_check_finished)
-            dependency_manager.install_finished.connect(self._on_dep_install_finished)
-            dependency_manager.check_error.connect(self._on_dep_error)
-            dependency_manager.download_error.connect(self._on_dep_error)
-        except Exception:
-            pass
+        self._reconnect_shared_signals()
 
         # 3. 检查缓存状态，决定是否需要发网络请求
+        #
+        # `failed` 必须和 `unloaded` 一样触发重取，`unsupported` 则不能。这是
+        # `_extract_tab` 那两个 status 分家之后的另一半：`unsupported` 是频道的属性
+        # （没有 Shorts 标签页，重取一万次还是没有），`failed` 是这一次没拿到
+        # （超时 / cookie 过期 / 风控）。少了这一行，"失败的标签页仍然可选"就只是好看 ——
+        # 用户点回去看到的还是那份空缓存，且对话框活着的期间永远不会再试一次。
+        refetchable = ("unloaded", "failed")
         if self._channel_tab == "all":
-            # 对于 all，检查是否所有的 target 都是 loaded 或 unsupported
             needs_fetch = [
                 tab
                 for tab in ["videos", "shorts", "streams"]
-                if self._channel_caches.get(tab, {}).get("status") == "unloaded"
+                if self._channel_caches.get(tab, {}).get("status") in refetchable
             ]
         else:
             needs_fetch = (
                 [self._channel_tab]
-                if self._channel_caches.get(self._channel_tab, {}).get("status") == "unloaded"
+                if self._channel_caches.get(self._channel_tab, {}).get("status") in refetchable
                 else []
             )
 
@@ -2680,7 +2805,7 @@ class DownloadConfigWindow(FramelessWindow):
 
         from ....download.workers import ChannelExtractWorker
 
-        w = ChannelExtractWorker(self.url, needs_fetch, self._current_options)
+        w = ChannelExtractWorker(self.url, needs_fetch, self._current_options, flow=self.trace)
         w.progress.connect(self._on_channel_progress)
         w.finished_all.connect(self.on_channel_parse_success)
         w.error.connect(self.on_parse_error)
@@ -2832,6 +2957,8 @@ class DownloadConfigWindow(FramelessWindow):
             aw.set_loading(False)
             from fluentytdl.ui.components.platforms.youtube import resolve_global_format
 
+            # 不传 trace：这里是列表行的画质预览，滚动一次就跑几十遍，不是权威决策。
+            # 真正落 `decision subsystem=format` 的是 `_build_playlist_tasks` 里拼 row_opts 那次。
             fmt_str, _ = resolve_global_format(data.get("detail"), override)
 
             parts = fmt_str.split("+")
@@ -3692,7 +3819,9 @@ class DownloadConfigWindow(FramelessWindow):
         if not info:
             return
 
-        dialog = PlaylistFormatDialog(info, self, vr_mode=self._vr_mode, mode=self._mode)
+        dialog = PlaylistFormatDialog(
+            info, self, vr_mode=self._vr_mode, mode=self._mode, trace=self.trace
+        )
         if dialog.exec():
             sel = dialog.get_selection()
             if sel and sel.get("format"):
@@ -3709,6 +3838,15 @@ class DownloadConfigWindow(FramelessWindow):
                 self._auto_apply_row_preset(row)
 
     def _handle_container_conflict(self, ydl_opts: dict) -> bool:
+        """用户压了容器却和字幕/多音轨冲突时的当面裁决。返回 False 表示放弃建任务。
+
+        三种答案全部落 `kind=decision subsystem=container`，因为三种都会让后面的产物
+        与用户以为的不一样，而**目前一条都不进日志**：
+        `keep` 之后合并可能直接报错、`external` 之后字幕成了独立文件（"字幕怎么没嵌进去"
+        的成因就在这里）、`abort` 则是整个任务压根没建起来 —— 用户只记得"我点了下载但没反应"。
+
+        记 `resolution` 这个 code，不记对话框里那段中文 —— 文案会随界面语言变，日志得能搜。
+        """
         from qfluentwidgets import BodyLabel, MessageBoxBase, PushButton, SubtitleLabel
 
         from ....utils.container_compat import (
@@ -3719,6 +3857,24 @@ class DownloadConfigWindow(FramelessWindow):
         container = ydl_opts.get("merge_output_format")
         if not container:
             return True
+
+        def _emit_conflict(kind_of: str, resolution: str, before: str, **extra: Any) -> None:
+            emit_event(
+                "decision",
+                trace=self.trace,
+                # 用户当面做的取舍，且每任务最多两次 —— 值得冒到控制台。
+                level="INFO",
+                stage="select",
+                subsystem="container",
+                reason=f"{kind_of}_conflict_prompt",
+                resolution=resolution,
+                # `before` 显式传入：`container` 这个局部变量会在音轨分支里被改成 mkv，
+                # 闭包读到的就不是用户原来压的那个值了。
+                container_before=before,
+                container=ydl_opts.get("merge_output_format"),
+                container_forced=True,
+                **extra,
+            )
 
         # 1. Check audio track conflict
         audio_count = ydl_opts.get("__audio_track_count", 1)
@@ -3751,10 +3907,17 @@ class DownloadConfigWindow(FramelessWindow):
 
             dialog = AudioConflictDialog(self)
             dialog.exec()
+            audio_before = container
             if dialog.result_action == "mkv":
                 ydl_opts["merge_output_format"] = "mkv"
                 container = "mkv"  # update for following checks
             # if keep, we do nothing and proceed
+            _emit_conflict(
+                "audio_multistream",
+                dialog.result_action,
+                audio_before,
+                audio_tracks=audio_count,
+            )
 
         # 2. Check subtitle conflict
         is_embed = ydl_opts.get("embedsubtitles", False)
@@ -3796,11 +3959,18 @@ class DownloadConfigWindow(FramelessWindow):
         if dialog.exec():
             if dialog.result_action == "mkv":
                 ydl_opts["merge_output_format"] = "mkv"
+                _emit_conflict("subtitle", "mkv", container, sub_langs_n=lang_count)
                 return True
             elif dialog.result_action == "external":
                 ydl_opts["embedsubtitles"] = False
+                # 记 embed=False：这条就是"字幕怎么变成独立 .srt 了"的唯一答案。
+                _emit_conflict(
+                    "subtitle", "external", container, sub_langs_n=lang_count, embed=False
+                )
                 return True
 
+        # 用户放弃 —— 任务压根不会被创建，除了这条事件外全链路无痕。
+        _emit_conflict("subtitle", "abort", container, sub_langs_n=lang_count)
         return False
 
     def get_selected_tasks(self) -> list[tuple[str, str, dict[str, Any], str | None]]:
@@ -3967,6 +4137,7 @@ class DownloadConfigWindow(FramelessWindow):
                         ),
                         video_info=self.video_info,
                         user_config=sub_config_override,
+                        trace=self.trace,
                     )
                     ydl_opts.update(subtitle_opts)
 
@@ -3998,8 +4169,10 @@ class DownloadConfigWindow(FramelessWindow):
                     if not self._handle_container_conflict(ydl_opts):
                         return []
                 else:
-                    ensure_subtitle_compatible_container(ydl_opts)
-                    ensure_audio_multistream_compatible_container(ydl_opts, audio_count)
+                    ensure_subtitle_compatible_container(ydl_opts, trace=self.trace)
+                    ensure_audio_multistream_compatible_container(
+                        ydl_opts, audio_count, trace=self.trace
+                    )
 
             # === Quality Guard Pre-flight Check (Single Video) ===
             if self._mode not in ("subtitle", "cover") and not ydl_opts.get("skip_download"):
@@ -4027,6 +4200,7 @@ class DownloadConfigWindow(FramelessWindow):
                     intent_preset_id=intent_preset_id,
                     download_type="video_audio",
                     source_path="simple",
+                    trace=self.trace,
                 )
 
                 ydl_opts = final_opts
@@ -4094,6 +4268,10 @@ class DownloadConfigWindow(FramelessWindow):
         import copy
 
         from ....core.config_manager import config_manager
+
+        # 只能局部 import：模块顶层的 `subtitle_service` 这个名字被
+        # `processing/__init__.py` 重导出的**单例**占了，不是子模块本身。
+        from ....processing.subtitle_service import declare_subtitle_intent
 
         # Prepare Overrides
         pl_sub_override = copy.deepcopy(config_manager.get_subtitle_config())
@@ -4178,13 +4356,23 @@ class DownloadConfigWindow(FramelessWindow):
                             video_id=str(row_data.get("id")),
                             video_info=row_data["detail"],
                             user_config=pl_sub_override,
+                            trace=self.trace,
                         )
                         row_opts.update(sub_opts)
                     else:
                         if pl_sub_override.enabled:
                             row_opts["writesubtitles"] = True
                             row_opts["writeautomaticsub"] = pl_sub_override.enable_auto_captions
-                            row_opts["subtitleslangs"] = pl_sub_override.default_languages
+                            # 这一行没有 `detail`（播放列表没有逐个解析），真实字幕键还不
+                            # 知道。只声明意图，`workers.py` 拿到 info 后再换成真实键 ——
+                            # 直写 `default_languages` 就是本次"字幕全空"的病根。
+                            row_opts.update(
+                                declare_subtitle_intent(
+                                    pl_sub_override.default_languages,
+                                    pl_sub_override,
+                                    trace=self.trace,
+                                )
+                            )
                             if pl_sub_override.embed_type == "external":
                                 if pl_sub_override.output_format:
                                     row_opts["convertsubtitles"] = pl_sub_override.output_format
@@ -4266,7 +4454,7 @@ class DownloadConfigWindow(FramelessWindow):
                 from fluentytdl.ui.components.platforms.youtube import resolve_global_format
 
                 fmt_str, e_opts = resolve_global_format(
-                    row_data.get("detail"), self._playlist_format_override
+                    row_data.get("detail"), self._playlist_format_override, trace=self.trace
                 )
                 row_opts["format"] = fmt_str
                 row_opts.update(e_opts)
@@ -4377,7 +4565,15 @@ class DownloadConfigWindow(FramelessWindow):
                 override = self._playlist_sub_override
                 row_opts["writesubtitles"] = True
                 row_opts["writeautomaticsub"] = override.enable_auto_captions
-                row_opts["subtitleslangs"] = override.target_languages
+                # `PlaylistSubtitleConfigDialog` 里勾的是 `PREDEFINED_LANGS`（`zh-Hans` /
+                # `en` 这类泛化偏好），不是真实字幕键 —— 同样只声明意图。
+                # `type_preference` / `max_languages` 只存在于全局配置里，所以上下文取
+                # `pl_sub_override`。
+                row_opts.update(
+                    declare_subtitle_intent(
+                        override.target_languages, pl_sub_override, trace=self.trace
+                    )
+                )
                 row_opts["embedsubtitles"] = override.embed_subtitles
                 if override.output_format:
                     row_opts["convertsubtitles"] = override.output_format
@@ -4389,6 +4585,7 @@ class DownloadConfigWindow(FramelessWindow):
                         video_id=str(row_data.get("id")),
                         video_info=row_data["detail"],
                         user_config=pl_sub_override,
+                        trace=self.trace,
                     )
                     row_opts.update(sub_opts)
                 else:
@@ -4396,7 +4593,16 @@ class DownloadConfigWindow(FramelessWindow):
                     if pl_sub_override.enabled:
                         row_opts["writesubtitles"] = True
                         row_opts["writeautomaticsub"] = pl_sub_override.enable_auto_captions
-                        row_opts["subtitleslangs"] = pl_sub_override.default_languages
+                        # 无 `detail` —— 这就是报告里那条日志的确切来源：
+                        # `default_languages`（`["zh-Hans","en"]`）被原样送进
+                        # `--sub-langs`，而真实键是 `en-GB` / `zh-Hans-en-GB`。
+                        row_opts.update(
+                            declare_subtitle_intent(
+                                pl_sub_override.default_languages,
+                                pl_sub_override,
+                                trace=self.trace,
+                            )
+                        )
 
                         # Embed
                         if pl_sub_override.embed_type == "soft":
@@ -4466,6 +4672,7 @@ class DownloadConfigWindow(FramelessWindow):
                     intent_preset_id=intent_preset_id,
                     download_type=download_type,
                     source_path=source_path,
+                    trace=self.trace,
                 )
 
                 row_opts = final_opts

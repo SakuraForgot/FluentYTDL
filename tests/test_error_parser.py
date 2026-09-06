@@ -139,6 +139,163 @@ def test_filter_skip_is_not_an_error() -> None:
     assert diag.severity == "warning"
 
 
+# ── 字幕三码（去掉 `--no-warnings` 之后才拿得到这些行）────────────────
+
+# 报告 `FluentYTDL-字幕下载问题排查报告.md:174-182` 列出的三条被抑制的行
+SUB_RATE_LIMITED = (
+    "WARNING: Unable to download video subtitles for 'zh-Hans-en-GB': "
+    "HTTP Error 429: Too Many Requests"
+)
+SUB_POT_REQUIRED = "WARNING: [youtube] MSJMJxd1udk: Some automatic captions require a PO Token"
+SUB_NO_MATCH = "[info] There are no subtitles for the requested languages"
+
+# 真机复现拿到的**原文**：报告转述时写成了 `WARNING:`，yt-dlp 实际打的是 `ERROR:` ——
+# 它描述的是单条字幕轨那一次子请求失败，任务本身照旧继续、照旧收尾。
+# 两种前缀都必须归到同一个码上，否则 `_scan_subtitle_warnings` 在真机上永远扫不到东西。
+SUB_RATE_LIMITED_REAL = (
+    "ERROR: Unable to download video subtitles for 'zh-Hans-en-GB': "
+    "HTTP Error 429: Too Many Requests"
+)
+SUB_POT_REQUIRED_REAL = (
+    "ERROR: [youtube] MSJMJxd1udk: Unable to download automatic captions: PO Token is required"
+)
+
+
+@pytest.mark.parametrize(
+    ("stderr", "expected_code"),
+    [
+        (SUB_RATE_LIMITED, "subtitle_download_rate_limited"),
+        (SUB_POT_REQUIRED, "subtitle_pot_required"),
+        (SUB_NO_MATCH, "subtitles_no_language_match"),
+        (SUB_RATE_LIMITED_REAL, "subtitle_download_rate_limited"),
+        (SUB_POT_REQUIRED_REAL, "subtitle_pot_required"),
+    ],
+    ids=[
+        "rate_limited",
+        "pot_required",
+        "no_language_match",
+        "rate_limited_real_error_prefix",
+        "pot_required_real_error_prefix",
+    ],
+)
+def test_subtitle_warning_is_identified_and_stays_a_warning(
+    stderr: str, expected_code: str
+) -> None:
+    """三种字幕失败必须互相可区分，且一律只是警告。
+
+    报告 P2 的原话是"对 429、PO Token 缺失、语言无匹配三种情况给出可区分的提示"。
+    `severity` 必须是 warning：视频已经下载完成了，把任务标红是彻头彻尾的误报。
+    """
+    diag = diagnose(0, stderr)
+    assert diag.code == expected_code
+    assert diag.severity == "warning"
+    assert diag.user_title.strip()
+    assert diag.user_message.strip()
+    # 字幕层面的失败绝不能触发整个任务的自动重试
+    assert diag.retry.policy == "never"
+
+
+def test_bare_info_line_reaches_the_engine() -> None:
+    """`[info] There are no subtitles…` 既没有 `ERROR:` 也没有 `WARNING:` 前缀。
+
+    这是 `bareLine` 通道存在的唯一理由 —— 没有它，这行在 `parse_events` 里连事件
+    都产生不了，用户只剩一句"未找到字幕文件"。
+    """
+    events = parse_events(SUB_NO_MATCH)
+    assert [ev.code for ev in events] == ["subtitles_no_language_match"]
+    assert events[0].level == "warning"
+
+
+def test_subtitle_rate_limit_beats_generic_429() -> None:
+    """p98 必须压过 `rate_limited_429`(p73)，否则字幕单独限流会被报成整任务网络故障。"""
+    diag = diagnose(0, SUB_RATE_LIMITED)
+    assert diag.code != "rate_limited_429"
+
+
+@pytest.mark.parametrize(
+    "stderr",
+    [SUB_RATE_LIMITED_REAL, SUB_POT_REQUIRED_REAL],
+    ids=["rate_limited", "pot_required"],
+)
+def test_subtitle_error_line_is_demoted_to_a_warning_event(stderr: str) -> None:
+    """`demoteToWarning`：字幕子请求的 `ERROR:` 行只产出 warning 级事件。
+
+    降级是免费换来两条护栏：任务真失败时 `pick_primary` 的"error 压 warning"让它永远
+    当不上主因（见下面两个 `..._still_wins_...`），而 priority 98/97 保持不变，仍然能在
+    **同一行**上压过更泛化的 `rate_limited_429` / `pot_token_required`。
+    """
+    events = parse_events(stderr)
+    assert len(events) == 1
+    assert events[0].level == "warning", "字幕子请求失败混进 error 层就会挤掉真正的失败原因"
+    assert events[0].priority >= 97, "降级只改级别，不该动 priority"
+
+
+def test_subtitle_pot_does_not_escalate_to_fatal() -> None:
+    """p97 必须压过 `pot_token_required`(p90, severity=fatal)。
+
+    去掉 `--no-warnings` 之后，字幕级 PO Token 警告开始进入诊断层；被 p90 接住就会
+    从"字幕少一个文件"升级成"认证致命错误"，比原来的静默失败更糟。
+    """
+    diag = diagnose(0, SUB_POT_REQUIRED)
+    assert diag.severity != "fatal"
+    assert diag.fix_action == "enable_pot_provider"
+
+
+def test_non_subtitle_pot_warning_still_fatal() -> None:
+    """反向护栏：字幕专属规则不能把普通 PO Token 问题一起降级。"""
+    diag = diagnose(1, "WARNING: [youtube] abc123: Some web client formats require a PO Token")
+    assert diag.code == "pot_token_required"
+
+
+def test_failed_task_is_not_blamed_on_a_subtitle_warning() -> None:
+    """rc != 0 且全场只有警告级线索时，不得拿它当主因。
+
+    `executor` 的两级体积校验会在**没有 ERROR: 行**的情况下抛
+    `YtDlpExecutionError`（Windows 上 `.part-Frag` 删不掉就是这条路）。那一刻顶上来
+    的很可能只是一条字幕限流警告 —— 报成任务的失败主因等于指错方向。
+    事件本身要留在 `events` 里，详情列表还要展示。
+    """
+    diag = diagnose(1, SUB_RATE_LIMITED)
+    assert diag.code == FALLBACK_CODE
+    assert diag.has_event("subtitle_download_rate_limited")
+
+
+def test_real_error_still_wins_over_subtitle_warning() -> None:
+    """护栏只在"只有警告"时生效，不能让真正的 ERROR 行也落到兜底。"""
+    diag = diagnose(1, SUB_RATE_LIMITED + "\nERROR: [youtube] abc123: Video unavailable")
+    assert diag.code == "video_unavailable"
+
+
+def test_real_error_still_wins_over_subtitle_error_line() -> None:
+    """同上，但字幕那行也是 `ERROR:` —— 这是真机上真正会出现的组合。
+
+    字幕规则的 p98 高于绝大多数故障规则，靠 `demoteToWarning` 把它压回 warning 层才
+    不至于把致命原因挤下去。少了降级，这里会报"字幕下载被限流"，而用户实际撞上的是
+    人机验证。
+    """
+    diag = diagnose(
+        1,
+        SUB_RATE_LIMITED_REAL + "\nERROR: [youtube] abc123: Sign in to confirm you're not a bot",
+    )
+    assert diag.code == "bot_check_sign_in"
+    assert diag.has_event("subtitle_download_rate_limited")
+
+
+def test_whole_task_429_wins_over_subtitle_429() -> None:
+    """视频数据本身也被限流时，主因是整任务限流，不是"少了个字幕文件"。
+
+    两者都是 429、都是 `ERROR:` 行，区别只在 `rate_limited_429` 带 backoff 重试预算。
+    把字幕那条报成主因会连重试一起丢掉。
+    """
+    diag = diagnose(
+        1,
+        SUB_RATE_LIMITED_REAL
+        + "\nERROR: unable to download video data: HTTP Error 429: Too Many Requests",
+    )
+    assert diag.code == "rate_limited_429"
+    assert diag.retry.policy == "backoff"
+
+
 # ── 兜底 ────────────────────────────────────────────────────────────
 
 

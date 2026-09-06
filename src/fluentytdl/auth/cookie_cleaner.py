@@ -2,10 +2,17 @@
 Cookie 清洗与合规过滤模块
 
 负责对提取的 Cookie 进行隐私合规清洗，仅保留特定平台运行所需的最小化 Cookie 集合。
+
+**平台参数必须传对。** `platform="youtube"` 会套上 `YOUTUBE_ALLOWED_NAMES` 名字白名单，
+而 X 的 `auth_token` / `ct0` 不在里面 —— 拿 X 的 Cookie 走 youtube 分支，结果是空列表。
+twitter 分支 `allowed_names = None`（不做名字过滤），所以清洗逻辑本身不会吃掉 X 的
+Cookie，风险 100% 来自调用方传错 platform。`tests/test_cookie_truth_source.py` 两条
+测试就是这条语义的护栏。
 """
 
 from __future__ import annotations
 
+import time
 from typing import Any
 
 from ..utils.logger import logger
@@ -56,20 +63,49 @@ class CookieCleaner:
     # 标准 Netscape Cookie 字段
     NETSCAPE_FIELDS = {"domain", "path", "secure", "expires", "name", "value"}
 
+    @staticmethod
+    def _domain_allowed(domain: str, allowed_domains: set[str]) -> bool:
+        """域名是否落在白名单里：**相等或是其子域**。
+
+        原来的实现是 `any(domain.endswith(d) or d.endswith(domain) ...)`。反向那半
+        （`d.endswith(domain)`）过于宽松：`domain=".com"` 能匹配白名单里的 `.x.com`，
+        于是任何一个顶级域 Cookie 都能混进真相源。前缀点在两边都先剥掉，`x.com` 与
+        `.x.com` 视为同一个域。
+        """
+        host = domain.lstrip(".").lower()
+        if not host:
+            return False
+
+        for allowed in allowed_domains:
+            base = allowed.lstrip(".").lower()
+            if base and (host == base or host.endswith("." + base)):
+                return True
+        return False
+
     @classmethod
     def clean(
-        cls, cookies: list[dict[str, Any]], platform: str = "youtube", enable_cleaning: bool = True
+        cls,
+        cookies: list[dict[str, Any]],
+        platform: str = "youtube",
+        enable_cleaning: bool = True,
+        *,
+        drop_expired: bool = True,
     ) -> list[dict[str, Any]]:
         """
         清洗 Cookie 列表
 
-        1. 过滤非白名单域名
-        2. (YouTube) 过滤非白名单 Cookie Name
-        3. 移除多余字段
+        1. 丢弃已过期条目（由 `drop_expired` 控制，**与合规清洗无关**）
+        2. 过滤非白名单域名（相等或子域）
+        3. (YouTube) 过滤非白名单 Cookie Name
+        4. 只保留 Netscape 标准字段
 
         Args:
             cookies: 原始 Cookie 列表
-            platform: 平台标识 (youtube, bilibili 等)
+            platform: 平台标识 (youtube, twitter, bilibili)。**传错会洗掉目标平台的凭证**
+            enable_cleaning: 是否启用隐私合规清洗（域名 + 名字白名单）
+            drop_expired: 是否丢弃已过期条目。独立于 `enable_cleaning` ——
+                以前它挂在合规清洗外面无条件执行，用户关掉"Cookie 清理"后仍然被丢，
+                与开关语义不符；现在是一个显式的、可单独关闭的维度，默认仍为 True。
 
         Returns:
             清洗后的 Cookie 列表
@@ -85,24 +121,24 @@ class CookieCleaner:
         ignored_names: set[str] = set()
         expired_count = 0
 
-        import time
-
         current_time = int(time.time())
 
         for cookie in cookies:
-            # 0. 过期时间检查 (全局通用)
+            # 0. 过期时间检查（expires == 0 是会话 Cookie，不算过期）
             expires = int(cookie.get("expires", 0) or 0)
-            if expires > 0 and expires < current_time:
+            if drop_expired and 0 < expires < current_time:
                 expired_count += 1
                 continue
 
             # 1. 域名过滤
             domain = cookie.get("domain", "")
-            if enable_cleaning and allowed_domains and domain not in allowed_domains:
-                # 尝试模糊匹配 (如 .google.com 匹配)
-                if not any(domain.endswith(d) or d.endswith(domain) for d in allowed_domains):
-                    ignored_domains.add(domain)
-                    continue
+            if (
+                enable_cleaning
+                and allowed_domains
+                and not cls._domain_allowed(domain, allowed_domains)
+            ):
+                ignored_domains.add(domain)
+                continue
 
             # 2. Name 过滤 (仅限 YouTube)
             name = cookie.get("name", "")
@@ -111,16 +147,12 @@ class CookieCleaner:
                 continue
 
             # 3. 字段清洗 (仅保留 Netscape 标准字段)
+            #
+            # 不再注入 `flag` 键：它不在 NETSCAPE_FIELDS 里，而真正写文件的
+            # `auth_service._write_netscape_file()` 自己按 domain 是否以 "." 开头
+            # 重算这一列，从来没读过这个键 —— 留着只是噪声。
             clean_cookie = {k: v for k, v in cookie.items() if k in cls.NETSCAPE_FIELDS}
-
-            # 确保必要字段存在
-            if "domain" not in clean_cookie:
-                clean_cookie["domain"] = domain
-            if "flag" not in clean_cookie:
-                # 自动推断 flag (如果 domain 以 . 开头则为 TRUE)
-                clean_cookie["flag"] = (
-                    "TRUE" if clean_cookie.get("domain", "").startswith(".") else "FALSE"
-                )
+            clean_cookie.setdefault("domain", domain)
 
             cleaned.append(clean_cookie)
 

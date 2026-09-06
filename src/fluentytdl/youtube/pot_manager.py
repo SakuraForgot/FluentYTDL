@@ -484,7 +484,7 @@ class POTManager:
 
             po_token = data.get("poToken") or data.get("po_token") or data.get("token") or ""
             if isinstance(po_token, str) and len(po_token) >= 16:
-                # 只记长度，绝不记 Token 明文（CLAUDE.md §8 / 日志安全约束）
+                # 只记长度，绝不记 Token 明文（CLAUDE.md §5「字段纪律」/ §9 日志安全约束）
                 self._last_token_len = len(po_token)
                 self._warm_event.set()  # 标记预热完成
                 return True, f"Token 有效 (长度 {len(po_token)})"

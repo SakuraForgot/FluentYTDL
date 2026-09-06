@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 from ..core.config_manager import config_manager
 from ..core.hardware_manager import hardware_manager
+from ..models.subtitle_config import SUBTITLE_RESOLUTION_KEY
 from ..processing.thumbnail_embed import can_embed_thumbnail, get_unsupported_formats_warning
 from ..processing.thumbnail_embedder import thumbnail_embedder
 from ..utils.logger import logger
@@ -35,6 +36,28 @@ class DownloadContext:
     @property
     def dest_paths(self) -> set[str]:
         return self.worker.dest_paths
+
+    @property
+    def sandbox_dir(self) -> str | None:
+        return getattr(self.worker, "sandbox_dir", None) or None
+
+    def is_in_sandbox(self, path: str | None) -> bool:
+        """`path` 是否落在本任务的沙盒目录里。
+
+        沙盒每个任务独享（`workers.py` 下载前建、成功后搬出），所以"整目录扫描"这类
+        兜底手段只在沙盒内安全 —— 在共享的下载目录里扫，会把别的视频的产物也算进来。
+        纯字幕 / 封面直下这类跳过沙盒的任务在这里一律得到 False。
+        """
+        sandbox = self.sandbox_dir
+        if not sandbox or not path:
+            return False
+        try:
+            root = os.path.normcase(os.path.abspath(sandbox))
+            target = os.path.normcase(os.path.abspath(path))
+            return os.path.commonpath([root, target]) == root
+        except (OSError, ValueError):
+            # ValueError: 跨盘符时 commonpath 直接抛
+            return False
 
     def emit_status(self, msg: str):
         if hasattr(self.worker, "_clean_logger"):
@@ -196,6 +219,9 @@ class SubtitleFeature(DownloadFeature):
             elif not fmt:
                 opts["merge_output_format"] = "mkv"
                 logger.info("[SubEmbed] 未指定 → MKV")
+            # `--embed-subs` 嵌入完就把外置字幕文件删了，于是 on_post_process 无从校验
+            # 字幕到底下没下到。先用 `--keep-subs` 留住，校验完再清理（见下）。
+            opts["keepsubtitles"] = True
         else:
             logger.warning("[SubEmbed] embedsubtitles=False")
 
@@ -216,29 +242,80 @@ class SubtitleFeature(DownloadFeature):
             result = subtitle_processor.process(
                 output_path=context.output_path,
                 opts=opts,
-                status_callback=lambda msg: context.emit_status(msg),
+                status_callback=context.emit_status,
+                # executor 解析 `Writing video subtitles to:` 时已经记下了精确路径，
+                # 这是最可靠的一级定位，以前整个丢掉了
+                dest_paths=context.dest_paths,
+                # 整目录兜底扫描只在任务沙盒内安全，见 _find_subtitle_files 的说明
+                allow_dir_scan=context.is_in_sandbox(context.output_path),
             )
-            if result.success:
-                if result.merged_file:
-                    context.emit_status("[字幕处理] ✓ 双语字幕已生成")
 
-                # 若配置了内嵌字幕，由我们手动清理外部残留（因搭配元数据嵌入时 yt-dlp 可能会默认保留外置文件）
-                if opts.get("embedsubtitles"):
-                    cleaned_count = 0
-                    for sub_file in result.processed_files:
-                        try:
-                            if os.path.exists(sub_file):
-                                os.remove(sub_file)
-                                cleaned_count += 1
-                        except OSError as e:
-                            logger.warning("清理外置字幕残留失败: {} - {}", sub_file, e)
+            if not result.success:
+                # 字幕是 best-effort：任务照样算成功，但用户必须知道字幕去哪了。
+                # 以前这里只有一行 logger.warning，UI 上什么都看不到。
+                logger.warning(
+                    "字幕后处理失败: {}（reason={} located_by={}）",
+                    result.message,
+                    result.reason,
+                    result.located_by,
+                )
+                if result.reason == "not_found":
+                    context.emit_warning(self._explain_missing(opts))
+                elif result.reason == "all_invalid":
+                    context.emit_warning(f"字幕文件校验失败：{result.message}")
+                # `video_missing` 不再提示：视频本身没落盘时早有各自的失败提示，
+                # 这里再冒一条字幕警告只会盖住真正的原因
 
-                    if cleaned_count > 0:
-                        logger.info("已清理 {} 个内嵌后的外置字幕文件", cleaned_count)
-            else:
-                logger.warning("字幕后处理失败: {}", result.message)
+            # 内嵌模式下的外置文件是 `--keep-subs` 特意留到现在的，校验完就没用了；
+            # 坏文件同样是残骸，一起清掉。
+            if opts.get("embedsubtitles"):
+                self._cleanup_external_subtitles(
+                    list(result.processed_files) + [p for p, _ in result.invalid_files]
+                )
         except Exception as e:
             logger.exception("字幕后处理异常: {}", e)
+
+    @staticmethod
+    def _cleanup_external_subtitles(paths: list[str]) -> None:
+        """清理内嵌后残留的外置字幕文件。
+
+        `on_download_start` 置的 `keepsubtitles` 让这些文件活到后处理，校验完即可删除。
+        """
+        cleaned = 0
+        for sub_file in paths:
+            try:
+                if os.path.exists(sub_file):
+                    os.remove(sub_file)
+                    cleaned += 1
+            except OSError as e:
+                logger.warning("清理外置字幕残留失败: {} - {}", sub_file, e)
+        if cleaned:
+            logger.info("已清理 {} 个内嵌后的外置字幕文件", cleaned)
+
+    @staticmethod
+    def _explain_missing(opts: dict[str, Any]) -> str:
+        """一个字幕文件都没有时，说出**具体**原因。
+
+        原因早就备在 `SUBTITLE_RESOLUTION_KEY` 里（`subtitle_service.build_resolution_meta`），
+        只是从来没人读 —— 用户能看到的只有一句"未找到字幕文件"。
+        """
+        meta = opts.get(SUBTITLE_RESOLUTION_KEY) or {}
+        mode = meta.get("mode")
+        prefs = "、".join(meta.get("prefs") or []) or "默认语言"
+        matched = "、".join(meta.get("matched") or [])
+        available = [str(x) for x in (meta.get("available") or [])]
+        avail_txt = "、".join(available[:6]) + ("…" if len(available) > 6 else "")
+
+        if mode == "no_match":
+            return f"字幕未命中任何可用语言（想要 {prefs}；该视频只有 {avail_txt or '无可用字幕'}）"
+        if mode == "pattern":
+            return f"未获取到字幕：按正则模式请求 {prefs}，yt-dlp 没有匹配到任何字幕轨道"
+        if matched:
+            return (
+                f"未获取到字幕：已请求 {matched}，但一个文件都没写出（可能被限速或需要 PO Token）"
+            )
+        langs = "、".join(str(x) for x in (opts.get("subtitleslangs") or [])) or prefs
+        return f"未获取到字幕：已请求 {langs}，但一个文件都没写出"
 
 
 class ThumbnailFeature(DownloadFeature):
