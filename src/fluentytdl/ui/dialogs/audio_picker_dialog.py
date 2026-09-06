@@ -316,7 +316,13 @@ class AudioPickerDialog(MessageBoxBase):
         self._filter_label.show()
 
     def _kind_label(self, kind: str) -> str:
-        """音轨类型的显示文案。四种类型来自 `language_preference`，见 `audio_track_kind()`。"""
+        """音轨类型的显示文案。四种类型来自 `language_preference`，见 `audio_track_kind()`。
+
+        ⚠️ 只有「原音」与「配音」两档在真实视频上见过；「默认」(`5`) 与
+        「音频描述」(`-10`) 的文案只在合成数据里显示过（真实 YouTube 探了 9 个视频
+        都没有这两档）。文案本身无风险，但如果日后收到"这一列显示得不对"的反馈，
+        先怀疑这两档 —— 判定侧的实测覆盖说明在 `format_scorer.AUDIO_DEFAULT` 处。
+        """
         return {
             "original": self.tr("原音"),
             "default": self.tr("默认"),

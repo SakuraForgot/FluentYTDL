@@ -70,10 +70,20 @@ class ScoringContext:
 # 见 `extractor/youtube/_video.py::get_language_code_and_preference()`。
 # **这是判定音轨类型的唯一权威**：项目原先读的 `audio_track_type` 在 yt-dlp 里
 # 根本不存在（`_format_fields` 白名单里没有，extractor 也从不写），恒为 None。
-AUDIO_ORIGINAL = 10  # displayName 含 "original"
-AUDIO_DEFAULT = 5  # audioIsDefault：账号/地区默认音轨，**不是**原音
-AUDIO_DUB = -1  # 普通配音
-AUDIO_DESCRIPTIVE = -10  # displayName 含 "descriptive"，语言码带 `-desc` 后缀
+#
+# ⚠️ **实测覆盖只有 `10` 与 `-1` 两档。** 端到端验收在真实 YouTube 上探了 9 个视频
+# （含 22 语种音轨的 MrBeast 系列、Blender/8K 演示片、几支 MV），`-J` 里出现过的
+# `language_preference` 只有 `10` 和 `-1`；`5` 与 `-10` **一次都没遇到**。
+# 也就是说下面这两个常量与它们对应的判定分支，依据是上游源码而不是观测数据 ——
+# 走过的验证是合成 info dict 过真实代码路径（`tests/test_audio_track_selection.py`），
+# 不是真实视频。这两条分支保守设计、不会误伤已验证的两档，但真遇到实物时值得核一眼：
+#   - `5`：`audioIsDefault`。MrBeast 那支视频的原音同时带 `(default)` 标注，
+#     所以"原音是日语、账号默认是英语配音"这种能区分 10 与 5 的视频还没找到实物。
+#   - `-10`：音频描述轨（视障辅助解说）。YouTube 上极少见。
+AUDIO_ORIGINAL = 10  # displayName 含 "original" —— 已实测
+AUDIO_DEFAULT = 5  # audioIsDefault：账号/地区默认音轨，**不是**原音 —— 未实测
+AUDIO_DUB = -1  # 普通配音 —— 已实测
+AUDIO_DESCRIPTIVE = -10  # displayName 含 "descriptive"，语言码带 `-desc` 后缀 —— 未实测
 
 KIND_ORIGINAL = "original"
 KIND_DEFAULT = "default"
@@ -107,6 +117,22 @@ def audio_track_kind(f: dict[str, Any]) -> str:
     > ⚠️ 回落路径**不认** `"auto" in format_note`：YouTube 的 `format_note` 里唯一含
     > "auto" 的 token 是 `AI-upscaled`，那是**视频**超分标记，不是 AI 配音。也不认
     > `"dubbed"` —— YouTube 从不产出这个词。
+
+    ⚠️ **验证覆盖不均**，改这个函数前先知道哪条腿实心哪条腿虚：
+
+    - `language_preference` 分支的 `10` / `-1` 两档在真实 YouTube 上实测过；
+      `5` / `-10` 只走过合成数据（见 `AUDIO_DEFAULT` / `AUDIO_DESCRIPTIVE` 处的说明）。
+    - **整条回落路径（下面的 `format_note` / `-desc` 字符串匹配）没有任何实测**。
+      它服务的是非 YouTube extractor，而那些平台**恰恰不写 `language_preference`**，
+      所以真实 Twitter 数据走到这里时四种类型全部落到 `unknown` —— 实测确认过
+      Twitter 形状的格式里既没有 `language_preference` 也没有 `original` / `descriptive`
+      这类 note。也就是说这几条 `return` 目前是**面向未来 extractor 的兜底**，
+      不是任何已知平台的实际行为。
+
+      后果是有界的：落 `unknown` 时 `_KIND_TIER` 给 1（等同普通配音），
+      语言偏好与 abr 照常生效，只是"原音优先"在那些平台上没有可判定的依据。
+      这是可接受的降级，不是缺陷 —— 别为了让它"看起来有用"去放宽匹配，
+      `"default" in note` 那类宽匹配正是本次修掉的老缺陷（见上面第一条警告）。
     """
     pref = f.get("language_preference")
     if isinstance(pref, bool):
@@ -200,7 +226,17 @@ def score_audio_format(f: dict[str, Any], ctx: ScoringContext) -> int:
             affinity_bonus = 2000
 
     if kind == KIND_DESCRIPTIVE and not ctx.allow_descriptive:
-        # 地板分：低于任何其它候选，但仍是有限值 —— "只有 desc 轨"时它照样能被选中
+        # 地板分：低于任何其它候选，但仍是有限值 —— "只有 desc 轨"时它照样能被选中。
+        #
+        # ⚠️ 这条分支**没有真实视频验证过**：端到端探了 9 个 YouTube 视频，
+        # 一条 `language_preference=-10` 都没遇到（那个字段的实测覆盖只有 10 / -1）。
+        # 已验证的是合成 info dict 过真实代码路径 —— 排末位、不被默认勾选、
+        # 弹窗显示「音频描述」、"只有 desc 轨"时仍能选中，见
+        # `tests/test_audio_track_selection.py::test_descriptive_*`。
+        #
+        # 选择地板分而不是硬过滤，正是因为拿不到实物：真遇到只有描述性音轨的视频时，
+        # 硬过滤会让它一条音频都选不出来（合并直接失败），地板分最坏情况只是
+        # "选了条解说轨"，用户能在音轨弹窗里看见并改。未验证的路径要按这个方向留退路。
         return _AUDIO_DESC_FLOOR + abr
 
     tier = _KIND_TIER.get(kind, 1)
