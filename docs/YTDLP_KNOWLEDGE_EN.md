@@ -56,6 +56,16 @@
 
 **Code**: `src/fluentytdl/youtube/youtube_service.py` — playlist retry logic
 
+### 1.6 Sub-request Failures Also Print `ERROR:` (the task did not fail)
+
+**Symptom**: when one caption track gets rate-limited, yt-dlp prints `ERROR: Unable to download video subtitles for 'zh-Hans-en-GB': HTTP Error 429: Too Many Requests` — yet it goes on to fetch the other languages and finishes normally, possibly with exit code 0
+
+**Root Cause**: that `ERROR:` prefix describes **that one sub-request**, not the task. A diagnostics layer that tiers events by prefix will put it in the same tier as genuinely fatal errors and let priority decide between them
+
+**Rule**: such rules declare `"appliesTo": "both"` to accept the `ERROR:` line, then `"demoteToWarning": true` to push the event back into the warning tier. Priority stays untouched — it is needed to beat more generic rules on the **same line** (subtitle 429 over `rate_limited_429`), while the level decides the tier in cross-line arbitration. Without the demotion, the subtitle rule's p98 shoves a real cause like `bot_check_sign_in` (p92) into a footnote; without `appliesTo: both`, the real-world `ERROR:` line never even gets a chance to match and falls through to the generic `rate_limited_429`, so the subtitle-specific hint never appears
+
+**Code**: `src/fluentytdl/diagnostics/engine.py::parse_events`, `assets/error_rules.json`
+
 ## 2. Format Selection
 
 ### 2.1 Language Preference Override Failure
@@ -70,13 +80,18 @@
 
 ### 2.2 BCP-47 Alias Expansion
 
-**Symptom**: Audio language matching fails for locale variants (e.g., `zh-CN` vs `zh-Hans`)
+**Symptom**: Language matching fails for locale variants — audio (`zh-CN` vs `zh-Hans`), subtitles (preference `en` fails to match the real key `en-GB`)
 
-**Root Cause**: YouTube uses different locale codes in different contexts
+**Root Cause**: YouTube uses different locale codes in different contexts. Subtitles go further: real caption keys carry a region (`en-GB`), and auto-generated/translated ones are `{target}-{source}` compound keys (`en-en-GB`, `zh-Hans-en-GB`)
 
-**Rule**: Use `bcp47_expand_for_sort()` to expand language codes to all possible aliases before building format_sort
+**Rule**:
 
-**Code**: `src/fluentytdl/utils/format_scorer.py`
+- Audio: use `bcp47.expand_for_sort()` to expand language codes to all possible aliases before building format_sort
+- Subtitles: **every `--sub-langs` entry is matched by yt-dlp as an anchored regex** against the caption keys — a bare `en` does not match `en-GB`, not a single `.vtt` gets written, and yt-dlp leaves only `[info] There are no subtitles for the requested languages` behind. User preferences must therefore be resolved to real keys via `bcp47.resolve_requested()` first; when the available-track list cannot be obtained, fall back to `bcp47.to_sub_langs_pattern()` (`en(-.+)?`, **not** `en.*` — the latter would also match `eng`/`enm`, two different languages)
+- Matching is **one-directional**: `en` matches `en-GB`, but `en-GB` does not match `en` (a user who explicitly asked for British English should not be handed a region-less `en`)
+- Simplified and Traditional Chinese must **never** mix: `zh-Hans` must not match `zh-Hant`
+
+**Code**: `src/fluentytdl/utils/bcp47.py` (the single authority; `utils/format_scorer.py` keeps only a thin delegation)
 
 ### 2.3 web_music Client Needs disable_innertube
 

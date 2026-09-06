@@ -78,6 +78,20 @@ jobs:
         run: uv run ruff format --check src tests
         continue-on-error: true
 
+      # 源码里新增的 self.tr() / QT_TRANSLATE_NOOP 必须抽取进 assets/locales/*.ts，
+      # 否则英文界面会静默回退成中文源串 —— 这正是 ISSUE #88 的成因：
+      # build.py 只跑 i18n_release.py（ts→qm），从来没有任何环节跑 i18n_update.py（源码→ts），
+      # 于是漂移无界累积。这里只做**只读校验**，不提交任何东西。
+      # 保持 continue-on-error（与本仓库其余检查一致）：它是提示，不是合并闸门。
+      - name: Check i18n catalogs are up to date
+        continue-on-error: true
+        run: |
+          uv run python scripts/i18n_update.py
+          if ! git diff --quiet -- assets/locales; then
+            echo "::warning::有新字符串未抽取到 .ts，请运行 python scripts/i18n_update.py 并补齐译文后提交"
+            git diff --stat -- assets/locales
+          fi
+
   typecheck:
     name: Pyright (advisory)
     runs-on: ubuntu-latest

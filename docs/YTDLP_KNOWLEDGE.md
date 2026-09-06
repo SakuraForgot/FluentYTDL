@@ -56,6 +56,16 @@
 
 **代码**：`src/fluentytdl/youtube/youtube_service.py` — 播放列表重试逻辑
 
+### 1.6 子请求失败也打 `ERROR:`（任务其实没失败）
+
+**症状**：单条字幕轨限流时，yt-dlp 打的是 `ERROR: Unable to download video subtitles for 'zh-Hans-en-GB': HTTP Error 429: Too Many Requests` —— 但它随后照旧下完别的语言、照旧正常收尾，退出码可以是 0
+
+**根因**：那个 `ERROR:` 前缀描述的是**那一次子请求**，不是整个任务。诊断层若按前缀分层，就会把它和真正的致命错误摆在同一层里比优先级
+
+**规则**：这类规则声明 `"appliesTo": "both"` 收下 `ERROR:` 行，再用 `"demoteToWarning": true` 把事件降回 warning 层。priority 不动 —— 它要留着在**同一行**上压过更泛化的规则（字幕 429 压 `rate_limited_429`），而级别决定它在跨行仲裁里的分层。少了降级，字幕规则的 p98 会把 `bot_check_sign_in`(p92) 这种真正的失败原因挤成配角；少了 `appliesTo: both`，真机上那行 `ERROR:` 连匹配的机会都没有，一路落到泛化的 `rate_limited_429`，字幕专属提示永远不出现
+
+**代码**：`src/fluentytdl/diagnostics/engine.py::parse_events`、`assets/error_rules.json`
+
 ## 2. 格式选择
 
 ### 2.1 语言偏好覆盖失败
@@ -70,13 +80,18 @@
 
 ### 2.2 BCP-47 别名扩展
 
-**症状**：语言环境变体的音轨语言匹配失败（如 `zh-CN` vs `zh-Hans`）
+**症状**：语言环境变体的语言匹配失败（音轨如 `zh-CN` vs `zh-Hans`；字幕如偏好 `en` 配不上真实键 `en-GB`）
 
-**根因**：YouTube 在不同上下文中使用不同的语言环境代码
+**根因**：YouTube 在不同上下文中使用不同的语言环境代码。字幕更进一步：真实字幕键除了带地区（`en-GB`），自动生成/翻译的还是 `{目标}-{来源}` 复合键（`en-en-GB`、`zh-Hans-en-GB`）
 
-**规则**：使用 `bcp47_expand_for_sort()` 在构建 format_sort 前将语言代码扩展为所有可能的别名
+**规则**：
 
-**代码**：`src/fluentytdl/utils/format_scorer.py`
+- 音频：用 `bcp47.expand_for_sort()` 在构建 format_sort 前把语言代码扩展成所有可能的别名
+- 字幕：**`--sub-langs` 的每一项被 yt-dlp 当作锚定正则**去匹配字幕键 —— 裸 `en` 匹配不到 `en-GB`，一个 `.vtt` 都不会写出来，而 yt-dlp 只留一句 `[info] There are no subtitles for the requested languages`。所以用户偏好必须先经 `bcp47.resolve_requested()` 解析成真实键；拿不到可用轨道列表时回落 `bcp47.to_sub_langs_pattern()`（`en(-.+)?`，**不是** `en.*` —— 后者会连带命中 `eng`/`enm` 这两个不同语种）
+- 匹配是**单向**的：`en` 命中 `en-GB`，但 `en-GB` 不命中 `en`（用户点名要英国英语时，不该拿到一条不知道哪个地区的 `en`）
+- 简繁**绝不能**混：`zh-Hans` 不得命中 `zh-Hant`
+
+**代码**：`src/fluentytdl/utils/bcp47.py`（唯一权威；`utils/format_scorer.py` 只保留一层薄委托）
 
 ### 2.3 web_music 客户端需要 disable_innertube
 

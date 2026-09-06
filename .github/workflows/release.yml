@@ -11,10 +11,19 @@
 #   X.Y.Z-rc.N     → rc     → GitHub Release (Pre-release)
 #   X.Y.Z-beta.N   → beta   → 仅 Artifacts，不创建 Release
 #
-# 发布产物:
-#   1. full.7z      - 便携完整版 (首要推荐)
-#   2. setup.exe    - Inno Setup 安装向导
-#   3. app-core.7z  - 增量更新内部包 (供程序内自动更新，非用户下载项)
+# 发布产物 (target=all 才全产):
+#   1. full.7z              - 便携完整版 (首要推荐)
+#   2. setup.exe            - Inno Setup 安装向导
+#   3. app-core.7z          - 增量更新内部包 (供程序内自动更新，非用户下载项)
+#   4. update-manifest.json - 程序内更新器读的清单
+#   5. SHA256SUMS.txt       - 本次产物校验和
+#
+# 构建目标 (scripts/build.py TARGET_OUTPUTS 是唯一事实源):
+#   all       上面五项全产 —— 标签推送与 publish=true 只走这个
+#   7z/full   只产 full.7z
+#   app-core  只产 app-core.7z + update-manifest.json
+#   setup     只产 setup.exe
+#   非 all 目标只能配 publish=false，产物从 Artifacts 取
 # ==============================================================================
 
 name: Build and Release
@@ -30,12 +39,14 @@ on:
         required: false
         default: ''
       targets:
-        description: '构建目标'
+        description: '构建目标（非 all 只产该目标的发布物，不能用于 publish）'
         required: true
         default: 'all'
         type: choice
         options:
           - all
+          - 7z
+          - app-core
           - setup
           - full
       publish:
@@ -149,8 +160,17 @@ jobs:
           $channel = if ($Matches[2]) { $Matches[2] } else { 'stable' }
           $tag     = "v$version"
 
-          if ($targets -notin @('all', 'full', 'setup')) {
+          # 允许值须与 scripts/build.py 的 TARGET_OUTPUTS 键集合一致（full 是 7z 的别名）。
+          # 校验产物那一步会直接读 build.py 的表，两边真要是对不上会在那里炸出来。
+          if ($targets -notin @('all', '7z', 'full', 'app-core', 'setup')) {
             throw "未知构建目标: '$targets'"
+          }
+
+          # 非 all 目标只产出该目标那几个文件 —— 缺 update-manifest.json 会让老用户的
+          # 程序内更新检查不到新版本，缺 full.7z / setup.exe 会让 Release 正文里的
+          # 下载链接全部 404。这种 Release 发出去比不发更糟，所以直接拦在这里。
+          if ($publish -eq 'true' -and $targets -ne 'all') {
+            throw "publish=true 只允许 targets=all，当前为 '$targets'`n  非 all 目标不产出完整发布物（清单/校验和/安装包会缺），发出去的 Release 会缺资产且中断程序内自动更新`n  只想验证单个产物请用 publish=false，产物在 Artifacts 里取"
           }
 
           $prerelease = if ($channel -eq 'stable') { 'false' } else { 'true' }
@@ -330,8 +350,10 @@ jobs:
           uv run python scripts/build.py --target '${{ steps.version.outputs.TARGETS }}' --version '${{ steps.version.outputs.VERSION }}'
           if ($LASTEXITCODE -ne 0) { throw '构建失败' }
 
-      # build.py 内部已生成 SHA256SUMS.txt 与 update-manifest.json 并断言产物齐全，
-      # 这里再从 CI 侧独立校验一次，防止脚本内断言被绕过。
+      # build.py 内部已按 target 生成产物并断言齐全，这里再从 CI 侧独立校验一次落盘
+      # 结果，防止脚本内断言被绕过。**预期清单向 build.py --print-names 要** ——
+      # 以前这里手抄了一份"总是有 SHA256SUMS.txt 和 update-manifest.json"的判断，
+      # target 收紧后立刻变成误报。核对的是磁盘实况，读同一张表不影响这层独立性。
       - name: "✅ 校验构建产物"
         shell: pwsh
         run: |
@@ -343,34 +365,38 @@ jobs:
 
           if (-not (Test-Path $dir)) { throw 'release 目录不存在' }
 
-          function Assert-Exists([string]$pattern) {
-            $items = Get-ChildItem -Path $dir -Filter $pattern -ErrorAction SilentlyContinue
-            if (-not $items) { throw "缺少产物: $pattern" }
-            foreach ($i in $items) {
-              if ($i.Length -le 0) { throw "产物为空文件: $($i.Name)" }
+          # 预期清单由 build.py 自己吐出（--print-names 只读表不构建），CI 侧不留副本
+          $expected = @(
+            uv run python scripts/build.py --print-names --target $targets --version $version |
+              Where-Object { $_ -ne '' }
+          )
+          if ($LASTEXITCODE -ne 0) { throw '无法从 build.py 读取预期产物清单' }
+          if ($expected.Count -eq 0) {
+            throw "build.py 认为 target='$targets' 不产出任何发布物 —— 目标名或 TARGET_OUTPUTS 有问题"
+          }
+          Write-Host "预期产物 ($($expected.Count)): $($expected -join ', ')"
+
+          function Assert-Exists([string]$name) {
+            $path = Join-Path $dir $name
+            if (-not (Test-Path -LiteralPath $path)) { throw "缺少产物: $name" }
+            if ((Get-Item -LiteralPath $path).Length -le 0) { throw "产物为空文件: $name" }
+          }
+
+          foreach ($name in $expected) { Assert-Exists $name }
+
+          # 更新清单里的版本必须与本次构建一致，否则程序内自动更新会指向错误资产。
+          # 只有产出清单的目标才校验（7z / setup 目标压根不生成它）。
+          if ($expected -contains 'update-manifest.json') {
+            $manifest = Get-Content (Join-Path $dir 'update-manifest.json') -Raw | ConvertFrom-Json
+            if ($manifest.app_version -ne $version) {
+              throw "update-manifest.json 版本不匹配: $($manifest.app_version) != $version"
             }
+            if ($manifest.release_tag -ne $tag) {
+              throw "update-manifest.json tag 不匹配: $($manifest.release_tag) != $tag"
+            }
+            Write-Host "✓ 清单校验通过 (app_version=$($manifest.app_version), release_tag=$($manifest.release_tag))"
           }
-
-          if ($targets -eq 'all' -or $targets -eq 'full') {
-            Assert-Exists "FluentYTDL-$version-*-full.7z"
-            Assert-Exists "FluentYTDL-$version-*-app-core.7z"
-          }
-          if ($targets -eq 'all' -or $targets -eq 'setup') {
-            Assert-Exists "FluentYTDL-$version-*-setup.exe"
-          }
-
-          Assert-Exists 'SHA256SUMS.txt'
-          Assert-Exists 'update-manifest.json'
-
-          # 更新清单里的版本必须与本次构建一致，否则程序内自动更新会指向错误资产
-          $manifest = Get-Content (Join-Path $dir 'update-manifest.json') -Raw | ConvertFrom-Json
-          if ($manifest.app_version -ne $version) {
-            throw "update-manifest.json 版本不匹配: $($manifest.app_version) != $version"
-          }
-          if ($manifest.release_tag -ne $tag) {
-            throw "update-manifest.json tag 不匹配: $($manifest.release_tag) != $tag"
-          }
-          Write-Host "✓ 产物校验通过 (app_version=$($manifest.app_version), release_tag=$($manifest.release_tag))"
+          Write-Host "✓ 产物校验通过 (target=$targets)"
 
       - name: "📋 列出构建产物"
         shell: pwsh

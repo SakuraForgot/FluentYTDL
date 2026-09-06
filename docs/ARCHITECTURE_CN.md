@@ -195,9 +195,9 @@ stateDiagram-v2
 
 启动时，`DownloadManager.load_unfinished_tasks()`：
 
-1. 从 `task_db.get_all_tasks()` 读取所有行
-2. 按逆时间顺序遍历
-3. 跳过终止状态（`completed`、`error`、`cancelled`）
+1. 用 `task_db.query_tasks(states=UNFINISHED_STATES + ("error",))` keyset 分页读取，**只取未完成态与 `error`**（终态行归任务列表的 `fetchMore()` 分页）
+2. 按逆时间顺序遍历（`updated_at` 升序，与列表分页同一个排序键）
+3. 跳过 `completed` / `cancelled`；`error` 超过 `failed_task_retention_days` 则删除
 4. 跳过 `skip_download` 任务（字幕/封面提取）— 标记为错误，因为对话上下文已丢失
 5. **关键安全阀：** 所有 `running`/`downloading`/`parsing` 状态的任务降级为 `paused` — 防止重启时并发下载风暴
 6. 从持久化字段重建 `DownloadWorker` 对象
@@ -366,7 +366,7 @@ flowchart LR
 self.features = [
     SponsorBlockFeature(),   # 1. 仅 configure() — 注入 sponsorblock_remove/mark
     MetadataFeature(),       # 2. 仅 configure() — 追加 FFmpegMetadata 后处理器
-    SubtitleFeature(),       # 3. 两个钩子 — 双语合并、格式兼容修复、嵌入
+    SubtitleFeature(),       # 3. 两个钩子 — 语言解析、格式兼容修复、嵌入
     ThumbnailFeature(),      # 4. 仅 on_post_process() — 通过 AtomicParsley/FFmpeg/mutagen 嵌入
     VRFeature(),             # 5. 仅 on_post_process() — EAC→Equi 转换 + 空间元数据
 ]
@@ -386,7 +386,7 @@ flowchart TD
     end
 
     subgraph on_post["后处理回调 — yt-dlp 运行后"]
-        SF2["字幕功能<br/>双语合并 + 清理外部字幕文件"]
+        SF2["字幕功能<br/>四级定位校验 + 清理外部字幕文件"]
         TF1["封面功能<br/>定位封面 → 通过<br/>AtomicParsley/FFmpeg/mutagen 嵌入 → 清理"]
         VF1["VR 功能<br/>EAC→等矩形 FFmpeg 转换<br/>+ 空间元数据注入"]
     end
@@ -625,61 +625,89 @@ PlaylistItemDelegate (playlist_delegate.py)
 
 ## 8. Cookie 与认证生命周期
 
-### 8.1 CookieSentinel — 4 个阶段
+### 8.1 CookieSentinel — 两个真相源
 
-CookieSentinel 是线程安全的单例，管理单个规范的 `bin/cookies.txt` 文件：
+CookieSentinel 是线程安全的 `QObject` 单例，掌管**两个**真相源 ——
+`bin/cookies_youtube.txt` 与 `bin/cookies_twitter.txt`，各带一个 `.txt.meta` 侧写文件。
+这两个文件是 yt-dlp 唯一会读的 Cookie 文件（`yt_dlp_cli.py` 注入 `--cookies`；
+`--cookies-from-browser` 被明令禁止，见 RULES §4.3）。其它一切 ——
+`bin/dle_user/<platform>/` 账号缓存、`cached_file_<platform>.txt`、浏览器提取结果
+—— 都只是上游素材。
 
 ```mermaid
 flowchart TD
-    subgraph P1["阶段 1：静默启动预提取"]
+    subgraph P1["阶段 1：静默启动刷新（按平台）"]
         A1["守护线程（启动后 2s 延迟）"]
         A1 --> A2{"auth_service.current_source?"}
         A2 -- "NONE" --> A3["跳过"]
-        A2 -- "DLE" --> A4["复制缓存 cookie 文件"]
+        A2 -- "WEBVIEW2" --> A4["按平台的缓存 cookie 文件<br/>（没有账号 ≠ 出错）"]
         A2 -- "FILE" --> A5["_copy_from_auth_service()"]
         A2 -- "Browser" --> A6["_update_from_browser(silent=True)"]
-        A4 --> A7{"成功?"}
-        A5 --> A7
-        A6 --> A7
-        A7 -- "是" --> A8["保存元数据，清除回退"]
-        A7 -- "否" --> A9{"旧 cookie 存在?"}
-        A9 -- "是" --> A10["进入回退模式<br/>（保留旧 cookies）"]
-        A9 -- "否" --> A11["记录警告"]
+        A4 --> G1
+        A5 --> G1
+        A6 --> G1
+        G1["_commit_to_truth_source(src, platform, tag)"]
+        G1 --> G2{"_validate_cookies(platform) 通过?"}
+        G2 -- "是" --> G3["原子替换（.txt.tmp → os.replace）<br/>+ 写 .txt.meta"]
+        G2 -- "否" --> G4["弱回退：旧文件纹丝不动<br/>原因 → _commit_warnings[platform]"]
+        G3 --> H1
+        G4 --> H1
+        H1["emit startupHealthReady(get_startup_health())"]
     end
 
     subgraph P2["阶段 2：下载时使用"]
-        B1["get_cookie_file_path()"]
+        B1["get_cookie_path_for_platform(platform)"]
         B1 --> B2["返回路径供 yt-dlp --cookies"]
     end
 
     subgraph P4["阶段 4：强制刷新（需 UAC）"]
-        D1["force_refresh_with_uac()"]
-        D1 --> D2["_update_lock 防止并发"]
-        D2 --> D3["_update_from_browser(force=True)"]
-        D3 --> D4{"成功?"}
-        D4 -- "是" --> D5["覆盖 cookies + meta"]
-        D4 -- "否" --> D6["回退：保留旧 cookies"]
+        D1["force_refresh_with_uac(platform=None)"]
+        D1 --> D2["按平台互斥：self._updating 集合<br/>（None 同时占用两个平台）"]
+        D2 --> D3["_update_from_browser(force=True, platform=…)"]
+        D3 --> G1
     end
 ```
 
-### 8.2 懒清理模式
+启动是**静默**的：UI 订阅 `startupHealthReady`（`Signal(dict)`，用
+`Qt.ConnectionType.QueuedConnection` 投递）而不是靠定时器猜时序，并且只对 `enabled`
+为真的平台提醒。WebView2 模式下 `enabled` 取自账号列表，所以只登录过 X 的用户永远
+不会被 YouTube 的状态骚扰。
 
-核心设计原则：**在新提取成功前绝不删除旧 cookies**。
+UI 侧的刷新一律走 `CookieRefreshWorker(QThread)` —— 刷新要读 DPAPI 数据库、要等
+WebView2 子进程，放在 Qt 主线程上就是用户报的卡死。
 
-- `_clear_cookie_and_meta()` 存在但在正常流程中**从不调用**
-- `validate_source_consistency()` 仅返回状态元组 — 明确不强制清理
-- 提取失败时，如果存在来自不同来源的旧 cookie 文件，进入**回退模式**而非删除
-- `.txt.meta` 辅助文件记录来源浏览器、提取时间戳和 cookie 数量，用于不匹配检测
+### 8.2 写入闸门与懒清理
 
-### 8.3 DLE vs WebView2 提供者
+`_commit_to_truth_source(src, platform, source_tag) -> (ok, reason)` 是真相源的**唯一**
+写入者。核心设计原则：**新提取通过校验之前，绝不删除或覆盖旧 cookies**。
 
-| 方面 | DLE 提供者 | WebView2 提供者 |
-|------|-----------|-----------------|
-| 机制 | 临时 Chrome 扩展注入到干净浏览器实例 | pywebview + Edge WebView2 后端 |
-| 进程模型 | 同进程（subprocess.Popen） | 双进程（multiprocessing.Process + Queue） |
-| 配置文件 | 隔离的 `--user-data-dir` | 持久化 WebView2 缓存（`private_mode=False`） |
-| 登录检测 | 轮询本地 HTTP 服务器的 cookie POST | 轮询 `LOGIN_INFO` cookie 存在 |
-| 状态 | 旧版 | 当前（替代 DLE） |
+- **弱回退** —— 校验不过则目的地字节级不变。"提取成功但内容是半份 / 全部过期"不再
+  覆盖一个还能用的文件；原因落进 `_commit_warnings[platform]`，通过
+  `get_commit_warning(platform)` / `get_status_info(platform)["commit_warning"]` 上浮到界面。
+- 必需 Cookie 分平台：YouTube `SID / HSID / SSID / SAPISID / APISID`，X `auth_token / ct0`。
+  会话 Cookie（`expires == 0`）不算过期。
+- 替换是原子的（`.txt.tmp` → `os.replace`，同卷），写一半崩溃也不会留下截断的真相源。
+- `_clear_cookie_and_meta()` 存在但在正常流程中**从不调用**；
+  `validate_source_consistency()` 仅返回状态元组，明确不强制清理。
+- `.txt.meta` 记录来源、提取时间戳与 cookie 数量，用于不匹配检测。因为它存的是**历史**
+  来源，`_get_source_display()` 的映射表比下拉框更宽，仍能渲染本版本已不支持的提取源
+  （`chrome`、`centbrowser`）。
+
+### 8.3 WebView2 提供者 —— 运行时预检与崩溃检测
+
+`WebView2CookieProvider`（`auth/providers/webview2_provider.py`）是唯一的登录式提供者；
+旧的 DLE 提供者（临时 Chrome 扩展 + 本地 HTTP 服务器）已删除。它在**独立进程**
+（`multiprocessing.Process` + `Queue`）里跑 pywebview + Edge WebView2 后端，使用持久化
+WebView2 缓存（`private_mode=False`），靠轮询平台的会话 Cookie 判定登录成功。
+
+两条失败路径正是那 5.5 分钟卡死的来源：
+
+| 护栏 | 位置 | 行为 |
+|------|------|------|
+| 运行时预检 | `auth/webview2_runtime.py::is_webview2_runtime_available()` | 查三个 `EdgeUpdate\Clients\{F3017226-…}` 注册表位置（HKLM、HKLM\WOW6432Node、HKCU）的 `pv` 值，`0.0.0.0` 视为未安装；结果按进程缓存。缺运行时则弹 `MessageBox` 给出"下载 / 改用浏览器提取 / 手动导入"三个出口，**且在此之前一个按钮都不禁用**。 |
+| 存活轮询 | `extract_cookies()` | 父进程改为循环 `cookie_queue.get(timeout=1.0)`，每轮检查 `process.is_alive()`，子进程没留下结果就死掉时**秒级**返回，而不是阻塞 `timeout + 30`。子进程把 `create_window` + `webview.start()` 包进 `try/except Exception`，异常文本经队列回传。 |
+
+登录按钮**按平台**禁用，绝不再一次禁用两个 —— 卡住的 YouTube 登录不会再挡住 X 登录。
 
 ### 8.4 POT Manager — 3 级渐进恢复
 
@@ -885,6 +913,7 @@ flowchart TD
 
 - **入口**：`SubtitleDownloadPage` → `show_subtitle_selection_dialog(url)` → `DownloadConfigWindow(mode="subtitle")`
 - **yt-dlp 选项**：`skip_download=True`、`writesubtitles`/`writeautomaticsub`、`subtitleslangs`、`convertsubtitles`
+- **语言解析**：这条路也要先把 `__fluentytdl_subtitle_prefs`（用户偏好）解析成真实字幕键 —— `_run_lightweight_extract()` 在 `run()` 的 `merged` 之前就 return，所以它自己单独调一次 `_resolve_subtitle_prefs()`。字幕参数与完整下载路径共用 `yt_dlp_cli.build_subtitle_args()`
 - **下载路径**：`_run_lightweight_extract()` — **完全绕过 Executor/Strategy/Feature 管道**
 - **后处理**：**无** — .srt/.vtt/.ass 文件即为最终输出
 - **关键文件**：`subtitle_download_page.py`、`workers.py:635`

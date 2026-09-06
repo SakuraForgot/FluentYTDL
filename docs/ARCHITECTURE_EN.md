@@ -196,9 +196,9 @@ stateDiagram-v2
 
 On startup, `DownloadManager.load_unfinished_tasks()`:
 
-1. Reads all rows from `task_db.get_all_tasks()`
-2. Iterates in reverse chronological order
-3. Skips terminal states (`completed`, `error`, `cancelled`)
+1. Keyset-paginates `task_db.query_tasks(states=UNFINISHED_STATES + ("error",))` — **unfinished states and `error` only** (terminal rows belong to the task list's `fetchMore()` pagination)
+2. Iterates in reverse chronological order (`updated_at` ascending, the same sort key the list pagination uses)
+3. Skips `completed` / `cancelled`; deletes `error` rows older than `failed_task_retention_days`
 4. Skips `skip_download` tasks (subtitle/cover extract) — marks them as error because their dialog context is lost
 5. **Critical safety valve:** Any task in `running`/`downloading`/`parsing` state is demoted to `paused` — prevents a thundering herd of concurrent downloads on restart
 6. Reconstructs `DownloadWorker` objects from persisted fields
@@ -367,7 +367,7 @@ flowchart LR
 self.features = [
     SponsorBlockFeature(),   # 1. configure() only — inject sponsorblock_remove/mark
     MetadataFeature(),       # 2. configure() only — append FFmpegMetadata postprocessor
-    SubtitleFeature(),       # 3. Both hooks — bilingual merge, format compat fix, embed
+    SubtitleFeature(),       # 3. Both hooks — language resolution, format compat fix, embed
     ThumbnailFeature(),      # 4. on_post_process() only — embed via AtomicParsley/FFmpeg/mutagen
     VRFeature(),             # 5. on_post_process() only — EAC→Equi conversion + spatial metadata
 ]
@@ -387,7 +387,7 @@ flowchart TD
     end
 
     subgraph on_post["on_post_process() — after yt-dlp"]
-        SF2["SubtitleFeature<br/>bilingual merge + cleanup external subs"]
+        SF2["SubtitleFeature<br/>4-tier file location + cleanup external subs"]
         TF1["ThumbnailFeature<br/>locate thumbnail → embed via<br/>AtomicParsley/FFmpeg/mutagen → cleanup"]
         VF1["VRFeature<br/>EAC→Equi FFmpeg conversion<br/>+ spatial metadata injection"]
     end
@@ -628,63 +628,98 @@ At the scheduler level, there is no difference — both use the identical `Playl
 
 ## 8. Cookie & Auth Lifecycle
 
-### 8.1 CookieSentinel — 4 Phases
+### 8.1 CookieSentinel — Two Truth Sources
 
-CookieSentinel is a thread-safe singleton that manages the single canonical `bin/cookies.txt` file:
+CookieSentinel is a thread-safe `QObject` singleton that owns **two** truth sources —
+`bin/cookies_youtube.txt` and `bin/cookies_twitter.txt` — each with a `.txt.meta` sidecar.
+Those two files are the only cookie files yt-dlp ever reads (`yt_dlp_cli.py` injects
+`--cookies`; `--cookies-from-browser` is forbidden, see RULES §4.3). Everything else —
+`bin/dle_user/<platform>/` account caches, `cached_file_<platform>.txt`, browser
+extractions — is upstream material.
 
 ```mermaid
 flowchart TD
-    subgraph P1["Phase 1: Silent Startup Pre-Extract"]
+    subgraph P1["Phase 1: Silent Startup Refresh (per platform)"]
         A1["Daemon thread (2s delay after launch)"]
         A1 --> A2{"auth_service.current_source?"}
         A2 -- "NONE" --> A3["Skip"]
-        A2 -- "DLE" --> A4["Copy cached cookie file"]
+        A2 -- "WEBVIEW2" --> A4["Per-platform cached cookie file<br/>(no account = not an error)"]
         A2 -- "FILE" --> A5["_copy_from_auth_service()"]
         A2 -- "Browser" --> A6["_update_from_browser(silent=True)"]
-        A4 --> A7{"Success?"}
-        A5 --> A7
-        A6 --> A7
-        A7 -- "Yes" --> A8["Save meta, clear fallback"]
-        A7 -- "No" --> A9{"Old cookie exists?"}
-        A9 -- "Yes" --> A10["Enter fallback mode<br/>(old cookies preserved)"]
-        A9 -- "No" --> A11["Log warning"]
+        A4 --> G1
+        A5 --> G1
+        A6 --> G1
+        G1["_commit_to_truth_source(src, platform, tag)"]
+        G1 --> G2{"_validate_cookies(platform) OK?"}
+        G2 -- "Yes" --> G3["Atomic replace (.txt.tmp → os.replace)<br/>+ write .txt.meta"]
+        G2 -- "No" --> G4["Weak fallback: old file untouched<br/>reason → _commit_warnings[platform]"]
+        G3 --> H1
+        G4 --> H1
+        H1["emit startupHealthReady(get_startup_health())"]
     end
 
     subgraph P2["Phase 2: Download-Time Usage"]
-        B1["get_cookie_file_path()"]
+        B1["get_cookie_path_for_platform(platform)"]
         B1 --> B2["Returns path for yt-dlp --cookies"]
     end
 
     subgraph P4["Phase 4: Force Refresh (with UAC)"]
-        D1["force_refresh_with_uac()"]
-        D1 --> D2["_update_lock prevents concurrent"]
-        D2 --> D3["_update_from_browser(force=True)"]
-        D3 --> D4{"Success?"}
-        D4 -- "Yes" --> D5["Overwrite cookies + meta"]
-        D4 -- "No" --> D6["Fallback: keep old cookies"]
+        D1["force_refresh_with_uac(platform=None)"]
+        D1 --> D2["Per-platform mutex: self._updating set<br/>(None occupies both)"]
+        D2 --> D3["_update_from_browser(force=True, platform=…)"]
+        D3 --> G1
     end
 ```
 
-### 8.2 Lazy Cleanup Pattern
+Startup is **silent**: the UI subscribes to `startupHealthReady` (a `Signal(dict)` delivered
+over `Qt.ConnectionType.QueuedConnection`) instead of guessing with a timer, and only warns
+about platforms whose `enabled` flag is true. WebView2 mode derives `enabled` from the
+account list, so a user who has only ever logged into X is never nagged about YouTube.
 
-The core design principle: **never delete old cookies until new extraction succeeds**.
+All UI-side refreshes go through `CookieRefreshWorker(QThread)` — refreshing reads DPAPI
+databases and waits on the WebView2 subprocess, so running it on the Qt main thread is the
+freeze users reported.
 
-- `_clear_cookie_and_meta()` exists but is **never called** in the normal flow
-- `validate_source_consistency()` only returns a status tuple — explicitly does NOT force cleanup
-- On extraction failure, if an old cookie file exists from a different source, enters **fallback mode** rather than deleting
-- A `.txt.meta` sidecar file records source browser, extraction timestamp, and cookie count for mismatch detection
+### 8.2 The Write Gate & Lazy Cleanup
 
-### 8.3 DLE vs WebView2 Providers
+`_commit_to_truth_source(src, platform, source_tag) -> (ok, reason)` is the **only** writer of
+a truth source. Core design principle: **never delete or overwrite old cookies until a new
+extraction has been validated**.
 
-| Aspect | DLE Provider | WebView2 Provider |
-|--------|-------------|-------------------|
-| Mechanism | Temporary Chrome extension injected into clean browser | pywebview with Edge WebView2 backend |
-| Process model | Same process (subprocess.Popen) | Dual-process (multiprocessing.Process + Queue) |
-| Profile | Isolated `--user-data-dir` | Persistent WebView2 cache (`private_mode=False`) |
-| Login detection | Polls local HTTP server for cookie POST | Polls `LOGIN_INFO` cookie presence |
-| Status | Legacy | Current (replaces DLE) |
+- **Weak fallback** — validation failure leaves the destination byte-identical. "Extraction
+  succeeded but the payload is half a cookie jar / entirely expired" no longer overwrites a
+  working file; the reason lands in `_commit_warnings[platform]` and surfaces through
+  `get_commit_warning(platform)` / `get_status_info(platform)["commit_warning"]`.
+- Required cookies are per platform: YouTube `SID / HSID / SSID / SAPISID / APISID`,
+  X `auth_token / ct0`. Session cookies (`expires == 0`) do not count as expired.
+- Replacement is atomic (`.txt.tmp` → `os.replace`, same volume), so a crash mid-write cannot
+  leave a truncated truth source.
+- `_clear_cookie_and_meta()` exists but is **never called** in the normal flow;
+  `validate_source_consistency()` only returns a status tuple and explicitly does not force
+  cleanup.
+- The `.txt.meta` sidecar records source, extraction timestamp, and cookie count for mismatch
+  detection. Because it stores *historical* sources, `_get_source_display()` also renders
+  extraction sources this version no longer supports (`chrome`, `centbrowser`).
 
-### 8.4 POT Manager — 3-Level Progressive Recovery
+### 8.3 WebView2 Provider — Runtime Pre-Check & Crash Detection
+
+`WebView2CookieProvider` (`auth/providers/webview2_provider.py`) is the only login-based
+provider; the older DLE provider (temporary Chrome extension + local HTTP server) is gone.
+It runs pywebview on the Edge WebView2 backend in a **separate process**
+(`multiprocessing.Process` + `Queue`) against a persistent WebView2 cache
+(`private_mode=False`), and detects login by polling for the platform's session cookie.
+
+Two failure paths were the source of the reported 5.5-minute freeze:
+
+| Guard | Where | Behaviour |
+|-------|-------|-----------|
+| Runtime pre-check | `auth/webview2_runtime.py::is_webview2_runtime_available()` | Probes three `EdgeUpdate\Clients\{F3017226-…}` registry keys (HKLM, HKLM\WOW6432Node, HKCU) for a `pv` that is not `0.0.0.0`; result cached per process. Missing runtime ⇒ `MessageBox` with download / browser-extraction / manual-import exits, **before** any button is disabled. |
+| Liveness polling | `extract_cookies()` | The parent polls `cookie_queue.get(timeout=1.0)` in a loop and checks `process.is_alive()` each pass, so a subprocess that dies without posting a result returns in seconds instead of blocking for `timeout + 30`. The child wraps `create_window` + `webview.start()` in `try/except Exception` and posts the error text back through the queue. |
+
+Login buttons are disabled **per platform**, never both at once, so a stuck YouTube login can
+no longer block an X login.
+
+
 
 POTManager manages the `bgutil-ytdlp-pot-provider` subprocess for PO Token generation (bypassing YouTube bot detection):
 
@@ -888,6 +923,7 @@ flowchart TD
 
 - **Entry**: `SubtitleDownloadPage` → `show_subtitle_selection_dialog(url)` → `DownloadConfigWindow(mode="subtitle")`
 - **yt-dlp options**: `skip_download=True`, `writesubtitles`/`writeautomaticsub`, `subtitleslangs`, `convertsubtitles`
+- **Language resolution**: this path also has to resolve `__fluentytdl_subtitle_prefs` (user preferences) into real caption keys — `_run_lightweight_extract()` returns before `run()` builds `merged`, so it calls `_resolve_subtitle_prefs()` itself. Subtitle flags come from the shared `yt_dlp_cli.build_subtitle_args()`
 - **Download path**: `_run_lightweight_extract()` — **bypasses Executor/Strategy/Feature pipeline entirely**
 - **Post-processing**: **None** — .srt/.vtt/.ass files are the final output
 - **Key files**: `subtitle_download_page.py`, `workers.py:635`
