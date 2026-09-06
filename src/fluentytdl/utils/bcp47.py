@@ -15,8 +15,14 @@
 原样塞进 `--sub-langs` 的结果就是一个 `.vtt` 都不写、而且 yt-dlp 只留一句
 `[info] There are no subtitles for the requested languages`。
 
-匹配语义**逐字沿用** `utils/format_scorer.py` 里已在音频路径上验证有效的实现
-（`-S lang:en,lang:en-gb,…`），本模块把它提升为公共 API，字幕路径不再各写一套。
+匹配语义**逐字沿用** `utils/format_scorer.py` 里音轨打分用的那套别名表与分层（`match_tier`），
+本模块把它提升为公共 API，字幕路径不再各写一套。
+
+> 这里原先写的是"已在音频路径上验证有效（`-S lang:en,lang:en-gb,…`）"。那句话的后半是错的：
+> `-S lang:xx` 从来不生效（`lang` 是 `language_preference` 的数值别名，且 `add_item` 只收
+> 第一个 `lang:` 条目），别名展开成 `lang:` 条目的 `expand_for_sort()` 已随之删除。真正有效
+> 的音频路径是格式串过滤器 `[language^=xx]`，见 `youtube/yt_dlp_cli.py`。**别名表与匹配语义
+> 本身是有效的**，变的只是它展开成什么。
 
 > ⚠️ 不要退回"按 `-` 切开比首段"那种双向前缀比较：它会把 `zh-Hans` 和 `zh-Hant`
 > 判成同一种语言。（`processing/subtitle_manager` 里那个 `_lang_matches()` 已经删了。）
@@ -198,20 +204,6 @@ def preference_rank(prefs: list[str], lang: str) -> tuple[int, int]:
         if tier is not None:
             return idx, tier
     return len(prefs), TIER_EXACT
-
-
-def expand_for_sort(lang: str) -> list[str]:
-    """将单个语言偏好展开为 yt-dlp format_sort 的 `lang:` 条目列表（含别名）。
-
-    示例：
-      expand_for_sort("zh-Hans") → ["lang:zh-hans","lang:zh-cn","lang:zh-sg",...]
-      expand_for_sort("orig")    → ["lang:orig"]
-    """
-    norm = normalize(lang)
-    result = [f"lang:{norm}"]
-    for alias in BCP47_ALIASES.get(norm, set()):
-        result.append(f"lang:{alias}")
-    return result
 
 
 def to_sub_langs_pattern(pref: str) -> str:

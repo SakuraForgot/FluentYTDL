@@ -241,22 +241,25 @@ def test_resolve_empty_inputs() -> None:
     assert bcp47.resolve_requested(["en"], []) == ([], ["en"])
 
 
-# ── expand_for_sort（既有音频路径的行为不能变） ─────────────────
+# ── 别名表本身（音频侧的格式过滤器直接读它） ────────────────────
 
 
-def test_expand_for_sort_unchanged() -> None:
-    """音频路径依赖这个函数，格式必须保持 `lang:xx`。"""
-    out = bcp47.expand_for_sort("zh-Hans")
-    assert out[0] == "lang:zh-hans"
-    assert set(out) == {"lang:zh-hans", "lang:zh-cn", "lang:zh-sg", "lang:zh-simplified", "lang:zh"}
-    assert bcp47.expand_for_sort("orig") == ["lang:orig"]
+def test_alias_table_covers_the_simplified_chinese_spellings() -> None:
+    """`yt_dlp_cli._language_filters()` 直接遍历 `BCP47_ALIASES` 生成过滤器分支。
 
-
-def test_format_scorer_still_re_exports() -> None:
-    """`youtube_service.py` 从 format_scorer 导入这个名字，委托不能断。"""
-    from fluentytdl.utils.format_scorer import bcp47_expand_for_sort
-
-    assert bcp47_expand_for_sort("en")[0] == "lang:en"
+    这里原先测的是 `expand_for_sort("zh-Hans")` 展开成的 `lang:` 条目 —— 那个函数
+    已经删了（`-S lang:xx` 从来不生效，见 `docs/YTDLP_KNOWLEDGE.md` §2.1），但**别名表
+    本身仍是有效的**，只是现在展开成 `[language=zh-CN]` 这样的过滤器。表的内容照旧要锁。
+    """
+    assert bcp47.BCP47_ALIASES[bcp47.normalize("zh-Hans")] == {
+        "zh-cn",
+        "zh-sg",
+        "zh-simplified",
+        "zh",
+    }
+    # 简繁绝不能互相出现在对方的别名里
+    assert "zh-tw" not in bcp47.BCP47_ALIASES[bcp47.normalize("zh-Hans")]
+    assert "zh-cn" not in bcp47.BCP47_ALIASES[bcp47.normalize("zh-Hant")]
 
 
 # ── split_translated_key（复合键拆解） ──────────────────────────

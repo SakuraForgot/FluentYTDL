@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QHeaderView,
@@ -25,6 +26,7 @@ from ...processing.audio_track_manager import (
     AudioTrack,
     extract_audio_tracks,
 )
+from ...processing.subtitle_manager import language_display_name
 from ...utils.container_compat import check_audio_multistream_container_compat
 
 if TYPE_CHECKING:
@@ -83,6 +85,14 @@ class AudioPickerDialog(MessageBoxBase):
         filter_layout.addWidget(self.codec_combo)
 
         self.viewLayout.addLayout(filter_layout)
+
+        # 筛选只是"看"，不动勾选状态 —— 于是被藏起来的行有可能仍然是勾上的，
+        # 而 `_get_selected_tracks()` 照样会把它算进去。不说这一句，用户看到的就是
+        # "我只勾了一条，怎么下载了两个音轨"。
+        self._filter_label = CaptionLabel("", self)
+        self._filter_label.setTextColor(QColor(96, 96, 96), QColor(210, 210, 210))
+        self._filter_label.hide()
+        self.viewLayout.addWidget(self._filter_label)
 
         # 音轨列表表格
         self.table = TableWidget(self)
@@ -154,22 +164,46 @@ class AudioPickerDialog(MessageBoxBase):
         if not self._all_tracks:
             return
 
-        # 提取语言组用于顶部 Filter
-        langs = set()
-        codecs = set()
+        # 语言与编码两组筛选项都**按 `_all_tracks` 的既有顺序**收集（`extract_audio_tracks`
+        # 已按得分降序），这样 tab 的排列就是推荐度排列，第一个非「全部」的 tab 正是赢家的语言。
+        # 用 dict 当有序集合，别用 `set` —— 那会让 tab 顺序在每次运行时变。
+        langs: dict[str, str] = {}
+        codecs: dict[str, str] = {}
         for t in self._all_tracks:
-            lang_key = (t.language or "orig").lower()
-            langs.add(lang_key)
-            if t.acodec:
-                # 简化 codec 名字，如 opus, mp4a
-                c_name = t.acodec.split(".")[0]
-                codecs.add(c_name)
+            lang_key = self._lang_key(t)
+            if lang_key not in langs:
+                langs[lang_key] = self._lang_filter_label(t)
+            codec_key = self._codec_key(t)
+            if codec_key and codec_key not in codecs:
+                codecs[codec_key] = codec_key.upper()
 
-        # 添加 Codec
-        for c in sorted(codecs):
-            self.codec_combo.addItem(c.upper(), userData=c)
+        # 只有一种语言时不加语言 tab：单个「全部语言」的分段控件点不动，纯占地方
+        if len(langs) > 1:
+            for key, label in langs.items():
+                self.lang_segment.addItem(key, label)
+        self.lang_segment.setCurrentItem("all")
+
+        for key, label in codecs.items():
+            self.codec_combo.addItem(label, userData=key)
 
         self._populate_table()
+
+    @staticmethod
+    def _lang_key(track: AudioTrack) -> str:
+        """筛选用的语言键。**不能用 `"all"`** —— 那是「全部语言」这一项的 routeKey。"""
+        return (track.language or "").strip().lower() or "unknown"
+
+    def _lang_filter_label(self, track: AudioTrack) -> str:
+        """语言 tab 的文案：查得到就用本地化名，查不到用原始语言码。"""
+        key = self._lang_key(track)
+        if key == "unknown":
+            return self.tr("未知")
+        return language_display_name(track.language or key)
+
+    @staticmethod
+    def _codec_key(track: AudioTrack) -> str:
+        """编码筛选键：`mp4a.40.2` → `mp4a`。与表格「编码」列取的是同一段。"""
+        return (track.acodec or "").split(".")[0].strip().lower()
 
     def _populate_table(self):
         """用 _all_tracks 填充表格并自动勾选默认项"""
@@ -245,11 +279,41 @@ class AudioPickerDialog(MessageBoxBase):
         self._update_compat_hint()
         self._on_filter_changed()
 
-    def _on_filter_changed(self):
-        """执行表格过滤"""
-        # TODO: Implement filtering later if needed
-        # Currently just letting the user see all sorted tracks
-        pass
+    def _on_filter_changed(self, *_args):
+        """按语言 tab 与编码下拉框隐藏/显示表格行。
+
+        隐藏而不是重建表格：`_checkboxes[i]` 与 `_all_tracks[i]` 是**下标对齐**的，
+        `_get_selected_tracks()` 直接靠这个对应关系取值。重建行会打断对齐，进而让
+        筛选一次就丢掉用户已经勾好的选择。
+
+        两个信号形参不同（`currentItemChanged(str)` / `currentIndexChanged(int)`），
+        `*_args` 吃掉它们；本方法也被 `_populate_table()` 无参调用。
+        """
+        lang_key = self.lang_segment.currentRouteKey() or "all"
+        codec_key = self.codec_combo.currentData()  # 「全部」那项没有 userData → None
+
+        for row_idx, track in enumerate(self._all_tracks):
+            show = (lang_key == "all" or self._lang_key(track) == lang_key) and (
+                not codec_key or self._codec_key(track) == codec_key
+            )
+            self.table.setRowHidden(row_idx, not show)
+
+        self._refresh_filter_notice()
+
+    def _refresh_filter_notice(self):
+        """更新筛选提示。勾选变化时也要重跑 —— 勾一条再把它筛掉，提示得跟着变。"""
+        hidden = [i for i in range(len(self._all_tracks)) if self.table.isRowHidden(i)]
+        if not hidden:
+            self._filter_label.hide()
+            return
+
+        if any(self._checkboxes[i].isChecked() for i in hidden):
+            self._filter_label.setText(
+                self.tr("筛选只影响显示；已隐藏的行里仍有勾选，确认时会一并生效。")
+            )
+        else:
+            self._filter_label.setText(self.tr("已隐藏 {0} 条不匹配的音轨。").format(len(hidden)))
+        self._filter_label.show()
 
     def _kind_label(self, kind: str) -> str:
         """音轨类型的显示文案。四种类型来自 `language_preference`，见 `audio_track_kind()`。"""
@@ -269,6 +333,9 @@ class AudioPickerDialog(MessageBoxBase):
 
     def _update_compat_hint(self):
         """联动更新容器兼容性提示"""
+        if self._checkboxes:
+            self._refresh_filter_notice()
+
         selected = self._get_selected_tracks()
         count = len(selected)
 

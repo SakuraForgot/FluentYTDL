@@ -2,10 +2,12 @@
 打分引擎模块
 
 提供简易模式格式选择所需的统一打分逻辑，涵盖：
-- 音轨语言偏好评分（等差间距 + BCP-47 别名匹配）
-- 视频流打分（分辨率 + 编解码器兼容性）
+- 音轨类型判定（读 `language_preference`：原音 / 默认 / 配音 / 音频描述）
+- 音轨语言偏好评分（等差间距 + BCP-47 别名匹配，策略决定排序层次）
 - 容器格式决策（感知字幕嵌入需求）
-- BCP-47 语言工具函数（薄委托到 `utils/bcp47.py`，供 youtube_service.py format_sort 复用）
+
+**没有**视频流打分：挑视频流的 `_pick_best_video()` / `resolve_global_format()` 按
+`(height, vbr)` 取 max，不经过本模块。
 """
 
 from __future__ import annotations
@@ -13,13 +15,13 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from .bcp47 import expand_for_sort as bcp47_expand_for_sort  # noqa: F401  (re-export)
 from .bcp47 import matches as _bcp47_match
 from .container_compat import choose_lossless_merge_container
 
 # BCP-47 匹配与别名表已迁到 utils/bcp47.py（字幕路径也要用同一套语义）。
-# 这里保留两个旧名字作为薄委托：`_bcp47_match` 供本模块的音轨打分使用，
-# `bcp47_expand_for_sort` 供 youtube_service.py 的 format_sort 拼装使用。
+# `_bcp47_match` 是供本模块音轨打分使用的薄委托。原先这里还再导出一个
+# `bcp47_expand_for_sort`，给 youtube_service.py 拼 format_sort 的 `lang:` 条目用 ——
+# 那条路已证伪（`-S lang:xx` 不生效），函数连同再导出一起删了。
 
 
 # ── 打分上下文 ────────────────────────────────────────────────
@@ -252,48 +254,15 @@ def format_ranking(ranked: list[tuple[dict[str, Any], int]], limit: int = 4) -> 
 # ── 视频打分（保留旧函数签名供其他模块按需调用）────────────────
 
 
-def is_mkv_heavy_stream(f: dict[str, Any]) -> bool:
-    """粗略判断视频流是否为强迫转码封装（VP9 / AV1 等难以无损汇入 MP4 的格式）"""
-    vcodec = (f.get("vcodec") or "").lower()
-    if "avc" in vcodec or "h264" in vcodec:
-        return False
-    if "av01" in vcodec or "vp9" in vcodec:
-        return True
-    return False
-
-
-def score_video_format(f: dict[str, Any], is_simple_mode: bool = True) -> int:
-    """对单条视频流评分。**当前全项目没有调用点。**
-
-    原 docstring 写的是"旧接口，内部仍使用"，那句话已经不成立了：真正在挑视频流的
-    `_pick_best_video()` / `resolve_global_format()` 都是按 `(height, vbr)` 取 max，
-    压根不过这里。所以下面这套简易模式偏好 —— 大幅惩罚 VP9/AV1（避免触发 FFmpeg
-    转封装假死）、奖励 H.264 + mp4 —— **实际从未生效过**：简易模式下选到 VP9 再转一遍
-    的情况仍会发生（另见 `_emit_format_decision()` 里关于 `prefer_ext` 的那段）。
-
-    保留不删，是因为它记录的是一个明确的意图，接上去是个待定的行为变更（会改变
-    既有用户的画质选择结果），不该在纯观测的改动里顺手做掉。
-    """
-    score = 0
-    h = int(f.get("height") or 0)
-    score += h * 10
-
-    fps = f.get("fps")
-    if fps and float(fps) > 30:
-        score += 500
-
-    ext = (f.get("ext") or "").lower()
-    vcodec = (f.get("vcodec") or "").lower()
-
-    if is_simple_mode:
-        if ext == "mp4":
-            score += 2000
-        if "avc" in vcodec or "h264" in vcodec:
-            score += 1000
-        if is_mkv_heavy_stream(f):
-            score -= 5000
-
-    return score
+# 这里原先有一对 `score_video_format()` / `is_mkv_heavy_stream()`：一套"简易模式下
+# 大幅惩罚 VP9/AV1、奖励 H.264 + mp4"的视频流偏好。它们**全项目零调用点** ——
+# 真正在挑视频流的 `_pick_best_video()` / `resolve_global_format()` 都是按
+# `(height, vbr)` 取 max，压根不过打分。所以那套偏好从未生效过，简易模式下选到 VP9
+# 再转一遍的情况仍会发生。
+#
+# 删掉而不是继续留着，是因为留着会让下一个人照它改：一个看起来是"现有行为"的函数
+# 其实是死代码，改它不产生任何效果。要接上这个意图是**画质选择的行为变更**（会改变
+# 既有用户拿到的流），得单独作为一个功能来做，届时从 git 历史里取回即可。
 
 
 # ── 容器决策 ──────────────────────────────────────────────────
