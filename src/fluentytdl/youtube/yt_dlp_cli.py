@@ -439,37 +439,52 @@ def prepare_yt_dlp_env(extra_paths: list[str] | None = None) -> dict[str, str]:
     return env
 
 
-def _inject_language_into_format(
-    fmt: str, format_sort: list | str | None, *, multistreams: bool = False
-) -> str:
-    """Prepend language-filtered format alternatives to the format string.
+#: 原音过滤器。`>=10` 而不是 `=10`：阈值语义与 `format_scorer.audio_track_kind()`
+#: 那边的 `pref >= AUDIO_ORIGINAL` 保持一致。
+#:
+#: **`?` 是必须的**（none-inclusive）：yt-dlp 的 `_build_format_filter` 在
+#: `actual_value is None` 时返回 `m.group('none_inclusive')`，不带 `?` 就是假。
+#: `language_preference` 只有 YouTube extractor 会算，Twitter 等平台的格式里压根
+#: 没有这个键 —— 不带 `?` 会把那些平台的**所有**音轨过滤光，下载直接失败。
+#: 带 `?` 的语义正好是想要的："有这个字段就要原音，没有就别管。"
+_ORIGINAL_AUDIO_FILTER = "[language_preference>=10?]"
 
-    yt-dlp's ``-S lang:xx`` cannot override the built-in ``language_preference=10``
-    assigned to audio tracks marked as *original* + *default*.  To truly prefer a
-    specific language, we need ``[language=xx]`` filters directly in the format
-    selection string, using the original (unfiltered) format as the final fallback.
+
+def _inject_language_into_format(
+    fmt: str,
+    langs: list[str] | None,
+    strategy: str | None,
+    *,
+    multistreams: bool = False,
+) -> str:
+    """把语言 / 原音偏好翻译成格式串里的过滤器分支，原始格式串作为最后兜底。
+
+    这是音轨偏好在 CLI 上**唯一**的表达方式。`-S lang:xx` 不行：`lang` 是
+    `language_preference` 的**数值**别名，不接受语言码，而且 `FormatSorter.add_item`
+    只接受第一个 `lang:` 条目（见 `CLAUDE.md` §4 规则 4）。
 
     Example::
 
-        fmt   = "bv*[height<=1080]+ba[ext=m4a]/b[height<=1080]/bv*[height<=1080]+ba"
-        langs from format_sort = ["ja", "zh-hans"]
-        result = ("bv*[height<=1080]+ba[ext=m4a][language=ja]/b[height<=1080][language=ja]"
-                  "/bv*[height<=1080]+ba[language=ja]"
-                  "/bv*[height<=1080]+ba[ext=m4a][language=zh-hans]/b[height<=1080][language=zh-hans]"
-                  "/bv*[height<=1080]+ba[language=zh-hans]"
-                  "/bv*[height<=1080]+ba[ext=m4a]/b[height<=1080]/bv*[height<=1080]+ba")
+        fmt      = "bv*[height<=1080]+ba[ext=m4a]/b[height<=1080]/bv*[height<=1080]+ba"
+        langs    = ["ja"]
+        strategy = "language_first"
+        result   = ("bv*[height<=1080]+ba[ext=m4a][language^=ja]/b[height<=1080][language^=ja]"
+                    "/bv*[height<=1080]+ba[language^=ja]"
+                    "/bv*[height<=1080]+ba[ext=m4a]/b[height<=1080]/bv*[height<=1080]+ba")
 
     判定本身在 `_plan_language_injection()` 里（纯函数、五条路径全收口），这里只负责
     emit 一条 `kind=decision subsystem=audio`：**"我设了日语音轨偏好，为什么下到的还是
-    英语"只有在这里才答得上来** —— `-S lang:ja` 进了命令行不代表它生效（§4.9 的规则 4），
-    真正决定成败的是 `[language=ja]` 到底有没有进 `-f`。四种"没注入"的成因里，
-    `explicit_multistream_ids` 是正常的（音轨已按 ID 点选），其余三种都值得看一眼。
+    英语"只有在这里才答得上来** —— 真正决定成败的是 `[language^=ja]` 到底有没有进 `-f`。
+    三种"没注入"的成因里，`explicit_multistream_ids` 是正常的（音轨已按 ID 点选），
+    其余两种都值得看一眼。
 
     Args:
+        langs: 已规范化的语言偏好（`youtube_service._resolve_preferred_audio_langs()`）。
+        strategy: `original_first` / `language_first` / `original_only`。
         multistreams: `audio_multistreams` 是否开启。开着就**故意不注入** ——
-            多音轨模式下格式串是显式的 `v+a1+a2` ID，插 `[language=xx]` 会把它改坏。
+            多音轨模式下格式串是显式的 `v+a1+a2` ID，插过滤器会把它改坏。
     """
-    plan = _plan_language_injection(fmt, format_sort, multistreams=multistreams)
+    plan = _plan_language_injection(fmt, langs, strategy, multistreams=multistreams)
     emit_event(
         "decision",
         trace=current_flow(),
@@ -480,6 +495,7 @@ def _inject_language_into_format(
         injected=plan.injected,
         reason=plan.reason,
         langs=plan.langs or None,
+        strategy=plan.strategy,
     )
     return plan.fmt
 
@@ -488,75 +504,140 @@ def _inject_language_into_format(
 class _LangInjectionPlan:
     """`_plan_language_injection()` 的判定结果。
 
-    `fmt` 是最终格式串，其余三个字段纯粹为了日志 —— 四种 `injected=False` 的成因在
-    命令行上长得一模一样（都是"没有 `[language=xx]`"），但一个是正常、三个是问题。
+    `fmt` 是最终格式串，其余四个字段纯粹为了日志 —— 三种 `injected=False` 的成因在
+    命令行上长得一模一样（都是"没有过滤器"），但一个是正常、两个是问题。`reason` 在
+    注入成功时还要分清注了语言、注了原音、还是两者都注了："原音优先但这个视频没有
+    原音标记"和"压根没注入"是两件事。
     """
 
     fmt: str
     langs: list[str]
     injected: bool
     reason: str
+    strategy: str
+
+
+def _language_filters(langs: list[str]) -> list[str]:
+    """每个语言偏好展开成若干过滤器表达式，按优先级排列。
+
+    偏好本身用 `^=`（startswith）：偏好 `en` 要能命中真实标注 `en-US`，这是旧的
+    `[language=en]` 在带地区标注的视频上拿不到任何音轨的直接原因。写法走
+    `bcp47.canonicalize()`，与 YouTube 的标注（`en-US`、`zh-Hans`）一致。
+
+    别名分支用 `=`（精确）而**不是** `^=`：别名表里有把 `zh-Hans` 放宽到 `zh` 的条目，
+    `[language^=zh]` 会连 `zh-Hant` 一起命中 —— 简中偏好换来一条繁中音轨。
+    精确匹配一条真的标着 `zh` 的音轨才是这个别名想表达的意思。
+    """
+    from ..utils import bcp47
+
+    exprs: list[str] = []
+    for lang in langs:
+        canon = bcp47.canonicalize(lang)
+        if not bcp47.is_safe_tag(canon):
+            # 非法字符会跑进命令行 —— 生产端已经挡过一层，这里是兜底
+            continue
+        candidates = [f"[language^={canon}]"]
+        for alias in sorted(bcp47.BCP47_ALIASES.get(bcp47.normalize(canon), set())):
+            candidates.append(f"[language={bcp47.canonicalize(alias)}]")
+        for expr in candidates:
+            if expr not in exprs:
+                exprs.append(expr)
+    return exprs
+
+
+def _apply_audio_filter(alternatives: list[str], expr: str) -> str:
+    """把一个过滤器表达式贴到每条候选的**音频侧**，返回一组 `/` 串起来的分支。"""
+    out: list[str] = []
+    for alt in alternatives:
+        if "+" in alt:
+            # 合并式 video+audio：过滤器只贴音频那一半
+            head, tail = alt.split("+", 1)
+            out.append(f"{head}+{tail}{expr}")
+        else:
+            # 单格式（已混流或纯音频）：整条贴
+            out.append(f"{alt}{expr}")
+    return "/".join(out)
 
 
 def _plan_language_injection(
-    fmt: str, format_sort: list | str | None, *, multistreams: bool
+    fmt: str,
+    langs: list[str] | None,
+    strategy: str | None,
+    *,
+    multistreams: bool,
 ) -> _LangInjectionPlan:
     """纯函数：算出注入后的格式串，以及注入了 / 没注入以及为什么。
 
     五条路径全部收口在这里（包括 `multistreams` 那条"故意不注入"，它原先是调用点上的
     一个 `if` + 注释），所以 `_inject_language_into_format()` 只需要一个 emit 点，
     也就不存在"第六条路径忘了记日志"。
+
+    分支顺序就是策略的全部体现：
+
+    | 策略 | 分支顺序 |
+    | --- | --- |
+    | `original_first` / `original_only` | 原音 → 语言 → 原始格式串 |
+    | `language_first` | 语言 → 原始格式串（不注原音） |
+
+    `original_only` 与 `original_first` 在这条路径上**产出相同的格式串**：格式串是
+    "按顺序试，第一条能满足的就用"，表达不了"只要原音，没有就报错"，而硬要表达就得
+    去掉兜底 —— 那会让没有原音标记的视频一条格式都选不出来（合并直接失败）。这与
+    `format_scorer` 那边"原音命中即赢、无原音则退化为语言优先"的取舍是同一个。
     """
+    from ..utils.format_scorer import (
+        AUDIO_STRATEGIES,
+        STRATEGY_LANGUAGE_FIRST,
+        STRATEGY_ORIGINAL_FIRST,
+    )
+
+    # 认不出的值按默认策略走，并且**报告规范化后的名字**：`want_original` 那行是
+    # `!= language_first`，垃圾值本来就已经在按 original_first 的行为跑了 ——
+    # 原样回传只会让日志里出现一个 `strategy=nonsense` 而行为对不上它。
+    strategy_name = str(strategy or "").strip()
+    if strategy_name not in AUDIO_STRATEGIES:
+        strategy_name = STRATEGY_ORIGINAL_FIRST
+    # 去重保序：重复偏好只会生成一份重复的分支组，纯粹让格式串变长。
+    # 生产端（`youtube_service`）已经去过重，这里是兜底。
+    deduped: list[str] = []
+    for item in langs or []:
+        text = str(item).strip()
+        if text and text not in deduped:
+            deduped.append(text)
+
+    want_original = strategy_name != STRATEGY_LANGUAGE_FIRST
+
     if not fmt:
-        return _LangInjectionPlan(fmt, [], False, "no_format_string")
+        return _LangInjectionPlan(fmt, deduped, False, "no_format_string", strategy_name)
 
-    # 从 format_sort 里取语言码（`"lang:ja"` → `"ja"`）。
-    # `orig` 不算具体请求（"跟着视频原始语言走"），与
-    # `observability.artifacts.audio_langs_from_opts()` 的判定保持一致 ——
-    # 那边是 `expect` 事件的 `audio_langs`，两处对不上就会自相矛盾。
-    langs: list[str] = []
-    items = format_sort if isinstance(format_sort, list) else ([format_sort] if format_sort else [])
-    for item in items:
-        s = str(item).strip().lower()
-        if s.startswith("lang:"):
-            code = s[5:].strip()
-            # 去重：重复的 lang 只会生成一份重复的 `[language=xx]` 分支组，纯粹让
-            # 格式串变长。生产端（`youtube_service`）已经去过重，这里是兜底。
-            if code and code != "orig" and code not in langs:
-                langs.append(code)
-
-    if not langs:
-        # 压根没请求过具体语言 —— 不是"注入失败"，没什么可注入的
-        return _LangInjectionPlan(fmt, [], False, "no_language_request")
+    if not deduped and not want_original:
+        # 语言优先 + 空偏好 = 压根没请求过什么 —— 不是"注入失败"，没什么可注入的
+        return _LangInjectionPlan(fmt, [], False, "no_language_request", strategy_name)
 
     if multistreams:
         # 显式多音轨 ID（`v+a1+a2`）：音轨已经按 ID 点选完了，语言偏好是多余的，
-        # 插 `[language=xx]` 只会把那串 ID 改坏
-        return _LangInjectionPlan(fmt, langs, False, "explicit_multistream_ids")
+        # 插过滤器只会把那串 ID 改坏
+        return _LangInjectionPlan(fmt, deduped, False, "explicit_multistream_ids", strategy_name)
 
     alternatives = [a.strip() for a in fmt.split("/") if a.strip()]
     if not alternatives:
-        return _LangInjectionPlan(fmt, langs, False, "unparsable_format_string")
+        return _LangInjectionPlan(fmt, deduped, False, "unparsable_format_string", strategy_name)
 
-    lang_groups: list[str] = []
-    for lang in langs:
-        lang_alts: list[str] = []
-        for alt in alternatives:
-            if "+" in alt:
-                # Merge pattern: video+audio -> add [language=xx] to audio part
-                parts = alt.split("+", 1)
-                lang_alts.append(f"{parts[0]}+{parts[1]}[language={lang}]")
-            else:
-                # Single format (muxed or audio-only) -> append [language=xx]
-                lang_alts.append(f"{alt}[language={lang}]")
-        if lang_alts:
-            lang_groups.append("/".join(lang_alts))
+    lang_exprs = _language_filters(deduped)
+    ordered = ([_ORIGINAL_AUDIO_FILTER] if want_original else []) + lang_exprs
 
-    if not lang_groups:
-        return _LangInjectionPlan(fmt, langs, False, "unparsable_format_string")
+    groups = [g for g in (_apply_audio_filter(alternatives, e) for e in ordered) if g]
+    if not groups:
+        return _LangInjectionPlan(fmt, deduped, False, "unparsable_format_string", strategy_name)
 
-    # Prepend language-filtered alternatives, with original format as fallback
-    return _LangInjectionPlan("/".join(lang_groups) + "/" + fmt, langs, True, "injected")
+    if want_original and lang_exprs:
+        reason = "injected_original_and_language"
+    elif want_original:
+        reason = "injected_original"
+    else:
+        reason = "injected_language"
+
+    # 原始格式串留在最后兜底：上面每一条都可能在某个视频上选不出格式
+    return _LangInjectionPlan("/".join(groups) + "/" + fmt, deduped, True, reason, strategy_name)
 
 
 def build_subtitle_args(ydl_opts: dict[str, Any], *, allow_embed: bool = True) -> list[str]:
@@ -746,12 +827,17 @@ def ydl_opts_to_cli_args(ydl_opts: dict[str, Any]) -> list[str]:
 
     fmt = ydl_opts.get("format")
     if isinstance(fmt, str) and fmt:
-        # `[language=xx]` 注入。`audio_multistreams`（显式 `v+a1+a2` ID）时故意不注入 ——
+        # 语言 / 原音过滤器注入。`audio_multistreams`（显式 `v+a1+a2` ID）时故意不注入 ——
         # 这个"不注入"的决定连同其余四条路径一起收口在 `_plan_language_injection()`，
         # 所以它现在也会留下日志，而不是在这里被一个 `if` 悄悄跳过。
+        #
+        # 意图从 `_fytdl_audio_langs` / `_fytdl_audio_strategy` 读，**不是**从
+        # `format_sort` 里抠 `lang:` 前缀：那些条目在 yt-dlp 的排序器里从来无效
+        # （§4 规则 4），现在也不再生成了。
         fmt = _inject_language_into_format(
             fmt,
-            ydl_opts.get("format_sort"),
+            ydl_opts.get("_fytdl_audio_langs"),
+            ydl_opts.get("_fytdl_audio_strategy"),
             multistreams=bool(ydl_opts.get("audio_multistreams")),
         )
         args += ["-f", fmt]

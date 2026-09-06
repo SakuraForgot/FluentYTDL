@@ -23,7 +23,6 @@ from fluentytdl.utils.logger import get_logger
 from fluentytdl.utils.paths import find_bundled_executable, is_frozen, locate_runtime_tool
 
 from ..core.config_manager import config_manager
-from ..utils.format_scorer import bcp47_expand_for_sort
 from .yt_dlp_cli import YtDlpCancelled, run_dump_single_json, run_version
 
 LogCallback = Callable[[str, str], None]
@@ -42,6 +41,42 @@ def _short_url_tag(url: str) -> str:
         return tail or parsed.netloc or "-"
     except Exception:
         return "-"
+
+
+def _resolve_preferred_audio_langs() -> list[str]:
+    """用户的音轨语言偏好，规范化 + 去重后按优先级排列。
+
+    走 `bcp47.canonicalize()` 而不是原样透传：设置页允许自定义标签，用户手打的
+    `zh-hans` / `PT-br` 要和目录里的 `zh-Hans` / `pt-BR` 落到同一个写法上，
+    下游的别名展开才认得。`orig` / `original` 在这里被剔除 —— 原音是**策略**
+    （`_fytdl_audio_strategy`），不是语言列表里的一个条目（Phase A 已迁移）。
+    """
+    from ..utils import bcp47
+
+    raw = config_manager.get("preferred_audio_languages")
+    if not isinstance(raw, list):
+        return []
+
+    out: list[str] = []
+    for item in raw:
+        text = str(item).strip()
+        if not text or text.lower() in {"orig", "original"}:
+            continue
+        if not bcp47.is_safe_tag(text):
+            # 非法字符会跑进格式过滤器里，那是命令行的一部分 —— 直接丢
+            continue
+        canon = bcp47.canonicalize(text)
+        if canon not in out:
+            out.append(canon)
+    return out
+
+
+def _resolve_audio_strategy() -> str:
+    """音轨策略键，非法值回落 `original_first`（与 `DEFAULT_CONFIG` 一致）。"""
+    from ..utils.format_scorer import AUDIO_STRATEGIES, STRATEGY_ORIGINAL_FIRST
+
+    value = str(config_manager.get("audio_track_strategy") or "").strip()
+    return value if value in AUDIO_STRATEGIES else STRATEGY_ORIGINAL_FIRST
 
 
 @dataclass(slots=True)
@@ -241,39 +276,19 @@ class YoutubeService:
         if download_dir:
             ydl_opts["paths"] = {"home": str(download_dir)}
 
-        # 音频偏好语言注入 (Multi-Language Audio Track support)
-        # 此 format_sort 仅对旧路径（格式字符串，如播放列表批量下载）生效；
-        # 新路径（简易模式直接传 format_id）由 format_selector._get_best_audio_id 单独打分。
-        pref_langs = config_manager.get("preferred_audio_languages")
+        # 音轨语言偏好**不进 format_sort**。`-S lang:xx` 从来不表示"偏好某语言"：
+        # `lang` 是 `language_preference` 的**数值**别名，喂它一个语言码会让 yt-dlp 把
+        # 全局 `settings['lang']['convert']` 改成 `'string'`，拿 10/5/−1/−10 当字符串跟
+        # `"ja"` 比；更要紧的是 `FormatSorter.add_item` 有 `if field in self._order: return`,
+        # 所以十几个 `lang:` 条目里**只有第一个会被接受**。这整段展开的贡献是零。
+        # 语言与原音偏好改由 `_inject_language_into_format()` 的格式过滤器表达
+        # （`[language^=xx]` / `[language_preference=10?]`），意图靠下面两个私有键传递。
+        ydl_opts["format_sort"] = ["res", "br", "fps", "acodec"]
 
-        fallback_langs: list[str] = []
-        if isinstance(pref_langs, list) and len(pref_langs) > 0:
-            for lang in pref_langs:
-                lang_str = str(lang).strip()
-                if not lang_str:
-                    continue
-                # 展开单个偏好为 yt-dlp 认识的 lang: 条目列表（含 BCP-47 别名）
-                fallback_langs.extend(bcp47_expand_for_sort(lang_str))
-
-            # 如果列表中完全没有 orig 也没有 en，在末尾强制加兜底
-            if "lang:orig" not in fallback_langs:
-                fallback_langs.append("lang:orig")
-            if "lang:en" not in fallback_langs:
-                fallback_langs.append("lang:en")
-        else:
-            # 默认兜底
-            fallback_langs = ["lang:orig", "lang:en"]
-
-        # 去重保序
-        seen: set[str] = set()
-        deduped: list[str] = []
-        for entry in fallback_langs:
-            if entry not in seen:
-                seen.add(entry)
-                deduped.append(entry)
-
-        # 组装最终 Sort 字符串列表
-        ydl_opts["format_sort"] = deduped + ["res", "br", "fps", "acodec"]
+        # 下划线前缀 = 不进 argv。`ydl_opts_to_cli_args()` 是逐键显式映射而非遍历，
+        # 所以没有映射的键天然到不了命令行。
+        ydl_opts["_fytdl_audio_langs"] = _resolve_preferred_audio_langs()
+        ydl_opts["_fytdl_audio_strategy"] = _resolve_audio_strategy()
 
         if not _is_twitter:
             self._maybe_configure_youtube_js_runtime(ydl_opts)
@@ -1328,7 +1343,10 @@ class YoutubeService:
             "format_sort": ydl_opts.get("format_sort") or [],
             "format": ydl_opts.get("format") or "",
             "extract_flat": ydl_opts.get("extract_flat"),
-            "audio_langs": config_manager.get("preferred_audio_languages", []),
+            # 音轨意图从 opts 读而不是从 config 读：`format_sort` 里已经没有 `lang:`
+            # 条目了，这两个键是它的替代品，不进指纹就等于换了策略还命中旧缓存。
+            "audio_langs": ydl_opts.get("_fytdl_audio_langs") or [],
+            "audio_strategy": ydl_opts.get("_fytdl_audio_strategy") or "",
         }
         raw = json.dumps(payload, sort_keys=True, ensure_ascii=False, default=str)
         return f"{mode}:{hashlib.sha256(raw.encode('utf-8')).hexdigest()}"

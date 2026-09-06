@@ -110,7 +110,7 @@ These rules are hard-won from production issues. Violating them WILL cause user-
 1. **NEVER force `player_client`** — trust yt-dlp's default strategy (tv → web_safari → android_vr)
 2. **NEVER enable `sleep_interval`** — causes signed URL expiry → HTTP 403
 3. **NEVER use `--cookies-from-browser`** — causes DPAPI file lock on Windows
-4. **Language format injection** — `-S lang:xx` cannot override `language_preference=10`; use `_inject_language_into_format()`
+4. **`-S lang:xx` is inert — never use it for language preference.** `lang` is a **numeric** alias of `language_preference` and does not accept language codes (it rewrites the global `settings['lang']['convert']` to `'string'` and compares 10/5/−1/−10 against `"ja"`), and `FormatSorter.add_item` admits only the **first** `lang:` entry. Language and original-audio preferences must be expressed as format-string filters via `_inject_language_into_format()`: `[language^=xx]` (startswith — a bare `[language=en]` misses the real tag `en-US`) and `[language_preference>=10?]` for original audio (**the `?` is mandatory** — `language_preference` exists only on YouTube, and without none-inclusive matching every audio track on Twitter etc. gets filtered away). The unfiltered format string always stays as the last fallback
 5. **Validate file size on non-zero exit** — Windows `.part-Frag` deletion fails but download is complete
 6. **Sync POT plugins to exe directory** — compiled yt-dlp cannot discover plugins via PYTHONPATH
 7. **TUN mode: no proxy env vars** — injecting `HTTPS_PROXY` causes double-proxying

@@ -37,7 +37,7 @@
 
 ## 刻意不进词汇表的两个
 
-- **音轨语言**：请求得到（`format_sort` 里的 `lang:xx`），但**验不了** ——
+- **音轨语言**：请求得到（`_fytdl_audio_langs`），但**验不了** ——
   确认合并产物里的音轨语言需要对成品跑一次 ffprobe，那是新增行为而不是加日志。
   它作为 `expect` 事件的 `audio_langs` 字段出现（可搜索），但不产 token：
   没有 `actual` 就凭空判 `missing`，等于把"未验证"记成"缺失"。
@@ -231,19 +231,22 @@ def expected_artifacts(
 
 
 def audio_langs_from_opts(opts: Mapping[str, Any]) -> list[str]:
-    """`format_sort` 里的 `lang:xx` —— 请求的音轨语言，**不产 token**（验不了）。
+    """请求的音轨语言，**不产 token**（验不了）。
 
-    `orig` 不算：那是"跟着视频原始语言走"，不是一个具体请求。
+    读 `_fytdl_audio_langs` —— 与 `yt_dlp_cli._plan_language_injection()` 的**同一个
+    输入**。以前这里从 `format_sort` 抠 `lang:xx`，那些条目在 yt-dlp 的排序器里从来
+    无效（§4 规则 4），现在也不再生成；两处对不上就会自相矛盾（这边说"请求了日语"，
+    那边说"没什么可注入的"）。
+
+    原音不在这里：它是 `_fytdl_audio_strategy`，是策略而不是一个语言请求。
     """
-    raw = opts.get("format_sort")
+    raw = opts.get("_fytdl_audio_langs")
     items = raw if isinstance(raw, (list, tuple)) else ([raw] if raw else [])
     out: list[str] = []
     for item in items:
-        text = str(item or "").strip().lower()
-        if text.startswith("lang:"):
-            code = text[5:].strip()
-            if code and code != "orig" and code not in out:
-                out.append(code)
+        code = str(item or "").strip()
+        if code and code.lower() not in {"orig", "original"} and code not in out:
+            out.append(code)
     return out
 
 

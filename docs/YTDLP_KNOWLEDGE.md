@@ -68,15 +68,22 @@
 
 ## 2. 格式选择
 
-### 2.1 语言偏好覆盖失败
+### 2.1 `-S lang:xx` 从来不表示"偏好某语言"
 
 **症状**：格式排序中的 `-S lang:xx` 未能选择正确的音轨
 
-**根因**：yt-dlp 的 `language_preference=10` 在 extractor_args 中覆盖了排序优先级；仅 `-S` 无法胜出
+**根因**（已对上游源码核实，早前记的"`language_preference=10` 覆盖了排序优先级"是**错的**）：`FormatSorter.settings` 里根本没有名为 `language` 的排序字段，`lang` 是 `language_preference` 的**数值**别名。喂它一个语言码时 `"ja".isnumeric()` 为假，于是 yt-dlp 改写**全局** `settings['lang']['convert'] = 'string'`、`limit="ja"`，排序键退化成拿 10/5/−1/−10 当字符串跟 `"ja"` 比。更要紧的是 `add_item` 有 `if field in self._order: return` —— 一串 `lang:` 条目里**只有第一个会被接受**，所以按 BCP-47 别名展开出十几条的做法贡献为零
 
-**规则**：使用 `_inject_language_into_format()` 在格式字符串的每个备选项前添加 `[language=xx]` 过滤器
+**规则**：语言与原音偏好**只能**由格式串里的过滤器表达，走 `_inject_language_into_format()`：
 
-**代码**：`src/fluentytdl/youtube/yt_dlp_cli.py` — `_inject_language_into_format()`
+- 语言用 `[language^=xx]`（startswith）。裸 `[language=en]` 匹配不到真实标注 `en-US`，那是"偏好了英语却一条音轨都拿不到"的直接原因；别名分支用精确 `=`（别名表把 `zh-Hans` 放宽到裸 `zh`，用 `^=` 展开会连 `zh-Hant` 一起命中）
+- 原音用 `[language_preference>=10?]`。**`?`（none-inclusive）不能掉**：`_build_format_filter` 的 `_filter` 在 `actual_value is None` 时返回 `m.group('none_inclusive')`，不带 `?` 即为假，而 `language_preference` 只有 YouTube extractor 会算 —— Twitter 等平台会被过滤掉**所有**音轨
+- 原始格式串永远作为最后一条兜底分支。少了它，没有对应音轨的视频会一条格式都选不出来（合并直接失败）
+- 意图经 `ydl_opts["_fytdl_audio_langs"]` / `["_fytdl_audio_strategy"]` 传递（下划线前缀 = 不进 argv）；`format_sort` 只留 `res,br,fps,acodec`
+
+**`language_preference` 的四个取值**（`extractor/youtube/_video.py::get_language_code_and_preference()` 计算，`-J` 输出里就有）：`10` 原音、`5` `audioIsDefault`（账号/地区默认，**不是**原音）、`-1` 普通配音、`-10` 音频描述轨。项目的音轨类型判定读的就是它（`format_scorer.audio_track_kind()`）
+
+**代码**：`src/fluentytdl/youtube/yt_dlp_cli.py` — `_plan_language_injection()` / `_ORIGINAL_AUDIO_FILTER`；`tests/test_audio_format_injection.py` 是它的回归锁
 
 ### 2.2 BCP-47 别名扩展
 
@@ -86,7 +93,7 @@
 
 **规则**：
 
-- 音频：用 `bcp47.expand_for_sort()` 在构建 format_sort 前把语言代码扩展成所有可能的别名
+- 音频：别名展开成格式串里的过滤器分支（见 §2.1）。**不要**往 format_sort 里塞 `lang:` 条目 —— 那条路早前被证伪，一个都不生效
 - 字幕：**`--sub-langs` 的每一项被 yt-dlp 当作锚定正则**去匹配字幕键 —— 裸 `en` 匹配不到 `en-GB`，一个 `.vtt` 都不会写出来，而 yt-dlp 只留一句 `[info] There are no subtitles for the requested languages`。所以用户偏好必须先经 `bcp47.resolve_requested()` 解析成真实键；拿不到可用轨道列表时回落 `bcp47.to_sub_langs_pattern()`（`en(-.+)?`，**不是** `en.*` —— 后者会连带命中 `eng`/`enm` 这两个不同语种）
 - 匹配是**单向**的：`en` 命中 `en-GB`，但 `en-GB` 不命中 `en`（用户点名要英国英语时，不该拿到一条不知道哪个地区的 `en`）
 - 简繁**绝不能**混：`zh-Hans` 不得命中 `zh-Hant`

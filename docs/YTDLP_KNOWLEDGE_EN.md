@@ -68,15 +68,22 @@
 
 ## 2. Format Selection
 
-### 2.1 Language Preference Override Failure
+### 2.1 `-S lang:xx` Never Meant "Prefer This Language"
 
-**Symptom**: `-S lang:xx` in format sort does not select correct audio track
+**Symptom**: `-S lang:xx` in format sort does not select the correct audio track
 
-**Root Cause**: yt-dlp's `language_preference=10` in extractor_args overrides sort priority; `-S` alone cannot win
+**Root Cause** (verified against upstream source; the earlier note claiming "`language_preference=10` overrides sort priority" is **wrong**): `FormatSorter.settings` has no sort field named `language` at all — `lang` is a **numeric** alias of `language_preference`. Given a language code, `"ja".isnumeric()` is false, so yt-dlp rewrites the **global** `settings['lang']['convert'] = 'string'` with `limit="ja"` and the sort key degenerates into comparing 10/5/−1/−10 as strings against `"ja"`. Worse, `add_item` has `if field in self._order: return` — of a run of `lang:` entries **only the first is ever admitted**, so expanding BCP-47 aliases into a dozen of them contributes exactly nothing
 
-**Rule**: Use `_inject_language_into_format()` to prepend `[language=xx]` filters to each alternative in the format string
+**Rule**: language and original-audio preferences can **only** be expressed as filters inside the format string, via `_inject_language_into_format()`:
 
-**Code**: `src/fluentytdl/youtube/yt_dlp_cli.py` — `_inject_language_into_format()`
+- Language uses `[language^=xx]` (startswith). A bare `[language=en]` does not match the real tag `en-US`, which is precisely why "preferred English, got no audio track at all" happened; alias branches use exact `=` (the alias table widens `zh-Hans` to bare `zh`, and `^=` would also match `zh-Hant`)
+- Original audio uses `[language_preference>=10?]`. **The `?` (none-inclusive) must not be dropped**: `_build_format_filter`'s `_filter` returns `m.group('none_inclusive')` when `actual_value is None`, which is falsy without `?` — and only the YouTube extractor computes `language_preference`, so platforms like Twitter would have **every** audio track filtered away
+- The unfiltered format string always stays as the final fallback branch. Without it, a video with no matching track selects no format at all (the merge fails outright)
+- Intent travels via `ydl_opts["_fytdl_audio_langs"]` / `["_fytdl_audio_strategy"]` (underscore prefix = never reaches argv); `format_sort` keeps only `res,br,fps,acodec`
+
+**The four `language_preference` values** (computed by `extractor/youtube/_video.py::get_language_code_and_preference()`, present in `-J` output): `10` original, `5` `audioIsDefault` (account/region default, **not** original), `-1` ordinary dub, `-10` descriptive audio. The project's audio-track classification reads exactly this field (`format_scorer.audio_track_kind()`)
+
+**Code**: `src/fluentytdl/youtube/yt_dlp_cli.py` — `_plan_language_injection()` / `_ORIGINAL_AUDIO_FILTER`; `tests/test_audio_format_injection.py` is its regression lock
 
 ### 2.2 BCP-47 Alias Expansion
 
@@ -86,7 +93,7 @@
 
 **Rule**:
 
-- Audio: use `bcp47.expand_for_sort()` to expand language codes to all possible aliases before building format_sort
+- Audio: aliases expand into filter branches inside the format string (see §2.1). Do **not** put `lang:` entries into format_sort — that path was disproven; not one of them takes effect
 - Subtitles: **every `--sub-langs` entry is matched by yt-dlp as an anchored regex** against the caption keys — a bare `en` does not match `en-GB`, not a single `.vtt` gets written, and yt-dlp leaves only `[info] There are no subtitles for the requested languages` behind. User preferences must therefore be resolved to real keys via `bcp47.resolve_requested()` first; when the available-track list cannot be obtained, fall back to `bcp47.to_sub_langs_pattern()` (`en(-.+)?`, **not** `en.*` — the latter would also match `eng`/`enm`, two different languages)
 - Matching is **one-directional**: `en` matches `en-GB`, but `en-GB` does not match `en` (a user who explicitly asked for British English should not be handed a region-less `en`)
 - Simplified and Traditional Chinese must **never** mix: `zh-Hans` must not match `zh-Hant`

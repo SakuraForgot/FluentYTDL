@@ -188,10 +188,16 @@ def test_subtitles_off_expects_nothing():
     assert expected_artifacts({"skip_download": True, "writesubtitles": False}) == set()
 
 
-def test_audio_langs_skips_orig():
-    """`orig` 是"跟着视频原始语言走"，不是一个具体请求。"""
-    assert audio_langs_from_opts({"format_sort": ["lang:ja", "lang:orig", "res:1080"]}) == ["ja"]
+def test_audio_langs_reads_the_injection_input():
+    """读 `_fytdl_audio_langs` —— 和注入端同一个输入，两处不许分叉。
+
+    `orig` 不算一个语言请求（原音是 `_fytdl_audio_strategy`，是策略）。
+    以前这里读 `format_sort` 里的 `lang:xx`，那些条目在排序器里从来无效。
+    """
+    assert audio_langs_from_opts({"_fytdl_audio_langs": ["ja", "orig", "ja"]}) == ["ja"]
     assert audio_langs_from_opts({}) == []
+    # 旧键不再被认：留着会让"请求了日语"与"没什么可注入的"同时出现在日志里
+    assert audio_langs_from_opts({"format_sort": ["lang:ja"]}) == []
 
 
 def test_expect_fields_flattens_resolution_meta():
@@ -199,7 +205,7 @@ def test_expect_fields_flattens_resolution_meta():
     fields = expect_fields(
         {
             "writesubtitles": True,
-            "format_sort": ["lang:ja"],
+            "_fytdl_audio_langs": ["ja"],
             SUBTITLE_RESOLUTION_KEY: {
                 "mode": "no_match",
                 "prefs": ["zh-Hans"],
