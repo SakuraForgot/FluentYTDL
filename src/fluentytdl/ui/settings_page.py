@@ -42,7 +42,18 @@ from ..core.config_manager import config_manager
 from ..core.dependency_manager import dependency_manager
 from ..core.hardware_manager import hardware_manager
 from ..download.download_manager import download_manager
-from ..processing.subtitle_manager import COMMON_SUBTITLE_LANGUAGES
+from ..processing.subtitle_manager import COMMON_SUBTITLE_LANGUAGES, language_display_name
+from ..utils.bcp47 import canonicalize as bcp47_canonicalize
+from ..utils.bcp47 import is_safe_tag as bcp47_is_safe_tag
+from ..utils.format_scorer import (
+    STRATEGY_LANGUAGE_FIRST as _STRATEGY_LANGUAGE_FIRST,
+)
+from ..utils.format_scorer import (
+    STRATEGY_ORIGINAL_FIRST as _STRATEGY_ORIGINAL_FIRST,
+)
+from ..utils.format_scorer import (
+    STRATEGY_ORIGINAL_ONLY as _STRATEGY_ORIGINAL_ONLY,
+)
 from ..utils.logger import LOG_DIR, logger
 from ..utils.paths import find_bundled_executable
 from ..youtube.yt_dlp_cli import resolve_yt_dlp_exe, run_version
@@ -51,6 +62,22 @@ from ..youtube.yt_dlp_cli import resolve_yt_dlp_exe, run_version
 # selection_dialog / reimagined_main_window 也要用它，dialog 不该去 import 一个 page。
 # 这里保留 re-export，老的 `from .settings_page import CookieRefreshWorker` 仍然有效。
 __all__ = ["CookieRefreshWorker"]
+
+#: 音轨策略下拉的项序。存盘的是 code（`original_first` 等），不是下拉的索引 ——
+#: 索引会随以后增删选项漂移，而 code 不会。
+_AUDIO_STRATEGY_ORDER = (
+    _STRATEGY_ORIGINAL_FIRST,
+    _STRATEGY_LANGUAGE_FIRST,
+    _STRATEGY_ORIGINAL_ONLY,
+)
+
+
+def _audio_strategy_index(strategy: str) -> int:
+    """把存盘的策略 code 映射回下拉索引；认不出来的落回「原音优先」。"""
+    try:
+        return _AUDIO_STRATEGY_ORDER.index(str(strategy or "").strip().lower())
+    except ValueError:
+        return 0
 
 
 class ComponentSettingCard(SettingCard):
@@ -527,11 +554,9 @@ class LanguageMultiSelectCard(SettingCard):
             # 显示选中的语言名称
             names = []
             for code in self.selected_languages[:3]:  # 最多显示3个
-                name = next((n for c, n in self.languages if c == code), code)
-                from PySide6.QtCore import QCoreApplication
-
-                name = QCoreApplication.translate("Subtitle", name)
-                names.append(name)
+                name = next((n for c, n in self.languages if c == code), None)
+                # 上下文必须是 "SubtitleManager"（源串在那儿标的），这里原先写 "Subtitle"
+                names.append(language_display_name(code, name))
 
             text = ", ".join(names)
             if len(self.selected_languages) > 3:
@@ -612,11 +637,25 @@ class AudioLanguageSelectionDialog(MessageBox):
         self.selected_list.setMinimumHeight(250)
         self.selected_list.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
         right_layout.addWidget(self.selected_list)
+
+        # 自定义 BCP-47 输入：目录里的 21 条覆盖不了所有真实视频的音轨语言
+        # （`pt-BR`、`es-419`、`en-GB` 这类地区变体尤其常见），给用户一条直接输入的路。
+        custom_layout = QHBoxLayout()
+        custom_layout.setSpacing(8)
+        self.custom_edit = LineEdit(content_widget)
+        self.custom_edit.setPlaceholderText(self.tr("自定义标签，如 pt-BR"))
+        self.custom_edit.returnPressed.connect(self._on_add_custom)
+        custom_layout.addWidget(self.custom_edit, stretch=1)
+        self.btn_add_custom = PushButton(self.tr("添加"), content_widget)
+        self.btn_add_custom.clicked.connect(self._on_add_custom)
+        custom_layout.addWidget(self.btn_add_custom, stretch=0)
+        right_layout.addLayout(custom_layout)
+
         layout.addLayout(right_layout, stretch=1)
 
         self.textLayout.addWidget(content_widget)
         self.widget.setMinimumWidth(650)
-        self.widget.setMinimumHeight(450)
+        self.widget.setMinimumHeight(500)
 
         # Signals
         self.btn_add.clicked.connect(self._on_add)
@@ -625,29 +664,66 @@ class AudioLanguageSelectionDialog(MessageBox):
         # Populate
         self._populate()
 
+    @staticmethod
+    def _display_name(code: str, name: str | None) -> str:
+        """语言的显示文案。
+
+        转发到 `subtitle_manager.language_display_name()`：翻译上下文必须是
+        `"SubtitleManager"`（`COMMON_SUBTITLE_LANGUAGES` 的源串是在那个模块里用
+        `QT_TRANSLATE_NOOP("SubtitleManager", ...)` 标的），而这里原先写的是 `"Subtitle"`，
+        永远取不到译文 —— 原文照样显示，所以这个 bug 在中文界面上看不出来。
+        """
+        return language_display_name(code, name)
+
+    def _make_item(self, code: str, name: str | None) -> QListWidgetItem:
+        display_name = self._display_name(code, name)
+        text = code if display_name == code else f"{display_name} ({code})"
+        item = QListWidgetItem(text)
+        item.setData(Qt.ItemDataRole.UserRole, code)
+        return item
+
     def _populate(self):
         # 建立快速查找表
         lang_dict = {code: name for code, name in self.languages}
 
-        # 填充已选
+        # 填充已选（目录外的自定义标签直接显示原码）
         for code in self.selected_languages_init:
-            name = lang_dict.get(code, code)
-            from PySide6.QtCore import QCoreApplication
-
-            display_name = QCoreApplication.translate("Subtitle", name)
-            item = QListWidgetItem(f"{display_name} ({code})")
-            item.setData(Qt.ItemDataRole.UserRole, code)
-            self.selected_list.addItem(item)
+            self.selected_list.addItem(self._make_item(code, lang_dict.get(code)))
 
         # 填充备选
         for code, name in self.languages:
             if code not in self.selected_languages_init:
-                from PySide6.QtCore import QCoreApplication
+                self.available_list.addItem(self._make_item(code, name))
 
-                display_name = QCoreApplication.translate("Subtitle", name)
-                item = QListWidgetItem(f"{display_name} ({code})")
-                item.setData(Qt.ItemDataRole.UserRole, code)
-                self.available_list.addItem(item)
+    def _on_add_custom(self):
+        """把输入框里的自定义 BCP-47 标签加进已选列表。"""
+        raw = self.custom_edit.text().strip()
+        if not raw:
+            return
+
+        code = bcp47_canonicalize(raw)
+        if not bcp47_is_safe_tag(code):
+            InfoBar.warning(
+                self.tr("标签无效"),
+                self.tr("请输入合法的 BCP-47 语言标签，如 pt-BR"),
+                parent=self.window(),
+            )
+            return
+
+        if code in self.get_selected_languages():
+            self.custom_edit.clear()
+            return
+
+        # 已在备选列表里的，走正常的"移过去"，避免同一个码两处并存
+        for row in range(self.available_list.count()):
+            if self.available_list.item(row).data(Qt.ItemDataRole.UserRole) == code:
+                self.selected_list.addItem(self.available_list.takeItem(row))
+                self.custom_edit.clear()
+                return
+
+        lang_dict = {c: n for c, n in self.languages}
+        self.selected_list.addItem(self._make_item(code, lang_dict.get(code)))
+        self.custom_edit.clear()
 
     def _on_add(self):
         for item in self.available_list.selectedItems():
@@ -700,11 +776,9 @@ class AudioLanguageMultiSelectCard(SettingCard):
         else:
             names = []
             for code in self.selected_languages[:3]:
-                name = next((n for c, n in self.languages if c == code), code)
-                from PySide6.QtCore import QCoreApplication
-
-                name = QCoreApplication.translate("Subtitle", name)
-                names.append(name)
+                name = next((n for c, n in self.languages if c == code), None)
+                # 上下文是 "SubtitleManager"，见 AudioLanguageSelectionDialog._display_name()
+                names.append(AudioLanguageSelectionDialog._display_name(code, name))
             text = " > ".join(names)
             if len(self.selected_languages) > 3:
                 text += " ..."
@@ -1303,37 +1377,64 @@ class SettingsPage(QWidget):
     def _init_audio_track_group(self, parent_widget: QWidget | None, layout: QVBoxLayout) -> None:
         self.audioTrackGroup = SettingCardGroup(self.tr("音轨下载"), parent_widget)
 
-        # 音频首选语言 (支持多选排序)
-        config = config_manager.get("preferred_audio_languages", ["zh-Hans", "en", "orig"])
-        if not isinstance(config, list):
-            config = ["zh-Hans", "en", "orig"]
+        # 音轨策略：「原音」以前是语言列表里的一个条目，和 zh-Hans/en 挤在一起排序 ——
+        # 既表达不了"只要原音"，也让"原音排第几位"这种没有意义的排序变得可能。
+        # 现在它是一个正交的维度，语言列表只管语言。
+        self.audioStrategyCard = InlineComboBoxCard(
+            FluentIcon.ALBUM,
+            self.tr("音轨策略"),
+            self.tr("多音轨视频优先取哪一条：原音是视频作者录制的那一条，配音是后期加的"),
+            [
+                self.tr("原音优先"),
+                self.tr("指定语言优先"),
+                self.tr("仅原音 (无原音时回退最佳)"),
+            ],
+            parent=self.audioTrackGroup,
+        )
+        strategy = str(config_manager.get("audio_track_strategy") or _STRATEGY_ORIGINAL_FIRST)
+        self.audioStrategyCard.comboBox.setCurrentIndex(_audio_strategy_index(strategy))
+        self.audioStrategyCard.comboBox.currentIndexChanged.connect(
+            self._on_audio_track_strategy_changed
+        )
+        self.audioTrackGroup.addSettingCard(self.audioStrategyCard)
 
-        langs = [
-            ("orig", self.tr("原音 (视频原生语言配音)")),
-            ("zh-Hans", self.tr("中文 (简体)")),
-            ("zh-Hant", self.tr("中文 (繁体)")),
-            ("en", self.tr("英语")),
-            ("ja", self.tr("日语")),
-            ("ko", self.tr("韩语")),
-            ("ru", self.tr("俄语")),
-            ("fr", self.tr("法语")),
-            ("de", self.tr("德语")),
-            ("es", self.tr("西班牙语")),
-        ]
+        # 音频首选语言 (支持多选排序)
+        config = config_manager.get("preferred_audio_languages", ["zh-Hans", "en"])
+        if not isinstance(config, list):
+            config = ["zh-Hans", "en"]
 
         self.preferredAudioLanguageCard = AudioLanguageMultiSelectCard(
             FluentIcon.MUSIC,
             self.tr("首选音轨语言 (多音轨视频)"),
             self.tr("当视频包含多个语言配音时，优先下载哪种语言的轨段 (可多选并排序)"),
-            languages=langs,
+            languages=COMMON_SUBTITLE_LANGUAGES,
             selected_default=config,
             parent=self.audioTrackGroup,
         )
         self.preferredAudioLanguageCard.selectionChanged.connect(
             self._on_preferred_audio_language_changed
         )
-
         self.audioTrackGroup.addSettingCard(self.preferredAudioLanguageCard)
+
+        # 音频描述轨（视障辅助解说轨）：默认排除。它在弹窗里仍然可见并标注，
+        # 只是不会被自动选中 —— 用户拿到一条全程旁白解说的音轨基本都是意外。
+        self.audioDescriptiveCard = InlineSwitchCard(
+            FluentIcon.VOLUME,
+            self.tr("包含音频描述轨"),
+            self.tr("音频描述轨为视障用户附加了画面解说。默认排除，开启后可被自动选中"),
+            parent=self.audioTrackGroup,
+        )
+        self.audioDescriptiveCard.switchButton.setChecked(
+            bool(config_manager.get("audio_allow_descriptive", False))
+        )
+        self.audioDescriptiveCard.checkedChanged.connect(
+            lambda checked: config_manager.set("audio_allow_descriptive", bool(checked))
+        )
+        self.audioTrackGroup.addSettingCard(self.audioDescriptiveCard)
+
+        # 语言列表只在「指定语言优先」下有意义
+        self._sync_audio_language_card_enabled()
+
         layout.addWidget(self.audioTrackGroup)
 
         # Trigger warning check initially
@@ -2771,11 +2872,27 @@ class SettingsPage(QWidget):
         self.deletionPolicyCard.comboBox.setCurrentIndex(policy_map.get(policy, 0))
         self.deletionPolicyCard.comboBox.blockSignals(False)
 
+        # Audio track strategy（原音优先 / 指定语言优先 / 仅原音）
+        strategy = config_manager.get("audio_track_strategy") or _STRATEGY_ORIGINAL_FIRST
+        self.audioStrategyCard.comboBox.blockSignals(True)
+        self.audioStrategyCard.comboBox.setCurrentIndex(_audio_strategy_index(strategy))
+        self.audioStrategyCard.comboBox.blockSignals(False)
+
         # Preferred Audio Languages (Array Selection)
         audio_langs = config_manager.get("preferred_audio_languages")
         if not isinstance(audio_langs, list):
-            audio_langs = ["orig", "zh-Hans", "en"]
+            audio_langs = ["zh-Hans", "en"]
         self.preferredAudioLanguageCard.set_selected_languages(audio_langs)
+
+        # 语言卡的可用性跟着策略走，重载后必须重新同步一次，否则显示的 enabled 状态
+        # 会是上一次策略留下的。
+        self._sync_audio_language_card_enabled()
+
+        # Descriptive audio track
+        allow_desc = bool(config_manager.get("audio_allow_descriptive", False))
+        self.audioDescriptiveCard.switchButton.blockSignals(True)
+        self.audioDescriptiveCard.switchButton.setChecked(allow_desc)
+        self.audioDescriptiveCard.switchButton.blockSignals(False)
 
         # Playlist: skip authcheck
         skip_authcheck = bool(config_manager.get("playlist_skip_authcheck") or False)
@@ -4512,8 +4629,27 @@ class SettingsPage(QWidget):
     def _on_preferred_audio_language_changed(self, languages: list[str]) -> None:
         """多音轨语言偏好改变时"""
         if not languages:
-            languages = ["orig", "zh-Hans", "en"]
+            languages = ["zh-Hans", "en"]
         config_manager.set("preferred_audio_languages", languages)
+
+    def _on_audio_track_strategy_changed(self, index: int) -> None:
+        """音轨策略改变时。语言列表只在「指定语言优先」下有意义，跟着 enable/disable。"""
+        try:
+            strategy = _AUDIO_STRATEGY_ORDER[index]
+        except IndexError:
+            strategy = _STRATEGY_ORIGINAL_FIRST
+        config_manager.set("audio_track_strategy", strategy)
+        self._sync_audio_language_card_enabled()
+
+    def _sync_audio_language_card_enabled(self) -> None:
+        """语言列表卡片的可用性：仅「指定语言优先」下生效。
+
+        灰掉而不是隐藏 —— 用户切策略时能看到"这个东西还在，只是当前策略不看它"，
+        隐藏会让人以为设置丢了。
+        """
+        idx = self.audioStrategyCard.comboBox.currentIndex()
+        enabled = _AUDIO_STRATEGY_ORDER[idx] == _STRATEGY_LANGUAGE_FIRST if 0 <= idx < 3 else False
+        self.preferredAudioLanguageCard.setEnabled(enabled)
 
     def _on_subtitle_enabled_changed(self, checked: bool) -> None:
         config_manager.set("subtitle_enabled", checked)

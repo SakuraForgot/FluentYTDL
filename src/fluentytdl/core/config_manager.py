@@ -130,9 +130,16 @@ class ConfigManager(QObject):
         "subtitle_fallback_to_english": True,  # 是否回退到英语
         "subtitle_max_languages": 2,  # 最多下载字幕数量
         # 音频偏好设置
-        # preferred_audio_languages: 首选音轨语言（多选优先级，对于多音轨视频）
-        # 'orig': 优先原音/默认, 'zh-Hans': 中文, 'en': 英文, 'ja': 日语等
-        "preferred_audio_languages": ["zh-Hans", "en", "orig"],
+        # audio_track_strategy: 音轨策略，见 utils/format_scorer.py AUDIO_STRATEGIES
+        # 'original_first' 原音优先 / 'language_first' 指定语言优先 / 'original_only' 仅原音
+        "audio_track_strategy": "original_first",
+        # preferred_audio_languages: 首选音轨语言（多选优先级，仅在 language_first 下生效）
+        # 'zh-Hans': 简体中文, 'en': 英文, 'ja': 日语……任意 BCP-47 标签
+        # 'orig' **不再**是这里的条目，已拆成 audio_track_strategy（见 _migrate_audio_orig_to_strategy）
+        "preferred_audio_languages": ["zh-Hans", "en"],
+        # audio_allow_descriptive: 是否允许自动选中音频描述轨（视障辅助解说轨）
+        "audio_allow_descriptive": False,
+        "audio_strategy_migrated": True,
         # audio_multistream_default_count: 多音轨视频默认选择几条音轨（0表示无限制，1表示仅最佳）
         "audio_multistream_default_count": 1,
         # 认证模式
@@ -278,6 +285,8 @@ class ConfigManager(QObject):
             self._migrate_parse_cache_ttl(data, merged)
             # Migration: parse cache retention default 30 min -> off.
             self._migrate_parse_cache_ttl_off(data, merged)
+            # Migration: 'orig' 条目 -> 独立的 audio_track_strategy。
+            self._migrate_audio_orig_to_strategy(data, merged)
 
             # Normalize tool paths: if a user keeps an old absolute path that no longer
             # exists (common after packaging/moving folders), fall back to auto-detect.
@@ -336,6 +345,44 @@ class ConfigManager(QObject):
         if merged.get("parse_cache_ttl_seconds") == 1800:
             merged["parse_cache_ttl_seconds"] = 0
         merged["parse_cache_ttl_off_migrated"] = True
+
+    @staticmethod
+    def _migrate_audio_orig_to_strategy(data: dict[str, Any], merged: dict[str, Any]) -> None:
+        """把 `preferred_audio_languages` 里的 `orig` 条目拆成独立的 `audio_track_strategy`。
+
+        旧方案把「原音」当成语言列表里的一个条目，和 `zh-Hans`/`en` 挤在一起排序 ——
+        既表达不了"只要原音"，也让"原音第几位"这种没有意义的排序变得可能。现在原音是
+        一个正交的策略维度，列表只管语言。
+
+        迁移读用户原来把 `orig` 放在哪：
+        - 首位 → `original_first`（"原音优先"，正是他们想表达的）
+        - 其它位置 → `language_first`（语言排在原音之前 → 语言优先）
+        - 不含 `orig` → 保持默认 `original_first`
+
+        然后从列表里剔掉 `orig`。剔掉之后可能空掉（老配置里就写了个 `["orig"]`），
+        补回默认的 `["zh-Hans", "en"]` —— 空列表在 `language_first` 下等于没有偏好。
+
+        标记位保证只跑一次：用户迁移后自己把策略改回来，下次启动不能被再改一遍。
+        判定用 `in` / `index()` 而不做类型转换 —— `_load()` 整段外面套着 except，
+        这里抛一次异常会把用户的整份配置回退成默认值。
+        """
+        if data.get("audio_strategy_migrated"):
+            return
+        merged["audio_strategy_migrated"] = True
+
+        langs = data.get("preferred_audio_languages")
+        if not isinstance(langs, list):
+            return
+
+        normalized = [str(x).strip() for x in langs if str(x).strip()]
+        lowered = [x.lower() for x in normalized]
+        if "orig" not in lowered and "original" not in lowered:
+            return
+
+        pos = lowered.index("orig") if "orig" in lowered else lowered.index("original")
+        merged["audio_track_strategy"] = "original_first" if pos == 0 else "language_first"
+        rest = [x for x in normalized if x.lower() not in {"orig", "original"}]
+        merged["preferred_audio_languages"] = rest or ["zh-Hans", "en"]
 
     def save(self) -> None:
         try:

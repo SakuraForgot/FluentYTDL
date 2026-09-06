@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from ..utils.format_scorer import ScoringContext, score_audio_format
+from ..utils.format_scorer import ScoringContext, audio_track_kind, score_audio_format
 
 
 @dataclass
@@ -11,7 +11,7 @@ class AudioTrack:
     format_id: str
     language: str | None
     display_name: str | None
-    audio_track_type: str | None  # "original" or "dubbed" etc.
+    kind: str  # "original" | "default" | "dub" | "descriptive" | "unknown"，见 audio_track_kind()
     acodec: str | None
     abr: float | None
     ext: str | None
@@ -43,7 +43,10 @@ def has_multi_language_audio(info: dict[str, Any]) -> bool:
 def extract_audio_tracks(
     info: dict[str, Any], context: ScoringContext | None = None
 ) -> list[AudioTrack]:
-    """提取所有可用音轨，并按语言去重（同语言保留最好的一条）。如有 context 则计算 score 并降序排列。"""
+    """提取所有可用音轨，按 `(类型, 语言, 编码)` 去重（同组保留最好的一条）。
+
+    如有 context 则计算 score 并降序排列。
+    """
     formats = info.get("formats") or []
     audio_formats = []
 
@@ -62,37 +65,40 @@ def extract_audio_tracks(
     if context is None:
         context = ScoringContext()
 
-    tracks_by_lang_codec: dict[tuple[str, str], dict[str, Any]] = {}
+    # 去重键含 kind：同语言的原音轨与配音轨必须都留下，否则弹窗里少一条、
+    # 而少掉的那条恰恰是用户要手动挑的（YouTube 会给同一语言同时提供原音和配音）。
+    tracks_by_kind_lang_codec: dict[tuple[str, str, str], dict[str, Any]] = {}
     for fmt in audio_formats:
         lang = str(fmt.get("language") or "orig")
         codec = str(fmt.get("acodec") or "unknown").split(".")[0].lower()
-        key = (lang, codec)
+        kind = audio_track_kind(fmt)
+        key = (kind, lang, codec)
 
         score = score_audio_format(fmt, context)
         fmt["_score"] = score
 
         # 去重：如果已有同语言同编码，比较 score
-        if key not in tracks_by_lang_codec:
-            tracks_by_lang_codec[key] = fmt
+        if key not in tracks_by_kind_lang_codec:
+            tracks_by_kind_lang_codec[key] = fmt
         else:
-            if score > tracks_by_lang_codec[key]["_score"]:
-                tracks_by_lang_codec[key] = fmt
-            elif score == tracks_by_lang_codec[key]["_score"]:
+            if score > tracks_by_kind_lang_codec[key]["_score"]:
+                tracks_by_kind_lang_codec[key] = fmt
+            elif score == tracks_by_kind_lang_codec[key]["_score"]:
                 # 如果 score 相同，看 abr 谁大
                 br1 = fmt.get("abr") or 0
-                br2 = tracks_by_lang_codec[key].get("abr") or 0
+                br2 = tracks_by_kind_lang_codec[key].get("abr") or 0
                 if br1 > br2:
-                    tracks_by_lang_codec[key] = fmt
+                    tracks_by_kind_lang_codec[key] = fmt
 
     results = []
-    for _, fmt in tracks_by_lang_codec.items():
+    for _, fmt in tracks_by_kind_lang_codec.items():
         name = fmt.get("format_note") or fmt.get("format")
         results.append(
             AudioTrack(
                 format_id=str(fmt.get("format_id")),
                 language=fmt.get("language"),
                 display_name=name,
-                audio_track_type=fmt.get("audio_track_type"),
+                kind=audio_track_kind(fmt),
                 acodec=fmt.get("acodec"),
                 abr=fmt.get("abr"),
                 ext=fmt.get("ext"),

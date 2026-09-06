@@ -86,7 +86,9 @@ CONFIG_SNAPSHOT_KEYS: tuple[str, ...] = (
     "subtitle_embed_type",
     "subtitle_embed_mode",
     # 音轨
+    "audio_track_strategy",
     "preferred_audio_languages",
+    "audio_allow_descriptive",
     "audio_multistream_default_count",
     # 容器与格式记忆
     "single_container_override",

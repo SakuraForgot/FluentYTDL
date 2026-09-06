@@ -38,7 +38,9 @@ from ....observability import FlowTrace, emit_event
 from ....utils.bcp47 import matches as bcp47_matches
 from ....utils.container_compat import choose_lossless_merge_container
 from ....utils.format_scorer import (
+    STRATEGY_ORIGINAL_FIRST,
     ScoringContext,
+    audio_track_kind,
     decide_merge_container,
     format_ranking,
     rank_audio_formats,
@@ -190,15 +192,19 @@ def _analyze_format_tags(r: dict) -> list[tuple[str, str]]:
         tags.append((f"{int(fps)}FPS", "red"))
 
     # 3. Audio Language / Track Type (Multi-Language support)
+    #    四种类型显式区分：原音 / 默认（账号或地区默认，**不是**原音）/ 配音 / 音频描述。
+    #    判定走 `audio_track_kind()`（读 `language_preference`），不再猜 `format_note`。
     lang = str(r.get("language") or "").strip()
     if lang:
-        # Check if original / default
-        track_type = str(r.get("audio_track_type") or "").lower()
-        # Original track usually marked by youtube or has language="original" in yt-dlp
-        if track_type == "original" or lang.lower() == "orig" or lang.lower() == "original":
+        kind = audio_track_kind(r)
+        if kind == "original" or lang.lower() in {"orig", "original"}:
             tags.append((QCoreApplication.translate("FormatSelector", "原音"), "green"))
-        else:
+        elif kind == "descriptive":
+            tags.append((QCoreApplication.translate("FormatSelector", "音频描述"), "gold"))
+        elif kind == "default":
             tags.append((f"[{lang.upper()}]", "blue"))
+        else:
+            tags.append((f"[{lang.upper()}]", "gray"))
 
     # 4. Codec
     # Video
@@ -967,11 +973,12 @@ class VideoFormatSelectorWidget(QWidget):
                     "abr": f.get("abr"),
                     "dynamic_range": f.get("dynamic_range"),
                     "language": f.get("language"),
-                    "audio_track_type": f.get("audio_track_type"),
-                    # `score_audio_format()` 的 is_orig / 配音加权全靠它（"yt-dlp 经常把
-                    # original 放在 format_note 里"）。之前这里没带上，于是打分引擎里
-                    # 那三条 format_note 分支在本控件的候选集上永远是死的 —— 原音识别
-                    # 只剩 `audio_track_type == "original"` 一条路，AI 配音的降权也从未生效。
+                    # 音轨类型判定的权威字段（10 原音 / 5 账号默认 / -1 配音 / -10 描述性），
+                    # 见 `utils/format_scorer.audio_track_kind()`。以前这里带的是
+                    # `audio_track_type` —— 那个字段在 yt-dlp 里不存在，恒为 None。
+                    "language_preference": f.get("language_preference"),
+                    # `audio_track_kind()` 在缺 `language_preference` 时的回落依据
+                    # （非 YouTube extractor 不写那个字段）。别删。
                     "format_note": f.get("format_note"),
                 }
             )
@@ -1021,10 +1028,11 @@ class VideoFormatSelectorWidget(QWidget):
             return None
 
         if ctx is None:
-            pref_langs = config_manager.get("preferred_audio_languages")
-            if not isinstance(pref_langs, list) or not pref_langs:
-                pref_langs = ["orig", "zh-Hans", "en"]
-            ctx = ScoringContext(preferred_audio_langs=pref_langs)
+            ctx = ScoringContext(
+                preferred_audio_langs=_global_pref_langs(),
+                audio_strategy=_global_audio_strategy(),
+                allow_descriptive=_global_allow_descriptive(),
+            )
 
         return rank_audio_formats(audio_rows, ctx)[0][0]["format_id"]
 
@@ -1429,11 +1437,11 @@ class VideoFormatSelectorWidget(QWidget):
           还是英语"，只有看 `avail_langs` 里到底有没有 ja 才答得上来。
 
         `audio_ranked`（`format_id:lang:score`，前四名）回答的是**同一语言里的内斗**：
-        `avail_langs` 说明不了"有两条日语音轨，为什么挑了 AI 配音那条"。分差的来源是配音
-        加权（原音 +50000 / 人工 +10000 / AI −50000），而那套加权全靠 `format_note` ——
-        它此前在两个候选集构造器里都被丢掉了（见 `_build_rows` 的注释），也就是说这条
-        排名同时是那处修复的验收口。用挑流时那份 ctx 重算（`_build_scoring_ctx()`），
-        不是随手 `ScoringContext()`，否则分数对不上真实选择。
+        `avail_langs` 说明不了"有两条日语音轨，为什么挑了配音那条"。分差的来源是
+        `audio_track_kind()` 的类型档（原音 > 默认 > 配音 > 音频描述）与语言偏好名次，
+        两者谁当主键由 `audio_strategy` 决定，所以这条排名要和同一事件里的
+        `audio_kind` / `audio_strategy` 一起读。用挑流时那份 ctx 重算
+        （`_build_scoring_ctx()`），不是随手 `ScoringContext()`，否则分数对不上真实选择。
 
         容器要三个一起看：`container_auto` 是按流的编解码器无损推断的，`container` 是最终值，
         `container_forced` 是用户在输出格式栏里压的。**"输出容器"只作用于合并后的容器，从不参与
@@ -1499,7 +1507,8 @@ class VideoFormatSelectorWidget(QWidget):
             audio_ext=(aud_row or {}).get("ext"),
             pref_langs=pref_langs if audio_rows else None,
             audio_lang=audio_lang,
-            audio_track_type=(aud_row or {}).get("audio_track_type"),
+            audio_kind=audio_track_kind(aud_row) if aud_row else None,
+            audio_strategy=_global_audio_strategy(),
             lang_matched=self._lang_pref_matched(pref_langs, aud_row) if aud_row else None,
             avail_langs=sorted(
                 {str(r.get("language")).lower() for r in audio_rows if r.get("language")}
@@ -1572,16 +1581,17 @@ class VideoFormatSelectorWidget(QWidget):
         """选中的音轨是否命中了用户的语言偏好。
 
         复用 `utils/bcp47.matches`（打分引擎用的同一个匹配器），不重抄别名表 —— 抄一份就会
-        出现"日志说匹配上了、打分说没有"的自相矛盾。`orig` 不是语言码而是"跟视频原始语言走"，
-        单独判。
+        出现"日志说匹配上了、打分说没有"的自相矛盾。
+
+        `orig` 已经从语言列表里拆成独立的 `audio_track_strategy`，所以新配置里不会再有
+        这一项；这里仍留着它的分支，是因为用户手改过的 config.json 或迁移没跑到的场合
+        列表里可能还带着 —— 与 `format_scorer._lang_pref_rank()` 的同一处让步保持一致。
         """
         lang = str(aud_row.get("language") or "").strip().lower()
-        ttype = str(aud_row.get("audio_track_type") or "").strip().lower()
-        note = str(aud_row.get("format_note") or "").strip().lower()
-        is_orig = ttype == "original" or "original" in note or lang in {"orig", "original"}
+        is_orig = audio_track_kind(aud_row) == "original" or lang in {"orig", "original"}
         for pref in pref_langs:
             p = str(pref).strip().lower()
-            if p == "orig":
+            if p in {"orig", "original"}:
                 if is_orig:
                     return True
             elif bcp47_matches(p, lang):
@@ -1804,9 +1814,9 @@ def _build_global_candidates(formats: list) -> list[dict]:
                 "abr": f.get("abr"),
                 "dynamic_range": f.get("dynamic_range"),
                 "language": f.get("language"),
-                "audio_track_type": f.get("audio_track_type"),
-                # 见 `_build_rows` 里的同名注释：少了它，`score_audio_format()` 的原音识别
-                # 与配音降权在这条路径上同样是死的。
+                # 见 `_build_rows` 里的同名注释：音轨类型判定的权威字段 + 非 YouTube
+                # extractor 的回落依据，两个都要带。
+                "language_preference": f.get("language_preference"),
                 "format_note": f.get("format_note"),
             }
         )
@@ -1915,8 +1925,18 @@ def _global_pref_langs() -> list[str]:
     """音轨语言偏好，带默认值。控件侧与全局预设侧读的是同一份配置，缺省值也必须是同一份。"""
     pref_langs = config_manager.get("preferred_audio_languages")
     if not isinstance(pref_langs, list) or not pref_langs:
-        return ["orig", "zh-Hans", "en"]
+        return ["zh-Hans", "en"]
     return pref_langs
+
+
+def _global_audio_strategy() -> str:
+    """音轨策略。`orig` 已从语言列表里拆出来，成了这一维。"""
+    return str(config_manager.get("audio_track_strategy") or STRATEGY_ORIGINAL_FIRST)
+
+
+def _global_allow_descriptive() -> bool:
+    """是否允许自动选中音频描述轨（视障辅助解说轨）。默认排除。"""
+    return bool(config_manager.get("audio_allow_descriptive", False))
 
 
 def _build_scoring_ctx(intent: dict) -> ScoringContext:
@@ -1941,6 +1961,8 @@ def _build_scoring_ctx(intent: dict) -> ScoringContext:
         preferred_audio_langs=pref_langs,
         embed_subtitles=sub_enabled,
         subtitle_lang_count=len(sub_config.default_languages) if sub_enabled else 0,
+        audio_strategy=_global_audio_strategy(),
+        allow_descriptive=_global_allow_descriptive(),
     )
 
 
@@ -2007,7 +2029,8 @@ def _emit_global_format_decision(
         audio_ext=(aud_row or {}).get("ext"),
         pref_langs=pref_langs if audio_rows else None,
         audio_lang=(aud_row or {}).get("language"),
-        audio_track_type=(aud_row or {}).get("audio_track_type"),
+        audio_kind=audio_track_kind(aud_row) if aud_row else None,
+        audio_strategy=_global_audio_strategy(),
         lang_matched=(
             VideoFormatSelectorWidget._lang_pref_matched(pref_langs, aud_row) if aud_row else None
         ),

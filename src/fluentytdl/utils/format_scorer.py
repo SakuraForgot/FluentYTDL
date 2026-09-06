@@ -55,30 +55,140 @@ class ScoringContext:
     audio_track_count: int = 1
     """音轨数量（> 1 时因 mp4 对多音轨支持不佳，强制或建议升级为 mkv）"""
 
+    audio_strategy: str = "original_first"
+    """音轨策略：`original_first` / `language_first` / `original_only`（见 `score_audio_format()`）"""
+
+    allow_descriptive: bool = False
+    """是否允许自动选中音频描述轨（False 时给地板分而**不**硬过滤，见 `score_audio_format()`）"""
+
+
+# ── 音轨类型判定 ──────────────────────────────────────────────
+
+# yt-dlp YouTube extractor 算好的 `language_preference` 取值，
+# 见 `extractor/youtube/_video.py::get_language_code_and_preference()`。
+# **这是判定音轨类型的唯一权威**：项目原先读的 `audio_track_type` 在 yt-dlp 里
+# 根本不存在（`_format_fields` 白名单里没有，extractor 也从不写），恒为 None。
+AUDIO_ORIGINAL = 10  # displayName 含 "original"
+AUDIO_DEFAULT = 5  # audioIsDefault：账号/地区默认音轨，**不是**原音
+AUDIO_DUB = -1  # 普通配音
+AUDIO_DESCRIPTIVE = -10  # displayName 含 "descriptive"，语言码带 `-desc` 后缀
+
+KIND_ORIGINAL = "original"
+KIND_DEFAULT = "default"
+KIND_DUB = "dub"
+KIND_DESCRIPTIVE = "descriptive"
+KIND_UNKNOWN = "unknown"
+
+# 类型档位加权：同一语言偏好等级内决定谁赢。
+# 量级刻意小于 `_AUDIO_PREF_STEP`，`original_first` 靠调换主键顺序而不是靠压过语言分。
+_KIND_TIER: dict[str, int] = {
+    KIND_ORIGINAL: 3,
+    KIND_DEFAULT: 2,
+    KIND_DUB: 1,
+    KIND_UNKNOWN: 1,
+    KIND_DESCRIPTIVE: 0,
+}
+
+
+def audio_track_kind(f: dict[str, Any]) -> str:
+    """判定音轨类型，返回 `original` / `default` / `dub` / `descriptive` / `unknown`。
+
+    `language_preference` 有值就以它为准 —— 这是 yt-dlp 已经算好、已经在 `-J` 输出里的
+    字段，比任何字符串猜测都准。缺失时（Twitter 等非 YouTube extractor 不写这个字段）
+    回落到 `format_note` 子串与 `-desc` 语言码后缀。
+
+    > ⚠️ **不要**把 `(default)` 当原音：它是 `audioIsDefault`（账号/地区默认），上游明确
+    > 把这两者分开（`ORIGINAL_LANG_VALUE = 10` vs `DEFAULT_LANG_VALUE = 5`）。旧实现里
+    > `"default" in format_note` 那条判定会在一个原音是日语、账号默认是英语配音的视频上
+    > 把英语配音报成原音。
+
+    > ⚠️ 回落路径**不认** `"auto" in format_note`：YouTube 的 `format_note` 里唯一含
+    > "auto" 的 token 是 `AI-upscaled`，那是**视频**超分标记，不是 AI 配音。也不认
+    > `"dubbed"` —— YouTube 从不产出这个词。
+    """
+    pref = f.get("language_preference")
+    if isinstance(pref, bool):
+        pref = None  # bool 是 int 的子类，挡掉它免得 True 被当成 1
+    if isinstance(pref, int):
+        if pref >= AUDIO_ORIGINAL:
+            return KIND_ORIGINAL
+        if pref >= AUDIO_DEFAULT:
+            return KIND_DEFAULT
+        if pref <= AUDIO_DESCRIPTIVE:
+            return KIND_DESCRIPTIVE
+        if pref < 0:
+            return KIND_DUB
+        return KIND_UNKNOWN
+
+    # 非 YouTube extractor 的回落路径
+    lang = str(f.get("language") or "").strip().lower()
+    note = str(f.get("format_note") or "").strip().lower()
+    if lang.endswith("-desc") or "descriptive" in note:
+        return KIND_DESCRIPTIVE
+    if "original" in note or lang in {"orig", "original"}:
+        return KIND_ORIGINAL
+    if "default" in note:
+        return KIND_DEFAULT
+    return KIND_UNKNOWN
+
 
 # ── 音频打分 ──────────────────────────────────────────────────
 
-# 偏好权重常数（等差间距，第 10 个偏好仍有效）
-_AUDIO_PREF_BASE = 100_000_000  # 偏好基准，远超 abr 数值范围 (0–500 kbps)
-_AUDIO_PREF_STEP = 10_000_000  # 每一偏好位降低（等差）
-_AUDIO_ORIG_BONUS = 1_000_000  # orig 无偏好命中时的兜底加分
+# 分数是两个有序键 + 两个小额修正的位置记数拼装：
+#
+#     score = primary * _AUDIO_PRIMARY + secondary * _AUDIO_SECONDARY + affinity + abr
+#
+# 哪个键当 primary 由策略决定（见 `score_audio_format()`）。这样"等差"是精确的：
+# 语言偏好每退一位，分数就少一个整的 `_AUDIO_PRIMARY`（或 `_AUDIO_SECONDARY`），
+# 第 21 个偏好和第 1 个一样有效，abr 和容器亲和加分永远越不过键的边界。
+_AUDIO_PRIMARY = 100_000_000  # 主键单位，远超 abr 数值范围 (0–500 kbps) 与亲和加分
+_AUDIO_SECONDARY = 1_000_000  # 次键单位
+_AUDIO_ORIGINAL_ONLY_WIN = 10**12  # `original_only` 命中原音时的压倒性加分
+_AUDIO_DESC_FLOOR = -(10**12)  # 描述性音轨在 allow_descriptive=False 时的地板分
+
+STRATEGY_ORIGINAL_FIRST = "original_first"
+STRATEGY_LANGUAGE_FIRST = "language_first"
+STRATEGY_ORIGINAL_ONLY = "original_only"
+AUDIO_STRATEGIES = (STRATEGY_ORIGINAL_FIRST, STRATEGY_LANGUAGE_FIRST, STRATEGY_ORIGINAL_ONLY)
+
+
+def _lang_pref_rank(lang: str, kind: str, prefs: list[str]) -> int:
+    """把语言偏好命中转成"越大越好"的名次：命中第 0 项 → `len(prefs)`，未命中 → 0。
+
+    历史遗留：偏好列表里可能还留着 `orig` 这一项（老配置迁移前、或用户手改过
+    config.json）。这里把它当"命中原音轨"处理，免得迁移没跑到的场合整份偏好错位。
+    新配置里 `orig` 已经拆成独立策略，不再出现在列表中。
+    """
+    for i, pref in enumerate(prefs):
+        p = pref.strip().lower()
+        if p in {"orig", "original"}:
+            if kind == KIND_ORIGINAL:
+                return len(prefs) - i
+            continue
+        if _bcp47_match(p, lang):
+            return len(prefs) - i
+    return 0
 
 
 def score_audio_format(f: dict[str, Any], ctx: ScoringContext) -> int:
-    """
-    对单条音频流评分，数值越大越优先。
+    """对单条音频流评分，数值越大越优先。
 
-    评分逻辑：
-    - 命中用户偏好列表第 i 项 → BASE - i*STEP + abr
-    - 无命中但为原音轨      → ORIG_BONUS + abr
-    - 完全无匹配            → abr（码率兜底，避免返回 0）
+    排序主键由 `ctx.audio_strategy` 决定：
+
+    | 策略 | 主键 → 次键 |
+    | --- | --- |
+    | `original_first` | 类型档（原音 > 默认 > 配音）→ 语言偏好 → abr |
+    | `language_first` | 语言偏好 → 类型档 → abr |
+    | `original_only` | 原音命中即赢；无原音时退化为 `language_first`（"无则回退最佳"） |
+
+    `descriptive` 在 `ctx.allow_descriptive=False` 时拿地板分而**不被硬过滤** ——
+    过滤会让"只有描述性音轨"的视频拿不到任何音频。
     """
     lang = str(f.get("language") or "").strip().lower()
-    ttype = str(f.get("audio_track_type") or "").strip().lower()
-    format_note = str(f.get("format_note") or "").strip().lower()
     abr = int(f.get("abr") or f.get("tbr") or 0)
     ext = str(f.get("ext") or "").strip().lower()
     acodec = str(f.get("acodec") or "").strip().lower()
+    kind = audio_track_kind(f)
 
     # 容器亲和性补偿：如果目标是 MP4，重赏原生支持的音频流，
     # 足以抵消 WebM/Opus (如 160kbps) 对比 M4A/AAC (如 128kbps) 的微弱码率优势，而不影响宏观的语言偏好顺序
@@ -87,35 +197,27 @@ def score_audio_format(f: dict[str, Any], ctx: ScoringContext) -> int:
         if ext in {"m4a", "aac"} or "mp4a" in acodec or "aac" in acodec:
             affinity_bonus = 2000
 
-    # 综合判断是否为原音 (yt-dlp 经常将 original 放在 format_note 中)
-    is_orig = (
-        ttype == "original"
-        or "original" in format_note
-        or "default" in format_note
-        or lang in {"orig", "original"}
-    )
+    if kind == KIND_DESCRIPTIVE and not ctx.allow_descriptive:
+        # 地板分：低于任何其它候选，但仍是有限值 —— "只有 desc 轨"时它照样能被选中
+        return _AUDIO_DESC_FLOOR + abr
 
-    # 配音类型加权：确保在同一语言偏好等级下，原音 > 人工配音 > AI配音
-    dub_bonus = 0
-    if is_orig:
-        dub_bonus = 50000
-    elif "auto" in format_note or "translated" in format_note or "ai " in format_note:
-        dub_bonus = -50000
-    elif "dubbed" in format_note or ttype == "dubbed":
-        dub_bonus = 10000
+    tier = _KIND_TIER.get(kind, 1)
+    lang_rank = _lang_pref_rank(lang, kind, ctx.preferred_audio_langs)
+    strategy = (ctx.audio_strategy or STRATEGY_ORIGINAL_FIRST).strip().lower()
 
-    for i, pref in enumerate(ctx.preferred_audio_langs):
-        score = _AUDIO_PREF_BASE - i * _AUDIO_PREF_STEP + affinity_bonus + dub_bonus
-        p = pref.strip().lower()
-        if p == "orig" and is_orig:
-            return score + abr
-        if _bcp47_match(p, lang):
-            return score + abr
+    if strategy == STRATEGY_ORIGINAL_FIRST:
+        primary, secondary = tier, lang_rank
+    else:
+        # language_first，以及 original_only（原音靠下面的压倒性加分取胜，
+        # 无原音时这里就是它的退化路径）
+        primary, secondary = lang_rank, tier
 
-    # 无偏好命中
-    if is_orig:
-        return _AUDIO_ORIG_BONUS + affinity_bonus + dub_bonus + abr
-    return affinity_bonus + dub_bonus + abr
+    score = primary * _AUDIO_PRIMARY + secondary * _AUDIO_SECONDARY + affinity_bonus + abr
+
+    if strategy == STRATEGY_ORIGINAL_ONLY and kind == KIND_ORIGINAL:
+        score += _AUDIO_ORIGINAL_ONLY_WIN
+
+    return score
 
 
 def rank_audio_formats(

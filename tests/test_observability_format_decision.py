@@ -40,6 +40,8 @@ from fluentytdl.ui.components.platforms.youtube import (  # noqa: E402
     resolve_global_format,
 )
 from fluentytdl.utils.format_scorer import (  # noqa: E402
+    STRATEGY_LANGUAGE_FIRST,
+    STRATEGY_ORIGINAL_FIRST,
     ScoringContext,
     rank_audio_formats,
     score_audio_format,
@@ -106,8 +108,8 @@ INFO_BILINGUAL = {
     "formats": [
         _video("137", "mp4", 1080),
         _video("136", "mp4", 720),
-        _audio("140", "m4a", "en", 128, audio_track_type="original"),
-        _audio("251-ja", "webm", "ja", 160, audio_track_type="dubbed"),
+        _audio("140", "m4a", "en", 128, language_preference=10),
+        _audio("251-ja", "webm", "ja", 160, language_preference=-1),
         _MUXED_360,
     ]
 }
@@ -115,19 +117,24 @@ INFO_BILINGUAL = {
 INFO_EN_ONLY = {
     "formats": [
         _video("248", "webm", 1080),
-        _audio("251", "webm", "en", 160, audio_track_type="original"),
+        _audio("251", "webm", "en", 160, language_preference=10),
     ]
 }
 
 #: 只有 360p 整合流 + 144p 视频流 —— 旧代码在这套数据上误报偏差
 INFO_TINY = {"formats": [_MUXED_360, _video("160", "mp4", 144)]}
 
-#: 两条**同语言**日语音轨：人工配音 vs AI 配音。`avail_langs` 解释不了这种内斗
+#: 两条**同语言**日语音轨：原音 vs 配音。`avail_langs` 解释不了这种内斗。
+#:
+#: 这套 fixture 原先写的是"人工配音 vs AI 配音"（`format_note="Japanese (auto-generated)"`），
+#: 前提已被证伪：真实 YouTube 数据里 `format_note` 从不带 `auto-generated`，唯一含 "auto"
+#: 的 token 是 `AI-upscaled`，而那是**视频**超分标记。类型档现在只由 `language_preference`
+#: 决定，所以这里换成 10（原音）对 −1（配音）。
 INFO_SAME_LANG = {
     "formats": [
         _video("137", "mp4", 1080),
-        _audio("ja-dub", "m4a", "ja", 128, audio_track_type="dubbed"),
-        _audio("ja-ai", "webm", "ja", 160, format_note="Japanese (auto-generated)"),
+        _audio("ja-orig", "m4a", "ja", 128, language_preference=10),
+        _audio("ja-dub", "webm", "ja", 160, language_preference=-1),
     ]
 }
 
@@ -145,14 +152,23 @@ def _score_of(ranked: list[str], fid: str) -> int:
     raise AssertionError(f"{fid} 不在排名里: {ranked}")
 
 
-def _select(info: dict, *, langs: list[str], intent: dict | None = None):
+def _select(
+    info: dict,
+    *,
+    langs: list[str],
+    intent: dict | None = None,
+    strategy: str = STRATEGY_ORIGINAL_FIRST,
+):
     """构造控件、压一份预设意图、返回 (widget, result)。
 
     **一律显式给 intent，不按下标点预设按钮。** 预设阶梯是固定的 1080/720/480/360，
     与视频实际有什么无关，所以下标和"用户看到的选项"并不一一对应；`_compute_selection_result()`
     也是每次调用现读 `btn.property("intent")`，压属性和点按钮等效。
+
+    `strategy` 也一律显式写死：它是全局配置，不写就取决于上一条测试留下了什么。
     """
     config_manager.set("preferred_audio_languages", langs)
+    config_manager.set("audio_track_strategy", strategy)
     widget = VideoFormatSelectorWidget(info, trace=new_flow(stage="select"))
     btn = widget.simple_widget.btn_group.buttons()[-1]
     btn.setProperty("intent", intent or {"max_height": None, "type": "video"})
@@ -164,8 +180,12 @@ def _select(info: dict, *, langs: list[str], intent: dict | None = None):
 
 
 def test_audio_language_hit_records_both_sides(qapp, events):
-    """偏好命中时，`pref_langs` / `audio_lang` / `avail_langs` 三者同时在场。"""
-    _, result = _select(INFO_BILINGUAL, langs=["ja", "en"])
+    """偏好命中时，`pref_langs` / `audio_lang` / `avail_langs` 三者同时在场。
+
+    策略显式给 `language_first`：这条测的是"语言偏好命中"，而 `original_first` 下
+    en 原音本来就该压过 ja 配音（那是策略在起作用，不是没命中）。
+    """
+    _, result = _select(INFO_BILINGUAL, langs=["ja", "en"], strategy=STRATEGY_LANGUAGE_FIRST)
 
     assert result["format"] == "137+251-ja"
     (decision,) = _decisions(events)
@@ -194,22 +214,55 @@ def test_audio_language_miss_is_distinguishable_from_a_bug(qapp, events):
 
 
 def test_ranking_explains_a_same_language_upset(qapp, events):
-    """两条日语音轨，挑了码率更低的那条 —— 因为另一条是 AI 配音。
+    """两条日语音轨，挑了码率更低的那条 —— 因为另一条是配音。
 
     `avail_langs=["ja"]` + `lang_matched=True` 在这里什么都解释不了：语言明明命中了，
-    用户的抱怨却是"为什么给我下了个机器音"。分差的来源是配音加权
-    （人工 +10000 / AI −50000），而那套加权全靠 `format_note` —— 它此前在候选集
-    构造器里被丢掉了，所以这条排名同时是那处修复的验收口。
+    用户的抱怨却是"为什么给我下了条配音"。分差的来源是 `audio_track_kind()` 的类型档，
+    而类型档来自 `language_preference` —— 那个字段此前在两个候选集构造器里都被丢掉了
+    （构造器塞的是 yt-dlp 里根本不存在的 `audio_track_type`），所以这条排名同时是
+    那处修复的验收口。
     """
     _, result = _select(INFO_SAME_LANG, langs=["ja"], intent={"max_height": 1080, "type": "video"})
 
-    assert result["format"] == "137+ja-dub"  # 128k 人工配音赢过 160k AI 配音
+    assert result["format"] == "137+ja-orig"  # 128k 原音赢过 160k 配音
     (decision,) = _decisions(events)
     assert decision["audio_lang"] == "ja"
     assert decision["lang_matched"] is True
+    assert decision["audio_kind"] == "original"
+    assert decision["audio_strategy"] == STRATEGY_ORIGINAL_FIRST
     ranked = decision["audio_ranked"]
-    assert ranked[0].startswith("ja-dub:ja:")  # 排名第一 == 真正选中的
-    assert _score_of(ranked, "ja-dub") - _score_of(ranked, "ja-ai") == 10000 + 50000 + 128 - 160
+    assert ranked[0].startswith("ja-orig:ja:")  # 排名第一 == 真正选中的
+    # 原音(档 3) vs 配音(档 1) —— 两档之差压过 32k 的码率劣势
+    assert _score_of(ranked, "ja-orig") - _score_of(ranked, "ja-dub") == 2 * 100_000_000 + 128 - 160
+
+
+def test_language_first_strategy_flips_the_same_ranking(qapp, events):
+    """同一份数据换成"指定语言优先"，赢家就换人 —— 策略是主键，不是加权微调。
+
+    `original_first` 下 en 原音(档 3, 语言名次 0) 压过 ja 配音(档 1, 名次 2)；
+    `language_first` 下主次调换，ja 配音反过来赢。两条断言并排放，是为了让"策略真的
+    在起作用"这件事有一个不依赖 UI 的凭据。
+    """
+    _, result_orig = _select(
+        INFO_BILINGUAL,
+        langs=["ja", "en"],
+        intent={"max_height": 1080, "type": "video"},
+        strategy=STRATEGY_ORIGINAL_FIRST,
+    )
+    assert result_orig["format"] == "137+140"  # en 原音
+
+    events.clear()
+    _, result_lang = _select(
+        INFO_BILINGUAL,
+        langs=["ja", "en"],
+        intent={"max_height": 1080, "type": "video"},
+        strategy=STRATEGY_LANGUAGE_FIRST,
+    )
+    assert result_lang["format"] == "137+251-ja"  # ja 配音
+
+    (decision,) = _decisions(events)
+    assert decision["audio_strategy"] == STRATEGY_LANGUAGE_FIRST
+    assert decision["audio_kind"] == "dub"
 
 
 def test_ranking_is_scored_with_the_context_that_actually_picked(qapp, events):
@@ -223,8 +276,9 @@ def test_ranking_is_scored_with_the_context_that_actually_picked(qapp, events):
     _select(INFO_BILINGUAL, langs=["en"], intent={"max_height": 1080, "type": "video"})
 
     (decision,) = _decisions(events)
-    # 命中偏好第 0 位(1e8) + 原音(50000) + abr(128)，**没有** mp4 亲和的 +2000
-    assert _score_of(decision["audio_ranked"], "140") == 100_000_000 + 50_000 + 128
+    # original_first：主键 = 类型档(原音 3) ×1e8，次键 = 语言名次(命中唯一偏好 → 1) ×1e6，
+    # 再加 abr(128)。**没有** mp4 亲和的 +2000。
+    assert _score_of(decision["audio_ranked"], "140") == 3 * 100_000_000 + 1_000_000 + 128
 
 
 def test_ranking_is_absent_when_there_are_no_audio_rows(qapp, events):
@@ -390,6 +444,7 @@ class _Override:
 def test_global_preset_uses_the_same_field_names(qapp, events):
     """播放列表里"这一行怎么是 720p"应该和单视频用同一条查询筛出来。"""
     config_manager.set("preferred_audio_languages", ["en"])
+    config_manager.set("audio_track_strategy", STRATEGY_ORIGINAL_FIRST)
     fmt, _ = resolve_global_format(INFO_BILINGUAL, _Override(), trace=new_flow(stage="select"))
 
     assert fmt == "137+140"
@@ -401,7 +456,7 @@ def test_global_preset_uses_the_same_field_names(qapp, events):
     assert decision["avail_langs"] == ["en", "ja"]
     # 全局侧的 `prefer_ext` 是真的 "mp4"（预设意图里带），所以 m4a 这次**该**拿到
     # +2000 亲和加分 —— 同一个字段名，两边各自记的是各自那份 ctx 算出来的分。
-    assert _score_of(decision["audio_ranked"], "140") == 100_000_000 + 50_000 + 2_000 + 128
+    assert _score_of(decision["audio_ranked"], "140") == 3 * 100_000_000 + 1_000_000 + 2_000 + 128
 
 
 def test_global_preset_without_formats_reports_the_bare_selector(qapp, events):

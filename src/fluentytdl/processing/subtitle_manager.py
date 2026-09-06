@@ -90,6 +90,26 @@ def _lookup_language_name(code: str) -> str | None:
     return None
 
 
+def language_display_name(code: str, name: str | None = None) -> str:
+    """语言标签的显示文案：`zh-Hans` → `中文(简体)`，表外标签原样返回 `pt-BR`。
+
+    给设置页的语言选择器用（`COMMON_SUBTITLE_LANGUAGES` 与用户自定义的 BCP-47 标签共用
+    一份显示逻辑）。`name` 是调用方手里已有的目录名，省一次查表；给 None 时自行逐级截断查。
+
+    **这个 helper 必须留在本模块**：`COMMON_SUBTITLE_LANGUAGES` / `LANGUAGE_NAMES` 的
+    源串是用 `QT_TRANSLATE_NOOP("SubtitleManager", …)` 在这里标记的，lupdate 只在标记处
+    抽串。把"按变量翻译"的 helper 写到别的模块里，那个模块没有对应的 NOOP 标记，
+    `tests/test_i18n_integrity.py::test_no_hidden_context_translate_helpers` 会拦下来 ——
+    拦的是真问题：译文会永久落空，而中文界面上看不出任何异常。
+    """
+    from PySide6.QtCore import QCoreApplication
+
+    table_name = name or _lookup_language_name(code)
+    if not table_name:
+        return code
+    return QCoreApplication.translate("SubtitleManager", table_name)
+
+
 class SubtitleSourceType(str, Enum):
     MANUAL = "manual"
     AUTO_GENERATED = "auto_generated"

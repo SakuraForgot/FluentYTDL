@@ -95,6 +95,16 @@ def canonicalize(tag: str) -> str:
     return "-".join(out)
 
 
+def is_safe_tag(tag: str) -> bool:
+    """标签是否只由 BCP-47 允许的字符（字母、数字、`-`）组成。
+
+    给 UI 的自定义标签输入做校验用。**不**判断这个语种是否真的存在 —— 语言码总共
+    有七千多个，任何白名单都会拦掉某个用户真正需要的那一条；这里只挡住会破坏下游
+    正则/命令行的字符。
+    """
+    return bool(tag) and bool(_SAFE_TAG_RE.match(tag))
+
+
 def _is_region(part: str) -> bool:
     """BCP-47 地区段：2 个字母（`GB`）或 3 个数字（`419`）。"""
     return (len(part) == 2 and part.isalpha()) or (len(part) == 3 and part.isdigit())

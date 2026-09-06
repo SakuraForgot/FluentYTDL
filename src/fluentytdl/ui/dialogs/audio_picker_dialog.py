@@ -1,5 +1,7 @@
+from __future__ import annotations
+
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
@@ -24,6 +26,9 @@ from ...processing.audio_track_manager import (
     extract_audio_tracks,
 )
 from ...utils.container_compat import check_audio_multistream_container_compat
+
+if TYPE_CHECKING:
+    from ...utils.format_scorer import ScoringContext
 
 
 @dataclass
@@ -129,14 +134,23 @@ class AudioPickerDialog(MessageBoxBase):
         self.widget.setMinimumWidth(650)
         self.widget.setMinimumHeight(450)
 
+    def _build_scoring_ctx(self) -> ScoringContext:
+        """按当前设置构建打分上下文。
+
+        `_load_tracks()`（排序）与 `_populate_table()`（默认勾选）**必须用同一份上下文**，
+        否则表格第一行和打了 ⭐ 的那行会是两条不同的音轨。
+        """
+        from ...utils.format_scorer import STRATEGY_ORIGINAL_FIRST, ScoringContext
+
+        return ScoringContext(
+            preferred_audio_langs=config_manager.get("preferred_audio_languages", []) or [],
+            audio_strategy=config_manager.get("audio_track_strategy", STRATEGY_ORIGINAL_FIRST),
+            allow_descriptive=bool(config_manager.get("audio_allow_descriptive", False)),
+        )
+
     def _load_tracks(self):
         """加载与挂载所有音轨数据"""
-        from ...utils.format_scorer import ScoringContext
-
-        ctx = ScoringContext()
-        ctx.preferred_audio_langs = config_manager.get("preferred_audio_languages", [])
-
-        self._all_tracks = extract_audio_tracks(self.video_info, ctx)
+        self._all_tracks = extract_audio_tracks(self.video_info, self._build_scoring_ctx())
         if not self._all_tracks:
             return
 
@@ -162,10 +176,8 @@ class AudioPickerDialog(MessageBoxBase):
         # 预先选出最好的 N 个音轨，默认勾选
         # 为了兼容，默认专业模式可以选择 1 个（或全选），这里先按 Top 1 勾选
         from ...processing.audio_track_manager import select_best_n_tracks
-        from ...utils.format_scorer import ScoringContext
 
-        ctx = ScoringContext()
-        ctx.preferred_audio_langs = config_manager.get("preferred_audio_languages", [])
+        ctx = self._build_scoring_ctx()
 
         # 如果是专业模式，默认选第一个最好的
         if self._initial_result and self._initial_result.format_ids:
@@ -199,9 +211,9 @@ class AudioPickerDialog(MessageBoxBase):
             item_lang.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             self.table.setItem(row_idx, 1, item_lang)
 
-            # Type
-            type_str = self.tr("原音") if track.audio_track_type == "original" else self.tr("配音")
-            item_type = QTableWidgetItem(type_str)
+            # Type：四态显式区分。旧实现是 `original` 二选一，而 `audio_track_type`
+            # 在 yt-dlp 里根本不存在（恒为 None），所以这一列以前永远显示"配音"。
+            item_type = QTableWidgetItem(self._kind_label(track.kind))
             item_type.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             self.table.setItem(row_idx, 2, item_type)
 
@@ -238,6 +250,15 @@ class AudioPickerDialog(MessageBoxBase):
         # TODO: Implement filtering later if needed
         # Currently just letting the user see all sorted tracks
         pass
+
+    def _kind_label(self, kind: str) -> str:
+        """音轨类型的显示文案。四种类型来自 `language_preference`，见 `audio_track_kind()`。"""
+        return {
+            "original": self.tr("原音"),
+            "default": self.tr("默认"),
+            "dub": self.tr("配音"),
+            "descriptive": self.tr("音频描述"),
+        }.get(kind, self.tr("未知"))
 
     def _get_selected_tracks(self) -> list[AudioTrack]:
         selected = []
