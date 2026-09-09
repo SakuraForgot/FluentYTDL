@@ -4,7 +4,8 @@ from PySide6.QtGui import QIcon
 
 from .paths import resource_path
 
-# 多尺寸图标的首选来源：FluentYTDL_v2.ico 内含 16/24/32/48/64/72/96/128/256 共 9 帧，
+# 多尺寸图标的首选来源：FluentYTDL_v2.ico 内含 16/20/24/32/48/64/72/96/128/256 共 10 帧，
+# 由 assets/logo.svg 经 scripts/generate_app_icons.py 生成。
 # 且与 EXE 资源图标（任务栏、资源管理器、快捷方式）是同一份素材，
 # 用它能保证托盘图标和 shell 图标外观完全一致。
 # Windows 通知区在 100% / 125% / 150% DPI 下分别索取 16 / 20 / 24 px，
