@@ -35,7 +35,8 @@ from fluentytdl.ui.components.common.badges import QualityCellWidget
 
 from ....core.config_manager import config_manager
 from ....observability import FlowTrace, emit_event
-from ....utils.bcp47 import TIER_MACRO, matches as bcp47_matches
+from ....utils.bcp47 import TIER_MACRO
+from ....utils.bcp47 import matches as bcp47_matches
 from ....utils.container_compat import choose_lossless_merge_container
 from ....utils.format_scorer import (
     STRATEGY_ORIGINAL_FIRST,
