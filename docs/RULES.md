@@ -97,7 +97,7 @@ pythonVersion = "3.10"
 
 这些规则来自生产环境的惨痛教训。违反它们**必然**导致用户可见的 bug。
 
-1. **绝不强制 `player_client`** — 信任 yt-dlp 默认策略（tv → web_safari → android_vr）
+1. **优先使用 yt-dlp 默认的 `player_client` 策略**（tv → web_safari → android_vr）——绝不*锁定*单一客户端。**例外（SABR-only 账号）：** 当 yt-dlp 报告账号命中 SABR-only 实验（`forcing SABR streaming` / `formats ... missing a url` → 高清格式没有直链、被丢弃，只剩 360p）时，向客户端集合**追加** `web_safari`（`default,web_safari`，或已设 POT 时的 `<现有>,web_safari`，例如 `default,mweb`）。这是*追加*而非锁定——默认客户端仍先跑，web_safari 只是找回直链高清（HLS）的兜底。在解析期侦测（`yt_dlp_cli._maybe_mark_sabr_only`），持久化**在账号上**（`WebView2Account.sabr_only`，登出时用内存会话标志），并在 `build_ydl_options` 中消费（`_maybe_append_sabr_web_safari`），从而同时覆盖解析**与**下载两条 opts 路径（各自独立构建 opts）。此为临时方案——随着采样更多视频可能需要调整。
 2. **绝不启用 `sleep_interval`** — 导致签名 URL 过期 → HTTP 403
 3. **绝不使用 `--cookies-from-browser`** — Windows 上导致 DPAPI 文件锁
 4. **`-S lang:xx` 是失效的 —— 绝不用它表达语言偏好。** `lang` 是 `language_preference` 的**数值**别名，不接受语言码（喂语言码会把全局 `settings['lang']['convert']` 改成 `'string'`、拿 10/5/−1/−10 跟 `"ja"` 比），而且 `FormatSorter.add_item` 只接受**第一个** `lang:` 条目。语言与原音偏好必须走 `_inject_language_into_format()` 的格式串过滤器：`[language^=xx]`（startswith —— 裸 `[language=en]` 匹配不到真实标注 `en-US`）与原音的 `[language_preference>=?10]`（**`?` 是必须的，且必须紧跟运算符** —— 只有 YouTube 有 `language_preference`，不带 none-inclusive 会把 Twitter 等平台的所有音轨过滤光；而 yt-dlp 的过滤器语法把该标记放在运算符与值之间，写成值侧的 `>=10?` 会直接 `SyntaxError: Invalid filter specification`，整个下载起不来）。原始格式串永远作为最后兜底
