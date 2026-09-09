@@ -91,6 +91,13 @@ def window(qapp):
         w.switchTo(w.task_page)
         _pump(qapp)
         yield w
+        # 无头下 `tray_icon.isVisible()` 恒为真，`w.close()` 会走「隐藏到托盘」分支、
+        # 直接 `event.ignore()`，跳过 `closeEvent` 里的 `_stop_theme_listener()`。于是
+        # `SystemThemeListener` 这条**原生 QThread**（阻塞在 Win32 注册表通知上，
+        # `threading.enumerate()` 根本看不到它）被留到解释器 finalize —— Python 3.10
+        # 下一条仍在跑的原生线程会让进程在收尾时段错误（3.12 的 finalize 恰好容忍，
+        # 所以这条只在 3.10 的 CI 上炸）。显式停掉它再退出，别把活线程丢给进程终结。
+        w._stop_theme_listener()
         w.close()
         _pump(qapp)
     finally:
