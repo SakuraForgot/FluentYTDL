@@ -532,6 +532,14 @@ def _language_filters(langs: list[str]) -> list[str]:
     别名分支用 `=`（精确）而**不是** `^=`：别名表里有把 `zh-Hans` 放宽到 `zh` 的条目，
     `[language^=zh]` 会连 `zh-Hant` 一起命中 —— 简中偏好换来一条繁中音轨。
     精确匹配一条真的标着 `zh` 的音轨才是这个别名想表达的意思。
+
+    带脚本/地区后缀的偏好（`zh-Hans`、`pt-BR`）末尾再追加一组「同母语言软档」，
+    对应 `format_scorer` 那边的 `TIER_MACRO`：偏好 `zh-Hans` 没命中时，同为中文的
+    `zh-Hant` 远胜过回退链里的下一门语言。软档以 `[language=zh]` + `[language^=zh-]`
+    追加在精确/别名**之后** —— 只在无精确脚本时兜底，不改变首选（简中在场仍先命中简中，
+    简/繁切换不受影响）。**刻意不写裸 `[language^=zh]`**：那会把 Zhuang(`zha`) 等三字母
+    近亲一起命中，也与打分器的 `primary_subtag` 相等语义分叉；这两条精确表达式恰好等价于
+    「primary subtag == zh」。裸偏好（`en`/`ja`）不追加：它们的 `^=en` 已覆盖 primary 空间。
     """
     from ..utils import bcp47
 
@@ -544,6 +552,12 @@ def _language_filters(langs: list[str]) -> list[str]:
         candidates = [f"[language^={canon}]"]
         for alias in sorted(bcp47.BCP47_ALIASES.get(bcp47.normalize(canon), set())):
             candidates.append(f"[language={bcp47.canonicalize(alias)}]")
+        if "-" in bcp47.normalize(canon):
+            # 同母语言软档：仅带脚本/地区后缀时才需要（裸偏好的 `^=` 已覆盖其 primary 空间）。
+            # 与打分器共用 `bcp47.primary_subtag()`，两条路径的"同一门语言"判定不漂移。
+            primary = bcp47.primary_subtag(canon)
+            candidates.append(f"[language={primary}]")
+            candidates.append(f"[language^={primary}-]")
         for expr in candidates:
             if expr not in exprs:
                 exprs.append(expr)
@@ -654,8 +668,8 @@ def build_subtitle_args(ydl_opts: dict[str, Any], *, allow_embed: bool = True) -
     字幕参数是本次修复的核心，两份实现意味着 bug 只修一半。
 
     Args:
-        allow_embed: `--embed-subs` / `--keep-subs` 是否可发。纯字幕模式带
-            `--skip-download`，压根没有视频文件可嵌，那两个参数在那里没有意义。
+        allow_embed: `--embed-subs` 是否可发。纯字幕模式带 `--skip-download`，
+            压根没有视频文件可嵌，这个参数在那里没有意义。
     """
     args: list[str] = []
 
@@ -685,13 +699,11 @@ def build_subtitle_args(ydl_opts: dict[str, Any], *, allow_embed: bool = True) -
         # 嵌入字幕
         if ydl_opts.get("embedsubtitles"):
             args += ["--embed-subs"]
-
-        # 保留外置字幕文件
-        # `--embed-subs` 嵌入完会顺手删掉外置字幕文件，字幕后处理因此永远校验不到东西
-        # （旧版那句"未找到字幕文件"有一半来自这里）。置位方在
-        # `download/features.py::SubtitleFeature.on_download_start`，校验完由后处理清理。
-        if ydl_opts.get("keepsubtitles"):
-            args += ["--keep-subs"]
+        # 外置字幕的保留交给上面的 `--write-sub` / `--write-auto-sub`：yt-dlp 仅在
+        # 「没有 --write-sub、临时下字幕来嵌入」时才会在嵌入后删外置文件，而本项目二者
+        # 恒同发（见 subtitle_service 交付真值表），外置 .vtt 因此始终留在 payload 供后
+        # 处理校验。切勿再拼 `--keep-subs`——那是 yt-dlp 根本不存在的参数，会在 parse
+        # 阶段直接 exit_code=2 崩掉整条下载。
 
     # 字幕格式转换 (显式指定的情况下)
     convert_subs = ydl_opts.get("convertsubtitles")

@@ -276,9 +276,10 @@ def test_ranking_is_scored_with_the_context_that_actually_picked(qapp, events):
     _select(INFO_BILINGUAL, langs=["en"], intent={"max_height": 1080, "type": "video"})
 
     (decision,) = _decisions(events)
-    # original_first：主键 = 类型档(原音 3) ×1e8，次键 = 语言名次(命中唯一偏好 → 1) ×1e6，
-    # 再加 abr(128)。**没有** mp4 亲和的 +2000。
-    assert _score_of(decision["audio_ranked"], "140") == 3 * 100_000_000 + 1_000_000 + 128
+    # original_first：主键 = 类型档(原音 3) ×1e8，次键 = 语言名次 ×1e6，再加 abr(128)。
+    # 语言名次 = (命中唯一偏好 → 1) × _LANG_SCRIPT_SPAN(2) = 2（精确脚本、无同母语言软档罚分）；
+    # ×2 是给「同母语言软档」在每个精确档下方留出的 2n−1 位。**没有** mp4 亲和的 +2000。
+    assert _score_of(decision["audio_ranked"], "140") == 3 * 100_000_000 + 2 * 1_000_000 + 128
 
 
 def test_ranking_is_absent_when_there_are_no_audio_rows(qapp, events):
@@ -456,7 +457,8 @@ def test_global_preset_uses_the_same_field_names(qapp, events):
     assert decision["avail_langs"] == ["en", "ja"]
     # 全局侧的 `prefer_ext` 是真的 "mp4"（预设意图里带），所以 m4a 这次**该**拿到
     # +2000 亲和加分 —— 同一个字段名，两边各自记的是各自那份 ctx 算出来的分。
-    assert _score_of(decision["audio_ranked"], "140") == 3 * 100_000_000 + 1_000_000 + 2_000 + 128
+    # 语言名次同样是 (命中唯一偏好 → 1) × _LANG_SCRIPT_SPAN(2) = 2 × 1e6。
+    assert _score_of(decision["audio_ranked"], "140") == 3 * 100_000_000 + 2 * 1_000_000 + 2_000 + 128
 
 
 def test_global_preset_without_formats_reports_the_bare_selector(qapp, events):

@@ -87,6 +87,32 @@ def test_match_tier_orders_by_closeness() -> None:
     assert bcp47.match_tier("en", "eng") is None
 
 
+def test_macro_tier_is_opt_in() -> None:
+    """`TIER_MACRO`（同母语言、脚本/地区不同）默认不参与匹配，只有音轨路径显式开启。
+
+    这是 macro 不得泄漏进字幕的核心闸门：字幕的简/繁是肉眼可见的真实差异
+    （见 `test_matches_negative`），所以默认 `max_tier=TIER_ALIAS` 下 `zh-Hans`
+    绝不软命中 `zh-Hant`；只有显式传 `max_tier=TIER_MACRO` 才放行。
+    """
+    # 默认严格：简繁不互通
+    assert bcp47.match_tier("zh-Hans", "zh-Hant") is None
+    # 显式开启软档：同为中文（primary subtag 都是 zh）→ 命中，且档位正是 MACRO
+    assert bcp47.match_tier("zh-Hans", "zh-Hant", max_tier=bcp47.TIER_MACRO) == bcp47.TIER_MACRO
+    # 通用性：不写死中文，pt-BR ↔ pt-PT 同理
+    assert bcp47.match_tier("pt-BR", "pt-PT", max_tier=bcp47.TIER_MACRO) == bcp47.TIER_MACRO
+    # primary subtag 不等就不误命中：en(2字母) 与 eng(3字母 ISO-639-2) 是两个语种
+    assert bcp47.match_tier("en", "eng", max_tier=bcp47.TIER_MACRO) is None
+    # 精确/前缀/别名恒 ≤ TIER_ALIAS，开启 macro 不改变更细档位的判定
+    assert bcp47.match_tier("zh-Hans", "zh-CN", max_tier=bcp47.TIER_MACRO) == bcp47.TIER_ALIAS
+
+
+def test_matches_macro_when_opted_in() -> None:
+    """`matches()` 把 `max_tier` 透传给 `match_tier` —— 音轨路径开启后 `zh-Hans` 吃 `zh-Hant`，
+    字幕路径用默认值仍严格。"""
+    assert not bcp47.matches("zh-Hans", "zh-Hant")
+    assert bcp47.matches("zh-Hans", "zh-Hant", max_tier=bcp47.TIER_MACRO)
+
+
 # ── to_sub_langs_pattern ──────────────────────────────────────
 
 

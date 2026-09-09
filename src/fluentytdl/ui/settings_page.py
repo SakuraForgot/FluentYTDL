@@ -1364,7 +1364,7 @@ class SettingsPage(QWidget):
         )
         self.audioTrackGroup.addSettingCard(self.audioDescriptiveCard)
 
-        # 语言列表只在「指定语言优先」下有意义
+        # 语言列表：「指定语言优先」当主选、「原音优先」当回退链、「仅原音」用不到（灰掉）
         self._sync_audio_language_card_enabled()
 
         layout.addWidget(self.audioTrackGroup)
@@ -4582,7 +4582,7 @@ class SettingsPage(QWidget):
         config_manager.set("preferred_audio_languages", languages)
 
     def _on_audio_track_strategy_changed(self, index: int) -> None:
-        """音轨策略改变时。语言列表只在「指定语言优先」下有意义，跟着 enable/disable。"""
+        """音轨策略改变时。语言列表的可用性 / 副标题随策略切换（见 `_sync_audio_language_card_enabled`）。"""
         try:
             strategy = _AUDIO_STRATEGY_ORDER[index]
         except IndexError:
@@ -4591,14 +4591,38 @@ class SettingsPage(QWidget):
         self._sync_audio_language_card_enabled()
 
     def _sync_audio_language_card_enabled(self) -> None:
-        """语言列表卡片的可用性：仅「指定语言优先」下生效。
+        """语言列表卡片的可用性 + 副标题，随音轨策略切换。
+
+        这份列表在三种策略里担的角色不同，只有「仅原音」用不到它：
+          - 指定语言优先：主选 —— 按列表顺序挑语言；
+          - 原音优先：回退链 —— 视频没有原音标记时退到列表里的语言（CLI 的
+            `[原音过滤器] + 语言分支`、打分器的次键 `lang_rank` 都在读它），所以这里
+            必须让用户能编辑，否则等于不让他配兜底；
+          - 仅原音：无意义 —— 要原音、没有则取最佳，根本不看语言 → 灰掉。
 
         灰掉而不是隐藏 —— 用户切策略时能看到"这个东西还在，只是当前策略不看它"，
-        隐藏会让人以为设置丢了。
+        隐藏会让人以为设置丢了。副标题跟着改：免得「原音优先」下一个可编辑的
+        "首选音轨语言"让人误以为语言又变回主选了。
         """
         idx = self.audioStrategyCard.comboBox.currentIndex()
-        enabled = _AUDIO_STRATEGY_ORDER[idx] == _STRATEGY_LANGUAGE_FIRST if 0 <= idx < 3 else False
-        self.preferredAudioLanguageCard.setEnabled(enabled)
+        strategy = (
+            _AUDIO_STRATEGY_ORDER[idx]
+            if 0 <= idx < len(_AUDIO_STRATEGY_ORDER)
+            else _STRATEGY_ORIGINAL_FIRST
+        )
+        self.preferredAudioLanguageCard.setEnabled(strategy != _STRATEGY_ORIGINAL_ONLY)
+        if strategy == _STRATEGY_LANGUAGE_FIRST:
+            self.preferredAudioLanguageCard.setContent(
+                self.tr("当视频包含多个语言配音时，优先下载哪种语言的轨段 (可多选并排序)")
+            )
+        elif strategy == _STRATEGY_ORIGINAL_FIRST:
+            self.preferredAudioLanguageCard.setContent(
+                self.tr("视频没有原音标记时的回退语言顺序 (可多选并排序)")
+            )
+        else:  # 仅原音：卡片灰掉，文案顺带说明为什么不可编辑
+            self.preferredAudioLanguageCard.setContent(
+                self.tr("「仅原音」不看语言：有原音就用，没有则回退到最佳音轨")
+            )
 
     def _on_subtitle_enabled_changed(self, checked: bool) -> None:
         config_manager.set("subtitle_enabled", checked)

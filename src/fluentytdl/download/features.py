@@ -181,9 +181,9 @@ class SubtitleFeature(DownloadFeature):
             elif not fmt:
                 opts["merge_output_format"] = "mkv"
                 logger.info("[SubEmbed] 未指定 → MKV")
-            # `--embed-subs` 嵌入完就把外置字幕文件删了，于是 on_post_process 无从校验
-            # 字幕到底下没下到。先用 `--keep-subs` 留住，校验完再清理（见下）。
-            opts["keepsubtitles"] = True
+            # 外置字幕靠 `--write-sub` 保留即可（它与 `--embed-subs` 恒同发），yt-dlp 不会
+            # 在嵌入后删它，on_post_process 因此能校验到。切勿在此设 `keepsubtitles`——它会
+            # 被翻成 yt-dlp 根本不存在的 `--keep-subs`，在 parse 阶段崩掉整条下载。
         else:
             logger.warning("[SubEmbed] embedsubtitles=False")
 

@@ -118,11 +118,47 @@ def test_aliases_are_exact_not_prefix():
     """别名分支用 `=`：`[language^=zh]` 会把 `zh-Hant` 一起命中。
 
     别名表里有 `zh-hans → zh` 这条，用 `^=` 展开等于"简中偏好换来一条繁中音轨"。
+
+    末尾追加的同母语言软档写成 `[language^=zh-]`（见 `test_macro_group_follows_exact_and_alias`），
+    它**不含**裸子串 `[language^=zh]`，所以这条"别名不是前缀"的断言仍然成立。
     """
     plan = _plan(["zh-Hans"], STRATEGY_LANGUAGE_FIRST)
     assert "[language^=zh-Hans]" in plan.fmt
     assert "[language=zh-CN]" in plan.fmt
     assert "[language^=zh]" not in plan.fmt
+
+
+def test_macro_group_follows_exact_and_alias():
+    """同母语言软档追加在精确/别名之后：只在无精确脚本时兜底，不改变首选。
+
+    偏好 `zh-Hans` 末尾多一组 `[language^=zh-]`（表达 primary==zh），它排在
+    `[language^=zh-Hans]`（精确）与 `[language=zh-CN]`（别名）之后 —— 简中在场时仍先命中
+    简中，简/繁切换不受影响；带多门语言时，软档也早于回退链里的下一门语言。
+    """
+    plan = _plan(["zh-Hans"], STRATEGY_LANGUAGE_FIRST)
+    assert "[language^=zh-]" in plan.fmt
+    assert plan.fmt.index("[language^=zh-]") > plan.fmt.index("[language^=zh-Hans]")
+    assert plan.fmt.index("[language^=zh-]") > plan.fmt.index("[language=zh-CN]")
+    # 软档仍早于末尾的原始兜底
+    assert plan.fmt.index("[language^=zh-]") < plan.fmt.index("/" + FMT)
+
+    # 多门语言：简中的软档要早于下一门语言 en，否则回退链顺序被打乱
+    multi = _plan(["zh-Hans", "en"], STRATEGY_LANGUAGE_FIRST)
+    assert multi.fmt.index("[language^=zh-]") < multi.fmt.index("[language^=en]")
+
+
+def test_macro_is_precise_not_bare_prefix():
+    """软档写成 `[language=zh]` + `[language^=zh-]`，**不是**裸 `[language^=zh]`。
+
+    裸 `^=zh` 会连三字母近亲 Zhuang(`zha`) 一起命中，也与打分器的 `primary_subtag`
+    相等语义分叉。两条精确表达式恰好等价于"primary subtag == zh"，两条路径语义一致。
+    """
+    plan = _plan(["zh-Hans"], STRATEGY_LANGUAGE_FIRST)
+    assert "[language^=zh]" not in plan.fmt
+
+    # 裸偏好（无脚本/地区后缀）不追加软档：`^=ja` 已覆盖其 primary 空间，追加是冗余
+    bare = _plan(["ja"], STRATEGY_LANGUAGE_FIRST)
+    assert "[language^=ja-]" not in bare.fmt
 
 
 def test_preference_order_is_preserved_in_branch_order():

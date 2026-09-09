@@ -160,32 +160,38 @@ def _observed_ids(bench: _Bench) -> set[str]:
     return {art.id for art in bench.manifest.observed()}
 
 
-# ── --keep-subs：让后处理有东西可校验 ─────────────────────────
+# ── 外置字幕保留：靠 --write-sub，绝不能是幻影参数 --keep-subs ──────
 
 
-def test_embedding_requests_keep_subs(tmp_path: Path) -> None:
-    """`--embed-subs` 嵌入完就删外置字幕，后处理因此永远校验不到东西。
+def test_embedding_does_not_set_the_phantom_keepsubtitles_flag(tmp_path: Path) -> None:
+    """嵌入只需保证容器可嵌（WebM→MKV）；外置字幕由 `--write-sub` 负责保留。
 
-    这也让 `on_post_process` 里那段清理从此才是活代码。
+    绝不能再设 `keepsubtitles` —— 它会被翻成 yt-dlp 根本不存在的 `--keep-subs`，
+    在 parse 阶段直接 exit_code=2 崩掉整条下载（3.7.0 回归）。
     """
     bench = _Bench(tmp_path)
     opts = {"embedsubtitles": True, "writesubtitles": True}
     SubtitleFeature().on_download_start(bench.context(bench.video(), opts))
 
-    assert opts["keepsubtitles"] is True
     assert opts["merge_output_format"] == "mkv"  # 原有行为不变
+    assert "keepsubtitles" not in opts
 
 
-def test_keep_subs_reaches_the_command_line() -> None:
-    """置了位还得真的传给 yt-dlp —— 这个 emitter 以前整个不存在。"""
+def test_keep_subs_never_reaches_the_command_line() -> None:
+    """`--keep-subs` 不是 yt-dlp 的合法参数（实测 2026.08.30 无此项），发出去会在
+    parse 阶段被拒、exit_code=2。留住外置字幕靠 `--write-sub`；哪怕上游误设了
+    `keepsubtitles`，也绝不能再翻成这个幻影参数。
+    """
     args = ydl_opts_to_cli_args({"writesubtitles": True, "embedsubtitles": True})
     assert "--embed-subs" in args
+    assert "--write-sub" in args  # 这才是留住外置字幕的真实开关
     assert "--keep-subs" not in args
 
+    # 即便 opts 里带了历史遗留的 keepsubtitles，也不得再拼出 --keep-subs
     args = ydl_opts_to_cli_args(
         {"writesubtitles": True, "embedsubtitles": True, "keepsubtitles": True}
     )
-    assert "--keep-subs" in args
+    assert "--keep-subs" not in args
 
 
 def test_no_keep_subs_when_not_embedding(tmp_path: Path) -> None:

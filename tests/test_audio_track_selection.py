@@ -158,6 +158,46 @@ def test_bcp47_alias_matches_a_regional_key():
     assert _winner(rows, _ctx(STRATEGY_LANGUAGE_FIRST, ["zh-Hans"])) == "zh"
 
 
+# ── 同母语言软档（macro tier）：脚本/地区不同也算命中同一门语言 ──────
+
+
+def test_language_first_falls_back_to_same_language_other_script():
+    """用户的原始现场：中文原音被 YouTube 标成繁体（`zh-Hant`），偏好首项却是简体。
+
+    偏好 `[zh-Hans, en, ko]` 下，`zh-Hant` 原音要靠"同母语言软档"命中中文，
+    而不是让"中文"整体落空、沿回退链掉到英文。这是本次修复的核心断言。
+    """
+    rows = [
+        _audio("zh-orig", "zh-Hant", 128, language_preference=10),
+        _audio("en-dub", "en", 160, language_preference=-1),
+    ]
+    assert _winner(rows, _ctx(STRATEGY_LANGUAGE_FIRST, ["zh-Hans", "en", "ko"])) == "zh-orig"
+
+
+def test_exact_script_still_beats_the_other_script():
+    """软档不吞掉简/繁切换：两个脚本都在时，用户点名的那个脚本胜出。
+
+    这是用户的硬约束——"要保留繁中简中的切换"。即便另一脚本码率更高，
+    精确脚本（同偏好里的 2n）仍压过软档（2n−1）。
+    """
+    rows = [
+        _audio("hans", "zh-Hans", 128, language_preference=-1),
+        _audio("hant", "zh-Hant", 160, language_preference=-1),
+        _audio("en", "en", 160, language_preference=-1),
+    ]
+    assert _winner(rows, _ctx(STRATEGY_LANGUAGE_FIRST, ["zh-Hans", "en"])) == "hans"
+    assert _winner(rows, _ctx(STRATEGY_LANGUAGE_FIRST, ["zh-Hant", "en"])) == "hant"
+
+
+def test_macro_is_general_across_languages():
+    """软档是通用规则，不写死中文：偏好 `pt-BR` 没命中时软命中 `pt-PT`，仍胜过英文。"""
+    rows = [
+        _audio("pt", "pt-PT", 128, language_preference=-1),
+        _audio("en", "en", 160, language_preference=-1),
+    ]
+    assert _winner(rows, _ctx(STRATEGY_LANGUAGE_FIRST, ["pt-BR"])) == "pt"
+
+
 # ── 描述性音轨：默认排除但不硬过滤 ──────────────────────────
 
 

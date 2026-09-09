@@ -15,13 +15,15 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from .bcp47 import matches as _bcp47_match
+from .bcp47 import TIER_MACRO
+from .bcp47 import match_tier as _bcp47_tier
 from .container_compat import choose_lossless_merge_container
 
 # BCP-47 匹配与别名表已迁到 utils/bcp47.py（字幕路径也要用同一套语义）。
-# `_bcp47_match` 是供本模块音轨打分使用的薄委托。原先这里还再导出一个
-# `bcp47_expand_for_sort`，给 youtube_service.py 拼 format_sort 的 `lang:` 条目用 ——
-# 那条路已证伪（`-S lang:xx` 不生效），函数连同再导出一起删了。
+# `_bcp47_tier` 是供本模块音轨打分使用的薄委托：音轨传 `max_tier=TIER_MACRO` 启用
+# 「同母语言软档」（偏好 `zh-Hans` 软命中一条被标成 `zh-Hant` 的轨），字幕路径则用默认
+# 严格值 —— 简/繁互斥。原先这里还再导出一个 `bcp47_expand_for_sort`，给 youtube_service.py
+# 拼 format_sort 的 `lang:` 条目用 —— 那条路已证伪（`-S lang:xx` 不生效），函数连同再导出一起删了。
 
 
 # ── 打分上下文 ────────────────────────────────────────────────
@@ -180,8 +182,22 @@ STRATEGY_ORIGINAL_ONLY = "original_only"
 AUDIO_STRATEGIES = (STRATEGY_ORIGINAL_FIRST, STRATEGY_LANGUAGE_FIRST, STRATEGY_ORIGINAL_ONLY)
 
 
+# `_lang_pref_rank` 把两级信息折进一个整数：偏好名次（粗）× `_LANG_SCRIPT_SPAN`，
+# 再减去脚本软档罚分（细）。×2 给「精确脚本 vs 同母语言软档」留出 1 的档位差 ——
+# 高位偏好的软档 (2n−1) 仍压过低位偏好的精确 (2n−2)，同一偏好里精确 (2n) > 软档 (2n−1)。
+# ⚠️ 上限：`original_first` 下 lang_rank 是次键（× `_AUDIO_SECONDARY`），须 < 100 才不越进
+# 主键 —— 即 `2 * len(prefs) < 100` → 偏好数 < 50。实际只有个位数（旧实现隐含上限是 < 100）。
+_LANG_SCRIPT_SPAN = 2
+
+
 def _lang_pref_rank(lang: str, kind: str, prefs: list[str]) -> int:
-    """把语言偏好命中转成"越大越好"的名次：命中第 0 项 → `len(prefs)`，未命中 → 0。
+    """把语言偏好命中转成"越大越好"的名次，并把「精确脚本 vs 同母语言软档」折进同一个整数。
+
+    命中第 i 项偏好 → `(len(prefs) - i) * _LANG_SCRIPT_SPAN`；若只是软档
+    （`TIER_MACRO`，如偏好 `zh-Hans` 命中一条被标成 `zh-Hant` 的轨）再减 1；一项都不命中 → 0。
+    于是：
+      - 高位偏好的软档 `2n−1` 仍压过低位偏好的精确 `2n−2`（中文繁体轨胜过英文轨）；
+      - 同一偏好里精确 `2n` > 软档 `2n−1`（两个脚本都在时简体胜出，简/繁切换保留）。
 
     历史遗留：偏好列表里可能还留着 `orig` 这一项（老配置迁移前、或用户手改过
     config.json）。这里把它当"命中原音轨"处理，免得迁移没跑到的场合整份偏好错位。
@@ -191,10 +207,12 @@ def _lang_pref_rank(lang: str, kind: str, prefs: list[str]) -> int:
         p = pref.strip().lower()
         if p in {"orig", "original"}:
             if kind == KIND_ORIGINAL:
-                return len(prefs) - i
+                return (len(prefs) - i) * _LANG_SCRIPT_SPAN
             continue
-        if _bcp47_match(p, lang):
-            return len(prefs) - i
+        tier = _bcp47_tier(p, lang, max_tier=TIER_MACRO)
+        if tier is not None:
+            macro_penalty = 1 if tier == TIER_MACRO else 0
+            return (len(prefs) - i) * _LANG_SCRIPT_SPAN - macro_penalty
     return 0
 
 

@@ -45,6 +45,11 @@ BCP47_ALIASES: dict[str, set[str]] = {
 TIER_EXACT = 0
 TIER_PREFIX = 1
 TIER_ALIAS = 2
+# 最粗的软档：同一 primary subtag、脚本/地区不同（`zh-Hans`↔`zh-Hant`、`pt-BR`↔`pt-PT`）。
+# **默认不参与匹配** —— 只有音轨路径显式传 `max_tier=TIER_MACRO` 才启用（见 `match_tier`）。
+# 字幕路径一律用默认严格值：简/繁在字幕里是肉眼可见的真实差异，混判会把
+# 「简中原声→繁中翻译」这类轨标错，正是 `subtitle_manager._same_language()` 刻意防的那件事。
+TIER_MACRO = 3
 
 # 合法 BCP-47 tag 的字符集；命中它就不需要正则转义（`-` 只在字符类里有特殊含义）
 _SAFE_TAG_RE = re.compile(r"^[A-Za-z0-9-]+$")
@@ -154,26 +159,48 @@ def split_translated_key(key: str) -> tuple[str, str | None]:
     return stripped, None
 
 
-def match_tier(pref: str, lang: str) -> int | None:
-    """返回 lang 相对偏好 pref 的匹配紧密度，不匹配返回 None。
+def primary_subtag(tag: str) -> str:
+    """取 BCP-47 的 primary language subtag（第一段，小写）：`zh-Hant` → `zh`、`pt-BR` → `pt`。
+
+    音轨的"同母语言软档"（`TIER_MACRO`）与 CLI 过滤器构造
+    （`youtube/yt_dlp_cli.py::_language_filters`）共用这一份定义，避免两处各切一次
+    `split("-")` 而语义漂移。空串 / 无语种段时返回 `""`。
+    """
+    return normalize(tag).split("-", 1)[0]
+
+
+def match_tier(pref: str, lang: str, *, max_tier: int = TIER_ALIAS) -> int | None:
+    """返回 lang 相对偏好 pref 的匹配紧密度，不匹配（或超出 `max_tier`）返回 None。
 
     这是 `matches()` 的底层实现，单独暴露是为了在多个候选里排序 ——
     偏好 `en` 同时命中 `en`、`en-GB`、`en-en-GB` 时要能挑出最贴合的那条。
+
+    `max_tier` 是允许的最粗档位，**默认 `TIER_ALIAS`（即严格）**：exact/prefix/alias
+    三档恒 ≤ `TIER_ALIAS`，所以默认行为与从前逐字一致（`match_tier("en","eng")` 仍 `None`，
+    因 primary subtag `en` ≠ `eng`；`match_tier("zh-Hans","zh-Hant")` 仍 `None`）。
+    只有音轨路径显式传 `max_tier=TIER_MACRO` 才启用「同母语言软档」—— 此时 `zh-Hans`
+    能软命中 `zh-Hant`（primary subtag 都是 `zh`）。**字幕路径绝不传它**，理由见 `TIER_MACRO`。
     """
     if not pref or not lang:
         return None
     pref_lower = normalize(pref)
     lang_lower = normalize(lang)
+    tier: int | None = None
     if pref_lower == lang_lower:
-        return TIER_EXACT
-    if lang_lower.startswith(pref_lower + "-"):
-        return TIER_PREFIX
-    if lang_lower in BCP47_ALIASES.get(pref_lower, set()):
-        return TIER_ALIAS
-    return None
+        tier = TIER_EXACT
+    elif lang_lower.startswith(pref_lower + "-"):
+        tier = TIER_PREFIX
+    elif lang_lower in BCP47_ALIASES.get(pref_lower, set()):
+        tier = TIER_ALIAS
+    elif (primary := primary_subtag(pref_lower)) and primary == primary_subtag(lang_lower):
+        # 更细的档都没命中，但同属一门语言（脚本/地区不同）→ 最粗的软档
+        tier = TIER_MACRO
+    if tier is None or tier > max_tier:
+        return None
+    return tier
 
 
-def matches(pref: str, lang: str) -> bool:
+def matches(pref: str, lang: str, *, max_tier: int = TIER_ALIAS) -> bool:
     """判断语言标注 lang 是否符合用户偏好 pref。
 
     匹配规则（优先级从高到低）：
@@ -183,8 +210,11 @@ def matches(pref: str, lang: str) -> bool:
 
     **单向是刻意的**：`en` 命中 `en-GB`，但 `en-GB` 不命中 `en` —— 用户点名要英国英语时
     不该拿到一条不知道是哪个地区的 `en`。
+
+    `max_tier` 透传给 `match_tier`，**默认严格**（简/繁互斥）。音轨路径传
+    `TIER_MACRO` 启用同母语言软档；字幕路径用默认值，见 `match_tier` / `TIER_MACRO` 说明。
     """
-    return match_tier(pref, lang) is not None
+    return match_tier(pref, lang, max_tier=max_tier) is not None
 
 
 def preference_rank(prefs: list[str], lang: str) -> tuple[int, int]:

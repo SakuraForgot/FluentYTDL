@@ -492,10 +492,11 @@ def apply_subtitle_delivery(
     第四态是旧模型表达不出来的「这次不要字幕」，所以它必须**显式**关掉两个 write
     旗标：不写就等于沿用 yt-dlp 的默认，而上游可能已经设过 `writeautomaticsub=True`。
 
-    `keepsubtitles` 恒为 True 是刻意的 —— 先让所有字幕都留在 payload 里，「留哪些」
-    这个决策交给 Manifest 在后处理之后做（`SubtitleFeature._dispose_external_subtitles`
-    读的就是 `__fluentytdl_keep_subtitle`）。yt-dlp 自己在嵌入后删外置文件的话，
-    完整性校验和「嵌入其实失败了」的兜底都没有东西可看。
+    外置字幕先全部留在 payload 里（靠 `--write-sub`，它与 `--embed-subs` 恒同发，见下），
+    「最终留哪些」这个决策交给 Manifest 在后处理之后做
+    （`SubtitleFeature._dispose_external_subtitles` 读的就是 `__fluentytdl_keep_subtitle`）。
+    yt-dlp 只有在没有 `--write-sub` 时才会在嵌入后删外置文件，二者恒同发就不会删，
+    完整性校验和「嵌入其实失败了」的兜底才有东西可看。
 
     **`writeautomaticsub` 只在第四态被碰。** 交付路径上它归调用方 —— 自动字幕要不要
     下是轨道解析的结论（`type_preference` / `enable_auto_captions`），不是交付开关的
@@ -522,7 +523,6 @@ def apply_subtitle_delivery(
         # 注意：不在此处设置 merge_output_format —— MP4 和 MKV 都支持字幕嵌入
         # （FFmpeg 会把 SRT 转成 mov_text），只有 WebM 不支持。容器由格式选择器决定，
         # 仅在必要时（WebM/未指定）由 `SubtitleFeature` 覆盖。
-        opts["keepsubtitles"] = True
         opts["__fluentytdl_keep_subtitle"] = keep
         if config.output_format:
             opts["convertsubtitles"] = config.output_format

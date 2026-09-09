@@ -35,7 +35,7 @@ from fluentytdl.ui.components.common.badges import QualityCellWidget
 
 from ....core.config_manager import config_manager
 from ....observability import FlowTrace, emit_event
-from ....utils.bcp47 import matches as bcp47_matches
+from ....utils.bcp47 import TIER_MACRO, matches as bcp47_matches
 from ....utils.container_compat import choose_lossless_merge_container
 from ....utils.format_scorer import (
     STRATEGY_ORIGINAL_FIRST,
@@ -1581,7 +1581,9 @@ class VideoFormatSelectorWidget(QWidget):
         """选中的音轨是否命中了用户的语言偏好。
 
         复用 `utils/bcp47.matches`（打分引擎用的同一个匹配器），不重抄别名表 —— 抄一份就会
-        出现"日志说匹配上了、打分说没有"的自相矛盾。
+        出现"日志说匹配上了、打分说没有"的自相矛盾。**同样传 `max_tier=TIER_MACRO`**：
+        打分器 (`format_scorer._lang_pref_rank`) 会用同母语言软档命中一条被标成繁体的中文轨，
+        这里若还严格，就会在那条被有意选中的轨上打出"未命中偏好"，日志与实际选择打架。
 
         `orig` 已经从语言列表里拆成独立的 `audio_track_strategy`，所以新配置里不会再有
         这一项；这里仍留着它的分支，是因为用户手改过的 config.json 或迁移没跑到的场合
@@ -1594,7 +1596,7 @@ class VideoFormatSelectorWidget(QWidget):
             if p in {"orig", "original"}:
                 if is_orig:
                     return True
-            elif bcp47_matches(p, lang):
+            elif bcp47_matches(p, lang, max_tier=TIER_MACRO):
                 return True
         return False
 
