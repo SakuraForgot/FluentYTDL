@@ -47,6 +47,33 @@ class SubtitleTypePreference(str, Enum):
     ALL = "all"
 
 
+def _read_delivery(data: dict) -> tuple[bool, bool]:
+    """读出 `(embed, keep_external)`，兼容 `embed_type` / `embed_mode` 两个旧键。
+
+    旧模型是个 XOR，所以迁移只可能落在两态之一 —— 「都要」和「都不要」是新模型
+    才有的格。判据合起来就一句：**只有 `soft` 且没被 `never` 关掉才算嵌入**，其余
+    一切旧配置都是「另存独立文件」。
+
+    | `embed_type` | `embed_mode` | → `embed` | → `keep_external` |
+    |---|---|---|---|
+    | `"soft"`（默认）| `≠ "never"` | True | False |
+    | `"soft"` | `"never"` | False | True |
+    | `"external"` | 任意 | False | True |
+
+    `embed_mode == "never"` 在旧文档里的字面含义是「总是保存为单独文件」，所以它
+    迁到 `keep_external=True` 而不是第四态 —— 否则一次升级会让老用户的字幕凭空消失。
+
+    `"ask"`（每次下载时询问）**从未实现**：全项目所有消费点判的都是 `!= "never"`，
+    没有一处弹过窗。所以它随字段一起退休，不迁移成任何东西。
+    """
+    if "embed" in data or "keep_external" in data:
+        return bool(data.get("embed", True)), bool(data.get("keep_external", False))
+
+    legacy_soft = data.get("embed_type", "soft") == "soft"
+    legacy_embed = legacy_soft and data.get("embed_mode", "always") != "never"
+    return legacy_embed, not legacy_embed
+
+
 @dataclass
 class SubtitleConfig:
     """
@@ -69,13 +96,27 @@ class SubtitleConfig:
     enable_auto_captions: bool = True
     """是否启用自动生成字幕（当手动字幕不可用时）"""
 
-    # ========== 嵌入配置 ==========
+    # ========== 交付配置：两个独立开关 ==========
 
-    embed_type: Literal["soft", "external"] = "soft"
-    """
-    字幕嵌入类型：
-    - soft: 软嵌入到视频容器（可开关，支持多轨，推荐）
-    - external: 外置独立文件（.srt/.ass，兼容性最佳）
+    embed: bool = True
+    """是否把字幕嵌入视频容器（软字幕轨，可开关、支持多轨）。"""
+
+    keep_external: bool = False
+    """是否另存一份独立字幕文件（`.srt` / `.ass`，兼容性最佳）。
+
+    **和 `embed` 正交** —— 这是它取代 `embed_type` 的全部理由。旧的
+    `embed_type: Literal["soft", "external"]` 是一个 XOR，四种组合里只能表达两种：
+
+    | embed | keep_external | 旧模型 |
+    |---|---|---|
+    | True | False | `"soft"` |
+    | False | True | `"external"` |
+    | True | True | **表达不出来**（要嵌入也要外挂，播放器兼容性兜底的常见需求）|
+    | False | False | **表达不出来**（这次不要字幕）|
+
+    第三态表达不出来，是「嵌入成功后外置字幕被误删」的语义源头：`SubtitleFeature`
+    只能把「请求了嵌入」当成「不要外挂」，于是删除决策是从一个**猜测**出发的。
+    第四态表达不出来，则意味着「不要字幕」只能靠上层不调用来实现。
     """
 
     output_format: Literal["srt", "ass", "vtt", "lrc"] = "srt"
@@ -87,17 +128,9 @@ class SubtitleConfig:
     - lrc: 歌词格式（仅适用于音乐类内容）
 
     此字段作为所有路径的默认格式权威：
-    - 软嵌入时：yt-dlp 获取到字幕后按此格式转换再嵌入容器
-    - 外置文件时：下载的字幕文件按此格式转换后保存
+    - 嵌入时：yt-dlp 获取到字幕后按此格式转换再嵌入容器
+    - 另存独立文件时：下载的字幕文件按此格式转换后保存
     - 纯字幕下载时：作为默认格式（可被 SubtitleSelectorWidget 覆盖）
-    """
-
-    embed_mode: Literal["always", "never", "ask"] = "always"
-    """
-    字幕嵌入模式（仅 embed_type="soft" 时有效）：
-    - always: 总是嵌入到视频文件
-    - never: 总是保存为单独文件
-    - ask: 每次下载时询问
     """
 
     # ========== 质量与后处理 ==========
@@ -123,8 +156,8 @@ class SubtitleConfig:
             "type_preference": self.type_preference.value,
             "default_languages": self.default_languages,
             "enable_auto_captions": self.enable_auto_captions,
-            "embed_type": self.embed_type,
-            "embed_mode": self.embed_mode,
+            "embed": self.embed,
+            "keep_external": self.keep_external,
             "output_format": self.output_format,
             "quality_check": self.quality_check,
             "remove_ads": self.remove_ads,
@@ -134,14 +167,15 @@ class SubtitleConfig:
 
     @classmethod
     def from_dict(cls, data: dict) -> SubtitleConfig:
-        """从字典创建配置对象"""
+        """从字典创建配置对象（含 `embed_type` / `embed_mode` 旧键迁移）"""
+        embed, keep_external = _read_delivery(data)
         return cls(
             enabled=data.get("enabled", False),
             type_preference=SubtitleTypePreference(data.get("type_preference", "manual_and_asr")),
             default_languages=data.get("default_languages", ["zh-Hans", "en"]),
             enable_auto_captions=data.get("enable_auto_captions", True),
-            embed_type=data.get("embed_type", "soft"),
-            embed_mode=data.get("embed_mode", "always"),
+            embed=embed,
+            keep_external=keep_external,
             output_format=data.get("output_format", "srt"),
             quality_check=data.get("quality_check", True),
             remove_ads=data.get("remove_ads", False),

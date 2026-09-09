@@ -260,16 +260,25 @@ class AudioProcessor:
     def normalize_audio_file(
         self,
         input_path: str,
-        output_path: str | None = None,
+        output_path: str,
         target_lufs: float = -14,
         target_tp: float = -1,
         target_lra: float = 11,
     ) -> bool:
-        """对已存在的音频文件进行音量标准化
+        """对已存在的音频文件进行音量标准化 —— **纯 transformer：只读 input、只写 output**。
+
+        以前 `output_path` 可以省略，省略时走原地分支：先 `input_p.unlink()` 再
+        `output_p.rename(input_p)`，两行之间断电 = 用户的音频原件已经消失、新内容还挂在
+        `.normalized.mp3` 这种临时名上。后来收敛成一次 `Path.replace()` 关掉了数据丢失
+        窗口，但「谁来采纳这份新内容」仍然由本模块自己决定，越过了下载产物事务层。
+
+        现在落点由调用方给（`StagingArea.reserve_workfile()`，在沙盒 `.work/` 里），
+        采纳由 `replace_artifact_content()` 做。**失败时不清理 `output_path`** —— 那是
+        沙盒的东西，随 `rmtree` 消失；在这里删它反而违反「销毁与位移只经过 StagingArea」。
 
         Args:
-            input_path: 输入文件路径
-            output_path: 输出文件路径（如果为 None，则覆盖原文件）
+            input_path: 输入文件路径，全程只读
+            output_path: 标准化之后的落点
             target_lufs: 目标响度 (dB LUFS)，默认 -14
             target_tp: 目标真峰值 (dB TP)，默认 -1
             target_lra: 目标响度范围 (LU)，默认 11
@@ -287,11 +296,7 @@ class AudioProcessor:
             logger.error(f"输入文件不存在: {input_path}")
             return False
 
-        # 临时输出文件
-        if output_path:
-            output_p = Path(output_path)
-        else:
-            output_p = input_p.with_suffix(f".normalized{input_p.suffix}")
+        output_p = Path(output_path)
 
         try:
             # 构建 FFmpeg 命令
@@ -328,28 +333,27 @@ class AudioProcessor:
                 logger.error(f"音量标准化失败: {result.stderr}")
                 return False
 
-            # 如果没有指定输出路径，替换原文件
-            if not output_path:
-                try:
-                    input_p.unlink()
-                    output_p.rename(input_p)
-                except Exception as e:
-                    logger.error(f"替换原文件失败: {e}")
-                    return False
+            if not output_p.exists():
+                logger.error(f"音量标准化未产出文件: {output_p}")
+                return False
 
-            logger.info(f"音量标准化完成: {input_path}")
+            logger.info(f"音量标准化完成: {input_path} → {output_p}")
             return True
 
         except Exception as e:
             logger.exception(f"音量标准化异常: {e}")
             return False
 
-    def embed_cover_art(self, audio_path: str, cover_path: str) -> bool:
-        """为音频文件嵌入封面
+    def embed_cover_art(self, audio_path: str, cover_path: str, output_path: str) -> bool:
+        """为音频文件嵌入封面 —— **纯 transformer：只读 input、只写 output**。
+
+        与 `normalize_audio_file` 同构：落点由调用方给（沙盒 `.work/`），采纳由
+        `StagingArea.replace_artifact_content()` 做，失败不清理 `output_path`。
 
         Args:
-            audio_path: 音频文件路径
+            audio_path: 音频文件路径，全程只读
             cover_path: 封面图片路径
+            output_path: 嵌好之后的落点
 
         Returns:
             是否成功
@@ -366,7 +370,7 @@ class AudioProcessor:
             logger.error("音频或封面文件不存在")
             return False
 
-        output_p = audio_p.with_suffix(f".cover{audio_p.suffix}")
+        output_p = Path(output_path)
 
         try:
             ext = audio_p.suffix.lower()
@@ -444,15 +448,11 @@ class AudioProcessor:
                 logger.error(f"封面嵌入失败: {result.stderr}")
                 return False
 
-            # 替换原文件
-            try:
-                audio_p.unlink()
-                output_p.rename(audio_p)
-            except Exception as e:
-                logger.error(f"替换原文件失败: {e}")
+            if not output_p.exists():
+                logger.error(f"封面嵌入未产出文件: {output_p}")
                 return False
 
-            logger.info(f"封面嵌入完成: {audio_path}")
+            logger.info(f"封面嵌入完成: {audio_path} → {output_p}")
             return True
 
         except Exception as e:

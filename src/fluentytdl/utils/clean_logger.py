@@ -242,7 +242,10 @@ class CleanLogger:
             processed_msg = "🎵 正在提取独立音频流..."
         elif "Writing video subtitles to" in msg:
             processed_msg = "📝 正在下载字幕..."
-        elif "[FFmpegSubtitlesConvertor]" in msg:
+        # 人类日志行的前缀也是短名（实测：`[Merger]` / `[ExtractAudio]` / `[Metadata]` /
+        # `[ThumbnailsConvertor]` / `[MoveFiles]`），所以 `[FFmpegSubtitlesConvertor]`
+        # 这个写法从来没匹配过 —— 判短名，长名留作版本兜底。
+        elif "[SubtitlesConvertor]" in msg or "[FFmpegSubtitlesConvertor]" in msg:
             processed_msg = "📝 正在转换字幕格式..."
         elif "Embedding subtitles in" in msg:
             processed_msg = "📝 正在内嵌字幕轨道..."
@@ -368,7 +371,11 @@ class CleanLogger:
                     msg = "📦 正在无损合并音视频 (FFmpeg)..."
                 elif pp_name == "EmbedSubtitle":
                     msg = "📝 正在内嵌字幕轨道..."
-                elif pp_name in ("MetadataParser", "FFmpegMetadata"):
+                # `FFmpegMetadataPP` 报的是 `Metadata`（剥掉 `FFmpeg` 前缀和 `PP` 后缀，
+                # 实测见 `output_parser.EMBED_EVIDENCE_BY_PP` 上方）—— 长键从未命中，
+                # 于是元数据一直掉进下面那条泛用分支。`MetadataParser` 是另一个后处理器，
+                # 它本来就是短名。
+                elif pp_name in ("Metadata", "MetadataParser", "FFmpegMetadata"):
                     msg = "🏷️ 正在写入视频元数据 (标题/作者)..."
                 elif pp_name == "ThumbnailsConvertor":
                     msg = "🖼️ 正在转换视频封面图..."

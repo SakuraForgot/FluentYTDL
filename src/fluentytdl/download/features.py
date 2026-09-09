@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-import re
 import subprocess
 from typing import TYPE_CHECKING, Any
 
@@ -14,6 +13,7 @@ from ..utils.logger import logger
 from ..utils.spatialmedia import metadata_utils
 
 if TYPE_CHECKING:
+    from .staging import Manifest, StagedArtifact, StagingArea
     from .workers import DownloadWorker
 
 
@@ -33,31 +33,80 @@ class DownloadContext:
     def output_path(self, value: str | None):
         self.worker.output_path = value
 
-    @property
-    def dest_paths(self) -> set[str]:
-        return self.worker.dest_paths
+    # ── 事务层入口 ──
+    #
+    # 两个都要，因为职责本来就分在两处：**动文件**的原子方法在 `StagingArea` 上
+    # （`reserve_workfile` / `register_generated` / `rename_artifact` /
+    # `supersede_artifact` / `replace_artifact_content`），**只动状态**的在 `Manifest` 上
+    # （`kept` / `drop` / `primary_media` / `mark_degraded` / `promote` / `embed_evidence`）。
+    #
+    # 两个都容许为 None：单测可以不带事务构造 context，那时 Feature 退化成 no-op
+    # 而不是 `AttributeError`。**但绝不回退到"自己去猜"** —— 没有清单就等于没有
+    # 本任务产物的可靠答案，猜出来的答案正是这轮重构要消灭的东西。
 
     @property
-    def sandbox_dir(self) -> str | None:
-        return getattr(self.worker, "sandbox_dir", None) or None
+    def staging(self) -> StagingArea | None:
+        return getattr(self.worker, "staging", None)
 
-    def is_in_sandbox(self, path: str | None) -> bool:
-        """`path` 是否落在本任务的沙盒目录里。
+    @property
+    def manifest(self) -> Manifest | None:
+        staging = self.staging
+        return staging.manifest if staging is not None else None
 
-        沙盒每个任务独享（`workers.py` 下载前建、成功后搬出），所以"整目录扫描"这类
-        兜底手段只在沙盒内安全 —— 在共享的下载目录里扫，会把别的视频的产物也算进来。
-        纯字幕 / 封面直下这类跳过沙盒的任务在这里一律得到 False。
+    # 这里以前有 `dest_paths` 属性。它是 executor 记下的**混装**集合（视频、分片、字幕、
+    # 封面全在里面），Feature 侧每个消费点都得自己再过一遍后缀/正则来重新猜角色 ——
+    # 而那正是「同一批文件的角色被三处独立地重新猜一遍」的其中一处。
+    # `worker.dest_paths` 本身还活着（`core/controller.py` 与 UI 侧仍在读，Step 8 退休），
+    # 但 Feature 链从此只认清单。
+
+    # 这里以前有 `sandbox_dir` 属性（`getattr(self.worker, "sandbox_dir", None)`）。
+    # 《下载产物事务层》Step 4 之后 Worker 上不再有那个属性 —— 沙盒是
+    # `StagingArea` 持有的事务，路径分成 payload / .parts / .fytdl 三个分区，
+    # "沙盒目录"这个单一字符串已经表达不了任何有用的东西，而它也早就没有消费者了。
+
+    def subtitle_artifacts(self) -> list[StagedArtifact]:
+        """本任务产出的字幕 artifact。
+
+        **这是"哪些文件是本任务的字幕"这个问题的唯一出口。** 角色在进入清单时已经
+        判定过一次（`add_reported` 由 yt-dlp 的 `Writing video subtitles to:` 声明，
+        `add_reconciled` 是 `reconcile()` 那一次集中兜底），这里只读不猜。
+
+        返回 artifact 而不是路径，因为下游要的是 `id` —— 删除表达为
+        `manifest.drop(id=...)`，不是 `os.remove(path)`。
         """
-        sandbox = self.sandbox_dir
-        if not sandbox or not path:
-            return False
-        try:
-            root = os.path.normcase(os.path.abspath(sandbox))
-            target = os.path.normcase(os.path.abspath(path))
-            return os.path.commonpath([root, target]) == root
-        except (OSError, ValueError):
-            # ValueError: 跨盘符时 commonpath 直接抛
-            return False
+        manifest = self.manifest
+        if manifest is None:
+            return []
+        return manifest.kept("subtitle")
+
+    def subtitle_candidates(self) -> list[str]:
+        """字幕路径 —— 只给 `SubtitleProcessor` 这个纯校验器用。"""
+        return [art.path for art in self.subtitle_artifacts()]
+
+    def primary_media(self) -> StagedArtifact | None:
+        """主媒体 artifact。
+
+        这里以前是 `find_final_merged_file()`：先按 `\\.f\\d+\\.` 正则判断当前
+        `output_path` 是不是分片、再拼后缀探测合并结果、再翻 `dest_paths` 找第一个
+        视频后缀、最后 `os.listdir` 整个目录按后缀猜一个。四层兜底每一层都在重新
+        回答「哪个文件是主媒体」，而 `[Merger] Merging formats into` 那一行明明已经
+        把答案写在 stdout 里了 —— 它只是从来没进过 `dest_paths`（Step 2 修好了）。
+
+        Unicode 兜底（Windows stdout 丢 U+30FB 之类的字符）也不再需要在这里：
+        `reconcile()` 扫 payload 时会把 yt-dlp 没报告成功的文件补录进清单，
+        `primary` 由那一次集中判定给出。
+        """
+        manifest = self.manifest
+        return manifest.primary_media() if manifest is not None else None
+
+    # 这里以前有 `is_in_sandbox()`：它唯一的用途是给
+    # `SubtitleProcessor.process(allow_dir_scan=...)` 开关"整目录扫描只在沙盒内安全"
+    # 这条兜底。四级定位退休之后（《下载产物事务层》Step 3），字幕路径由清单直接交来，
+    # `processing/` 侧不再有任何扫描动作，这个判断也就没有消费者了。
+    #
+    # 包含性判断本身没有消失，只是搬到了唯一该做它的地方：`staging.assert_inside()`
+    # —— 那里用 `os.path.realpath` 先规范化（junction / symlink / 8.3），逃逸是硬失败
+    # 而不是降级成 False。
 
     def emit_status(self, msg: str):
         if hasattr(self.worker, "_clean_logger"):
@@ -74,99 +123,12 @@ class DownloadContext:
         self.worker.thumbnail_embed_warning.emit(msg)
         self.emit_status(f"⚠️ {msg}")
 
-    def find_final_merged_file(self) -> str | None:
-        """查找最终合并的输出文件"""
-        output_path = self.output_path
-        if not output_path:
-            return None
-
-        # 列出父目录中的实际文件（用于兜底匹配）
-        parent_dir = os.path.dirname(output_path)
-        actual_files: list[str] | None = None
-        if os.path.isdir(parent_dir):
-            try:
-                actual_files = os.listdir(parent_dir)
-            except OSError:
-                pass
-
-        # 检查当前 output_path 是否是分片文件
-        match = re.search(r"^(.+)\.[fF]\d+\.(\w+)$", output_path)
-        if match:
-            base_name = match.group(1)
-            possible_extensions = [".mp4", ".mkv", ".webm", ".avi", ".mov"]
-            for ext in possible_extensions:
-                merged_path = base_name + ext
-                if os.path.exists(merged_path):
-                    return merged_path
-        elif os.path.exists(output_path):
-            return output_path
-
-        # 如果直接匹配失败，检查 dest_paths (例如 yt-dlp 最终下载了不同扩展名的视频)
-        video_exts = {".mp4", ".mkv", ".webm", ".avi", ".mov", ".flv"}
-        fallback_path = None
-        for dest_path in self.dest_paths:
-            # 排除纯分片文件
-            if not re.search(r"\.[fF]\d+\.\w+$", dest_path):
-                if os.path.exists(dest_path):
-                    ext = os.path.splitext(dest_path)[1].lower()
-                    if ext in video_exts:
-                        return dest_path
-                    elif fallback_path is None and ext not in {
-                        ".jpg",
-                        ".jpeg",
-                        ".png",
-                        ".webp",
-                        ".srt",
-                        ".vtt",
-                        ".ass",
-                        ".lrc",
-                        ".json",
-                    }:
-                        fallback_path = dest_path
-
-        if fallback_path:
-            return fallback_path
-
-        # ── 兜底：目录扫描 ──
-        # yt-dlp 在 Windows 上的 stdout 可能丢失特殊 Unicode 字符（如 U+30FB 片假名中点），
-        # 导致解析出的路径与磁盘实际文件名不匹配。
-        # 沙盒目录是隔离的（每个任务独立），因此按扩展名扫描是安全的。
-        if actual_files:
-            # 优先使用 output_path 的扩展名
-            expected_ext = os.path.splitext(output_path)[1].lower()
-            target_exts = [expected_ext] if expected_ext in video_exts else list(video_exts)
-
-            for ext in target_exts:
-                for f in actual_files:
-                    if f.lower().endswith(ext):
-                        resolved = os.path.join(parent_dir, f)
-                        logger.warning(
-                            "路径不匹配兜底生效: yt-dlp 报告的文件名与磁盘不一致，"
-                            "已通过目录扫描定位到: {}",
-                            resolved,
-                        )
-                        return resolved
-
-        return None
-
-    def find_thumbnail_file(self, video_path: str) -> str | None:
-        """查找视频文件对应的封面文件"""
-        base_path = os.path.splitext(video_path)[0]
-        exts = [".jpg", ".jpeg", ".webp", ".png"]
-
-        for ext in exts:
-            candidate = base_path + ext
-            if os.path.exists(candidate):
-                return candidate
-
-        match = re.match(r"^(.+)\.[fF]\d+$", base_path)
-        if match:
-            clean_base = match.group(1)
-            for ext in exts:
-                candidate = clean_base + ext
-                if os.path.exists(candidate):
-                    return candidate
-        return None
+    # 这里以前有 `find_final_merged_file()` 与 `find_thumbnail_file()`。
+    #
+    # 前者见 `primary_media()` 的说明。后者是「拿视频 stem 拼 `.jpg/.jpeg/.webp/.png`
+    # 探测」——**同名不等于同一个任务的产物**：共享下载目录里别人的封面长得一模一样，
+    # 而 `ThumbnailFeature` 拿到它之后是要嵌入并（旧代码里）删掉的。配对现在由
+    # `ThumbnailFeature._locate_files()` 在清单内做，两边都来自同一份清单。
 
 
 class DownloadFeature:
@@ -233,31 +195,34 @@ class SubtitleFeature(DownloadFeature):
 
         from ..processing import subtitle_processor
 
-        # 纠正 output_path：分片文件（如 .f136.mp4）在合并后已被删除，需要找到最终的合并文件
-        final_output = context.find_final_merged_file()
-        if final_output:
-            context.output_path = final_output
+        # 纠正 output_path：分片文件（如 .f136.mp4）在合并后已被删除，主媒体是哪个
+        # 由清单回答（`[Merger] Merging formats into` 那一行的 `role="media"`）。
+        primary = context.primary_media()
+        if primary is not None:
+            context.output_path = primary.path
+
+        # 只取一次：下面的取舍要按 `id` 表达，路径只是给纯校验器看的。
+        artifacts = context.subtitle_artifacts()
 
         try:
             result = subtitle_processor.process(
                 output_path=context.output_path,
+                # 本任务产出的字幕由**报告者声明**：executor 解析
+                # `Writing video subtitles to:` 时就记下了精确路径和角色，
+                # `reconcile()` 只对没报告到的做一次集中兜底。
+                # processor 侧只做后缀过滤 + 存在性校验，不再有"找"这个动作。
+                subtitle_paths=[art.path for art in artifacts],
                 opts=opts,
                 status_callback=context.emit_status,
-                # executor 解析 `Writing video subtitles to:` 时已经记下了精确路径，
-                # 这是最可靠的一级定位，以前整个丢掉了
-                dest_paths=context.dest_paths,
-                # 整目录兜底扫描只在任务沙盒内安全，见 _find_subtitle_files 的说明
-                allow_dir_scan=context.is_in_sandbox(context.output_path),
             )
 
             if not result.success:
                 # 字幕是 best-effort：任务照样算成功，但用户必须知道字幕去哪了。
                 # 以前这里只有一行 logger.warning，UI 上什么都看不到。
                 logger.warning(
-                    "字幕后处理失败: {}（reason={} located_by={}）",
+                    "字幕后处理失败: {}（reason={}）",
                     result.message,
                     result.reason,
-                    result.located_by,
                 )
                 if result.reason == "not_found":
                     context.emit_warning(self._explain_missing(opts))
@@ -266,31 +231,64 @@ class SubtitleFeature(DownloadFeature):
                 # `video_missing` 不再提示：视频本身没落盘时早有各自的失败提示，
                 # 这里再冒一条字幕警告只会盖住真正的原因
 
-            # 内嵌模式下的外置文件是 `--keep-subs` 特意留到现在的，校验完就没用了；
-            # 坏文件同样是残骸，一起清掉。
-            if opts.get("embedsubtitles"):
-                self._cleanup_external_subtitles(
-                    list(result.processed_files) + [p for p, _ in result.invalid_files]
-                )
+            self._dispose_external_subtitles(context, artifacts, result)
         except Exception as e:
             logger.exception("字幕后处理异常: {}", e)
 
     @staticmethod
-    def _cleanup_external_subtitles(paths: list[str]) -> None:
-        """清理内嵌后残留的外置字幕文件。
+    def _dispose_external_subtitles(
+        context: DownloadContext,
+        artifacts: list[StagedArtifact],
+        result: Any,
+    ) -> None:
+        """决定每条外置字幕的去向 —— **只改清单，不动文件**。
 
-        `on_download_start` 置的 `keepsubtitles` 让这些文件活到后处理，校验完即可删除。
+        物理删除只发生在沙盒 `rmtree`（硬约束 1），所以这里表达的是"不交付"而不是
+        "删掉"。以前这个函数叫 `_cleanup_external_subtitles`，对
+        `processed_files + invalid_files` 一律 `os.remove` —— 三个问题一次犯全：
+
+        1. **校验失败的也删。** 坏文件恰恰是唯一能说明"字幕为什么不对"的证据；
+        2. **不看嵌入是否真的成功。** 判据只是 `opts["embedsubtitles"]`（*请求过*
+           嵌入），于是 ffmpeg 嵌入失败时外置文件也被删干净 —— 用户既没有字幕轨、
+           也没有 `.srt`，两头空。现在的判据是
+           `"subtitle" in manifest.embed_evidence`，那是
+           `postprocessor_status == "finished"` 的结构化证据（Step 2 接线）；
+        3. **表达不出"嵌入且保留外挂"。** 老模型里 `embed_type` 是 soft XOR
+           external，四态只有两个能说。
+
+        `keep` 缺省取 `True`（硬约束 2：标志缺失 ⇒ 保留）。
+        `apply_subtitle_delivery()` 已处处写入该键，缺失只出现在遗留路径或测试中。
         """
-        cleaned = 0
-        for sub_file in paths:
-            try:
-                if os.path.exists(sub_file):
-                    os.remove(sub_file)
-                    cleaned += 1
-            except OSError as e:
-                logger.warning("清理外置字幕残留失败: {} - {}", sub_file, e)
-        if cleaned:
-            logger.info("已清理 {} 个内嵌后的外置字幕文件", cleaned)
+        manifest = context.manifest
+        if manifest is None or not artifacts:
+            return
+
+        opts = context.opts
+        invalid = {os.path.normcase(p) for p, _ in getattr(result, "invalid_files", ())}
+        embed_requested = bool(opts.get("embedsubtitles"))
+        embed_done = "subtitle" in manifest.embed_evidence
+        keep_external = bool(opts.get("__fluentytdl_keep_subtitle", True))
+
+        dropped = 0
+        for art in artifacts:
+            if os.path.normcase(art.path) in invalid:
+                # 留着：它是"字幕为什么不对"的唯一物证，随沙盒消失而不是被提前删掉
+                manifest.mark_degraded(art.id, "integrity_failed")
+                continue
+            if not embed_requested:
+                continue
+            if not embed_done:
+                manifest.mark_degraded(art.id, "embed_failed_fallback")
+                continue
+            if keep_external:
+                continue
+            manifest.drop(id=art.id, reason="embedded_successfully")
+            dropped += 1
+
+        if embed_requested and not embed_done:
+            context.emit_warning("字幕嵌入未完成，已保留外置字幕文件")
+        if dropped:
+            logger.info("{} 条字幕已嵌入容器，不再单独交付", dropped)
 
     @staticmethod
     def _explain_missing(opts: dict[str, Any]) -> str:
@@ -320,117 +318,149 @@ class SubtitleFeature(DownloadFeature):
 
 class ThumbnailFeature(DownloadFeature):
     def on_post_process(self, context: DownloadContext) -> None:
-        if not context.opts.get("embedthumbnail"):
-            self._cleanup_thumbnail_files(context)
-            return
-        if not context.opts.get("writethumbnail"):
-            return
+        primary = context.primary_media()
+        if primary is not None:
+            context.output_path = primary.path
 
-        final_output = context.find_final_merged_file()
-        if final_output:
-            context.output_path = final_output
+        if context.opts.get("embedthumbnail") and context.opts.get("writethumbnail"):
+            self._embed(context)
 
-        files = self._locate_files(context)
-        if not files:
+        # 交付取舍在最后统一做一次 —— 无论嵌入跑没跑、成没成
+        self._dispose_thumbnails(context)
+
+    def _embed(self, context: DownloadContext) -> None:
+        pairs = self._locate_files(context)
+        if not pairs:
             return
-
         if not thumbnail_embedder.is_available():
             context.emit_thumbnail_warning("⚠️ 封面嵌入工具不可用")
             return
+        for video, thumb in pairs:
+            self._process_single_file(context, video, thumb)
 
-        for v, t in files:
-            self._process_single_file(context, v, t)
-        self._cleanup_thumbnail_files(context)
+    def _process_single_file(
+        self,
+        context: DownloadContext,
+        video: StagedArtifact,
+        thumb: StagedArtifact,
+    ) -> None:
+        """把封面嵌进 `video` —— 嵌入器只产出候选，采纳由事务层做。
 
-    def _process_single_file(self, context: DownloadContext, video_path: str, thumb_path: str):
-        ext = os.path.splitext(video_path)[1].lower().lstrip(".")
+        以前是 `embed_thumbnail(video_path, thumb_path)` 直接改写主媒体：
+        `thumbnail_embedder` 自己 `mkstemp(dir=video_path.parent)`（临时文件落在
+        payload 里）、自己 `os.replace(temp, video)`、失败自己 `os.remove(temp)`。
+        三件事都越过了事务层 —— 崩在中途就留下一个 `tmpXXXX.mp4`，而它一旦被下一个
+        run 的 `reconcile()` 看到就成了清单里一个假的 media。
+
+        现在：落点由 `reserve_workfile()` 给（在 `.work/` 里，`reconcile()` 永远看不到），
+        采纳走 `replace_artifact_content()`（`id` 与计划中的 `final_path` 都不变，
+        旧内容移进 `.internal/` 而不是被删）。原地改写型的后端（AtomicParsley
+        `--overWrite` / mutagen `audio.save()`）拿到的 output 是先播种好的副本，
+        源 artifact 全程只读。
+        """
+        staging = context.staging
+        manifest = context.manifest
+        if staging is None or manifest is None:
+            return
+
+        ext = os.path.splitext(video.path)[1].lower().lstrip(".")
         if not can_embed_thumbnail(ext):
             w = get_unsupported_formats_warning(ext)
             if w:
                 context.emit_thumbnail_warning(w)
             return
-        context.emit_status(f"[封面嵌入] 正在处理: {os.path.basename(video_path)}")
+
+        context.emit_status(f"[封面嵌入] 正在处理: {os.path.basename(video.path)}")
+        tool = thumbnail_embedder.get_recommended_tool(ext)
+        work = staging.reserve_workfile(
+            os.path.splitext(os.path.basename(video.path))[0],
+            os.path.splitext(video.path)[1],
+            seed_from=video.id if tool.mutates_in_place else None,
+        )
         res = thumbnail_embedder.embed_thumbnail(
-            video_path,
-            thumb_path,
+            video.path,
+            thumb.path,
+            work,
             progress_callback=lambda msg: context.emit_status(f"[封面嵌入] {msg}"),
         )
         if res.success:
+            staging.replace_artifact_content(video.id, work, producer="ThumbnailEmbedder")
+            manifest.embed_evidence.add("thumbnail")
             context.emit_status("[封面嵌入] ✓ 成功")
         elif res.skipped:
             context.emit_thumbnail_warning(res.message)
         else:
             context.emit_thumbnail_warning(f"封面嵌入失败: {res.message}")
+        # 失败时 workfile 从未登记，随沙盒 `rmtree` 消失；主媒体原样不动
 
-    def _locate_files(self, context: DownloadContext) -> list[tuple[str, str]]:
-        files = []
-        paths = set()
-        if context.output_path:
-            paths.add(context.output_path)
-        paths.update(context.dest_paths)
+    def _locate_files(
+        self, context: DownloadContext
+    ) -> list[tuple[StagedArtifact, StagedArtifact]]:
+        """把媒体和封面按 stem 配对 —— **只在清单内**。
 
-        for p in paths:
-            if not os.path.exists(p):
-                continue
-            if re.search(r"\.[fF]\d+\.\w+$", p):
-                continue
-            t = context.find_thumbnail_file(p)
-            if t:
-                files.append((p, t))
+        这里以前有两层扫描：先拿 `output_path ∪ dest_paths` 的每个路径去
+        `find_thumbnail_file()` 拼后缀探测，配不上再 `os.listdir` 整个目录按后缀
+        分成两堆重新配一遍，配上还顺手把 `context.output_path` 改成扫出来的那个。
+        那次 `listdir` 兜底存在的理由是 Windows stdout 会丢 U+30FB 之类的字符导致
+        路径对不上 —— 而这件事现在由 `reconcile()` 一次性解决（它扫 payload 补录
+        没报告到的文件），所以扫描没有理由再留在这里。改 `output_path` 也一并去掉：
+        主媒体是谁由清单的 `primary` 回答，不是由配对的副产物指定。
+        """
+        manifest = context.manifest
+        if manifest is None:
+            return []
 
-        if not files:  # Fallback scan
-            output_dir = None
-            if context.output_path:
-                output_dir = os.path.dirname(context.output_path)
-            elif context.dest_paths:
-                output_dir = os.path.dirname(next(iter(context.dest_paths)))
+        media = manifest.kept("media")
+        thumbs = manifest.kept("thumbnail")
+        if not media or not thumbs:
+            return []
 
-            if output_dir and os.path.exists(output_dir):
-                v_files, t_files = [], []
-                v_exts = {".mp4", ".mkv", ".webm", ".avi", ".mov", ".m4a", ".mp3", ".flac", ".opus"}
-                t_exts = {".jpg", ".jpeg", ".png", ".webp"}
-                for f in os.listdir(output_dir):
-                    fp = os.path.join(output_dir, f)
-                    if not os.path.isfile(fp):
-                        continue
-                    if re.search(r"\.[fF]\d+\.\w+$", f):
-                        continue
-                    ext = os.path.splitext(f)[1].lower()
-                    if ext in v_exts:
-                        v_files.append(fp)
-                    elif ext in t_exts:
-                        t_files.append(fp)
+        by_stem: dict[str, StagedArtifact] = {}
+        for t in thumbs:
+            by_stem.setdefault(os.path.splitext(os.path.basename(t.path))[0], t)
 
-                for v in v_files:
-                    vb = os.path.splitext(os.path.basename(v))[0]
-                    for t in t_files:
-                        if os.path.splitext(os.path.basename(t))[0] == vb:
-                            files.append((v, t))
-                            context.output_path = v
-                            break
-        return files
+        pairs: list[tuple[StagedArtifact, StagedArtifact]] = []
+        for v in media:
+            stem = os.path.splitext(os.path.basename(v.path))[0]
+            t = by_stem.get(stem)
+            if t is None and len(media) == 1 and len(thumbs) == 1:
+                # yt-dlp 会把封面写成 `<stem>.jpg`，但 VR 转码等环节可能已经换过
+                # 媒体的名字。一媒体一封面时配对是无歧义的，不必因为 stem 不等就放弃。
+                t = thumbs[0]
+            if t is not None:
+                pairs.append((v, t))
+        return pairs
 
-    def _cleanup_thumbnail_files(self, context: DownloadContext) -> None:
-        if context.opts.get("__fluentytdl_keep_thumbnail"):
+    @staticmethod
+    def _dispose_thumbnails(context: DownloadContext) -> None:
+        """决定封面是否交付 —— **只改清单**。
+
+        这里以前是 `_cleanup_thumbnail_files()`：拿
+        `output_path ∪ dest_paths` 的每个 stem 去拼 `.webp/.jpg/.jpeg/.png` 然后
+        `os.remove`，**嵌入分支和不嵌入分支都跑**，挡在用户独立封面前面的只有
+        `opts.get("__fluentytdl_keep_thumbnail")` 一个真值判断。那个键有 6 个设置点，
+        其中一个藏在 `elif hasattr(self, "subtitle_check")` 里 —— 任何没有该控件的
+        路径都不会设它，于是**键缺失 ⇒ 当作 False ⇒ 静默删掉用户要的封面**。
+        更糟的是它按 stem 拼路径，删的可能压根不是本任务的文件。
+
+        现在缺省是**保留**（硬约束 2：标志缺失 ⇒ 保留），删除表达为清单标记，
+        而且只在"嵌入确实成功了"这一个理由下才不交付。
+        """
+        manifest = context.manifest
+        if manifest is None:
             return
-        if not context.opts.get("writethumbnail"):
+        opts = context.opts
+        if opts.get("__fluentytdl_keep_thumbnail", True):
             return
-        paths = set()
-        if context.output_path and os.path.exists(context.output_path):
-            paths.add(context.output_path)
-        for p in context.dest_paths:
-            if os.path.exists(p):
-                paths.add(p)
-        exts = [".webp", ".jpg", ".jpeg", ".png"]
-        for p in paths:
-            b = os.path.splitext(p)[0]
-            for e in exts:
-                t = b + e
-                if os.path.exists(t):
-                    try:
-                        os.remove(t)
-                    except Exception:
-                        pass
+
+        embed_requested = bool(opts.get("embedthumbnail"))
+        if embed_requested and "thumbnail" not in manifest.embed_evidence:
+            for art in manifest.kept("thumbnail"):
+                manifest.mark_degraded(art.id, "embed_failed_fallback")
+            return
+
+        for art in manifest.kept("thumbnail"):
+            manifest.drop(id=art.id, reason="embedded_successfully" if embed_requested else "not_requested")
 
 
 class VRFeature(DownloadFeature):
@@ -448,10 +478,13 @@ class VRFeature(DownloadFeature):
                 context.emit_warning("Mesh 格式暂不支持转码")
             return
 
-        final_file = context.find_final_merged_file() or context.output_path
-        if not final_file or not os.path.exists(final_file):
+        staging = context.staging
+        source = context.primary_media()
+        if staging is None or source is None or not os.path.exists(source.path):
             logger.warning("[VR] 无法找到最终文件")
             return
+        final_file = source.path
+        context.output_path = final_file
 
         ffmpeg_exe = opts.get("ffmpeg_location") or "ffmpeg"
         if os.path.isdir(ffmpeg_exe):
@@ -470,12 +503,13 @@ class VRFeature(DownloadFeature):
                 context.emit_warning(f"跳过 VR 转码: 分辨率过高 ({h}p)")
                 needs_convert = False
 
+        target = source
         if needs_convert:
             context.emit_status("VR 投影转换 (EAC -> Equi)...")
-            ext = os.path.splitext(final_file)[1]
-            out_conv = os.path.splitext(final_file)[0] + "_equi" + ext
+            stem, ext = os.path.splitext(os.path.basename(final_file))
+            work = staging.reserve_workfile(f"{stem}.equi", ext)
 
-            cmd = self._build_cmd(ffmpeg_exe, final_file, out_conv)
+            cmd = self._build_cmd(ffmpeg_exe, final_file, work)
             dur = 0.0
             try:
                 dur = float(opts.get("duration") or 0)
@@ -483,22 +517,50 @@ class VRFeature(DownloadFeature):
                 pass
 
             if self._run_ffmpeg(cmd, context, dur):
-                if not config_manager.get("vr_keep_source", True):
-                    os.remove(final_file)
-                    os.rename(out_conv, final_file)
-                else:
-                    bak = os.path.splitext(final_file)[0] + ".eac" + ext
-                    if os.path.exists(bak):
-                        os.remove(bak)
-                    os.rename(final_file, bak)
-                    os.rename(out_conv, final_file)
+                target = self._adopt_transcode(staging, source, work, stem, ext)
                 proj = "equirectangular"
             else:
                 context.emit_warning("VR 转码失败")
-                if os.path.exists(out_conv):
-                    os.remove(out_conv)
+                # workfile 从未登记，随沙盒 `rmtree` 消失 —— 这里不需要（也不许）动它
 
-        self._inject_meta(context, final_file, proj, opts)
+        self._inject_meta(context, target, proj, opts)
+        context.output_path = target.path
+
+    @staticmethod
+    def _adopt_transcode(
+        staging: StagingArea,
+        source: StagedArtifact,
+        work: str,
+        stem: str,
+        ext: str,
+    ) -> StagedArtifact:
+        """采纳 equi 产物 —— 全部经由 `StagingArea` 的原子 API。
+
+        这里以前是三个裸 `os.replace`（更早是 `os.remove` 紧跟 `os.rename`，两行之间
+        断电就等于用户的成品消失、转码结果挂在 `_equi` 这种中间名上）。问题不只是原子性：
+        物理世界改了而清单不知道，于是 `build_plan()` 会去搬一个已经不在那儿的文件。
+
+        **先用中间名登记，再腾位、再改名** —— 直接按 `{stem}{ext}` 登记会让
+        `register_generated` 的 `os.replace` 当场覆盖掉还占着这个名字的源片。
+
+        `vr_keep_source=False` 时源片也不立即删：`supersede_artifact()` 把它移进
+        `.internal/`，转码产物在提交前万一被发现有问题它还在，而「物理删除只发生在
+        `rmtree`」这条不变量不必为 VR 破例。
+        """
+        equi = staging.register_generated(
+            work,
+            kind="media",
+            producer="VRFeature",
+            parent_ids=(source.id,),
+            target_name=f"{stem}.equi{ext}",
+        )
+        if config_manager.get("vr_keep_source", True):
+            staging.rename_artifact(source.id, f"{stem}.eac{ext}")
+        else:
+            staging.supersede_artifact(source.id, equi.id, reason="vr_transcode")
+        staging.rename_artifact(equi.id, f"{stem}{ext}")
+        staging.manifest.promote(equi.id)
+        return equi
 
     def _build_cmd(self, exe, inp, out):
         cmd = [exe, "-y", "-i", inp, "-vf", "v360=eac:e"]
@@ -575,8 +637,24 @@ class VRFeature(DownloadFeature):
         except Exception:
             return False
 
-    def _inject_meta(self, ctx, f, proj, opts):
-        if os.path.splitext(f)[1].lower() not in (".mp4", ".mov"):
+    @staticmethod
+    def _inject_meta(
+        ctx: DownloadContext,
+        art: StagedArtifact,
+        proj: str,
+        opts: dict[str, Any],
+    ) -> None:
+        """注入球面视频元数据 —— 换的是**同一个逻辑文件的内容**，所以走
+        `replace_artifact_content()`（`id` 与计划中的 `final_path` 都不变）。
+
+        这里以前是 `tmp = f + ".tmp.mp4"` 落在 payload 里，成功 `os.replace(tmp, f)`、
+        失败 `os.remove(tmp)`。两个问题：临时文件在 payload 里，崩在中途就会被下一个
+        run 的 `reconcile()` 当成一个假 media 补录进清单；而 `os.replace` 改了物理世界
+        却没通知清单。现在落点在 `.work/`（`reconcile()` 看不到），采纳与回滚都在事务层。
+        """
+        staging = ctx.staging
+        f = art.path
+        if staging is None or os.path.splitext(f)[1].lower() not in (".mp4", ".mov"):
             return
         md = metadata_utils.Metadata()
         stereo = str(opts.get("__vr_stereo_mode") or "").lower()
@@ -593,13 +671,12 @@ class VRFeature(DownloadFeature):
             return
 
         ctx.emit_status("注入 VR 元数据...")
-        tmp = f + ".tmp.mp4"
+        stem, ext = os.path.splitext(os.path.basename(f))
+        work = staging.reserve_workfile(f"{stem}.meta", ext)
         try:
-            metadata_utils.inject_metadata(f, tmp, md, lambda x: None)
-            if os.path.exists(tmp):
-                os.remove(f)
-                os.rename(tmp, f)
+            metadata_utils.inject_metadata(f, work, md, lambda x: None)
+            if os.path.isfile(work):
+                staging.replace_artifact_content(art.id, work, producer="VRFeature")
                 ctx.emit_status("VR 元数据注入成功")
         except Exception:
-            if os.path.exists(tmp):
-                os.remove(tmp)
+            logger.exception("[VR] 元数据注入失败，保留原文件")

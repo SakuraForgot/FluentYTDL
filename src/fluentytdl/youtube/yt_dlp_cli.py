@@ -1024,6 +1024,42 @@ def _extract_error_lines(output: str) -> str:
     return "\n".join(lines)
 
 
+#: SABR-only 灰度的两条判据（与 assets/error_rules.json 的 sabr_formats_skipped 规则
+#: 同源）。命中任一即认定该账号被 YouTube 拉进 SABR 实验。
+_SABR_MARKERS = (
+    "forcing sabr streaming",
+    "formats have been skipped as they are missing a url",
+)
+
+
+def _maybe_mark_sabr_only(output: str) -> None:
+    """解析输出命中 SABR 标记 → 在当前 YouTube 账号 / 会话上打标。
+
+    只打标、不改本次 opts：追加 web_safari 客户端由下一次 build_ydl_options() 消费
+    （解析与下载各自独立构建 opts，标记是唯一能同时命中两条路的共享位置）。
+    best-effort：任何异常都吞掉，绝不让观测拖垮解析（硬规则 5）。
+    """
+    if not output:
+        return
+    try:
+        low = output.lower()
+        if not any(marker in low for marker in _SABR_MARKERS):
+            return
+        from ..auth.auth_service import auth_service
+
+        if auth_service.get_youtube_sabr_only():
+            return  # 已标记，避免重复日志/写盘
+        auth_service.mark_youtube_sabr_only()
+        from loguru import logger
+
+        logger.warning(
+            "[SABR] 检测到账号级 SABR-only 灰度（高清直链被丢弃），已标记账号；"
+            "后续解析/下载将追加 web_safari 客户端以拿回高清格式。"
+        )
+    except Exception:
+        return
+
+
 def run_dump_single_json(
     url: str,
     ydl_opts: dict[str, Any],
@@ -1035,95 +1071,103 @@ def run_dump_single_json(
     if exe is None:
         raise FileNotFoundError("未找到 yt-dlp.exe（既没有内置也不在 PATH 中）")
 
-    cmd = [
-        str(exe),
-        "--no-color",
-        "--no-progress",
-        "-J",
-        *ydl_opts_to_cli_args(ydl_opts),
-    ]
-    if extra_args:
-        cmd += list(extra_args)
-    cmd.append(url)
+    from ..auth.cookie_runfile import cookie_runfile
 
-    from loguru import logger
+    # yt-dlp 每次 `--cookies` 运行结束都会把 jar 回写进该文件；若直接传 Sentinel 真相源，
+    # 一次被拒的会话就会把登出态写回、永久抹掉 `.youtube.com` 的 LOGIN_INFO。这里改传一份
+    # 用完即弃的字节副本，回写只污染副本，真相源逐字节不变（非托管/用户自管文件与 None
+    # 原样直通）。副本必须存活到子进程结束——回写发生在进程退出时——故 `with` 覆盖整段执行。
+    with cookie_runfile(ydl_opts.get("cookiefile")) as _run_cf:
+        run_opts = {**ydl_opts, "cookiefile": _run_cf}
+        cmd = [
+            str(exe),
+            "--no-color",
+            "--no-progress",
+            "-J",
+            *ydl_opts_to_cli_args(run_opts),
+        ]
+        if extra_args:
+            cmd += list(extra_args)
+        cmd.append(url)
 
-    log_pot_in_argv(cmd, stage="Parse")
+        from loguru import logger
 
-    _t_env = time.perf_counter()
-    env = prepare_yt_dlp_env()
-    work_dir = _safe_working_dir()
-    _env_ms = (time.perf_counter() - _t_env) * 1000
-    _t_proc = time.perf_counter()
+        log_pot_in_argv(cmd, stage="Parse")
 
-    def _safe_decode(b: bytes | None) -> str:
-        if not b:
-            return ""
-        try:
-            return b.decode("utf-8")
-        except UnicodeDecodeError:
-            import locale
+        _t_env = time.perf_counter()
+        env = prepare_yt_dlp_env()
+        work_dir = _safe_working_dir()
+        _env_ms = (time.perf_counter() - _t_env) * 1000
+        _t_proc = time.perf_counter()
 
-            fallback = locale.getpreferredencoding()
+        def _safe_decode(b: bytes | None) -> str:
+            if not b:
+                return ""
             try:
-                return b.decode(fallback)
+                return b.decode("utf-8")
             except UnicodeDecodeError:
-                return b.decode("utf-8", errors="replace")
+                import locale
 
-    if cancel_event is None:
-        proc = subprocess.run(
-            cmd,
-            capture_output=True,
-            env=env,
-            cwd=work_dir,
-            **_win_hide_console_kwargs(),
-        )
+                fallback = locale.getpreferredencoding()
+                try:
+                    return b.decode(fallback)
+                except UnicodeDecodeError:
+                    return b.decode("utf-8", errors="replace")
 
-        out = _safe_decode(proc.stdout) + "\n" + _safe_decode(proc.stderr)
-        if proc.returncode != 0:
-            stderr_snippet = _extract_error_lines(out)
-            raise YtDlpExecutionError(proc.returncode, stderr_snippet)
-    else:
-        proc2 = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            env=env,
-            cwd=work_dir,
-            **_win_hide_console_kwargs(),
-        )
+        if cancel_event is None:
+            proc = subprocess.run(
+                cmd,
+                capture_output=True,
+                env=env,
+                cwd=work_dir,
+                **_win_hide_console_kwargs(),
+            )
 
-        # 使用独立的取消监控线程，communicate() 只调用一次
-        import threading as _threading
+            out = _safe_decode(proc.stdout) + "\n" + _safe_decode(proc.stderr)
+            if proc.returncode != 0:
+                stderr_snippet = _extract_error_lines(out)
+                raise YtDlpExecutionError(proc.returncode, stderr_snippet)
+        else:
+            proc2 = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                env=env,
+                cwd=work_dir,
+                **_win_hide_console_kwargs(),
+            )
 
-        def _cancel_watcher():
-            """后台监控 cancel_event，触发时终止子进程"""
-            while proc2.poll() is None:
+            # 使用独立的取消监控线程，communicate() 只调用一次
+            import threading as _threading
+
+            def _cancel_watcher():
+                """后台监控 cancel_event，触发时终止子进程"""
+                while proc2.poll() is None:
+                    if cancel_event.is_set():
+                        _terminate_process_best_effort(proc2)
+                        return
+                    cancel_event.wait(timeout=0.2)
+
+            watcher = _threading.Thread(target=_cancel_watcher, daemon=True)
+            watcher.start()
+
+            try:
+                stdout_bytes, stderr_bytes = proc2.communicate()
+            except Exception as e:
+                _terminate_process_best_effort(proc2)
                 if cancel_event.is_set():
-                    _terminate_process_best_effort(proc2)
-                    return
-                cancel_event.wait(timeout=0.2)
+                    raise YtDlpCancelled("yt-dlp cancelled") from e
+                raise
+            finally:
+                watcher.join(timeout=1.0)
 
-        watcher = _threading.Thread(target=_cancel_watcher, daemon=True)
-        watcher.start()
-
-        try:
-            stdout_bytes, stderr_bytes = proc2.communicate()
-        except Exception as e:
-            _terminate_process_best_effort(proc2)
             if cancel_event.is_set():
-                raise YtDlpCancelled("yt-dlp cancelled") from e
-            raise
-        finally:
-            watcher.join(timeout=1.0)
+                raise YtDlpCancelled("yt-dlp cancelled")
 
-        if cancel_event.is_set():
-            raise YtDlpCancelled("yt-dlp cancelled")
-
-        out = _safe_decode(stdout_bytes) + "\n" + _safe_decode(stderr_bytes)
-        if proc2.returncode != 0:
-            stderr_snippet = _extract_error_lines(out)
-            raise YtDlpExecutionError(proc2.returncode, stderr_snippet)
+            out = _safe_decode(stdout_bytes) + "\n" + _safe_decode(stderr_bytes)
+            if proc2.returncode != 0:
+                stderr_snippet = _extract_error_lines(out)
+                raise YtDlpExecutionError(proc2.returncode, stderr_snippet)
 
     _proc_ms = (time.perf_counter() - _t_proc) * 1000
     log_pot_from_output(out, stage="Parse")
@@ -1143,6 +1187,13 @@ def run_dump_single_json(
         stage="parse",
         operation="dump_single_json",
     )
+
+    # SABR-only 账号级检测：输出里出现"forcing SABR streaming"/"formats ... missing
+    # a url"意味着 YouTube 已把该账号拉进 SABR 灰度，高清直链被丢，只有追加 web_safari
+    # 客户端才能拿回。这里只**打标**（落在账号 / 会话上），下一次 build_ydl_options()
+    # 读标记时才追加客户端——因为解析与下载各自独立调 build_ydl_options()，标记是唯一
+    # 能同时命中两条路的位置。best-effort：观测绝不拖垮解析（硬规则 5）。
+    _maybe_mark_sabr_only(out)
 
     # yt-dlp may print other lines; pick the last parsable JSON line.
     _t_json = time.perf_counter()

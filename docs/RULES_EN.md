@@ -108,7 +108,11 @@ These rules are hard-won from production issues. Violating them WILL cause user-
 7. **TUN mode: no proxy env vars** — injecting `HTTPS_PROXY` causes double-proxying
 8. **web_music needs `disable_innertube=True`** — InnerTube challenges broken for that client
 9. **BCP-47 alias expansion** — `zh-Hans` must match `zh-CN`, `zh-SG`, etc.; audio **and subtitles** both go through the single `utils/bcp47.py`. Every `--sub-langs` entry is matched by yt-dlp as an **anchored regex** against the real caption keys, so a bare `en` does NOT match `en-GB` — user preferences must be resolved to real keys (or fall back to `en(-.+)?`) before they reach the command line
-10. **Sandbox download model** — temp dir per task, move on success, sweep on cancel
+10. **Transaction-scoped sandbox model** — `StagingArea` in `download/staging.py` owns the full artifact lifecycle. The lifecycle is: `create(txn-scoped uuid4 dir)` → `prepare_attempt(n)` → yt-dlp runs with `paths.home = payload/`, `paths.temp = .parts/` → `add_reported()` per output line → `reconcile()` (only physical scan, only `payload/`) → `seal_discovery()` → Feature mutations via `StagingArea` atomic API → `verify()` (safety gate, binary, no set subtraction) → `build_plan()` → `commit()` (cancel gate → phase=committing → reserve group → WAL-publish per item → phase=committed) → point of no return → `finalize_failure()` as the single failure/cancel arbitration point. Four explicit constraints that must never be violated:
+    - **`outtmpl` must be relative and must pass `assert_inside`** — an absolute `-o` silences `-P` entirely and breaks typed-path sandbox redirection.
+    - **From before `reserve`, the transaction is non-cancellable and must not be externally deleted** — `commit()` contains the single cancel gate; after it fires, cancellation only records `pending_cancel`. `core/controller.py` must not `rmtree` the sandbox of a live transaction (would pull source files out from under a commit, violating hard constraint 8).
+    - **`phase=committed` is an irreversible success boundary** — post-commit exceptions (`emit_actual`, `cleanup`) may only become `kind=signal`; they must not change the outcome to `failed`.
+    - **`delivered:*` tokens must not be consumed by any pre-commit gate** — they do not exist until after `commit()`, so `verify()` must not reference them (doing so makes every normal download fail its own safety gate).
 
 See `docs/YTDLP_KNOWLEDGE_EN.md` for the full empirical knowledge base.
 
@@ -237,7 +241,11 @@ The startup refresh is **silent**. `get_startup_health()` returns per-platform `
 - **Do not** add dependencies without updating `pyproject.toml`
 - **Do not** commit `config.json`, credentials, API tokens, or cookies
 - **Do not** use `type:ignore` without discussion
-- **Do not** bypass the sandbox download model for video downloads
+- **Do not** bypass the transaction-scoped sandbox model for video downloads — every download mode must go through `StagingArea` (§4.10)
+- **Do not** use an absolute path for `outtmpl` — it silences `-P` and breaks typed-path sandbox redirection (§4.10)
+- **Do not** `rmtree` or externally delete a live transaction's sandbox — request cancellation and wait for the terminal-state callback instead (§4.10 hard constraint 8)
+- **Do not** reference `delivered:*` tokens inside `verify()` or any pre-commit gate — those tokens don't exist until after `commit()` (§4.10)
+- **Do not** let post-commit exceptions (`emit_actual`, `cleanup`) change the outcome to `failed` — they must become `kind=signal` only (§4.10 hard constraint 9)
 - **Do not** write a cookie truth source with anything but `_commit_to_truth_source()` (§6)
 - **Do not** call `force_refresh_with_uac()` from the Qt main thread — use `CookieRefreshWorker` (§6)
 - **Do not** pass a `platform` you have not verified into `CookieCleaner.clean()` or `_validate_cookies()` — the wrong one wipes the other platform's credentials (§6)

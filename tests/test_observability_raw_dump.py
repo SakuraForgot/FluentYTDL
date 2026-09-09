@@ -311,8 +311,13 @@ def test_worker_clean_success_leaves_no_dump(trace_dir, tmp_path):
             self.diag_lines = DiagnosticLineCollector()
 
         def execute(self, url, ydl_opts, **kwargs):
-            out = tmp_path / "v.mp4"
-            out.write_bytes(b"0" * 4096)
+            # **必须写进 yt-dlp 真正被告知的目录**：`StagingArea.apply_to_opts()` 已经把
+            # `paths["home"]` 改写成沙盒的 `payload/`。写到 `tmp_path` 根上等于绕开事务层，
+            # payload 会是空的，`verify()` 就会合法地抛 `primary_media_missing` —— 那时红
+            # 的是夹具，不是产品。
+            out = Path(ydl_opts["paths"]["home"]) / "v.mp4"
+            out.write_bytes(b"0" * 32768)  # 要过 `staging.MIN_VALID_MEDIA_BYTES`（10 KiB）
+            kwargs["on_file_created"](str(out), "media")
             kwargs["on_path"](str(out))
             return str(out)
 
@@ -330,4 +335,7 @@ def test_worker_clean_success_leaves_no_dump(trace_dir, tmp_path):
         worker.run()
 
     assert worker._run_outcome == "success", "夹具本身要先真的走成功路径"
+    # 成功必须走到 `commit()`：产物上岸到用户目录，沙盒随之消失
+    assert (tmp_path / "v.mp4").is_file()
+    assert not (tmp_path / ".fluent_temp").exists()
     assert list(trace_dir.rglob("*.ytdlp.log")) == []

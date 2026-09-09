@@ -634,7 +634,100 @@ class YoutubeService:
                         "info", f"🚫 SponsorBlock 已启用: 将移除以下类别: {', '.join(categories)}"
                     )
 
+        # === SABR-only 兜底：追加 web_safari 客户端 ===
+        # 必须放在 POT / 手动 PO Token 之后：那两条会设 player_client（如 default,mweb），
+        # 这里是**追加**而非覆盖，让 default 客户端仍先跑、web_safari 作为拿回高清直链的
+        # 兜底。仅在账号/会话被标记为 SABR-only 时生效，且仅 YouTube（player_client 是
+        # youtube 命名空间参数）。这是唯一能同时覆盖解析与下载两条独立 opts 路径的位置。
+        # 【待观察】当前只在检测到 SABR 时追加 web_safari，可能需按其他视频的解析情况调整。
+        if not _is_twitter:
+            self._maybe_append_sabr_web_safari(ydl_opts)
+
         return ydl_opts
+
+    def _maybe_append_sabr_web_safari(self, ydl_opts: dict[str, Any]) -> None:
+        """账号/会话被标记为 SABR-only 时，把 web_safari 追加进 player_client。
+
+        追加语义（非锁定）：已有 player_client（如 POT 的 `default,mweb`）就在末尾补
+        `web_safari` 并去重，无则设 `default,web_safari`。见 CLAUDE.md §4.1 的 SABR 例外。
+        """
+        try:
+            from ..auth.auth_service import auth_service
+
+            if not auth_service.get_youtube_sabr_only():
+                return
+        except Exception:
+            return
+
+        extractor_args = cast(dict[str, Any], ydl_opts.setdefault("extractor_args", {}))
+        youtube_args = cast(dict[str, Any], extractor_args.setdefault("youtube", {}))
+
+        # player_client 在本项目里一律存成"单元素、逗号分隔"的 list（见 POT 分支
+        # `["default,mweb"]`），yt_dlp_cli / workers 拼命令行时按逗号 join。这里沿用同形。
+        existing = youtube_args.get("player_client")
+        if isinstance(existing, (list, tuple)) and existing:
+            raw = ",".join(str(x) for x in existing)
+        elif isinstance(existing, str):
+            raw = existing
+        else:
+            raw = "default"
+
+        clients = [c.strip() for c in raw.split(",") if c.strip()]
+        if "web_safari" not in clients:
+            clients.append("web_safari")
+        youtube_args["player_client"] = [",".join(clients)]
+
+        self._emit_log(
+            "warning",
+            "⚠️ [SABR] 该账号处于 SABR-only 灰度，已追加 web_safari 客户端以拿回高清直链 "
+            f"(player_client={youtube_args['player_client'][0]})。此策略为待观察项。",
+        )
+
+    @staticmethod
+    def _youtube_sabr_only_flag() -> bool:
+        """读当前 YouTube 账号/会话的 SABR-only 标记（异常时保守返回 False）。"""
+        try:
+            from ..auth.auth_service import auth_service
+
+            return auth_service.get_youtube_sabr_only()
+        except Exception:
+            return False
+
+    def _maybe_reparse_after_sabr_flip(
+        self,
+        url: str,
+        options: YoutubeServiceOptions | None,
+        sabr_before: bool,
+        cancel_event: threading.Event | None,
+        *,
+        tuned_overrides: dict[str, Any],
+        extra_args: list[str],
+    ) -> dict[str, Any] | None:
+        """SABR 标记本趟刚翻转 → 用带 web_safari 的新 opts 重解析一次。
+
+        仅当 `sabr_before is False` 且现在已翻转为 True 时触发一次；否则返回 None
+        （调用方沿用原 info）。返回 None 也用于任何重解析失败——那时保留原始 360p
+        结果总比整个弹窗解析失败好。
+        """
+        if sabr_before or not self._youtube_sabr_only_flag():
+            return None
+        try:
+            self._emit_log(
+                "info",
+                "🔁 [SABR] 首次检测到账号级 SABR，正在追加 web_safari 客户端重新解析以拿回高清档…",
+            )
+            fresh = self.build_ydl_options(options, url=url)
+            fresh.update(tuned_overrides)
+            info = run_dump_single_json(
+                url, fresh, extra_args=extra_args, cancel_event=cancel_event
+            )
+            if isinstance(info, dict):
+                return info
+        except YtDlpCancelled:
+            raise
+        except Exception as exc:
+            self._emit_log("warning", f"[SABR] web_safari 重解析失败，沿用原结果: {exc}")
+        return None
 
     def _maybe_configure_youtube_js_runtime(self, ydl_opts: dict[str, Any]) -> None:
         """Configure yt-dlp external JS runtime (YouTube EJS).
@@ -1224,9 +1317,18 @@ class YoutubeService:
                 raise RuntimeError(f"yt-dlp returned unexpected info type: {type(info)!r}")
             return cast(dict[str, Any], info)
 
+        _sabr_before = self._youtube_sabr_only_flag()
+
         try:
             self._emit_log("info", f"开始解析 URL: {url}")
             info = _do_extract(ydl_opts)
+            # SABR 标记本趟刚翻转：重建 opts（含 web_safari）重解析一次拿回高清档。
+            retried = self._maybe_reparse_after_sabr_flip(
+                url, options, _sabr_before, cancel_event,
+                tuned_overrides={}, extra_args=["--no-playlist"],
+            )
+            if retried is not None:
+                info = retried
             self._parse_cache_put(cache_key, info)
             return info
         except Exception as exc:
@@ -1555,6 +1657,10 @@ class YoutubeService:
                 "未找到 yt-dlp.exe。请在设置页指定路径，或将 yt-dlp.exe 放入 _internal/yt-dlp/，或加入 PATH。"
             ) from e
 
+        # 记下解析前的 SABR 标记：这一趟可能是 web_creator 高清被 SABR 丢光、只回 360p，
+        # 而 run_dump_single_json 会在输出里读到 SABR 标记并给账号打标（首次翻转）。
+        _sabr_before = self._youtube_sabr_only_flag()
+
         try:
             info = run_dump_single_json(
                 url,
@@ -1563,6 +1669,22 @@ class YoutubeService:
                 cancel_event=cancel_event,
             )
             info = cast(dict[str, Any], info)
+
+            # SABR 标记本趟刚翻转（False→True）：此刻手里的 info 很可能只有 360p。
+            # 立即用**重新构建**的 opts（build_ydl_options 会追加 web_safari）重解析一次，
+            # 让用户当场看到高清档。缓存 key 含 extractor_args，天然不撞旧的 360p 结果。
+            retried = self._maybe_reparse_after_sabr_flip(
+                url, options, _sabr_before, cancel_event, tuned_overrides={
+                    "skip_download": True,
+                    "extract_flat": "in_playlist",
+                    "lazy_playlist": True,
+                    "ignoreerrors": False,
+                }, extra_args=["--flat-playlist", "--lazy-playlist"]
+            )
+            if retried is not None:
+                info = retried
+                _log_done(info, attempts=2, note="[SABR 追加 web_safari 重解析]")
+                return info
 
             _log_done(info, attempts=1)
             return info

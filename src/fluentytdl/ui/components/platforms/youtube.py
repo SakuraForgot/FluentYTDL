@@ -1951,9 +1951,9 @@ def _build_scoring_ctx(intent: dict) -> ScoringContext:
     """
     pref_langs = _global_pref_langs()
     sub_config = config_manager.get_subtitle_config()
-    sub_enabled = (
-        sub_config.enabled and sub_config.embed_type == "soft" and sub_config.embed_mode != "never"
-    )
+    # 打分只关心「要不要往容器里塞字幕轨」（那会影响容器亲和度），另存独立文件
+    # 对格式选择没有任何影响，所以这里刻意**不看** `keep_external`。
+    sub_enabled = sub_config.enabled and sub_config.embed
     return ScoringContext(
         is_simple_mode=True,
         max_height=intent.get("max_height"),

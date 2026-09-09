@@ -10,11 +10,9 @@
 
 from __future__ import annotations
 
-import os
 import shutil
 import subprocess
 import sys
-import tempfile
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
@@ -33,6 +31,18 @@ class EmbedTool(Enum):
     ATOMICPARSLEY = "atomicparsley"  # MP4/M4A 最佳选择
     FFMPEG = "ffmpeg"  # MKV/WEBM 等
     MUTAGEN = "mutagen"  # MP3/FLAC/OGG 音频
+
+    @property
+    def mutates_in_place(self) -> bool:
+        """这个后端是不是**只会改写自己手上那份文件**。
+
+        AtomicParsley 走 `--overWrite`、mutagen 走 `audio.save()`，两者都没有
+        「输出到另一个路径」的用法。ffmpeg 相反，本来就是 `-i 源 → 新文件`。
+
+        调用侧靠它决定 `reserve_workfile()` 要不要 `seed_from` —— 原地型拿到的
+        output 必须是源字节的副本，这样源 artifact 全程只读，失败时主媒体原样不动。
+        """
+        return self is not EmbedTool.FFMPEG
 
 
 @dataclass
@@ -202,14 +212,29 @@ class ThumbnailEmbedder:
         self,
         video_path: str | Path,
         thumbnail_path: str | Path,
+        output_path: str | Path,
         progress_callback: Callable[[str], None] | None = None,
     ) -> EmbedResult:
-        """
-        嵌入封面到视频/音频文件
+        """嵌入封面 —— **纯 transformer：只读 input、只写 output**。
+
+        以前这个方法直接改写 `video_path`：ffmpeg 分支自己
+        `mkstemp(dir=video_path.parent)`（临时文件落在 payload 里）、自己
+        `os.replace(temp, video)`、失败自己 `os.remove(temp)`。三件事都越过了下载
+        产物事务层 —— 崩在中途会留下一个 `tmpXXXX.mp4`，而它一旦被下一个 run 的
+        `reconcile()` 看到就成了清单里一个假的 media。
+
+        现在落点由调用方给（`StagingArea.reserve_workfile()`，在 `.work/` 里，
+        `reconcile()` 永远看不到），采纳由 `replace_artifact_content()` 做。
+
+        **失败时不清理 `output_path`** —— 那是沙盒的东西，随 `rmtree` 消失；这里去
+        删它反而会违反「销毁与位移只经过 StagingArea」。
 
         Args:
-            video_path: 视频/音频文件路径
+            video_path: 源文件，全程只读
             thumbnail_path: 封面图片路径
+            output_path: 嵌好之后的落点。原地改写型后端（见
+                `EmbedTool.mutates_in_place`）要求调用方**先把源字节播种进来**
+                （`reserve_workfile(..., seed_from=...)`）
             progress_callback: 进度回调函数
 
         Returns:
@@ -217,6 +242,7 @@ class ThumbnailEmbedder:
         """
         video_path = Path(video_path)
         thumbnail_path = Path(thumbnail_path)
+        output_path = Path(output_path)
 
         if not video_path.exists():
             return EmbedResult(False, None, f"视频文件不存在: {video_path}")
@@ -241,23 +267,36 @@ class ThumbnailEmbedder:
         if tool is None:
             return EmbedResult(success=False, tool_used=None, message="没有可用的封面嵌入工具")
 
+        if tool.mutates_in_place and not output_path.exists():
+            # 正常路径上调用方已经用 `reserve_workfile(seed_from=...)` 播种过了。这里兜一层
+            # 是因为「选哪个工具」被算了两次（调用方一次、这里一次），中间万一因为工具
+            # 可用性变化而分叉，原地型后端会拿到一个不存在的 output 直接失败。
+            # 纯创建，不动任何既有文件。
+            try:
+                shutil.copy2(video_path, output_path)
+            except OSError as e:
+                return EmbedResult(False, tool, f"无法准备嵌入落点: {e}")
+
         # 执行嵌入
         if tool == EmbedTool.ATOMICPARSLEY:
-            return self._embed_with_atomicparsley(video_path, thumbnail_path, progress_callback)
+            return self._embed_with_atomicparsley(output_path, thumbnail_path, progress_callback)
         elif tool == EmbedTool.FFMPEG:
-            return self._embed_with_ffmpeg(video_path, thumbnail_path, progress_callback)
+            return self._embed_with_ffmpeg(
+                video_path, thumbnail_path, output_path, progress_callback
+            )
         elif tool == EmbedTool.MUTAGEN:
-            return self._embed_with_mutagen(video_path, thumbnail_path, progress_callback)
+            return self._embed_with_mutagen(output_path, thumbnail_path, progress_callback)
 
         return EmbedResult(False, None, "未知错误")
 
     def _embed_with_atomicparsley(
         self,
-        video_path: Path,
+        target: Path,
         thumbnail_path: Path,
         progress_callback: Callable[[str], None] | None = None,
     ) -> EmbedResult:
-        """使用 AtomicParsley 嵌入封面"""
+        """使用 AtomicParsley 嵌入封面 —— `--overWrite` 只能原地改写，所以 `target`
+        必须已经是**播种好的副本**（见 `EmbedTool.mutates_in_place`），源文件不在这里出现。"""
         ap_path = self._find_atomicparsley()
         if not ap_path:
             return EmbedResult(False, EmbedTool.ATOMICPARSLEY, "AtomicParsley 不可用")
@@ -266,7 +305,7 @@ class ThumbnailEmbedder:
             progress_callback("正在使用 AtomicParsley 嵌入封面...")
 
         try:
-            cmd = [str(ap_path), str(video_path), "--artwork", str(thumbnail_path), "--overWrite"]
+            cmd = [str(ap_path), str(target), "--artwork", str(thumbnail_path), "--overWrite"]
 
             kwargs = {}
             if sys.platform == "win32":
@@ -288,7 +327,7 @@ class ThumbnailEmbedder:
             )
 
             if result.returncode == 0:
-                logger.info(f"AtomicParsley 封面嵌入成功: {video_path}")
+                logger.info(f"AtomicParsley 封面嵌入成功: {target}")
                 return EmbedResult(True, EmbedTool.ATOMICPARSLEY, "封面嵌入成功")
             else:
                 error_msg = result.stderr or result.stdout or "未知错误"
@@ -305,9 +344,16 @@ class ThumbnailEmbedder:
         self,
         video_path: Path,
         thumbnail_path: Path,
+        output_path: Path,
         progress_callback: Callable[[str], None] | None = None,
     ) -> EmbedResult:
-        """使用 FFmpeg 嵌入封面"""
+        """使用 FFmpeg 嵌入封面 —— `-i 源 → output_path`，源全程只读。
+
+        这里以前有三处越权：`mkstemp(dir=video_path.parent)` 把临时文件造在 payload 里、
+        `os.replace(temp, video_path)` 直接覆盖事务持有的主媒体、`finally` 里
+        `os.remove(temp)` 自己清理。现在落点由调用方（事务层）给，失败也不清理它 ——
+        它在沙盒的 `.work/` 里，随 `rmtree` 消失。
+        """
         ffmpeg_path = self._find_ffmpeg()
         if not ffmpeg_path:
             return EmbedResult(False, EmbedTool.FFMPEG, "FFmpeg 不可用")
@@ -316,11 +362,7 @@ class ThumbnailEmbedder:
             progress_callback("正在使用 FFmpeg 嵌入封面...")
 
         ext = video_path.suffix.lower()
-
-        # 创建临时输出文件
-        # 指定 dir=video_path.parent 确保临时文件在同一驱动器，避免 os.replace 跨盘移动失败 (WinError 17)
-        temp_fd, temp_path = tempfile.mkstemp(suffix=ext, dir=video_path.parent)
-        os.close(temp_fd)
+        out = str(output_path)
 
         try:
             # 根据格式选择不同的嵌入方式
@@ -342,7 +384,7 @@ class ThumbnailEmbedder:
                     "filename=cover.jpg",
                     "-c",
                     "copy",
-                    temp_path,
+                    out,
                 ]
             else:
                 # MP4 等: 作为视频流嵌入
@@ -361,7 +403,7 @@ class ThumbnailEmbedder:
                     "copy",
                     "-disposition:v:1",
                     "attached_pic",
-                    temp_path,
+                    out,
                 ]
 
             kwargs = {}
@@ -383,10 +425,8 @@ class ThumbnailEmbedder:
                 **kwargs,
             )
 
-            if result.returncode == 0 and os.path.exists(temp_path):
-                # 替换原文件
-                os.replace(temp_path, video_path)
-                logger.info(f"FFmpeg 封面嵌入成功: {video_path}")
+            if result.returncode == 0 and output_path.exists():
+                logger.info(f"FFmpeg 封面嵌入成功: {output_path}")
                 return EmbedResult(True, EmbedTool.FFMPEG, "封面嵌入成功")
             else:
                 error_msg = result.stderr or "未知错误"
@@ -397,28 +437,21 @@ class ThumbnailEmbedder:
             logger.error(f"FFmpeg 异常: {e}")
             return EmbedResult(False, EmbedTool.FFMPEG, f"FFmpeg 异常: {e}")
 
-        finally:
-            # 清理临时文件
-            if os.path.exists(temp_path):
-                try:
-                    os.remove(temp_path)
-                except Exception:
-                    pass
-
     def _embed_with_mutagen(
         self,
-        video_path: Path,
+        target: Path,
         thumbnail_path: Path,
         progress_callback: Callable[[str], None] | None = None,
     ) -> EmbedResult:
-        """使用 mutagen 嵌入封面（用于音频文件）"""
+        """使用 mutagen 嵌入封面（用于音频文件）—— `audio.save()` 只能原地改写，
+        所以 `target` 必须已经是**播种好的副本**（见 `EmbedTool.mutates_in_place`）。"""
         if not self._check_mutagen():
             return EmbedResult(False, EmbedTool.MUTAGEN, "mutagen 库不可用")
 
         if progress_callback:
             progress_callback("正在使用 mutagen 嵌入封面...")
 
-        ext = video_path.suffix.lower().lstrip(".")
+        ext = target.suffix.lower().lstrip(".")
 
         try:
             # 读取封面数据
@@ -426,11 +459,11 @@ class ThumbnailEmbedder:
                 thumbnail_data = f.read()
 
             if ext == "mp3":
-                return self._embed_mp3(video_path, thumbnail_data)
+                return self._embed_mp3(target, thumbnail_data)
             elif ext == "flac":
-                return self._embed_flac(video_path, thumbnail_data)
+                return self._embed_flac(target, thumbnail_data)
             elif ext in ("ogg", "opus"):
-                return self._embed_ogg(video_path, thumbnail_data)
+                return self._embed_ogg(target, thumbnail_data)
             else:
                 return EmbedResult(False, EmbedTool.MUTAGEN, f"mutagen 不支持 {ext} 格式")
 

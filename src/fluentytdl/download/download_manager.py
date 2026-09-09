@@ -267,6 +267,47 @@ class DownloadManager(QObject):
                 worker._cancel_event.clear()
                 worker._pause_event.clear()
 
+        # 任务恢复完成后回收孤儿沙盒（照 utils/paths.py:604-606 的「开工先清」写法）。
+        # 存活判据是 staging_id，不是 task_key 也不是 run_id（见 staging.py 的 GC 一节）。
+        # 取配置下载目录 + 所有已恢复任务各自的下载目录，各自独立调用 gc_orphans —— 不同
+        # 下载目录各有自己的 .fluent_temp，合并成一个集合扫不出来。
+        try:
+            from .staging import gc_orphans
+
+            live_ids: set[str] = set()
+            gc_dirs: set[str] = set()
+
+            for w in (*self.active_workers, *self._pending_workers):
+                if getattr(w, "staging", None) is not None:
+                    sid = getattr(w.staging, "staging_id", None)
+                    if sid:
+                        live_ids.add(sid)
+                d = getattr(w, "download_dir", None)
+                if d:
+                    gc_dirs.add(str(d))
+
+            cfg_dir = config_manager.get("download_dir", "")
+            if cfg_dir:
+                gc_dirs.add(str(cfg_dir))
+
+            for d in gc_dirs:
+                try:
+                    gc_orphans(d, live_ids)
+                except Exception:
+                    logger.exception("gc_orphans 失败: {}", d)
+        except Exception:
+            logger.exception("启动 GC 失败")
+
+        # cookie 运行副本的启动兜底：`cookie_runfile()` 的 `finally` 已在子进程结束时确定性
+        # 删除副本，这里只回收「崩溃 / TerminateProcess / IDE 强杀 / 断电」导致 `finally`
+        # 没跑到的 `fluentytdl_ck_*` 漏网文件（沿用上面 gc_orphans 的「开工先清」思路）。
+        try:
+            from ..auth.cookie_runfile import sweep_stale_cookie_runfiles
+
+            sweep_stale_cookie_runfiles()
+        except Exception:
+            logger.exception("cookie 运行副本启动清理失败")
+
         # 最后不 pump()，要等 UI 初始化完后再由其他流程触发或用户手动恢复
 
     def _max_concurrent(self) -> int:

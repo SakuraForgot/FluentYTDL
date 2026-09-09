@@ -62,6 +62,29 @@ def _youtube_partial() -> str:
     return _netscape([(".youtube.com", FUTURE, "LOGIN_INFO", "v-LOGIN_INFO")])
 
 
+def _youtube_google_only(expires: int = FUTURE) -> str:
+    """yt-dlp 回写登出态后的典型残骸：SID 家族只剩在 `.google.com` 上（那一侧能挺过回写），
+    `.youtube.com` 上一个登录态 marker 都没有（LOGIN_INFO 被剥掉），只剩访客态 Cookie。
+    name-only 必需字段检查会被它骗过（SID/HSID/... 名字都在），域感知闸门必须挡下。"""
+    return _netscape(
+        [(".google.com", expires, name, f"v-{name}") for name in
+         ("SID", "HSID", "SSID", "SAPISID", "APISID")]
+        + [(".youtube.com", expires, "VISITOR_INFO1_LIVE", "v-guest"),
+           (".youtube.com", expires, "PREF", "v-pref")]
+    )
+
+
+def _youtube_login_realistic(expires: int = FUTURE) -> str:
+    """更贴近真实登录 jar 的形态：SID 家族在 `.google.com`，LOGIN_INFO 在 `.youtube.com`。
+    必需字段齐全，且 `.youtube.com` 上有登录态 marker —— 闸门应放行。"""
+    return _netscape(
+        [(".google.com", expires, name, f"v-{name}") for name in
+         ("SID", "HSID", "SSID", "SAPISID", "APISID")]
+        + [(".youtube.com", expires, "LOGIN_INFO", "v-LOGIN_INFO"),
+           (".youtube.com", expires, "__Secure-1PSID", "v-1psid")]
+    )
+
+
 def _twitter_full(expires: int = FUTURE) -> str:
     return _netscape(
         [(".x.com", expires, "auth_token", "v-auth"), (".x.com", expires, "ct0", "v-ct0")]
@@ -144,6 +167,46 @@ def test_non_netscape_source_is_rejected(sentinel, tmp_path):
 
     assert ok is False
     assert not dest.exists()
+
+
+# ==================== 提交闸门：域感知的登录态 marker ====================
+
+
+def test_commit_gate_rejects_google_only_residue_over_good_truth(sentinel, tmp_path):
+    """只剩 `.google.com` SID 家族、`.youtube.com` 无登录态 marker 的半 jar
+    （yt-dlp 回写登出态后的残骸）不得覆盖一个可用真相源。
+
+    这正是「日志里 Valid=True、yt-dlp 却判未登录」的根因：旧的 name-only 检查忽略域，
+    SID 家族在 `.google.com` 上齐全就放行，于是一份被回写成登出态的残骸能把好文件覆盖掉。
+    域感知闸门补上这一刀。"""
+    dest = sentinel.get_cookie_path_for_platform("youtube")
+    dest.write_text(_youtube_login_realistic(), encoding="utf-8")
+    before = dest.read_bytes()
+
+    src = tmp_path / "google_only_residue.txt"
+    src.write_text(_youtube_google_only(), encoding="utf-8")
+
+    ok, reason = sentinel._commit_to_truth_source(src, "youtube", "edge")
+
+    assert ok is False
+    assert ".youtube.com" in reason  # 原因点名缺 .youtube.com 登录态
+    assert dest.read_bytes() == before  # 真相源纹丝不动
+
+
+def test_commit_gate_accepts_jar_with_youtube_login_marker(sentinel, tmp_path):
+    """SID 家族在 `.google.com`、LOGIN_INFO 在 `.youtube.com` 的真实登录形态 —— 放行。
+
+    确保闸门不误伤真实 jar：markers 只要有一个真的落在 `.youtube.com` 上即可。"""
+    dest = sentinel.get_cookie_path_for_platform("youtube")
+    dest.write_text(_youtube_partial(), encoding="utf-8")
+
+    src = tmp_path / "good_realistic.txt"
+    src.write_text(_youtube_login_realistic(), encoding="utf-8")
+
+    ok, _msg = sentinel._commit_to_truth_source(src, "youtube", "webview2:acc-1")
+
+    assert ok is True
+    assert dest.read_bytes() == src.read_bytes()
 
 
 # ==================== 原子性 ====================

@@ -51,6 +51,50 @@ class ParsedLine:
     postprocessor: str | None = None  # 后处理器名
     postprocessor_status: str | None = None
 
+    role: str | None = None
+    """`path` 这个文件是什么角色 —— **只在 yt-dlp 自己说清楚了的时候才填**。
+
+    取值是 `download/staging.py` 的 `Kind` 子集：`media` | `subtitle` | `thumbnail`。
+
+    `None` 不是"未知所以随便猜"，而是一条硬信息：**报告者没有声明角色**。
+    `[download] Destination:` 与 `%(progress.filename)s` 都只给路径不给类别（同一种行
+    既可能是视频流、也可能是 DASH 分片或字幕），所以它们恒为 `None`；这类路径不进
+    `add_reported()`，留给 `staging.reconcile()` 那唯一一次集中式兜底分类。
+
+    这么分是《下载产物事务层》第一条不变量的落点：**角色只在进入 Manifest 时判定
+    一次**。以前 `:151-157` 把 `Writing video subtitles` 和 `Writing video thumbnail`
+    一律返回 `type="subtitle"`，正则**明明抓到了** `kind` 却当场丢掉 —— 于是下游
+    (`features._cleanup_thumbnail_files` 按后缀拼名字、`subtitle_processor` 的四级定位
+    扫目录) 只能各自再猜一遍，那正是"少删误删"的根因。字幕那一侧的四级定位已经在
+    Step 3 整体退休 —— 它现在只校验调用方交来的路径。
+    """
+
+
+# ── 嵌入证据 ──────────────────────────────────────────────
+
+#: 后处理器名 → 嵌入证据类别（`staging.Manifest.embed_evidence` 的取值）。
+#:
+#: 这是"字幕/封面到底嵌进去了没有"的**权威通道**：判据是结构化的
+#: `postprocessor_status == "finished"`，不是人类日志行、更不是 yt-dlp 的最终 rc。
+#: 删除外挂字幕的唯一合法理由就是这条证据成立（见《下载产物事务层》「删除只有一个
+#: 理由」），所以它必须来自 yt-dlp 自己报告的后处理状态。
+#:
+#: **短拼写才是真的**（yt-dlp 2026.08.30 实测，三个后处理器同时印证）：
+#: `%(progress.postprocessor)s` 吐的是**剥掉 `FFmpeg` 前缀和 `PP` 后缀**之后的名字 ——
+#: `FFmpegMergerPP` → `Merger`、`FFmpegExtractAudioPP` → `ExtractAudio`、
+#: `FFmpegMetadataPP` → `Metadata`、`MoveFilesAfterDownloadPP` → `MoveFiles`。
+#: 所以 `FFmpegEmbedSubtitlePP` 报的是 `EmbedSubtitle` —— `clean_logger.py:369` 判对了，
+#: `_PP_NAMES` 里那些 `FFmpeg*` 键从来没被命中过。
+#:
+#: 长拼写仍然留着：它不命中就是死键，代价为零；而万一哪个版本改回长名，漏掉证据的
+#: 后果是把嵌入成功误判成失败 ⇒ 外挂字幕被保留 —— 那是安全的一侧。
+EMBED_EVIDENCE_BY_PP: dict[str, str] = {
+    "FFmpegEmbedSubtitle": "subtitle",
+    "EmbedSubtitle": "subtitle",
+    "EmbedThumbnail": "thumbnail",
+    "FFmpegThumbnail": "thumbnail",
+}
+
 
 # ── yt-dlp 输出解析器 ────────────────────────────────────
 
@@ -111,20 +155,34 @@ class YtDlpOutputParser:
         r".*?(?:bitrate=\s*(?P<bitrate>\S+).*?)?speed=\s*(?P<speed>[\d.]+)x"
     )
 
-    # 后处理器名称映射
+    # 后处理器名称映射。
+    #
+    # **短拼写是实际到达的那一个**：`%(progress.postprocessor)s` 剥掉了 `FFmpeg` 前缀和
+    # `PP` 后缀（见 `EMBED_EVIDENCE_BY_PP` 上方的实测记录）。这张表原先只给
+    # `Metadata` / `ExtractAudio` / `SubtitlesConvertor` / `ThumbnailsConvertor` /
+    # `VideoConvertor` 登记了 `FFmpeg*` 长键，于是它们**一个都没命中过** ——「后处理:
+    # ExtractAudio (完成)」这种半英文状态就是这么来的。长键一并留着：不命中即死键，
+    # 代价为零，而版本改回长名时它就是兜底。
     _PP_NAMES: dict[str, str] = {
         "MoveFiles": "移动文件",
         "Merger": "合并音视频",
-        "FFmpegMerger": "合并音视频",
         "EmbedThumbnail": "嵌入封面",
+        "EmbedSubtitle": "嵌入字幕",
+        "Metadata": "嵌入元数据",
+        "ThumbnailsConvertor": "转换封面格式",
+        "ExtractAudio": "提取音频",
+        "VideoConvertor": "转换视频格式",
+        "SubtitlesConvertor": "转换字幕格式",
+        "SponsorBlock": "跳过赞助片段",
+        "ModifyChapters": "修改章节",
+        # ── 长拼写兜底（当前版本不会命中）──
+        "FFmpegMerger": "合并音视频",
         "FFmpegMetadata": "嵌入元数据",
         "FFmpegThumbnailsConvertor": "转换封面格式",
         "FFmpegExtractAudio": "提取音频",
         "FFmpegVideoConvertor": "转换视频格式",
         "FFmpegEmbedSubtitle": "嵌入字幕",
         "FFmpegSubtitlesConvertor": "转换字幕格式",
-        "SponsorBlock": "跳过赞助片段",
-        "ModifyChapters": "修改章节",
     }
 
     def parse_line(self, line: str) -> ParsedLine:
@@ -146,14 +204,17 @@ class YtDlpOutputParser:
             return self._parse_structured_progress(line)
 
         # 2. 字幕 / 封面落盘路径
-        #    两者都复用 `subtitle` 类型：executor 靠它把路径记进 `dest_paths`，
-        #    而 `dest_paths` 是字幕后处理第 1 级定位的唯一来源。
+        #    `type` 仍是 `subtitle`（executor / workers 的既有分支靠它把路径记进
+        #    `dest_paths`），但**角色改由 `role` 承载**：正则本来就抓了 `kind`，
+        #    以前在这里被丢掉，下游只好按后缀再猜一遍。
         wt = self._RE_WRITING_TO.search(line)
         if wt:
+            kind = (wt.group("kind") or "").lower()
             return ParsedLine(
                 type="subtitle",
                 path=wt.group("path").strip().strip('"'),
                 message=line,
+                role="thumbnail" if "thumbnail" in kind else "subtitle",
             )
 
         # 2.5 其余 `[info]` 行
@@ -168,10 +229,14 @@ class YtDlpOutputParser:
             return ParsedLine(type="info", message=line)
 
         # 3. 字幕转换
-        if "[FFmpegSubtitlesConvertor]" in line:
+        # 人类日志行的前缀同样是短名（实测 `[Merger]` / `[ExtractAudio]` / `[Metadata]`），
+        # 所以判短名，长名留作版本兜底。
+        if "[SubtitlesConvertor]" in line or "[FFmpegSubtitlesConvertor]" in line:
             return ParsedLine(type="status", message=line)
 
         # 4. 合并/提取音频
+        #    这两行是 yt-dlp **明确声明**了角色的主媒体路径（`[Merger]` 的产物就是
+        #    合并成品，`[ExtractAudio]` 的产物就是提取出的音频），所以带 `role="media"`。
         if (
             line.startswith("[Merger]")
             or line.startswith("[ExtractAudio]")
@@ -179,10 +244,14 @@ class YtDlpOutputParser:
         ):
             m = self._RE_MERGE.match(line)
             if m:
-                return ParsedLine(type="merge", path=m.group("path").strip(), message=line)
+                return ParsedLine(
+                    type="merge", path=m.group("path").strip(), message=line, role="media"
+                )
             m = self._RE_EXTRACT_AUDIO.match(line)
             if m:
-                return ParsedLine(type="merge", path=m.group("path").strip(), message=line)
+                return ParsedLine(
+                    type="merge", path=m.group("path").strip(), message=line, role="media"
+                )
             return ParsedLine(type="status", message=line)
 
         # 5. 下载目标路径

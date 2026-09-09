@@ -106,7 +106,11 @@ pythonVersion = "3.10"
 7. **TUN 模式不注入代理环境变量** — 注入 `HTTPS_PROXY` 导致双重代理
 8. **web_music 需要 `disable_innertube=True`** — 该客户端的 InnerTube 挑战有缺陷
 9. **BCP-47 别名扩展** — `zh-Hans` 必须匹配 `zh-CN`、`zh-SG` 等；音频与**字幕**都走 `utils/bcp47.py` 这一份。`--sub-langs` 的每一项被 yt-dlp 当作**锚定正则**去匹配真实字幕键，裸 `en` 匹配不到 `en-GB` —— 用户偏好必须先解析成真实键（或回落成 `en(-.+)?`）才能进命令行
-10. **沙箱下载模型** — 每个任务一个临时目录，成功后移动，取消时清理
+10. **事务沙盒模型** — `download/staging.py` 的 `StagingArea` 全权管理产物生命周期。完整顺序：`create(事务级 uuid4 目录)` → `prepare_attempt(n)` → yt-dlp 以 `paths.home = payload/`、`paths.temp = .parts/` 运行 → 每行输出 `add_reported()` → `reconcile()`（唯一物理扫描，只扫 `payload/`）→ `seal_discovery()` → Feature 经 `StagingArea` 原子 API 变更 → `verify()`（安全门，二值，不做集合减法）→ `build_plan()` → `commit()`（取消门 → phase=committing → 预留整组 → WAL 逐项发布 → phase=committed）→ 不可逆点 → `finalize_failure()` 作为唯一失败/取消裁决点。四条绝对不可违反的约束：
+    - **`outtmpl` 必须是相对路径且必须通过 `assert_inside`** —— 绝对 `-o` 会让 `-P` 完全失效，破坏类型化路径沙盒重定向。
+    - **从 `reserve` 之前起，事务不可取消、不可被外部删除** —— `commit()` 内含唯一的取消门；触发后取消仅记 `pending_cancel`。`core/controller.py` 不得对活事务 `rmtree` 沙盒（会把正在提交的源文件从提交中抽走，违反硬约束 8）。
+    - **`phase=committed` 是不可逆的成功边界** —— 提交后的异常（`emit_actual`、`cleanup`）只能成为 `kind=signal`；不得将 outcome 改为 `failed`。
+    - **`delivered:*` token 不得被任何提交前的门消费** —— 它们在 `commit()` 之后才存在，`verify()` 中引用它们会让每个正常下载都被自己的安全门拦下。
 
 详见 `docs/YTDLP_KNOWLEDGE.md` 完整经验知识库。
 
@@ -233,7 +237,11 @@ retry  transition  outcome  config  argv  identity
 - **不要**在未更新 `pyproject.toml` 的情况下添加依赖
 - **不要**提交 `config.json`、凭证、API token 或 cookies
 - **不要**随意使用 `type:ignore`
-- **不要**绕过沙箱下载模型进行视频下载
+- **不要**绕过 `download/staging.py` 的 `StagingArea` 事务模型进行视频下载 —— 所有产物生命周期必须经由该 API 管理，不得绕行
+- **不要**将 `outtmpl` 设为绝对路径，且落盘前所有路径必须通过 `assert_inside`（绝对 `-o` 会让 `-P` 整体失效，破坏沙盒重定向）
+- **不要**在临界区之前（`reserve` 之前）对活事务 `rmtree` 沙盒，也不要在进入临界区后的任何一点取消事务 —— 唯一的取消门在 `commit()` 开头；`core/controller.py` 不得对活事务沙盒调用 `rmtree`
+- **不要**在 `phase=committed` 之后将 outcome 改写为 `failed` —— 提交后的异常（`emit_actual`、`cleanup`）只能成为 `kind=signal`，不可逆的成功边界不可被后续异常推翻
+- **不要**在任何提交前的门中消费 `delivered:*` token —— 它们在 `commit()` 之后才成立；`verify()` 中引用它们会让每个正常下载都被自己的安全门拦下
 - **不要**用 `_commit_to_truth_source()` 以外的任何方式写 Cookie 真相源（§6）
 - **不要**在 Qt 主线程调 `force_refresh_with_uac()` —— 统一走 `CookieRefreshWorker`（§6）
 - **不要**把没核对过的 `platform` 传进 `CookieCleaner.clean()` 或 `_validate_cookies()` —— 传错会毁掉**另一个**平台的凭证（§6）

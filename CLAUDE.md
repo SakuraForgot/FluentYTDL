@@ -107,7 +107,7 @@ pythonVersion = "3.10"
 
 These rules are hard-won from production issues. Violating them WILL cause user-facing bugs.
 
-1. **NEVER force `player_client`** — trust yt-dlp's default strategy (tv → web_safari → android_vr)
+1. **Prefer yt-dlp's default `player_client` strategy** (tv → web_safari → android_vr) — never *pin* a single client. **Exception (SABR-only accounts):** when yt-dlp reports the account is under the SABR-only experiment (`forcing SABR streaming` / `formats ... missing a url` → high-res formats have no direct URL and get dropped, leaving only 360p), **append** `web_safari` to the client set (`default,web_safari`, or `<existing>,web_safari` when POT already set e.g. `default,mweb`). This is an *addition*, not a pin — default clients still run first; web_safari is the fallback that recovers direct-URL high-res (HLS). Detected at parse time (`yt_dlp_cli._maybe_mark_sabr_only`), persisted **on the account** (`WebView2Account.sabr_only`, or an in-memory session flag when logged out), and consumed in `build_ydl_options` (`_maybe_append_sabr_web_safari`) so it covers the parse **and** download opts paths (each builds opts independently). Provisional — may need tuning as more videos are sampled.
 2. **NEVER enable `sleep_interval`** — causes signed URL expiry → HTTP 403
 3. **NEVER use `--cookies-from-browser`** — causes DPAPI file lock on Windows
 4. **`-S lang:xx` is inert — never use it for language preference.** `lang` is a **numeric** alias of `language_preference` and does not accept language codes (it rewrites the global `settings['lang']['convert']` to `'string'` and compares 10/5/−1/−10 against `"ja"`), and `FormatSorter.add_item` admits only the **first** `lang:` entry. Language and original-audio preferences must be expressed as format-string filters via `_inject_language_into_format()`: `[language^=xx]` (startswith — a bare `[language=en]` misses the real tag `en-US`) and `[language_preference>=?10]` for original audio (**the `?` is mandatory and belongs right after the operator** — `language_preference` exists only on YouTube, so without none-inclusive matching every audio track on Twitter etc. gets filtered away; and yt-dlp's filter grammar puts the marker between operator and value, so the value-side `>=10?` is a hard `SyntaxError: Invalid filter specification` that kills the whole download). The unfiltered format string always stays as the last fallback
@@ -116,7 +116,11 @@ These rules are hard-won from production issues. Violating them WILL cause user-
 7. **TUN mode: no proxy env vars** — injecting `HTTPS_PROXY` causes double-proxying
 8. **web_music needs `disable_innertube=True`** — InnerTube challenges broken for that client
 9. **BCP-47 alias expansion** — `zh-Hans` must match `zh-CN`, `zh-SG`, etc.; audio **and subtitles** both go through the single `utils/bcp47.py`. Every `--sub-langs` entry is matched by yt-dlp as an **anchored regex** against the real caption keys, so a bare `en` does NOT match `en-GB` — user preferences must be resolved to real keys (or fall back to `en(-.+)?`) before they reach the command line
-10. **Sandbox download model** — temp dir per task, move on success, sweep on cancel
+10. **Transaction-scoped sandbox model** — `StagingArea` in `download/staging.py` owns the full artifact lifecycle. The lifecycle is: `create(txn-scoped uuid4 dir)` → `prepare_attempt(n)` → yt-dlp runs with `paths.home = payload/`, `paths.temp = .parts/` → `add_reported()` per output line → `reconcile()` (only physical scan, only `payload/`) → `seal_discovery()` → Feature mutations via `StagingArea` atomic API → `verify()` (safety gate, binary, no set subtraction) → `build_plan()` → `commit()` (cancel gate → phase=committing → reserve group → WAL-publish per item → phase=committed) → point of no return → `finalize_failure()` as the single failure/cancel arbitration point. Four explicit constraints that must never be violated:
+    - **`outtmpl` must be relative and must pass `assert_inside`** — an absolute `-o` silences `-P` entirely and breaks typed-path sandbox redirection.
+    - **From before `reserve`, the transaction is non-cancellable and must not be externally deleted** — `commit()` contains the single cancel gate; after it fires, cancellation only records `pending_cancel`. `core/controller.py` must not `rmtree` the sandbox of a live transaction (would pull source files out from under a commit, violating hard constraint 8).
+    - **`phase=committed` is an irreversible success boundary** — post-commit exceptions (`emit_actual`, `cleanup`) may only become `kind=signal`; they must not change the outcome to `failed`.
+    - **`delivered:*` tokens must not be consumed by any pre-commit gate** — they do not exist until after `commit()`, so `verify()` must not reference them (doing so makes every normal download fail its own safety gate).
 
 See `docs/YTDLP_KNOWLEDGE_EN.md` for the full empirical knowledge base.
 
@@ -245,7 +249,11 @@ The startup refresh is **silent**. `get_startup_health()` returns per-platform `
 - **Do not** add dependencies without updating `pyproject.toml`
 - **Do not** commit `config.json`, credentials, API tokens, or cookies
 - **Do not** use `type:ignore` without discussion
-- **Do not** bypass the sandbox download model for video downloads
+- **Do not** bypass the transaction-scoped sandbox model for video downloads — every download mode must go through `StagingArea` (§4.10)
+- **Do not** use an absolute path for `outtmpl` — it silences `-P` and breaks typed-path sandbox redirection (§4.10)
+- **Do not** `rmtree` or externally delete a live transaction's sandbox — request cancellation and wait for the terminal-state callback instead (§4.10 hard constraint 8)
+- **Do not** reference `delivered:*` tokens inside `verify()` or any pre-commit gate — those tokens don't exist until after `commit()` (§4.10)
+- **Do not** let post-commit exceptions (`emit_actual`, `cleanup`) change the outcome to `failed` — they must become `kind=signal` only (§4.10 hard constraint 9)
 - **Do not** write a cookie truth source with anything but `_commit_to_truth_source()` (§6)
 - **Do not** call `force_refresh_with_uac()` from the Qt main thread — use `CookieRefreshWorker` (§6)
 - **Do not** pass a `platform` you have not verified into `CookieCleaner.clean()` or `_validate_cookies()` — the wrong one wipes the other platform's credentials (§6)

@@ -122,8 +122,11 @@ class ConfigManager(QObject):
         "subtitle_type_preference": "manual_and_asr",  # 字幕类型偏好
         "subtitle_default_languages": ["zh-Hans", "en"],  # 默认字幕语言优先级
         "subtitle_enable_auto_captions": True,  # 是否启用自动生成字幕
-        "subtitle_embed_type": "soft",  # 嵌入类型: soft/external
-        "subtitle_embed_mode": "always",  # 嵌入模式: always/never/ask
+        # 交付：两个**正交**开关，不是一个 XOR（旧的 subtitle_embed_type/subtitle_embed_mode
+        # 表达不出「都要」和「都不要」，见 models/subtitle_config._read_delivery）
+        "subtitle_embed": True,  # 是否嵌入视频容器（软字幕轨）
+        "subtitle_keep_external": False,  # 是否另存一份独立字幕文件
+        "subtitle_delivery_migrated": True,  # 一次性迁移标记，见 _migrate_subtitle_delivery()
         "subtitle_output_format": "vtt",  # 字幕输出格式：srt/ass/vtt/lrc
         "subtitle_quality_check": True,  # 是否启用字幕质量检查
         "subtitle_remove_ads": False,  # 是否自动移除字幕广告
@@ -287,6 +290,8 @@ class ConfigManager(QObject):
             self._migrate_parse_cache_ttl_off(data, merged)
             # Migration: 'orig' 条目 -> 独立的 audio_track_strategy。
             self._migrate_audio_orig_to_strategy(data, merged)
+            # Migration: subtitle_embed_type/-_mode 这个 XOR -> 两个正交开关。
+            self._migrate_subtitle_delivery(data, merged)
 
             # Normalize tool paths: if a user keeps an old absolute path that no longer
             # exists (common after packaging/moving folders), fall back to auto-detect.
@@ -384,6 +389,53 @@ class ConfigManager(QObject):
         rest = [x for x in normalized if x.lower() not in {"orig", "original"}]
         merged["preferred_audio_languages"] = rest or ["zh-Hans", "en"]
 
+    @staticmethod
+    def _migrate_subtitle_delivery(data: dict[str, Any], merged: dict[str, Any]) -> None:
+        """`subtitle_embed_type` / `subtitle_embed_mode` 这个 XOR → 两个正交开关。
+
+        旧模型只能表达「嵌入」**或**「另存」，四种组合里的「都要」和「都不要」压根
+        写不出来。新模型是 `subtitle_embed` + `subtitle_keep_external` 两个布尔。
+
+        映射与 `models/subtitle_config._read_delivery()` 逐字一致（那边管
+        `SubtitleConfig.from_dict()` 的旧任务字典，这边管磁盘上的 `config.json`，
+        两处必须给出同一个答案，否则设置页显示的和实际下载用的会分叉）：
+
+        | `embed_type` | `embed_mode` | → `subtitle_embed` | → `subtitle_keep_external` |
+        |---|---|---|---|
+        | `"soft"`（默认）| `≠ "never"` | True | False |
+        | `"soft"` | `"never"` | False | True |
+        | `"external"` | 任意 | False | True |
+
+        **不会迁到第四态**（都不要）：旧的 `embed_mode == "never"` 在旧文档里字面
+        写的是「总是保存为单独文件」，映射成「不要字幕」会让老用户升级一次就字幕
+        凭空消失。所以 `keep_external = not embed` 恒成立，两个新态只能由用户在新
+        UI 里主动选出来。
+
+        **必须在这里做，不能靠 `get_subtitle_config()` 里的 `_get()` 兜底** ——
+        `_load_config()` 走的是 `{**DEFAULT_CONFIG, **data}`，新键在合并后**必然存在**
+        （值是 `DEFAULT_CONFIG` 的 `True`/`False`），`_get()` 因此永远看不到「缺失」，
+        旧键会被静默无视。判定读的是 `data`（磁盘原文）而不是 `merged`。
+
+        标记位保证只跑一次：用户迁移后自己把开关改回来，下次启动不能被再改一遍。
+        两个旧键**不从 `merged` 里删** —— `save()` 写整份配置，留着它们是回滚到旧版本
+        时的唯一依据，而新版本已经没有任何读者了（Step 6 把读者清零）。
+        """
+        if data.get("subtitle_delivery_migrated"):
+            return
+        merged["subtitle_delivery_migrated"] = True
+
+        if "subtitle_embed" in data or "subtitle_keep_external" in data:
+            # 已经是新模型了（多半是同版本内的重复迁移），别覆盖用户的选择
+            return
+        if "subtitle_embed_type" not in data and "subtitle_embed_mode" not in data:
+            # 全新安装，DEFAULT_CONFIG 已经给了正确的值
+            return
+
+        legacy_soft = data.get("subtitle_embed_type", "soft") == "soft"
+        embed = legacy_soft and data.get("subtitle_embed_mode", "always") != "never"
+        merged["subtitle_embed"] = embed
+        merged["subtitle_keep_external"] = not embed
+
     def save(self) -> None:
         try:
             self.config_file.parent.mkdir(parents=True, exist_ok=True)
@@ -442,8 +494,8 @@ class ConfigManager(QObject):
             type_preference=SubtitleTypePreference(_get("subtitle_type_preference")),
             default_languages=_get("subtitle_default_languages"),
             enable_auto_captions=_get("subtitle_enable_auto_captions"),
-            embed_type=_get("subtitle_embed_type"),
-            embed_mode=_get("subtitle_embed_mode"),
+            embed=bool(_get("subtitle_embed")),
+            keep_external=bool(_get("subtitle_keep_external")),
             output_format=_get("subtitle_output_format"),
             quality_check=_get("subtitle_quality_check"),
             remove_ads=_get("subtitle_remove_ads"),
@@ -457,8 +509,8 @@ class ConfigManager(QObject):
         self.config["subtitle_type_preference"] = config.type_preference.value
         self.config["subtitle_default_languages"] = config.default_languages
         self.config["subtitle_enable_auto_captions"] = config.enable_auto_captions
-        self.config["subtitle_embed_type"] = config.embed_type
-        self.config["subtitle_embed_mode"] = config.embed_mode
+        self.config["subtitle_embed"] = config.embed
+        self.config["subtitle_keep_external"] = config.keep_external
         self.config["subtitle_output_format"] = config.output_format
         self.config["subtitle_quality_check"] = config.quality_check
         self.config["subtitle_remove_ads"] = config.remove_ads

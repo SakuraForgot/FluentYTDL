@@ -25,6 +25,45 @@
 | `subtitle:<lang>` | 某个具体语言键的字幕 | 迟解析命中的真实键 + 明确没命中的偏好 | 字幕文件名里的语言段 |
 | `subtitle:any` | "至少一条字幕" | 正则回落模式（此时指不出具体语言） | 存在任意字幕文件 |
 | `thumbnail` | 封面图被取到 | `writethumbnail` | 任一图片文件 |
+| `embedded:subtitle` | 字幕轨真的进了容器 | `embedsubtitles` | `manifest.embed_evidence`（结构化 PP 证据） |
+| `embedded:thumbnail` | 封面真的进了容器 | `embedthumbnail` | 同上 |
+| `delivered:media` | 主媒体最终提交到了用户目录 | 期望 `media` 时恒有 | journal 里 `published` 的成员 |
+| `delivered:subtitle:<lang>` | 外挂字幕最终落到用户目录 | 期望该字幕 **∧** `__fluentytdl_keep_subtitle` | 同上 |
+| `delivered:thumbnail` | 独立封面最终落到用户目录 | `writethumbnail` **∧** `__fluentytdl_keep_thumbnail` | 同上 |
+
+## 三层事实，三组 token（`embedded:` / `delivered:` 存在的理由）
+
+下面这两个空洞用现有词汇表**都推不出 `missing`**，补法相同 —— 给封闭词汇表加词。
+
+**空洞一：嵌入失败。** 外挂文件被保留、字幕本身不缺，`expected − actual` 是空集，
+可用户要的字幕轨并不在容器里。`embedded:*` 让这件事有落点。
+
+**空洞二：`actual` 是历史事实，所以物理丢失也推不出 `missing`。** 判据是"报告过创建"
+（见下面「不做存在性检查」），于是文件写出来又消失时 `actual` 里**照样**有它 ——
+这不是 bug，那个契约正是"嵌进去了别误报成没拿到"的唯一防线，不能为此破坏。
+所以加第二层期望，把**取得**与**交付**分开：
+
+```
+observed    创建事实      ← StagedArtifact.origin / producer   → subtitle:ja
+present     当前物理事实  ← StagedArtifact.presence
+committed   最终交付事实  ← final_path + journal published     → delivered:subtitle:ja
+```
+
+字幕写出来又丢了 ⇒ `actual` 有 `subtitle:ja`（历史不丢）、没有
+`delivered:subtitle:ja` ⇒ `missing` 非空 ⇒ **`degraded` 合法产生**。而"嵌入成功 +
+`keep_external=False`"根本不期望 `delivered:subtitle:*`，所以不会制造假降级 ——
+这正是把交付期望挂在 `__fluentytdl_keep_subtitle` 而不是 `writesubtitles` 上的原因。
+
+**`container:*` 刻意不进 delivery**：容器是主文件的属性，不是一个交付物。
+`metadata:*` 也刻意不加：基础词汇表里还没有 `metadata`，加交付层就得先加取得层。
+
+### 生命周期约束（硬约束，不只是实施细节）
+
+**`delivered:*` 只在 `commit()` 之后成立，任何提交前的门都不得对它做减法。**
+`StagingArea.verify()` 是事务安全门（"现在提交安全吗"，二值），只问
+`expected_artifacts()` 里**有没有** `media` 这一个布尔；`emit_actual()` 才是契约评估
+（`expected − actual`，全流程只算一次）。倒过来的话每个正常下载都会在自己的门前
+"缺" `delivered:media` —— 那是生命周期倒置，不是断言变严。
 
 **`subtitle:any` 不是偷懒。** 正则回落模式（拿不到 info dict 时把 `en` 编译成
 `en(-.+)?` 交给 yt-dlp 自己匹配）下，命中的真实键可能是 `en-GB` —— 若按偏好逐条记
@@ -51,6 +90,11 @@
 嵌入字幕 / 嵌入封面成功之后，那两个独立文件按设计就被删掉了 —— 去 stat 一遍会把
 "嵌进去了"误报成"没拿到"。附带好处：`verify` 阶段零 I/O。
 
+"此刻还在不在"这件事并没有因此失去落点，它只是搬到了**交付侧**：`delivered:*` 的
+实际来源是 journal 里 `published` 的成员，写出来又丢掉的文件不会出现在那里。所以
+`actual` 保持"报告过创建"的纯粹语义，物理丢失照样能推出 `missing` —— 两件事各有
+各的 token，谁都不用为对方破例。
+
 代价是"文件写出来了但内容是坏的"这一种在这里判为已拿到。那件事有它自己的通道
 （`SubtitleProcessor` 的完整性校验 + `kind=signal`），不该由产物集合兼职。
 """
@@ -74,6 +118,18 @@ SUBTITLE_PREFIX = "subtitle:"
 #: "至少一条字幕" —— 正则回落模式下唯一诚实的期望（见模块 docstring）。
 SUBTITLE_ANY = "subtitle:any"
 CONTAINER_PREFIX = "container:"
+
+#: 嵌入事实层 —— 实际来源是 `manifest.embed_evidence`（结构化 PP 证据），不看磁盘、
+#: 也不看 yt-dlp 的最终 rc。"请求过嵌入"和"嵌入成功了"是两件事。
+EMBEDDED_PREFIX = "embedded:"
+EMBEDDED_SUBTITLE = "embedded:subtitle"
+EMBEDDED_THUMBNAIL = "embedded:thumbnail"
+
+#: 交付事实层 —— 实际来源是 journal 里 `published` 的成员。只在 `commit()` 之后成立，
+#: 提交前的门不得对它做减法（见模块 docstring 的生命周期约束）。
+DELIVERED_PREFIX = "delivered:"
+DELIVERED_MEDIA = "delivered:media"
+DELIVERED_THUMBNAIL = "delivered:thumbnail"
 
 #: 既不是主媒体也不是附属产物的伴生文件。落进 `media` 会让"主文件到手了"这个判断
 #: 被一个 `.info.json` 满足，而那恰恰是下载失败时最容易留下的东西。
@@ -221,12 +277,29 @@ def expected_artifacts(
     expected: set[str] = set()
     if not opts.get("skip_download"):
         expected.add(MEDIA)
+        # 主媒体一定是要交到用户手上的；`container:*` 刻意不进 delivery（属性不是交付物）。
+        expected.add(DELIVERED_MEDIA)
         container = _expected_container(opts)
         if container:
             expected.add(container_token(container))
-    expected |= _expected_subtitles(opts, subtitle_resolution)
+
+    subtitles = _expected_subtitles(opts, subtitle_resolution)
+    expected |= subtitles
+    # 交付期望挂在 `__fluentytdl_keep_subtitle` 而不是 `writesubtitles` 上：嵌入成功且
+    # 用户没要外挂时，字幕本来就不该出现在用户目录里，期望它就是制造假降级。
+    # 缺失即保留（硬约束 2），所以这里的缺省是 True。
+    if subtitles and opts.get("__fluentytdl_keep_subtitle", True):
+        expected |= {f"{DELIVERED_PREFIX}{token}" for token in subtitles}
+
     if opts.get("writethumbnail"):
         expected.add(THUMBNAIL)
+        if opts.get("__fluentytdl_keep_thumbnail", True):
+            expected.add(DELIVERED_THUMBNAIL)
+
+    if opts.get("embedsubtitles"):
+        expected.add(EMBEDDED_SUBTITLE)
+    if opts.get("embedthumbnail"):
+        expected.add(EMBEDDED_THUMBNAIL)
     return expected
 
 
@@ -351,6 +424,38 @@ def found_artifacts(
     return found
 
 
+def delivery_tokens(final_paths: Iterable[str]) -> set[str]:
+    """已交付的最终路径 → `delivered:*`。喂 `journal` 里 `published` 成员的 `dst`。
+
+    内部**复用 `found_artifacts()`** 再加前缀，而不是另写一遍分支 —— 这样语言键的
+    粒度规则（认不出语言时只记 `subtitle:any`）两侧自动一致，不会各自漂移。
+
+    `container:*` 被丢掉：容器是主文件的属性，不是一个交付物，断言"交付了 mp4 容器"
+    没有意义（`container:` 该不该匹配已经由取得侧回答过了）。
+    """
+    out: set[str] = set()
+    for token in found_artifacts(final_paths):
+        if token.startswith(CONTAINER_PREFIX):
+            continue
+        out.add(f"{DELIVERED_PREFIX}{token}")
+    return out
+
+
+def embed_tokens(evidence: Iterable[str]) -> set[str]:
+    """`manifest.embed_evidence`（`{"subtitle", "thumbnail"}`）→ `embedded:*`。
+
+    判据是结构化的后处理证据，不是 opts 里那个开关、也不是 yt-dlp 的最终退出码 ——
+    ffmpeg 那一步失败时容器里没有字幕轨，而请求过嵌入的期望仍然在，于是
+    `embedded:subtitle` 进 `missing`，这正是空洞一要的落点。
+    """
+    out: set[str] = set()
+    for item in evidence:
+        name = str(item or "").strip()
+        if name:
+            out.add(f"{EMBEDDED_PREFIX}{name}")
+    return out
+
+
 # ── 出口 ────────────────────────────────────────────────────
 
 
@@ -391,6 +496,7 @@ def emit_actual(
     trace: Any = None,
     output_path: str = "",
     stage: str = "verify",
+    extra_actual: Iterable[str] | None = None,
     **common: Any,
 ) -> set[str]:
     """落一条 `kind=actual` 并把产物集合喂给 trace，返回该集合。
@@ -401,9 +507,20 @@ def emit_actual(
     `missing` 与 `unexpected` 都记，但只有前者进 `degraded`：多拿到东西不是降级
     （硬规则 3 的方向性）。`unexpected` 的用处是反向的 —— "封面明明没勾却下了一张"
     这类问题在这里现形。
+
+    Args:
+        paths: 取得侧的事实 —— 喂 `manifest.observed()` 的 **payload 内原名**
+            （语言段完整、未经整组改名）。
+        extra_actual: 路径推不出来的那两层事实，由调用方组装：
+            `delivery_tokens(staging.published_paths())`（交付）
+            `| embed_tokens(manifest.embed_evidence)`（嵌入）。
+            走参数而不是让 `found_artifacts()` 多接两个入口，是为了保住它的纯路径函数
+            契约 —— 交付与嵌入都不是"从文件名看得出来"的事。
     """
     try:
         found = found_artifacts(paths, output_path=output_path)
+        if extra_actual:
+            found |= {str(t) for t in extra_actual if t}
     except Exception:
         return set()  # 硬规则 5
 

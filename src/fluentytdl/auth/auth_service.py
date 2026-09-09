@@ -161,6 +161,15 @@ PLATFORM_DOMAINS = {
 # YouTube 登录验证所需的关键 Cookie
 YOUTUBE_REQUIRED_COOKIES = {"SID", "HSID", "SSID", "SAPISID", "APISID"}
 
+# 提交闸门专用的认证态 marker（见 `_validate_cookies` 的 youtube 分支）。yt-dlp 的
+# `--cookies` 回写会用「已登出」jar 覆盖真相源，而 SID 家族在 `.google.com` 上能挺过回写
+# ——于是一个「只剩 .google.com SID、无任何 .youtube.com 登录态」的半 jar 仍能骗过下面
+# 那套 name-only 检查（日志里 `Valid=True`，yt-dlp 却判未登录）。故在 youtube 分支额外要求：
+# **至少一个 marker 落在 `.youtube.com` 域上**。这不是新的「真理」、也不是登录活性证明，
+# 只是挡住「明显退化成访客态」的候选把一个可用文件覆盖掉。访客态 Cookie（VISITOR_INFO1_LIVE
+# / PREF / __Secure-ROLLOUT_TOKEN / __Secure-YNID）一律不算。
+YOUTUBE_AUTH_MARKERS = {"LOGIN_INFO", "SID", "SAPISID", "__Secure-1PSID"}
+
 # X (Twitter) 登录验证关键 Cookie (仅做存在性检查)
 X_REQUIRED_COOKIES = {"auth_token", "ct0"}
 
@@ -226,6 +235,11 @@ class WebView2Account:
     valid: bool = False
     is_default: bool = False
     notes: str | None = None
+    # 该账号是否被 YouTube 拉进 SABR-only 灰度：一旦解析输出里出现 "forcing SABR
+    # streaming" / "formats ... missing a url"，就在账号上打标并持久化。SABR 是
+    # 账号级实验，命中后该账号后续所有视频都要追加 web_safari 客户端才能拿到高清直链。
+    # 旧 accounts.json 无此键 → from_dict 的 known-fields 过滤令其默认 False。
+    sabr_only: bool = False
 
     @property
     def localized_name(self) -> str:
@@ -273,6 +287,10 @@ class AuthService:
         self._auto_refresh: bool = True
         self._last_status: AuthStatus = AuthStatus()
         self._current_webview2_account_ids: dict[str, str] = {}
+
+        # 无登录态（无当前 WebView2 账号）时 SABR 标记的退化载体：进程内 sticky，
+        # 重启清零。有当前账号时一律以账号对象上的 `sabr_only` 为准（持久化）。
+        self._session_sabr_only: bool = False
 
         # 高级：多账户配置
         self._profiles: dict[str, AuthProfile] = {}
@@ -350,6 +368,37 @@ class AuthService:
         if not account_id:
             return None
         return self._webview2_accounts.get(account_id)
+
+    # ==================== SABR-only 账号级标记 ====================
+    # SABR 是 YouTube 的账号级灰度：命中后带下载链接的高清格式被丢弃，只有追加
+    # web_safari 客户端才能拿回直链。标记须落在 build_ydl_options() 之外的共享处，
+    # 因为解析与下载各自独立调 build_ydl_options()，必须让两条路读到同一个状态。
+
+    def get_youtube_sabr_only(self) -> bool:
+        """当前 YouTube 账号是否处于 SABR-only 灰度。
+
+        有当前账号 → 以账号对象上的持久化 `sabr_only` 为准（跨重启、切账号隔离）；
+        无当前账号（无登录态）→ 退化到进程内 sticky 标志。
+        """
+        account = self.get_current_webview2_account("youtube")
+        if account is not None:
+            return bool(account.sabr_only)
+        return self._session_sabr_only
+
+    def mark_youtube_sabr_only(self) -> None:
+        """把当前 YouTube 账号（或无账号时的会话）标记为 SABR-only。
+
+        幂等：已为 True 直接返回，绝不重复写盘。有当前账号时持久化到 accounts.json，
+        无账号时只置内存 sticky（重启清零）。
+        """
+        account = self.get_current_webview2_account("youtube")
+        if account is not None:
+            if account.sabr_only:
+                return
+            account.sabr_only = True
+            self._save_webview2_accounts()
+            return
+        self._session_sabr_only = True
 
     # ==================== 核心方法 ====================
 
@@ -871,6 +920,29 @@ class AuthService:
                     "valid": False,
                     "message": f"Cookie 不完整，缺少: {', '.join(missing)}",
                 }
+
+            # 提交闸门（见 `YOUTUBE_AUTH_MARKERS`）：上面的 name-only 检查会被「只剩
+            # .google.com SID 家族」的半 jar 骗过——那正是 yt-dlp 回写登出态后的典型残骸。
+            # 这里再要求至少一个认证态 marker 真的落在 `.youtube.com` 域上（域判定复用
+            # `CookieCleaner._domain_allowed`：相等或子域，已处理前缀点）。仅限 youtube 分支
+            # ——twitter/通用分支与其它平台都不受影响，也不给任何 Cookie 强加全局
+            # `.youtube.com` 要求。
+            from .cookie_cleaner import CookieCleaner
+
+            has_youtube_auth = any(
+                c.get("name", "") in YOUTUBE_AUTH_MARKERS
+                and CookieCleaner._domain_allowed(c.get("domain", ""), {".youtube.com"})
+                for c in valid_cookies
+            )
+            if not has_youtube_auth:
+                return {
+                    "valid": False,
+                    "message": (
+                        "缺少 .youtube.com 登录态 Cookie"
+                        "（LOGIN_INFO / SID / SAPISID / __Secure-1PSID 之一）"
+                    ),
+                }
+
             return {
                 "valid": True,
                 "message": "已验证 (检测到 YouTube 登录)",

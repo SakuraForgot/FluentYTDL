@@ -5,7 +5,7 @@ import shutil
 import subprocess
 import time
 from pathlib import Path
-from typing import Any, Literal, cast
+from typing import Any
 
 from PySide6.QtCore import QCoreApplication, Qt, QThread, QTimer, QUrl, Signal
 from PySide6.QtGui import QColor, QDesktopServices
@@ -474,7 +474,6 @@ class LanguageSelectionDialog(MessageBox):
         row = 0
         col = 0
         for code, name in languages:
-            from PySide6.QtCore import QCoreApplication
 
             display_name = QCoreApplication.translate("Subtitle", name)
             checkbox = CheckBox(f"{display_name} ({code})", checkbox_container)
@@ -814,73 +813,6 @@ class WebView2AccountNameDialog(MessageBox):
     def get_account_name(self) -> str:
         return (self.nameEdit.text() or "").strip()
 
-
-class EmbedTypeComboCard(SettingCard):
-    """嵌入类型下拉框卡片"""
-
-    valueChanged = Signal(str)  # soft/external
-
-    # 嵌入类型映射
-    EMBED_TYPES = [
-        (
-            "soft",
-            QCoreApplication.translate(
-                "EmbedTypeComboCard", "软嵌入（推荐） - 封装到容器，可开关，多语言"
-            ),
-        ),
-        (
-            "external",
-            QCoreApplication.translate(
-                "EmbedTypeComboCard", "外置文件 - 独立.srt，易编辑，兼容性最佳"
-            ),
-        ),
-    ]
-
-    def __init__(
-        self,
-        icon,
-        title: str,
-        content: str | None,
-        default: str = "soft",
-        parent=None,
-    ):
-        super().__init__(icon, title, content, parent)
-
-        # 创建下拉框
-        self.comboBox = ComboBox(self)
-        self.comboBox.setMinimumWidth(280)
-
-        # 添加选项
-        for code, display_text in self.EMBED_TYPES:
-            self.comboBox.addItem(display_text, userData=code)
-
-        # 设置默认值
-        self.set_value(default)
-
-        # 连接信号
-        self.comboBox.currentIndexChanged.connect(self._on_selection_changed)
-
-        # 添加到布局
-        self.hBoxLayout.addWidget(self.comboBox, 0, Qt.AlignmentFlag.AlignRight)
-        self.hBoxLayout.addSpacing(16)
-
-    def _on_selection_changed(self, index: int):
-        """下拉框选择改变"""
-        value = self.comboBox.itemData(index)
-        if value:
-            self.valueChanged.emit(value)
-
-    def get_value(self) -> str:
-        """获取当前选中的值"""
-        current_index = self.comboBox.currentIndex()
-        return self.comboBox.itemData(current_index) or "soft"
-
-    def set_value(self, value: str):
-        """设置选中的值"""
-        for i in range(self.comboBox.count()):
-            if self.comboBox.itemData(i) == value:
-                self.comboBox.setCurrentIndex(i)
-                break
 
 
 class InlinePathPickerCard(SettingCard):
@@ -2589,15 +2521,27 @@ class SettingsPage(QWidget):
             self._on_subtitle_type_pref_changed
         )
 
-        # 嵌入类型下拉框卡片 (NEW)
-        self.subtitleEmbedTypeCard = EmbedTypeComboCard(
+        # 嵌入到视频容器开关
+        self.subtitleEmbedCard = InlineSwitchCard(
             FluentIcon.VIDEO,
-            self.tr("嵌入类型"),
-            self.tr("选择字幕的封装方式"),
-            default=config.embed_type,
+            self.tr("嵌入视频容器"),
+            self.tr("将字幕封装进视频文件（软字幕，可开关）"),
             parent=self.subtitleGroup,
         )
-        self.subtitleEmbedTypeCard.valueChanged.connect(self._on_subtitle_embed_type_changed)
+        self.subtitleEmbedCard.switchButton.setChecked(config.embed)
+        self.subtitleEmbedCard.checkedChanged.connect(self._on_subtitle_embed_changed)
+
+        # 另存独立字幕文件开关
+        self.subtitleKeepExternalCard = InlineSwitchCard(
+            FluentIcon.DOCUMENT,
+            self.tr("另存独立字幕文件"),
+            self.tr("同时保留独立的 .srt / .ass 等字幕文件"),
+            parent=self.subtitleGroup,
+        )
+        self.subtitleKeepExternalCard.switchButton.setChecked(config.keep_external)
+        self.subtitleKeepExternalCard.checkedChanged.connect(
+            self._on_subtitle_keep_external_changed
+        )
 
         # 字幕输出格式
         self.subtitleFormatCard = InlineComboBoxCard(
@@ -2614,14 +2558,16 @@ class SettingsPage(QWidget):
         self.subtitleGroup.addSettingCard(self.subtitleEnabledCard)
         self.subtitleGroup.addSettingCard(self.subtitleTypePrefCard)
         self.subtitleGroup.addSettingCard(self.subtitleLanguagesCard)
-        self.subtitleGroup.addSettingCard(self.subtitleEmbedTypeCard)
+        self.subtitleGroup.addSettingCard(self.subtitleEmbedCard)
+        self.subtitleGroup.addSettingCard(self.subtitleKeepExternalCard)
 
         self.subtitleGroup.addSettingCard(self.subtitleFormatCard)
 
         # 缩进依赖项
         self._indent_setting_card(self.subtitleTypePrefCard)
         self._indent_setting_card(self.subtitleLanguagesCard)
-        self._indent_setting_card(self.subtitleEmbedTypeCard)
+        self._indent_setting_card(self.subtitleEmbedCard)
+        self._indent_setting_card(self.subtitleKeepExternalCard)
 
         self._indent_setting_card(self.subtitleFormatCard)
 
@@ -2951,10 +2897,13 @@ class SettingsPage(QWidget):
         self.subtitleTypePrefCard.comboBox.setCurrentIndex(pref_idx_map.get(type_pref, 1))
         self.subtitleTypePrefCard.comboBox.blockSignals(False)
 
-        # Subtitle: embed type (NEW)
-        self.subtitleEmbedTypeCard.comboBox.blockSignals(True)
-        self.subtitleEmbedTypeCard.set_value(subtitle_config.embed_type)
-        self.subtitleEmbedTypeCard.comboBox.blockSignals(False)
+        # Subtitle: embed / keep_external switches
+        self.subtitleEmbedCard.switchButton.blockSignals(True)
+        self.subtitleEmbedCard.switchButton.setChecked(subtitle_config.embed)
+        self.subtitleEmbedCard.switchButton.blockSignals(False)
+        self.subtitleKeepExternalCard.switchButton.blockSignals(True)
+        self.subtitleKeepExternalCard.switchButton.setChecked(subtitle_config.keep_external)
+        self.subtitleKeepExternalCard.switchButton.blockSignals(False)
 
         # Subtitle: output format
         output_format = str(config_manager.get("subtitle_output_format", "vtt"))
@@ -4664,7 +4613,6 @@ class SettingsPage(QWidget):
         if not languages:
             languages = ["zh-Hans", "en"]
         config_manager.set("subtitle_default_languages", languages)
-        from PySide6.QtCore import QCoreApplication
 
         names = [
             QCoreApplication.translate("Subtitle", n)
@@ -4680,17 +4628,26 @@ class SettingsPage(QWidget):
             parent=self,
         )
 
-    def _on_subtitle_embed_type_changed(self, embed_type: str) -> None:
-        """嵌入类型改变回调"""
-        if embed_type not in ("soft", "external"):
-            embed_type = "soft"
+    def _on_subtitle_embed_changed(self, checked: bool) -> None:
+        """嵌入视频容器开关改变回调"""
         config = config_manager.get_subtitle_config()
-        config.embed_type = cast(Literal["soft", "external"], embed_type)
+        config.embed = checked
         config_manager.set_subtitle_config(config)
-        type_names = {"soft": self.tr("软嵌入"), "external": self.tr("外置文件")}
         InfoBar.info(
-            self.tr("嵌入类型"),
-            self.tr("字幕嵌入类型: {}").format(type_names.get(embed_type, embed_type)),
+            self.tr("字幕设置"),
+            self.tr("嵌入视频容器: {}").format(self.tr("开") if checked else self.tr("关")),
+            duration=3000,
+            parent=self,
+        )
+
+    def _on_subtitle_keep_external_changed(self, checked: bool) -> None:
+        """另存独立字幕文件开关改变回调"""
+        config = config_manager.get_subtitle_config()
+        config.keep_external = checked
+        config_manager.set_subtitle_config(config)
+        InfoBar.info(
+            self.tr("字幕设置"),
+            self.tr("另存独立字幕文件: {}").format(self.tr("开") if checked else self.tr("关")),
             duration=3000,
             parent=self,
         )
@@ -4814,4 +4771,5 @@ class SettingsPage(QWidget):
         # 用户希望关闭字幕下载时，依然保留选项显示以便修改
         # 这样即使全局关闭，用户在单次下载中想开启时，配置已经是预期的
         self.subtitleLanguagesCard.setVisible(True)
-        self.subtitleEmbedTypeCard.setVisible(True)
+        self.subtitleEmbedCard.setVisible(True)
+        self.subtitleKeepExternalCard.setVisible(True)

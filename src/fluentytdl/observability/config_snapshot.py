@@ -83,8 +83,8 @@ CONFIG_SNAPSHOT_KEYS: tuple[str, ...] = (
     "subtitle_enable_auto_captions",
     "subtitle_max_languages",
     "subtitle_output_format",
-    "subtitle_embed_type",
-    "subtitle_embed_mode",
+    "subtitle_embed",
+    "subtitle_keep_external",
     # 音轨
     "audio_track_strategy",
     "preferred_audio_languages",

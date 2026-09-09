@@ -99,7 +99,9 @@ class PlaylistSubtitleConfigDialog(MessageBoxBase):
         if current_override:
             self._embed_combo.setCurrentIndex(0 if current_override.embed_subtitles else 1)
         else:
-            self._embed_combo.setCurrentIndex(0 if config.embed_type == "soft" else 1)
+            # `PlaylistSubtitleOverride` 只有 `embed_subtitles` 一个布尔，所以这里仍是
+            # XOR。它覆盖的也只是「嵌入」这一半，另存由全局 `keep_external` 决定。
+            self._embed_combo.setCurrentIndex(0 if config.embed else 1)
 
         self._embed_row.addWidget(BodyLabel(self.tr("嵌入方式:"), self))
         self._embed_row.addWidget(self._embed_combo)

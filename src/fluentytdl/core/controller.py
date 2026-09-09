@@ -276,12 +276,11 @@ class AppController(QObject):
         final_path = getattr(worker, "output_path", getattr(worker, "_final_filepath", ""))
         import os
 
-        # 如果任务还在沙盒里（未合并），直接删沙盒
-        sandbox_dir = getattr(worker, "sandbox_dir", None)
+        # 沙盒（`.fluent_temp/task_*/txn_*/`）由事务层自己管理：活事务只能请求取消、等终态
+        # 回调后再清记录；已终态的沙盒留给 gc_orphans 回收。这里只删用户目录里的成品
+        # —— 那是业务操作，不是事务清理，两者的路径在 commit 之后才分开。
+        # 硬约束 8：不得对活事务直接 rmtree 沙盒，否则可能把 committing 中的源文件抽走。
         paths_to_delete = []
-
-        if sandbox_dir and os.path.exists(sandbox_dir):
-            paths_to_delete.append(sandbox_dir)
 
         # 收集最终上岸的文件
         if final_path and os.path.exists(str(final_path)):
@@ -294,12 +293,6 @@ class AppController(QObject):
             playlist_dir = worker.download_dir
             if playlist_dir and os.path.exists(playlist_dir):
                 paths_to_delete.append(playlist_dir)
-
-        # 对于未在最终路径的 dest_paths 进行兜底
-        if hasattr(worker, "dest_paths"):
-            for p in worker.dest_paths:
-                if p and os.path.exists(str(p)) and str(p) not in paths_to_delete:
-                    paths_to_delete.append(str(p))
 
         # 去重
         paths_to_delete = list(dict.fromkeys(paths_to_delete))
@@ -586,14 +579,11 @@ class AppController(QObject):
                         logger.error(f"Error stopping worker in batch remove: {e}")
 
                 if force_delete_files:
-                    # Collect files to delete
+                    # 同 _do_force_delete_files：只删用户目录里的成品，不碰沙盒。
+                    # 活事务由取消请求 + 终态回调来清理，硬约束 8。
                     final_path = getattr(
                         worker, "output_path", getattr(worker, "_final_filepath", "")
                     )
-                    sandbox_dir = getattr(worker, "sandbox_dir", None)
-
-                    if sandbox_dir and os.path.exists(sandbox_dir):
-                        paths_to_delete.append(sandbox_dir)
 
                     if final_path and os.path.exists(str(final_path)):
                         paths_to_delete.append(str(final_path))
@@ -605,11 +595,6 @@ class AppController(QObject):
                         playlist_dir = worker.download_dir
                         if playlist_dir and os.path.exists(playlist_dir):
                             paths_to_delete.append(playlist_dir)
-
-                    if hasattr(worker, "dest_paths"):
-                        for p in worker.dest_paths:
-                            if p and os.path.exists(str(p)) and str(p) not in paths_to_delete:
-                                paths_to_delete.append(str(p))
 
             except Exception as e:
                 logger.error(f"Error processing worker for batch remove: {e}")

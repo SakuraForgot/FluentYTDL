@@ -15,7 +15,7 @@ import subprocess
 import threading
 import time
 from collections import deque
-from collections.abc import Callable
+from contextlib import ExitStack
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -40,7 +40,7 @@ from ..youtube.yt_dlp_cli import (
     resolve_yt_dlp_exe,
     ydl_opts_to_cli_args,
 )
-from .output_parser import YtDlpOutputParser
+from .output_parser import EMBED_EVIDENCE_BY_PP, YtDlpOutputParser
 
 # 字幕/封面等附属文件后缀，不应被视为主输出文件
 _AUXILIARY_EXTENSIONS = frozenset(
@@ -166,6 +166,44 @@ class PathCallback(Protocol):
     def __call__(self, path: str) -> None: ...
 
 
+class FileCreatedCallback(Protocol):
+    """"yt-dlp 报告创建了一个文件"的唯一通道。
+
+    `role` 是 yt-dlp **自己声明**的角色（`media` / `subtitle` / `thumbnail`），
+    `None` 表示报告者没说 —— 见 `output_parser.ParsedLine.role`。消费方
+    （Step 4 起是 `StagingArea`）据此决定走 `add_reported(kind=role)` 还是留给
+    `reconcile()` 那唯一一次兜底分类；**不许自己按后缀补一个角色出来**。
+    """
+
+    def __call__(self, path: str, role: str | None = None) -> None: ...
+
+
+class EmbedEvidenceCallback(Protocol):
+    """结构化的"嵌入确实成功了"证据通道，取值 `subtitle` / `thumbnail`。
+
+    只在 `postprocessor_status == "finished"` 时被调用。这是删除外挂字幕的唯一
+    合法依据（见《下载产物事务层》「删除只有一个理由」）—— 人类日志行只作显示。
+    """
+
+    def __call__(self, kind: str) -> None: ...
+
+
+class PartsProbe(Protocol):
+    """`--download-sections` 时的进度兜底探针：返回**此刻**半成品的字节总数。
+
+    FFmpegFD 不会把子 ffmpeg 的进度转发给 yt-dlp 的 stdout，所以那段时间里唯一
+    能证明"还在下"的证据是半成品文件在长大。以前这里是 `Path(work_dir).glob("*.part")`
+    —— 而 `work_dir` 是 `paths["home"]`，`home != temp` 之后那里**永远是 0 字节**，
+    进度条会静默卡死。所以扫描收敛到事务层（`StagingArea.parts_bytes()`，唯一允许
+    物理扫描的地方），executor 只拿一个数字，不知道也不需要知道文件在哪。
+
+    实现方必须自己吞掉 `OSError`（沙盒可能已被 `rmtree`）—— 它跑在守护线程里，
+    抛出去没人接。
+    """
+
+    def __call__(self) -> int: ...
+
+
 # ── 容器决策 ──────────────────────────────────────────────
 
 _SUBTITLE_COMPATIBLE_CONTAINERS = {"mp4", "mkv", "mov", "m4v"}
@@ -237,6 +275,10 @@ class DownloadExecutor:
 
     def __init__(self) -> None:
         self._proc: subprocess.Popen[Any] | None = None
+        # 本次执行的 cookie 运行副本上下文（见 `cookie_runfile`）。yt-dlp 每次运行结束都会
+        # 把 jar 回写进 `--cookies` 文件，所以绝不把真相源直接交给它；副本随子进程生命周期
+        # 结束而删除——其生命周期恰等于 `self._proc`，两处 `self._proc = None` 各配一次释放。
+        self._cookie_stack: ExitStack | None = None
         self._ytdlp_parser = YtDlpOutputParser()
         # 诊断行缓冲：失败时作为 `diagnose()` 的输入，成功时供再跑一次 `parse_events`
         # —— 字幕缺失不会让任务失败，而 `diagnose()` 只在 rc != 0 时跑。
@@ -260,7 +302,10 @@ class DownloadExecutor:
         on_status: StatusCallback,
         on_path: PathCallback,
         cancel_check: CancelCheck,
-        on_file_created: Callable[[str], None] | None = None,
+        on_file_created: FileCreatedCallback | None = None,
+        on_embed_evidence: EmbedEvidenceCallback | None = None,
+        final_paths_file: str | None = None,
+        parts_probe: PartsProbe | None = None,
         cached_info_dict: dict[str, Any] | None = None,
     ) -> str | None:
         """执行下载，返回输出文件路径。
@@ -272,7 +317,14 @@ class DownloadExecutor:
             on_status: 状态消息回调。
             on_path: 输出路径回调。
             cancel_check: 取消检查回调。
-            on_file_created: 文件创建回调。
+            on_file_created: 文件创建回调，带 yt-dlp 声明的 `role`（见
+                `FileCreatedCallback`）。
+            on_embed_evidence: 嵌入成功证据回调（见 `EmbedEvidenceCallback`）。
+            final_paths_file: `--print-to-file after_move:filepath` 的落点（**绝对**
+                路径，通常是 `StagingArea.prepare_attempt(n)` 给的
+                `.fytdl/final.<n>.txt`）。给了才加这个参数。
+            parts_probe: `--download-sections` 的进度兜底探针（见 `PartsProbe`）。
+                不给就不开那个监视线程 —— 没有探针的兜底只会报 0 字节。
             cached_info_dict: (Optional) 预先提取的 info dict，避免重复提取。
 
         Returns:
@@ -290,6 +342,9 @@ class DownloadExecutor:
             on_path=on_path,
             cancel_check=cancel_check,
             on_file_created=on_file_created,
+            on_embed_evidence=on_embed_evidence,
+            final_paths_file=final_paths_file,
+            parts_probe=parts_probe,
             cached_info_dict=cached_info_dict,
         )
 
@@ -304,7 +359,10 @@ class DownloadExecutor:
         on_status: StatusCallback,
         on_path: PathCallback,
         cancel_check: CancelCheck,
-        on_file_created: Callable[[str], None] | None = None,
+        on_file_created: FileCreatedCallback | None = None,
+        on_embed_evidence: EmbedEvidenceCallback | None = None,
+        final_paths_file: str | None = None,
+        parts_probe: PartsProbe | None = None,
         label: str = "",
         cached_info_dict: dict[str, Any] | None = None,
     ) -> str | None:
@@ -343,7 +401,42 @@ class DownloadExecutor:
             ),
         ]
 
-        cmd += ydl_opts_to_cli_args(ydl_opts)
+        # 主媒体最终路径的**权威来源**：走文件不走控制台。
+        #
+        # 为什么不是 `-O/--print`：它的帮助文本明写 *"Implies --quiet"* —— 用它就等于
+        # 掐死上面两条 `--progress-template`，整个进度解析随之失效。`--print-to-file`
+        # 的帮助里**没有**这句（已对 v2026.08.30 的 `--help` 核实），而 `after_move`
+        # 属 later-stage WHEN，所以也不隐含 `--simulate`。
+        #
+        # 为什么走文件：Windows 控制台代码页会把非 ASCII 路径吃掉字符，而这个值正是
+        # 用来定位用户成品的 —— 丢一个字就等于定位不到。
+        #
+        # FILE 用的是 **output-template 语法**，相对路径会被解到 `paths.home`（=
+        # `payload/`）里去，那会让控制文件掉进 `reconcile()` 的视野；所以这里传**绝对**
+        # 路径，并把 `%` 转义成 `%%`。（「outtmpl 必须相对」那条纪律约束的是输出模板
+        # 本身 —— 绝对 `-o` 会让 `-P` 整体失效 —— 不约束这个 FILE。）
+        if final_paths_file:
+            cmd += [
+                "--print-to-file",
+                "after_move:filepath",
+                final_paths_file.replace("%", "%%"),
+            ]
+
+        # yt-dlp 每次运行结束都把 cookie jar 回写进 `--cookies` 文件（固有行为，无开关可关）。
+        # 绝不把 Sentinel 真相源直接交给它——改传一份用完即弃的字节副本，回写只污染副本，
+        # 真相源逐字节不变（非托管/用户自管文件与 None 由 `cookie_runfile` 原样直通）。
+        # 副本必须存活到子进程结束（回写发生在进程退出时），故其生命周期挂在 `self._proc`
+        # 上、由 `_release_cookie_runfile()` 在两个死亡点释放。**绝不**把副本路径写回
+        # `ydl_opts`：重试会复用同一份 `ydl_opts`（见 workers.py 的 `merged`），必须让每次
+        # attempt 都从真相源重新拷一份干净 jar，而不是继承上一轮被污染的副本。
+        from ..auth.cookie_runfile import cookie_runfile
+
+        self._cookie_stack = ExitStack()
+        _run_cf = self._cookie_stack.enter_context(
+            cookie_runfile(ydl_opts.get("cookiefile"))
+        )
+        run_opts = {**ydl_opts, "cookiefile": _run_cf}
+        cmd += ydl_opts_to_cli_args(run_opts)
         cmd.append(url)
 
         # 这条 argv 里可能有 `socks5://user:pass@host`、cookie 文件的完整路径、含
@@ -377,12 +470,13 @@ class DownloadExecutor:
         )
 
         # FFmpegFD does not consistently forward its child FFmpeg progress to
-        # yt-dlp's stdout. While it is silent, monitor the sandbox .part file
-        # so the UI still reflects real download activity.
-        if ydl_opts.get("download_sections"):
+        # yt-dlp's stdout. While it is silent, poll the transaction layer's
+        # `.parts/` byte total so the UI still reflects real download activity.
+        # 没有探针就不开线程 —— 兜底进度只会一路报 0 字节，比没有更糟。
+        if ydl_opts.get("download_sections") and parts_probe is not None:
             threading.Thread(
                 target=_monitor_section_part_progress,
-                args=(self._proc, work_dir, on_progress),
+                args=(self._proc, parts_probe, on_progress),
                 daemon=True,
                 name="section-part-progress",
             ).start()
@@ -473,7 +567,10 @@ class DownloadExecutor:
                     p = _abs(parsed.progress.filename)
                     dest_paths.add(p)
                     if on_file_created:
-                        on_file_created(p)
+                        # `%(progress.filename)s` 只给路径不给类别（同一种行既可能是
+                        # 视频流、也可能是 DASH 分片或字幕），所以 `role` 恒为 None ——
+                        # 这类路径留给 `reconcile()` 那唯一一次兜底分类。
+                        on_file_created(p, parsed.role)
                     if not output_path and not _is_auxiliary_file(p):
                         output_path = p
                         on_path(p)
@@ -483,7 +580,8 @@ class DownloadExecutor:
                     p = _abs(parsed.path)
                     dest_paths.add(p)
                     if on_file_created:
-                        on_file_created(p)
+                        # 同上：`[download] Destination:` 也不声明角色。
+                        on_file_created(p, parsed.role)
                     if not output_path and not _is_auxiliary_file(p):
                         output_path = p
                         on_path(p)
@@ -528,6 +626,14 @@ class DownloadExecutor:
                     p = _abs(parsed.path)
                     output_path = p
                     on_path(p)
+                    # 合并/提取音频的产物**必须进清单**。以前这里只设 `output_path`、
+                    # 从不 `dest_paths.add()` —— 那正是当年 `features.find_final_merged_file()`
+                    # 只能靠 `os.listdir` 兜底的唯一原因（《下载产物事务层》诊断 3）。
+                    # 这一行补上之后那个函数就没有存在理由了，已随 Step 5 退休。
+                    # 角色由 yt-dlp 自己声明（`role="media"`），不需要任何推断。
+                    dest_paths.add(p)
+                    if on_file_created:
+                        on_file_created(p, parsed.role)
                 if parsed.message:
                     on_status(parsed.message)
 
@@ -540,6 +646,13 @@ class DownloadExecutor:
                         "pp_status": parsed.postprocessor_status or "",
                     }
                 )
+                # 嵌入证据：判据是结构化的 `finished`，不是人类日志行、也不是最终 rc。
+                # 这是删除外挂字幕/独立封面的唯一合法依据 —— 少收一条证据只会导致
+                # "嵌入成功却仍保留外挂文件"，那是安全的一侧；多删一个文件不是。
+                if on_embed_evidence and parsed.postprocessor_status == "finished":
+                    evidence = EMBED_EVIDENCE_BY_PP.get(parsed.postprocessor or "")
+                    if evidence:
+                        on_embed_evidence(evidence)
                 if parsed.message:
                     on_status(parsed.message)
 
@@ -550,10 +663,16 @@ class DownloadExecutor:
                     p = _abs(parsed.path)
                     dest_paths.add(p)
                     if on_file_created:
-                        on_file_created(p)
+                        # `[info] Writing video subtitles/thumbnail to:` —— 这两行是
+                        # yt-dlp **明确声明**了角色的，`role` 是 `subtitle` 或
+                        # `thumbnail`。正则一直抓得到 `kind`，只是以前在 parser 里被
+                        # 丢掉，于是下游各自按后缀再猜一遍（那正是"少删误删"的根因）。
+                        on_file_created(p, parsed.role)
 
         rc = proc.wait()
         self._proc = None
+        # 子进程已退出，yt-dlp 的 cookie 回写（若有）已落在运行副本上——现在删掉它。
+        self._release_cookie_runfile()
 
         if rc != 0:
             last_lines = "\n".join(tail)
@@ -728,7 +847,9 @@ class DownloadExecutor:
         on_progress: ProgressCallback,
         on_status: StatusCallback,
         cancel_check: CancelCheck,
-        on_file_created: Callable[[str], None] | None = None,
+        on_file_created: FileCreatedCallback | None = None,
+        on_embed_evidence: EmbedEvidenceCallback | None = None,
+        final_paths_file: str | None = None,
     ) -> None:
         """运行后处理 pass (skip-download)。"""
         # 克隆选项并强制跳过下载
@@ -748,6 +869,8 @@ class DownloadExecutor:
             on_path=lambda path: None,
             cancel_check=cancel_check,
             on_file_created=on_file_created,
+            on_embed_evidence=on_embed_evidence,
+            final_paths_file=final_paths_file,
         )
 
     def _extract_stream_urls(
@@ -945,6 +1068,18 @@ class DownloadExecutor:
 
         return os.getcwd()
 
+    def _release_cookie_runfile(self) -> None:
+        """删除本次执行的 cookie 运行副本（若有），幂等。
+
+        yt-dlp 的 `--cookies` 回写只落在这份副本上，真相源不受影响；副本生命周期等于
+        子进程生命周期。正常 `proc.wait()` 之后与 `_terminate_proc()`（取消/强杀的唯一
+        咽喉）都会调它。先把字段置空再 `close()`，避免重入时二次进入。
+        """
+        stack = self._cookie_stack
+        if stack is not None:
+            self._cookie_stack = None
+            stack.close()
+
     def _terminate_proc(self) -> None:
         """终止当前子进程并尽可能杀死整个进程树防止锁释放失败。"""
         if self._proc:
@@ -971,6 +1106,8 @@ class DownloadExecutor:
                 except Exception:
                     pass
             self._proc = None
+            # 取消/强杀路径：进程已死，释放本次执行的 cookie 运行副本（幂等）。
+            self._release_cookie_runfile()
 
     def terminate(self) -> None:
         """外部调用：终止执行器的子进程。"""
@@ -1005,20 +1142,22 @@ def _iter_process_output(stream) -> Any:
 
 
 def _monitor_section_part_progress(
-    proc: subprocess.Popen[Any], work_dir: str, on_progress: ProgressCallback
+    proc: subprocess.Popen[Any], parts_probe: PartsProbe, on_progress: ProgressCallback
 ) -> None:
-    """Emit fallback progress from a growing section-download .part file."""
+    """Emit fallback progress from the transaction layer's growing `.part` bytes.
+
+    以前这里自己 `Path(work_dir).glob("*.part")`。那有两个问题：`work_dir` 是
+    `paths["home"]`，而 `home != temp` 之后 `.part` 全在 `.parts/` 里，所以它永远读
+    到 0；而且它是 `download/` 下唯一一处物理扫描（架构测试的基线里就记着这条）。
+    现在只调一个返回字节数的探针 —— 扫描留在事务层，这里连沙盒长什么样都不知道。
+    """
     previous_bytes = 0
     previous_tick = time.monotonic()
-    root = Path(work_dir)
     while proc.poll() is None:
-        total_bytes = 0
         try:
-            for candidate in root.glob("*.part"):
-                if candidate.is_file():
-                    total_bytes += candidate.stat().st_size
-        except OSError:
-            pass
+            total_bytes = parts_probe()
+        except Exception:
+            total_bytes = 0
 
         now = time.monotonic()
         if total_bytes > 0:

@@ -5,6 +5,7 @@ import threading
 from collections import deque
 from collections.abc import Iterable, Mapping
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from contextlib import ExitStack
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
@@ -15,11 +16,14 @@ from ..diagnostics import SUBTITLE_WARNING_CODES, DiagnosticLineCollector, diagn
 from ..models.errors import YtDlpExecutionError
 from ..models.subtitle_config import SUBTITLE_CONFIG_KEY, SUBTITLE_PREFS_KEY
 from ..observability import (
+    DELIVERED_THUMBNAIL,
     THUMBNAIL,
     FlowTrace,
     TaskTrace,
     bind_current_flow,
+    delivery_tokens,
     dump_raw_for_outcome,
+    embed_tokens,
     emit_actual,
     emit_event,
     emit_expect,
@@ -29,7 +33,6 @@ from ..observability import (
     render_argv,
     sanitize_url,
 )
-from ..utils.aux_files import is_aux_name
 from ..utils.logger import logger
 from ..utils.translator import translate_error
 from ..youtube.youtube_service import YoutubeServiceOptions, youtube_service
@@ -43,6 +46,17 @@ from .features import (
     ThumbnailFeature,
     VRFeature,
 )
+from .staging import Kind, StagingArea, StagingCancelled, VerifyBlocked
+
+#: yt-dlp 自己声明的 `role` → Manifest 的 `Kind`。**只做映射，不做推断** ——
+#: 表外的 role（含 `None`）一律不登记，留给 `reconcile()` 那唯一一次兜底分类。
+#: 写成显式字典而不是 `cast()`：这里是「报告者声明的角色」进入事务层的关口，
+#: 关口上应该看得见到底放行了哪几个值。
+_REPORTED_KINDS: dict[str, Kind] = {
+    "media": "media",
+    "subtitle": "subtitle",
+    "thumbnail": "thumbnail",
+}
 
 
 class DownloadCancelled(Exception):
@@ -612,6 +626,11 @@ class DownloadWorker(QThread):
         # Best-effort: all destination paths seen in yt-dlp output.
         # This is important for paused/cancelled tasks where final output_path may be unknown.
         self.dest_paths: set[str] = set()  # 格式选择状态追踪（防止格式自动降级到音频）
+        # 本次下载的产物事务。`None` = 还没建（提前 return 的轻量模式、或 run() 之前）。
+        # **不要**再用 `hasattr(self, "sandbox_dir")` 那种存在性守卫来判断有没有沙盒 ——
+        # 那个属性只在沙盒模式下才被赋值，于是每个读它的地方都得自己记得加守卫，
+        # 漏一处就是 `AttributeError`。这里始终存在，判据统一成 `if self.staging`。
+        self.staging: StagingArea | None = None
         self._original_format: str | None = None
         self._ssl_error_count = 0
         self._format_warning_shown = False
@@ -776,52 +795,76 @@ class DownloadWorker(QThread):
         """当前是否处于暂停状态。"""
         return not self._pause_event.is_set() and not self._cancel_event.is_set()
 
-    def _sweep_part_files(self) -> None:
-        """物理清除所有因为取消而残留的残骸文件"""
-        import os
-        import shutil
+    def _settle_file_locks(self) -> None:
+        """给 yt-dlp 及其子进程一秒释放句柄，否则 Windows 上 `rmtree` 撞 WinError 32。
+
+        `cancel()` 是 `taskkill /F /T` —— 进程没了不等于句柄立刻回收。清不掉并不致命
+        （事务层会把沙盒留给启动 GC），但那会让**每一次取消**都留下一个孤儿沙盒。
+        """
         import time
 
-        from ..utils.logger import logger
+        time.sleep(1.0)
 
-        if hasattr(self, "sandbox_dir") and self.sandbox_dir and os.path.exists(self.sandbox_dir):
-            logger.info("💥 执行沙盒清理: {}", self.sandbox_dir)
-            for _ in range(5):
-                try:
-                    shutil.rmtree(self.sandbox_dir, ignore_errors=True)
-                    if not os.path.exists(self.sandbox_dir):
-                        break
-                except OSError:
-                    pass
-                time.sleep(0.5)
+    def _finalize_staging_cancel(self) -> str:
+        """取消侧的唯一裁决入口 —— 判据在 `StagingArea` 里，这里不做任何判断。
 
-        sweep_list = set()
-        if self.output_path:
-            sweep_list.add(self.output_path)
-        sweep_list.update(self.dest_paths)
+        `committing` 之后取消只会被记成 `pending_cancel`（硬约束 8），`committed`
+        之后是 no-op（硬约束 9）；两者都不该由 Worker 自己判。
+        """
+        staging = self.staging
+        if staging is None:
+            return "no_staging"
+        self._settle_file_locks()
+        try:
+            return staging.finalize_cancel()
+        except Exception:
+            # 终态处理不许再抛：沙盒留给启动 GC 也比丢掉"任务已取消"这个结论好。
+            logger.exception("取消裁决失败（沙盒留给 GC）: {}", staging.txn_dir)
+            return "no_op"
 
-        # 非沙盒模式（纯提取任务等）兜底清理
-        for f in sweep_list:
-            if os.path.exists(f) and os.path.isfile(f):
-                try:
-                    os.remove(f)
-                    logger.info("已物理清除残骸: {}", f)
-                except Exception:
-                    pass
+    def _finalize_staging_failure(self, exc: BaseException | None) -> str:
+        """失败侧的唯一裁决入口。返回 `failed` / `already_succeeded` / `no_staging`。
 
-    def _clean_part_files(self) -> None:
-        """清理 sandbox 内的 .part/.ytdl 残骸，避免 403 后断点续传撞过期 token。"""
-        if not hasattr(self, "sandbox_dir") or not self.sandbox_dir:
+        `already_succeeded` 意味着 `phase` 已经是 `committed` —— 用户手上的文件是
+        完整的，调用方**不得**把 outcome 改成 `failed`（硬约束 9）。
+        """
+        staging = self.staging
+        if staging is None:
+            return "no_staging"
+        self._settle_file_locks()
+        try:
+            return staging.finalize_failure(exc)
+        except Exception:
+            logger.exception("失败裁决失败（沙盒留给 GC）: {}", staging.txn_dir)
+            return "failed"
+
+    def _register_primary_media(self, opts: dict[str, Any]) -> None:
+        """把本轮 attempt 的主媒体登记进清单。
+
+        权威来源是 `--print-to-file after_move:filepath` 落下的
+        `.fytdl/final.<attempt>.txt`，不是 stdout 里的 `[Merger]` 行 —— 后者报的是
+        **temp 侧**路径（`home != temp` 之后 yt-dlp 几乎所有输出行都报 temp），而
+        合并/提取音频之后的最终文件名只有 yt-dlp 自己知道。**只读本轮那个文件**：
+        `--print-to-file` 是 Append 语义，自动重试会让单文件混进上一次失败 attempt
+        的路径，读出来的"主媒体"可能是失败那次的。
+
+        `Manifest._put()` 幂等，所以哪怕这条路径已经由 `on_file_created` 登记过，
+        这里也只是把 `primary` 补强上去，不会重复建条目。
+        """
+        staging = self.staging
+        if staging is None:
             return
-        if not os.path.exists(self.sandbox_dir):
-            return
-        for f in os.listdir(self.sandbox_dir):
-            if f.endswith((".part", ".ytdl")):
-                try:
-                    os.remove(os.path.join(self.sandbox_dir, f))
-                    logger.info("已清理残骸文件: {}", f)
-                except OSError:
-                    pass
+        for idx, path in enumerate(staging.read_attempt_paths()):
+            try:
+                # 只有第一条算 primary：播放列表模式下这个文件会有多行，而
+                # `primary_media()` 是单数概念。
+                art = staging.add_reported(
+                    path, "media", primary=(idx == 0), opts=opts
+                )
+            except Exception:
+                logger.exception("主媒体登记失败: {}", path)
+                continue
+            self.dest_paths.add(art.path)
 
     def _wait_if_paused(self) -> None:
         """红绿灯检查点：如果红灯则阻塞，直到绿灯或取消。"""
@@ -1145,20 +1188,28 @@ class DownloadWorker(QThread):
             except Exception:
                 self.download_dir = os.path.abspath(os.getcwd())
 
-            # === 沙盒模式分离临时文件与最终目录 ===
-            if not self.opts.get("skip_download", False) and not self.opts.get(
-                "__fluentytdl_is_cover_direct", False
-            ):
-                # `db_id` 正常总是有的（`create_worker()` 入库后即赋值）。兜底用 run_id
-                # 而不是 `id(self)`：内存地址会被复用，同一次运行里两个先后创建的 worker
-                # 完全可能拿到同一个地址，于是共用一个沙盒目录、互删对方的临时文件。
-                db_id_str = str(getattr(self, "db_id", "") or f"run{self.trace.run_id}")
-                self.sandbox_dir = os.path.abspath(
-                    os.path.join(self.download_dir, ".fluent_temp", f"task_{db_id_str}")
-                )
-                os.makedirs(self.sandbox_dir, exist_ok=True)
-
-                merged["paths"] = {"home": self.sandbox_dir, "temp": self.sandbox_dir}
+            # === 产物事务：建沙盒并把 yt-dlp 的全部输出路径改写进 payload ===
+            # 这里**不再有** `skip_download` / `is_cover_direct` 的守卫 —— 那两条快
+            # 路径早在 `run()` 开头就 return 掉了（见上面两处），守卫是永远为真的死代码。
+            # 它们各自也建自己的事务（`_fastpath_open_staging()`），只是走的是精简版
+            # 上岸（没有 attempt 文件、没有 Feature 链），所以那一套不在这里。
+            #
+            # 目录身份是 `create()` 自己生成的全长 `uuid4().hex`，不是 `trace.run_id`：
+            # 后者只有 24 bit、是给人看的展示标识，拿它当 filesystem ownership identity
+            # 就得为碰撞准备 fallback，而两个 `run_abc123*` 目录的 journal 里 `run_id`
+            # 都一样，GC 无法判断谁还活着。`task_key` 用 `db_id` 只决定分组的中间那一层，
+            # 每次 run 仍然独占一个 `txn_<staging_id>/` —— 重下会复用同一个 `db_id`
+            # （`controller.handle_start_snapshot()` 的 `restore_db_id`），旧 run 的残骸
+            # 必须落在别的目录里，否则 `reconcile()` 会把它当成自己的产物交付出去。
+            task_key = str(getattr(self, "db_id", "") or f"run{self.trace.run_id}")
+            self.staging = StagingArea.create(
+                self.download_dir,
+                task_key,
+                trace_run_id=self.trace.run_id,
+                trace=self.trace,
+                cancel_check=self._cancel_event.is_set,
+            )
+            self.staging.apply_to_opts(merged)
 
             # === 字幕语言迟解析 ===
             # 必须在 Feature 链之前：SubtitleFeature.on_download_start 要看到最终语言列表
@@ -1205,8 +1256,35 @@ class DownloadWorker(QThread):
             def on_path(path: str) -> None:
                 self.output_path = path
 
-            def on_file_created(path: str) -> None:
-                self.dest_paths.add(path)
+            def on_file_created(path: str, role: str | None = None) -> None:
+                # `role` 是 yt-dlp **自己声明**的角色（`media`/`subtitle`/`thumbnail`），
+                # `None` = 报告者没说（见 `executor.FileCreatedCallback`）。没声明就**不登记**，
+                # 留给 `reconcile()` 那唯一一次兜底分类 —— **不许在这儿按后缀替它补一个角色
+                # 出来**，那正是「同一批文件的角色被三处各猜一遍」的老路。
+                staging = self.staging
+                kind = _REPORTED_KINDS.get(role or "")
+                if staging is None or kind is None:
+                    self.dest_paths.add(path)
+                    return
+                try:
+                    art = staging.add_reported(path, kind, opts=merged)
+                except Exception:
+                    # 登记失败（路径逃逸、封板后迟到的行）不该打断下载：真在 payload 里
+                    # 的那些由 `reconcile()` 兜回来，真正的逃逸会在那里再抛一次。
+                    logger.exception("产物登记失败: {}", path)
+                    self.dest_paths.add(path)
+                    return
+                # Feature 链（Step 5 之前）仍读 `dest_paths`，喂它**映射后的 payload
+                # 路径**：`home != temp` 之后 yt-dlp 报的几乎全是 temp 侧路径，原样塞
+                # 进去下游拿到的是一个下载结束就不存在的名字。
+                self.dest_paths.add(art.path)
+
+            def on_embed_evidence(kind: str) -> None:
+                # 「嵌入确实成功了」的唯一合法依据：结构化 PP 证据，不看磁盘、也不看
+                # 人类日志行。删除外挂字幕/封面只认它（见《下载产物事务层》「删除只有
+                # 一个理由」）。
+                if self.staging is not None:
+                    self.staging.manifest.embed_evidence.add(kind)
 
             # === 执行下载 ===
             logger.info("🚀 启动下载...")
@@ -1218,6 +1296,12 @@ class DownloadWorker(QThread):
 
                 self.executor = DownloadExecutor()
                 attempt_no = self.trace.attempt
+                # 每个 attempt 一个独立的 `final.<n>.txt` —— `--print-to-file` 是
+                # **Append** 语义，单文件会被上一轮失败 attempt 的路径污染，读到的
+                # 「主媒体」可能是失败那次的。
+                final_paths_file = (
+                    self.staging.prepare_attempt(attempt_no) if self.staging else None
+                )
                 try:
                     # 执行
                     final_path = self.executor.execute(
@@ -1228,12 +1312,18 @@ class DownloadWorker(QThread):
                         on_path=on_path,
                         cancel_check=lambda: self.is_cancelled,
                         on_file_created=on_file_created,
+                        on_embed_evidence=on_embed_evidence,
+                        final_paths_file=final_paths_file,
+                        parts_probe=self.staging.parts_bytes if self.staging else None,
                         cached_info_dict=self.cached_info,
                     )
 
                     if final_path:
                         self.output_path = final_path
-                        if not hasattr(self, "sandbox_dir"):
+                        if self.staging is None:
+                            # 沙盒模式下这还是 payload 里的路径，不是用户手上的最终
+                            # 路径 —— 提早 emit 会让 UI 的「打开文件」指向一个提交后
+                            # 就不存在的地方。等 `commit()` 之后再发。
                             self.output_path_ready.emit(final_path)
 
                     break  # 跳出 while 循环，进入后续处理
@@ -1394,6 +1484,35 @@ class DownloadWorker(QThread):
             # === Feature Pipeline: Post-process ===
             # 执行各模块的后处理逻辑（封面嵌入、字幕合并、VR转码等）
             if not self.is_cancelled:
+                # ── 对账与封板：**必须在 Feature 链之前** ──
+                # `reconcile()` 是全流程唯一的目录扫描，且只扫 `payload/`：yt-dlp
+                # 没报告过的产物在这里补录（`origin="reconciled"`，也是唯一被允许
+                # 做兜底分类的地方）、报告过而盘上已经没有的在这里标 `presence`、
+                # 主媒体也在这里推定。`seal_discovery()` 封的是**推断**不是**创造**
+                # —— 之后不许再「发现」新产物，但 Feature 仍可显式 `register_generated`。
+                if self.staging is not None:
+                    self._clean_logger.force_update("completed", 97.0, "🧾 正在核对产物...")
+                    self._register_primary_media(merged)
+                    try:
+                        self.staging.reconcile(merged)
+                        self.staging.seal_discovery()
+                    except StagingCancelled:
+                        raise
+                    except Exception:
+                        # 对账失败不该在这里变成终态：真正的逃逸/阻断由后面的
+                        # `verify()` 拦，那里才是安全门。这里只留证据。
+                        logger.exception("产物对账失败")
+                        emit_event(
+                            "signal",
+                            trace=self.trace,
+                            level="WARNING",
+                            stage="verify",
+                            code="manifest_reconcile_failed",
+                        )
+                    # Feature 链（Step 5 之前）仍读 `dest_paths`。补录进来的产物也得
+                    # 让它们看得见 —— 否则「reconcile 兜回来的字幕」对下游等于不存在。
+                    self.dest_paths.update(self.staging.observed_paths())
+
                 for feature in self.features:
                     try:
                         feature.on_post_process(context)
@@ -1412,65 +1531,39 @@ class DownloadWorker(QThread):
                     if isinstance(k, str) and k.startswith("__fluentytdl_"):
                         merged.pop(k, None)
 
-                # ── 转移上岸 (Extraction) ──
-                if hasattr(self, "sandbox_dir") and os.path.exists(self.sandbox_dir):
+                # ── 提交上岸 (Commit) ──
+                # **唯一的落地代码。** 分工按《下载产物事务层》：
+                #   `verify()`    事务安全门 —— 只回答「现在提交安全吗」，二值，
+                #                 不做集合减法（减法归 commit 之后的 `emit_actual`）；
+                #   `build_plan()` 整组同 stem 定名，撞名整组一起变 `Title (1).*`，
+                #                 于是字幕的语言段和封面的附属关系都保得住；
+                #   `commit()`    里面才有那**唯一一次** cancel gate，之后就是不可
+                #                 取消临界区（预留占位符本身已经是沙盒外副作用）。
+                if self.staging is not None:
                     self._clean_logger.force_update("completed", 99.0, "📦 正在整理文件...")
-                    import shutil
-
-                    final_moved_path = None
+                    staging = self.staging
                     try:
-                        for root, _, files in os.walk(self.sandbox_dir):
-                            for f in files:
-                                if f.endswith(".part") or f.endswith(".ytdl"):
-                                    continue
+                        staging.verify(merged)
+                        plan = staging.build_plan()
+                        staging.commit(plan)
+                    except StagingCancelled as exc:
+                        # commit 开头那道 gate：此刻沙盒外一片干净，按取消处理即可。
+                        raise DownloadCancelled() from exc
+                    except VerifyBlocked as blocked:
+                        # 安全门拦下。payload 里此刻究竟有什么已经由 `verify_blocked`
+                        # 信号记完了，这里只把结论翻成人话；异常继续往上走 ——
+                        # 终态诊断归外层那唯一一处失败边界（硬规则 2）。
+                        context.emit_warning(f"产物校验未通过，已保留沙盒供排查：{blocked}")
+                        raise
 
-                                rel_path = os.path.relpath(root, self.sandbox_dir)
-                                target_dir = (
-                                    os.path.join(self.download_dir, rel_path)
-                                    if rel_path != "."
-                                    else self.download_dir
-                                )
-                                os.makedirs(target_dir, exist_ok=True)
-
-                                src = os.path.join(root, f)
-                                dst = os.path.join(target_dir, f)
-
-                                # 确保目标文件名唯一，避免覆盖
-                                def get_unique_path(target_path: str) -> str:
-                                    if not os.path.exists(target_path):
-                                        return target_path
-                                    base, ext = os.path.splitext(target_path)
-                                    counter = 1
-                                    while True:
-                                        new_path = f"{base} ({counter}){ext}"
-                                        if not os.path.exists(new_path):
-                                            return new_path
-                                        counter += 1
-
-                                dst = get_unique_path(dst)
-                                shutil.move(src, dst)
-
-                                # 提取新的文件名以便更新追踪
-                                new_f = os.path.basename(dst)
-
-                                # Check if this is the main output path
-                                if self.output_path and os.path.basename(self.output_path) == f:
-                                    final_moved_path = dst
-                                elif not self.output_path and not is_aux_name(new_f):
-                                    final_moved_path = dst
-
-                        if final_moved_path:
-                            self.output_path = final_moved_path
-                            self.output_path_ready.emit(final_moved_path)
-                        elif self.output_path and not self.output_path.startswith(self.sandbox_dir):
-                            self.output_path_ready.emit(self.output_path)
-
-                        # Clean up sandbox
-                        shutil.rmtree(self.sandbox_dir, ignore_errors=True)
-                    except Exception as e:
-                        logger.warning("移动沙盒文件失败: {}", e)
-                        if self.output_path:
-                            self.output_path_ready.emit(self.output_path)
+                    # ↓↓↓ point of no return：用户手上的文件已经完整，事务成功不可推翻 ↓↓↓
+                    primary = staging.manifest.primary_media()
+                    if primary is not None and primary.final_path:
+                        # 不再靠 `basename == f` / `not is_aux_name()` 反推主媒体 ——
+                        # 那条老路能把 `.info.json` 推举成 `output_path`。
+                        self.output_path = primary.final_path
+                    if self.output_path:
+                        self.output_path_ready.emit(self.output_path)
                 else:
                     if self.output_path:
                         self.output_path_ready.emit(self.output_path)
@@ -1487,16 +1580,55 @@ class DownloadWorker(QThread):
                     context.emit_status(f"⚠️ {sub_warning}")
 
                 # ── 实际产物 vs 期望产物 ──
-                # 同样必须在 force_update("completed") 之前（见上一段注释）。
-                # 传的是 `dest_paths` 而不是重扫最终目录：沙盒上岸时的去重改名
-                # （`Title.en.vtt` → `Title.en (1).vtt`）会毁掉文件名里的语言段，
-                # 而沙盒内的原始名是准的。`output_path` 已是上岸后的路径，容器判定要用它。
-                emit_actual(
-                    self.dest_paths,
-                    trace=self.trace,
-                    output_path=self.output_path or "",
-                    stage="verify",
-                )
+                # 同样必须在 force_update("completed") 之前（见上一段注释），也必须
+                # 在 `commit()` 之后。喂的是 `observed()` 的 **payload 内原名**：
+                # `actual` 的契约是「yt-dlp 报告过创建」而不是「此刻磁盘上还在」，
+                # 嵌进容器后被吃掉的字幕仍必须计入，否则会把「嵌进去了」误报成
+                # 「没拿到」。`output_path` 已是提交后的路径，容器判定要用它。
+                #
+                # 硬约束 9：这一步和下面的 `cleanup()` 都在 `phase=committed` 之后，
+                # 抛异常只能落 `kind=signal`，**不得**把 outcome 改成 failed ——
+                # 文件明明下好了却上报失败，正是这轮重构要消灭的谎言的镜像版本。
+                try:
+                    # 路径推不出来的那两层事实从 `extra_actual` 并入：
+                    #   交付 ← journal 里 `published` 成员的 `dst`（写出来又丢的不在里面，
+                    #          所以物理丢失终于能推出 `missing`，而 `actual` 不必背叛
+                    #          「报告过创建」的契约）；
+                    #   嵌入 ← `manifest.embed_evidence`（结构化 PP 证据，不看磁盘也不看 rc）。
+                    extra: set[str] = set()
+                    if self.staging is not None:
+                        extra |= delivery_tokens(self.staging.published_paths())
+                        extra |= embed_tokens(self.staging.manifest.embed_evidence)
+                    emit_actual(
+                        self.staging.observed_paths() if self.staging else self.dest_paths,
+                        trace=self.trace,
+                        output_path=self.output_path or "",
+                        stage="verify",
+                        extra_actual=extra,
+                    )
+                except Exception:
+                    logger.exception("提交后观测失败")
+                    emit_event(
+                        "signal",
+                        trace=self.trace,
+                        level="WARNING",
+                        stage="verify",
+                        code="postcommit_observability_failed",
+                    )
+
+                if self.staging is not None:
+                    try:
+                        # 唯一的物理删除动作，且只在 `phase=committed` 之后。
+                        self.staging.cleanup()
+                    except Exception:
+                        logger.exception("沙盒清理失败（成品不受影响）")
+                        emit_event(
+                            "signal",
+                            trace=self.trace,
+                            level="WARNING",
+                            stage="finalize",
+                            code="staging_cleanup_deferred",
+                        )
 
                 self._clean_logger.force_update("completed", 100.0, "✅ 下载并处理完成！")
                 self._run_outcome = "success"
@@ -1504,22 +1636,20 @@ class DownloadWorker(QThread):
 
         except DownloadCancelled:
             self._clean_logger.force_update("cancelled", 0.0, "🗑️ 任务已取消并清理残骸")
-            # 延时 1 秒给 yt-dlp 及其子进程释放文件锁，防止 WinError 32
-            import time
-
-            time.sleep(1.0)
-            self._sweep_part_files()
+            # 取消的**唯一**裁决点。判据是 phase 不是调用点：`committing` 之后取消
+            # 只记 `pending_cancel`，`committed` 之后是 no-op —— 绝不出现「UI 说已
+            # 取消，用户目录里躺着半组成品」。沙盒外的文件在这里一个都不会被碰
+            # （老的 `_sweep_part_files()` 会对 `output_path ∪ dest_paths` 无条件
+            # `os.remove`，那是把已交付给用户的成品也删掉的杀伤半径，缺陷 F）。
+            self._finalize_staging_cancel()
             self.status_msg.emit("任务已取消")
             self._run_outcome = "cancelled"
             self.cancelled.emit()
         except DownloadFailed as failure:
-            # 错误已经在内层诊断并 emit 过了，这里只做残骸清理：
+            # 错误已经在内层诊断并 emit 过了，这里只做终态裁决：
             # 不重复上报，也不发 cancelled，避免 UI 把失败显示成"任务已取消"
             logger.info("任务终态失败（不可重试）: {} — {}", self.url, failure)
-            import time
-
-            time.sleep(1.0)
-            self._sweep_part_files()
+            self._finalize_staging_failure(failure)
             # 内层只 emit 了 `kind=diagnosis`（这次失败判定成了什么），终态裁决仍归本层：
             # diagnosis 和 outcome 是两件事，前者可能一个 run 出现多条（每次尝试一条），
             # 后者恰好一条。
@@ -1529,13 +1659,34 @@ class DownloadWorker(QThread):
             logger.exception("下载过程发生未知异常: {}", self.url)
             pct = getattr(self, "progress_val", 0.0)
 
+            # 失败的**唯一**裁决点，同时决定「沙盒留还是清」和「上报什么」——
+            # 这两件事分开判就又变成两处判断了。
+            verdict = self._finalize_staging_failure(exc)
+            if verdict == "already_succeeded":
+                # 硬约束 9：`phase=committed` 是不可逆的成功边界。走到这里说明
+                # 提交已经全部完成，异常只可能来自 housekeeping（观测序列化炸了、
+                # rmtree 撞上杀软锁），而上面那两层 `try` 没兜住。**不许翻成 failed**
+                # —— 文件明明下好了却上报失败，是本轮重构要消灭的谎言的镜像版本。
+                emit_event(
+                    "signal",
+                    trace=self.trace,
+                    level="WARNING",
+                    stage="finalize",
+                    code="postcommit_escaped",
+                    error=msg[:200],
+                )
+                self._clean_logger.force_update("completed", 100.0, "✅ 下载并处理完成！")
+                self._run_outcome = "success"
+                self.completed.emit()
+                return
+
             self._clean_logger.force_update("error", pct, f"❌ 错误: {msg}")
 
             # 兼容旧逻辑：如果是纯文本 Exception，依然通过 translate_error 进行基本的处理
             # 实际上 translate_error 也可以被废弃，我们现在直接传结构化 dict
             err_dict = translate_error(exc)
             # 这是 run 的第二个失败边界：内层 `except YtDlpExecutionError` 管 yt-dlp
-            # 自己报的错，这里管管线里出的错（后处理、沙盒移动、feature 抛异常）。
+            # 自己报的错，这里管管线里出的错（后处理、提交、feature 抛异常）。
             # 两条路互斥 —— 内层走完必定 raise `DownloadFailed`/`DownloadCancelled`，
             # 那两个都在上面自己的分支里被接住，不会落到这里，所以不会二次 emit。
             _emit_failure_diagnosis(
@@ -1549,6 +1700,237 @@ class DownloadWorker(QThread):
             self.executor = None
 
     # ── 小文件快速通道 ────────────────────────────────────
+    # 这两条路（纯字幕/封面提取、封面直下）不走 Executor / Strategy / Feature 管线，
+    # 但**必须**走同一套产物事务 —— 缺陷 G 说的就是它们原本直写用户目录：没有整组重名
+    # 保护（两个同名任务互相覆盖）、取消时不扫任何半成品（直接 `return`）、rc≠0 时把
+    # 半份产物留在用户目录里。下面三个 helper 是那套事务在快速通道上的最小形态。
+
+    def _fastpath_relativize_outtmpl(self, opts: dict[str, Any]) -> None:
+        """把绝对 `outtmpl` 拆成「`paths["home"]` + 文件名」。**这是沙盒被静默绕过的唯一入口。**
+
+        yt-dlp 的 `-P/--paths` 只对**相对**输出模板生效，所以一个绝对 `-o` 会让
+        `home` 与 `temp` 双双失效：产物直写用户目录，而刚建的沙盒全程是空的 ——
+        `reconcile()` 什么都扫不到、`build_plan()` 抛「没有任何可交付成员」，一次
+        成功的下载被报成失败，更糟的是用户目录里那份**没过任何重名保护**。
+
+        这不是理论隐患：`core/controller.py` 恰恰只在 outtmpl **不是**绝对路径时才补
+        `paths`（那句 `if not (isinstance(outtmpl, str) and os.path.isabs(outtmpl))`），
+        即「绝对 outtmpl」是它显式承认的一种输入；UI 侧的两处归一化也只在模板**同时**
+        含分隔符与 `%(title)s.%(ext)s` 时才改写，挡不住这一类。
+
+        修法是拆开而不是拒绝：目录段还原成用户意图（`paths["home"]`，随后由
+        `apply_to_opts()` 记进 `dest_intent`，最终由 `build_plan()` 复现），文件名段
+        留在 `outtmpl` 里。语义等价，而 `-P` 重新生效。
+        """
+        tmpl = opts.get("outtmpl")
+        if not (isinstance(tmpl, str) and tmpl.strip()):
+            return
+        tmpl = tmpl.strip()
+        if not os.path.isabs(tmpl):
+            return
+        parent, base = os.path.split(tmpl)
+        if not (parent and base):
+            return
+        paths = dict(opts.get("paths") or {})
+        paths["home"] = parent
+        opts["paths"] = paths
+        opts["outtmpl"] = base
+        emit_event(
+            "signal",
+            trace=self.trace,
+            level="WARNING",
+            stage="download",
+            code="outtmpl_relativized",
+            detail=parent,
+        )
+
+    def _fastpath_group_stem(self, opts: Mapping[str, Any]) -> str | None:
+        """从 `outtmpl` 取整组 stem，**仅当它已经是字面量**。
+
+        `%(title)s` 还没被 `controller` 写死时这个模板不是文件名而是配方，拿它当
+        `group_stem` 会让整组产物叫 `%(title)s.vtt`。那种情况返回 `None`，把 authority
+        让给 `Manifest._put()` 的首个字幕（纯字幕模式）或 `_fastpath_land()` 的兜底。
+        """
+        tmpl = opts.get("outtmpl")
+        if not (isinstance(tmpl, str) and tmpl.strip()):
+            return None
+        stem = os.path.splitext(os.path.basename(tmpl.strip().replace("\\", "/")))[0]
+        if not stem or "%(" in stem:
+            return None
+        return stem
+
+    def _fastpath_open_staging(self, opts: dict[str, Any]) -> None:
+        """给快速通道开一个事务，并把 `opts` 的全部输出路径改写进 payload。
+
+        `download_dir` 的三档回落与 `run()` 里那段逐字一致 —— 这两条路原本是从
+        `paths["home"]` **单档**反推的，`paths` 缺失时就留着 `None`，于是 `-P` 根本不
+        发、沙盒也无处可建。硬约束 6 要求 `.fluent_temp` 在 `download_dir` 之下（同卷
+        `os.replace` 的前提），所以这个值必须先定下来再建沙盒。
+        """
+        # 必须在推导 `download_dir` 与 `apply_to_opts()` **之前**：绝对 `outtmpl` 的
+        # 目录段才是用户真正的目的地，还原成 `paths["home"]` 之后下面两步自然吃到它。
+        self._fastpath_relativize_outtmpl(opts)
+
+        try:
+            paths = opts.get("paths")
+            outtmpl = opts.get("outtmpl")
+            if isinstance(paths, dict) and paths.get("home"):
+                self.download_dir = os.path.abspath(str(paths.get("home")))
+            elif isinstance(outtmpl, str) and outtmpl.strip():
+                self.download_dir = os.path.abspath(
+                    os.path.dirname(outtmpl.strip()) or os.getcwd()
+                )
+            else:
+                self.download_dir = os.path.abspath(os.getcwd())
+        except Exception:
+            self.download_dir = os.path.abspath(os.getcwd())
+
+        task_key = str(getattr(self, "db_id", "") or f"run{self.trace.run_id}")
+        self.staging = StagingArea.create(
+            self.download_dir,
+            task_key,
+            trace_run_id=self.trace.run_id,
+            trace=self.trace,
+            cancel_check=self._cancel_event.is_set,
+            group_stem=self._fastpath_group_stem(opts),
+        )
+        self.staging.apply_to_opts(opts)
+
+    def _fastpath_paths_args(self, opts: Mapping[str, Any]) -> list[str]:
+        """把 `apply_to_opts()` 改写后的 `paths` 拼成 `-P <type>:<dir>`。
+
+        **不再反推 `download_dir`**（这两条路原本在这里干这件事）—— 它在开事务时就定
+        了，而此刻 `paths["home"]` 指向的是 payload，反推会把沙盒当成用户目录，于是
+        沙盒套沙盒、`dest_intent` 也指进沙盒里。
+
+        `home != temp` 之后 `.part`/`.ytdl` 不再与产物混层，`reconcile()` 只扫 payload。
+        Windows 盘符不会被 `<TYPES>:` 的冒号切错：yt-dlp 的键只认
+        `home|temp|<OUTTMPL_TYPES>`，`home:D:\\payload` 解出的是 key=`home`、
+        val=`D:\\payload`。
+        """
+        args: list[str] = []
+        for key, value in sorted((opts.get("paths") or {}).items()):
+            if isinstance(value, str) and value.strip():
+                args += ["-P", f"{key}:{value.strip()}"]
+        return args
+
+    def _fastpath_land(self, expect_opts: dict[str, Any], *, component: str) -> None:
+        """快速通道的上岸：对账 → 封板 → 校验 → 计划 → 提交 → 观测 → 清沙盒。
+
+        `expect_opts` 必须是**期望形态**的 opts（这条路实际行为下的 `skip_download`
+        等已覆写），不是原始 `opts` —— `verify()` 的判据是 `expected_artifacts()` 里
+        有没有 `media`，喂原始 opts 会让每个纯字幕/纯封面任务都被自己的安全门拦下。
+
+        与 `run()` 的上岸块是同一套顺序，差别只有三处，都是这两条路的事实：
+        - 不调 `prepare_attempt()` / `_register_primary_media()`：它们不发
+          `--print-to-file`，`final.<n>.txt` 会是个空的死文件，journal 里不记
+          `final_path_file` 才是诚实的记录；
+        - 不并 `embed_tokens()`：纯字幕路走 `build_subtitle_args(allow_embed=False)`、
+          封面直下就是一张图，`embed_evidence` 恒为空集，那会是个恒为 0 的调用；
+        - 不设 `self.output_path`：两条路都没有主媒体，也就没有容器可判。
+        """
+        staging = self.staging
+        if staging is None:
+            return
+
+        self._clean_logger.force_update("completed", 97.0, "🧾 正在核对产物...")
+        try:
+            staging.reconcile(expect_opts)
+            staging.seal_discovery()
+        except StagingCancelled:
+            raise
+        except Exception:
+            logger.exception("产物对账失败")
+            emit_event(
+                "signal",
+                trace=self.trace,
+                level="WARNING",
+                stage="verify",
+                code="manifest_reconcile_failed",
+            )
+
+        if staging.manifest.group_stem is None:
+            # 最后一档 stem authority。前两档都可能落空：`outtmpl` 还带着 `%(title)s`
+            # 时不是字面量，而 `_put()` 的首个字幕兜底在**纯封面**轻量模式下没有字幕
+            # 可用。缺 stem 时 `build_plan()` 会「拒绝猜测」—— 把一次成功的提取报成
+            # 失败。这不是让 `build_plan()` 去猜：是快速通道自己声明 authority，与
+            # cover-direct 用 `outtmpl` 声明是同一件事，只是判据换成了实际产物。
+            kept = sorted(staging.manifest.kept(), key=lambda art: art.id)
+            if kept:
+                staging.manifest.group_stem = os.path.splitext(
+                    os.path.basename(kept[0].path)
+                )[0]
+                staging.manifest.stem_authority = "explicit"
+
+        self._clean_logger.force_update("completed", 99.0, "📦 正在整理文件...")
+        try:
+            staging.verify(expect_opts)
+            plan = staging.build_plan()
+            staging.commit(plan)
+        except StagingCancelled as exc:
+            # `commit()` 开头的 gate 判定本次已取消。沙盒外一片干净（那道 gate 就在
+            # 第一个 `reserve` 之前），翻译成 `DownloadCancelled` 交给调用方收尾。
+            raise DownloadCancelled() from exc
+        except VerifyBlocked:
+            logger.exception("产物校验未通过，已保留沙盒供排查")
+            raise
+
+        # ↓↓↓ point of no return：用户手上的文件已经完整，事务成功不可推翻 ↓↓↓
+        # 下面两步各自包一层（硬约束 9）：housekeeping 出错只能落 `kind=signal`，
+        # 不许把 outcome 翻成 failed。
+        try:
+            emit_actual(
+                staging.observed_paths(),
+                trace=self.trace,
+                stage="verify",
+                component=component,
+                extra_actual=delivery_tokens(staging.published_paths()),
+            )
+        except Exception:
+            logger.exception("提交后观测失败")
+            emit_event(
+                "signal",
+                trace=self.trace,
+                level="WARNING",
+                stage="verify",
+                code="postcommit_observability_failed",
+            )
+
+        try:
+            staging.cleanup()
+        except Exception:
+            logger.exception("沙盒清理失败（成品不受影响）")
+            emit_event(
+                "signal",
+                trace=self.trace,
+                level="WARNING",
+                stage="finalize",
+                code="staging_cleanup_deferred",
+            )
+
+    def _fastpath_fail(self, exc: BaseException, *, component: str, done_text: str) -> bool:
+        """快速通道的失败裁决单点。返回 True 表示「其实已经成功了，别改 outcome」。
+
+        与 `run()` 的通用 handler 同构：`finalize_staging_failure()` 一次决定「沙盒
+        留还是清」和「上报什么」，而 `already_succeeded`（`phase=committed`）走硬约束
+        9 —— 用户手上的文件已经完整，逃到这里的只能是 housekeeping 出错。
+        """
+        if self._finalize_staging_failure(exc) != "already_succeeded":
+            return False
+        emit_event(
+            "signal",
+            trace=self.trace,
+            level="WARNING",
+            stage="finalize",
+            code="postcommit_escaped",
+            component=component,
+            error=str(exc)[:200],
+        )
+        self._clean_logger.force_update("completed", 100.0, done_text)
+        self._run_outcome = "success"
+        self.completed.emit()
+        return True
+
     def _run_lightweight_extract(self) -> None:
         """纯字幕/封面提取：完全绕过 Executor / Strategy / Feature 管线，
         直接用最干净的 subprocess 调用 yt-dlp。
@@ -1604,22 +1986,35 @@ class DownloadWorker(QThread):
         except Exception:
             base_opts = {}
 
-        # Cookie（必须保留，否则可能无法访问受限视频）
+        # Cookie（必须保留，否则可能无法访问受限视频）。
+        # yt-dlp 每次运行结束都把 jar 回写进 `--cookies` 文件；绝不把 Sentinel 真相源直接
+        # 交给它，改传一份用完即弃的字节副本（回写只污染副本，真相源逐字节不变）。副本必须
+        # 存活到子进程结束（回写发生在进程退出时），由方法末尾 `finally` 里 `_cookie_stack.close()`
+        # 删除；崩溃/强杀漏网的由启动扫描 `fluentytdl_ck_*` 兜底。非托管/用户自管文件与 None
+        # 由 `cookie_runfile` 原样直通。
+        from ..auth.cookie_runfile import cookie_runfile
+
+        _cookie_stack = ExitStack()
         cookiefile = opts.get("cookiefile") or base_opts.get("cookiefile")
-        if isinstance(cookiefile, str) and cookiefile:
-            cmd += ["--cookies", cookiefile]
+        _run_cf = _cookie_stack.enter_context(cookie_runfile(cookiefile))
+        if isinstance(_run_cf, str) and _run_cf:
+            cmd += ["--cookies", _run_cf]
+
+        # === 产物事务（缺陷 G）===
+        # 必须在拼 `-o` / `-P` **之前**：`_fastpath_open_staging()` 会先把绝对
+        # `outtmpl` 拆成「`paths["home"]` + 文件名」（否则 `-P` 整体失效、沙盒被静默
+        # 绕过），再把 `paths` 的每个键改写进 payload。下面两段读的都是改写后的值。
+        #
+        # 这一步抛异常没有本地 handler：它在下面那个 `try` 之外，会一路逃到 `run()`
+        # 的通用 handler —— 而那里走的是同一个 `_finalize_staging_failure()` 裁决点，
+        # 所以「沙盒留还是清」的结论一致，只是诊断上少一个 component 标签。
+        self._fastpath_open_staging(opts)
 
         # 输出路径
         outtmpl = opts.get("outtmpl")
         if isinstance(outtmpl, str) and outtmpl:
             cmd += ["-o", outtmpl]
-
-        paths = opts.get("paths")
-        if isinstance(paths, dict):
-            home = paths.get("home")
-            if isinstance(home, str) and home.strip():
-                cmd += ["-P", home.strip()]
-                self.download_dir = os.path.abspath(home.strip())
+        cmd += self._fastpath_paths_args(opts)
 
         # ffmpeg 位置（字幕转换可能需要）
         ffmpeg_loc = base_opts.get("ffmpeg_location")
@@ -1700,9 +2095,10 @@ class DownloadWorker(QThread):
         # "哪些行算线索"就是当初 `[download] ... Skipping` 只有一处认得的由来。
         diag_lines = DiagnosticLineCollector()
         # 这条路没有 Executor 的 `on_file_created`，产物只能从输出行里捞。
-        # `_RE_WRITING_TO` 同时认字幕和封面（两者都返回 `type="subtitle"` + `path`），
-        # 所以纯封面轻量模式也一样有落点。
-        produced: set[str] = set()
+        # `_RE_WRITING_TO` 同时认字幕和封面（两者都带 `role`），所以纯封面轻量模式
+        # 也一样有落点。`Destination:` 行没有 `role`（`output_parser` 的文档里写明恒为
+        # `None`），放它进 `add_reported` 会被 `landing_path()` 当 `.parts` 侧路径换算，
+        # 得到一个拼错的名字 —— 所以**只登记带了 `role` 的行**，其余留给 `reconcile()`。
         self._clean_logger.force_update("parsing", 0.0, "⚡ 正在初始化提取引擎...")
 
         try:
@@ -1733,9 +2129,12 @@ class DownloadWorker(QThread):
                             proc.terminate()
                     except Exception:
                         pass
+                    # 取消裁决在 `_finalize_staging_cancel()` 里：它只判"沙盒留还是清"，
+                    # 结论本身仍是"取消"。其余与改前一致 —— 取消不是失败，不写 error。
+                    self._finalize_staging_cancel()
                     self._run_outcome = "cancelled"
                     self.cancelled.emit()
-                    return
+                    return  # type: ignore[union-attr]
 
                 try:
                     line = raw.decode("utf-8").rstrip("\r\n")  # type: ignore[union-attr]
@@ -1752,9 +2151,17 @@ class DownloadWorker(QThread):
                     if parsed.type not in ("progress", "ffmpeg_progress"):
                         diag_lines.feed(line)
                     if parsed.path:
-                        # 不按 type 过滤：任何被 yt-dlp 报出路径的行都算"它写了这个文件"，
-                        # 归类交给 `found_artifacts()` 按后缀做（那里也是下载路径的判据）。
-                        produced.add(parsed.path)
+                        # 走上岸事务：把 yt-dlp 报过的创建登记进 Manifest（角色由报告者
+                        # 声明，这里只做 `role → Kind` 的映射，不按后缀猜）。没带 `role`
+                        # 的行（`Destination:`）跳过 —— `reconcile()` 会做那唯一一次兜底
+                        # 分类。登记失败（路径逃逸、封板后迟到）不该打断提取：真在 payload
+                        # 里的那些由 `reconcile()` 兜回来。
+                        kind = _REPORTED_KINDS.get(parsed.role or "")
+                        if kind is not None and self.staging is not None:
+                            try:
+                                self.staging.add_reported(parsed.path, kind, opts=opts)
+                            except Exception:
+                                logger.exception("产物登记失败: {}", parsed.path)
                     if parsed.type == "warning":
                         logger.warning("[LightweightExtract] {}", line)
                     elif parsed.type == "error":
@@ -1797,6 +2204,9 @@ class DownloadWorker(QThread):
                 _emit_failure_diagnosis(
                     self.trace, err, stage="download", operation="lightweight_extract", exc=fail
                 )
+                # 失败裁决（缺陷 G）：对账还没做，沙盒里是"半份产物"，`finalize_failure`
+                # 会按事务规则决定清还是留。结论是失败，照常往下报。
+                self._finalize_staging_failure(fail)
                 self._run_outcome = "failed"
                 self.error.emit(err)
             else:
@@ -1817,16 +2227,25 @@ class DownloadWorker(QThread):
                 # 这条路的 `actual` 尤其是整件事的重点：rc=0、UI 写"✅ 提取完成"、
                 # 而一个字幕文件都没写出来，正是用户最初报的那个查不出来的问题。
                 # 不传 `output_path`：这条路没有主媒体，也就没有容器可判。
-                emit_actual(
-                    produced,
-                    trace=self.trace,
-                    stage="verify",
-                    component="lightweight_extract",
-                )
+                # `delivered:*` 的期望这条路也有（字幕期望 ∧ keep_subtitle），所以实际侧
+                # 必须一起给，否则每个纯字幕任务都会"缺"一个交付 token。
+                #
+                # === 上岸（缺陷 G）===
+                # 上面 `emit_success_signals` 只喂状态行，产物对账/封板/校验/计划/提交全在
+                # `_fastpath_land()` 里：它拿 `expect_opts`（期望形态）跑 `reconcile`（标
+                # presence）→ `verify`（安全门）→ `build_plan` → `commit`（交付到用户目录，
+                # 报告过的路径此刻不再等于最终路径），提交成功后才 `emit_actual(observed,
+                # extra_actual=delivery_tokens(published))` 并清沙盒。
+                self._fastpath_land(expect_opts, component="lightweight_extract")
                 self._clean_logger.force_update("completed", 100.0, "✅ 提取完成")
                 self._run_outcome = "success"
                 self.completed.emit()
 
+        except DownloadCancelled:
+            # 取消**唯一**裁决点（与完整道路同一个）：判据是 phase 不是调用点。
+            self._finalize_staging_cancel()
+            self._run_outcome = "cancelled"
+            self.cancelled.emit()
         except Exception as exc:
             logger.exception("[LightweightExtract] 提取失败: {}", self.url)
             self._clean_logger.force_update("error", 0.0, f"❌ 错误: {exc}")
@@ -1834,9 +2253,17 @@ class DownloadWorker(QThread):
             _emit_failure_diagnosis(
                 self.trace, err, stage="download", operation="lightweight_extract", exc=exc
             )
+            # 失败裁决单点：`_fastpath_land()` 已 commit、之后才出的异常（清洁失败、
+            # 观测失败）返回 True（= already_succeeded），outcome 必须保持 success。
+            if self._fastpath_fail(
+                exc, component="lightweight_extract", done_text="✅ 提取完成"
+            ):
+                return
             self._run_outcome = "failed"
             self.error.emit(err)
         finally:
+            # 子进程已结束（正常/取消/异常），yt-dlp 的 cookie 回写只落在运行副本上——删掉它。
+            _cookie_stack.close()
             self.is_running = False
 
     def _run_cover_direct_download(self) -> None:
@@ -1853,18 +2280,20 @@ class DownloadWorker(QThread):
 
         cmd: list[str] = [str(exe), "--ignore-config", "--no-warnings", "--newline"]
 
-        opts = self.opts
+        # 浅拷贝：`_fastpath_open_staging()` 会原地改写 `opts["paths"]` 与 `opts["outtmpl"]`，
+        # 不能让它写到 `self.opts` 这份共享状态上。
+        opts = dict(self.opts)
+
+        # === 产物事务（缺陷 G）===
+        # 同 `_run_lightweight_extract`：必须在拼 `-o` / `-P` **之前** —— `_fastpath_open_staging()`
+        # 会先把绝对 `outtmpl` 拆成「`paths["home"]` + 文件名」，再把 `paths` 的每个键改写进
+        # payload，否则 `-P` 整体失效、沙盒被静默绕过。下面两段读的都是改写后的值。
+        self._fastpath_open_staging(opts)
+
         outtmpl = opts.get("outtmpl")
         if isinstance(outtmpl, str) and outtmpl:
             cmd += ["-o", outtmpl]
-
-        # Paths
-        paths = opts.get("paths")
-        if isinstance(paths, dict):
-            home = paths.get("home")
-            if isinstance(home, str) and home.strip():
-                cmd += ["-P", home.strip()]
-                self.download_dir = os.path.abspath(home.strip())
+        cmd += self._fastpath_paths_args(opts)
 
         # Proxy
         proxy = opts.get("proxy")
@@ -1877,13 +2306,15 @@ class DownloadWorker(QThread):
         # 这条路的期望**不能**交给 `emit_expect(opts)` 推：它下的本来就是一个图片 URL，
         # 产物按后缀归类成 `thumbnail`，而 opts 里没有 `skip_download` —— 套通用规则会
         # 期望出一个 `media`，于是每次封面直下都同时报"主文件缺失 + 多下了一张封面"。
-        self.trace.expect_artifacts({THUMBNAIL})
+        # 期望里加 `DELIVERED_THUMBNAIL`：上岸事务提交后 `delivery_tokens()` 会产出它，
+        # 实际侧才有得对（否则每个封面直下都"缺"一个交付 token，局面和主路径一样）。
+        self.trace.expect_artifacts({THUMBNAIL, DELIVERED_THUMBNAIL})
         emit_event(
             "expect",
             trace=self.trace,
             stage="select",
             component="cover_direct",
-            artifacts=[THUMBNAIL],
+            artifacts=[THUMBNAIL, DELIVERED_THUMBNAIL],
         )
 
         # 封面直下这条路上面刚拼过 `--proxy`，代理里的账号密码就在 argv 里。
@@ -1906,7 +2337,11 @@ class DownloadWorker(QThread):
         self._clean_logger.force_update("downloading", 0.0, "⚡ 正在下载图片...")
         # 这条路只解析 "Destination:" 一行来推进度条，失败时原本什么线索都留不下。
         cover_diag = DiagnosticLineCollector()
-        produced: set[str] = set()
+        # 上岸事务的校验期望：封面直下其实有了 `paths["home"]` 而**没有** `skip_download`，
+        # 喂原始 opts 给 `verify()` 会期望出一个 `media`（缺主文件）加多下的封面，每个
+        # 封面直下都会被自己的安全门拦下。这里补上 `skip_download`，与轻量提取同一个道理。
+        verify_opts = dict(opts)
+        verify_opts["skip_download"] = True
 
         try:
             cwd = self.download_dir or os.getcwd()
@@ -1937,6 +2372,8 @@ class DownloadWorker(QThread):
                             proc.terminate()
                     except Exception:
                         pass
+                    # 取消裁决与轻量提取同一点：判"沙盒留还是清"，结论仍是"取消"。
+                    self._finalize_staging_cancel()
                     self._run_outcome = "cancelled"
                     self.cancelled.emit()
                     return
@@ -1947,7 +2384,13 @@ class DownloadWorker(QThread):
                     line = raw.decode("utf-8", errors="replace").rstrip("\r\n")
                 if line and "Destination:" in line:
                     dest = line.split("Destination: ")[-1].strip()
-                    produced.add(dest)
+                    # 登记者声明角色为 thumbnail（这条路只下图片）；登记失败不该打断下载，
+                    # 真在 payload 里的由 `reconcile()` 兜回来。
+                    if self.staging is not None:
+                        try:
+                            self.staging.add_reported(dest, "thumbnail", opts=opts)
+                        except Exception:
+                            logger.exception("产物登记失败: {}", dest)
                     self._clean_logger.force_update(
                         "downloading",
                         50.0,
@@ -1965,6 +2408,9 @@ class DownloadWorker(QThread):
                 _emit_failure_diagnosis(
                     self.trace, err, stage="download", operation="cover_direct", exc=fail
                 )
+                # 失败裁决（缺陷 G）：对账还没做，沙盒里是"半份产物"，`finalize_failure`
+                # 会按事务规则决定清还是留。结论是失败，照常往下报。
+                self._finalize_staging_failure(fail)
                 self._run_outcome = "failed"
                 self.error.emit(err)
             else:
@@ -1973,15 +2419,22 @@ class DownloadWorker(QThread):
                 # 只会让读代码的人以为封面直下也在扫成功路径的征兆。它收诊断行纯粹是
                 # 为了 rc≠0 时喂 `diagnose()`。
                 # 不传 `output_path`：产物是一张图，没有容器可判。
-                emit_actual(
-                    produced,
-                    trace=self.trace,
-                    stage="verify",
-                    component="cover_direct",
-                )
+                #
+                # === 上岸（缺陷 G）===
+                # `_fastpath_land()` 拿 `verify_opts`（期望形态）跑 reconcile → verify →
+                # build_plan → commit（交付到用户目录，报告过的路径此刻不再等于最终路径），
+                # 提交成功后才 `emit_actual(observed, extra_actual=delivery_tokens(published))`
+                # 并清沙盒。`verify_opts` 补了 `skip_download`，否则封面直下会被自己的
+                # 安全门按"缺主媒体"拦下。
+                self._fastpath_land(verify_opts, component="cover_direct")
                 self._clean_logger.force_update("completed", 100.0, "✅ 下载完成")
                 self._run_outcome = "success"
                 self.completed.emit()
+        except DownloadCancelled:
+            # 取消**唯一**裁决点（与完整道路、轻量提取同一个）：判据是 phase 不是调用点。
+            self._finalize_staging_cancel()
+            self._run_outcome = "cancelled"
+            self.cancelled.emit()
         except Exception as exc:
             logger.exception("[CoverDirect] 提取失败: {}", self.url)
             self._clean_logger.force_update("error", 0.0, f"❌ 错误: {exc}")
@@ -1989,6 +2442,10 @@ class DownloadWorker(QThread):
             _emit_failure_diagnosis(
                 self.trace, err, stage="download", operation="cover_direct", exc=exc
             )
+            # 失败裁决单点：`_fastpath_land()` 已 commit、之后才出的异常（清洁失败、
+            # 观测失败）返回 True（= already_succeeded），outcome 必须保持 success。
+            if self._fastpath_fail(exc, component="cover_direct", done_text="✅ 下载完成"):
+                return
             self._run_outcome = "failed"
             self.error.emit(err)
         finally:

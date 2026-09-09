@@ -4129,8 +4129,6 @@ class DownloadConfigWindow(FramelessWindow):
                     if pick.output_format:
                         ydl_opts["convertsubtitles"] = pick.output_format
                 else:
-                    embed_override = None
-
                     subtitle_opts = subtitle_service.apply(
                         video_id=(
                             dto.video_id if dto is not None else self.video_info.get("id", "")
@@ -4140,19 +4138,8 @@ class DownloadConfigWindow(FramelessWindow):
                         trace=self.trace,
                     )
                     ydl_opts.update(subtitle_opts)
-
-                    if embed_override is not None:
-                        if sub_config_override:
-                            embed_type = sub_config_override.embed_type
-                        else:
-                            from ....core.config_manager import config_manager as cfg
-
-                            embed_type = cfg.get_subtitle_config().embed_type
-
-                        if embed_type == "soft":
-                            ydl_opts["embedsubtitles"] = embed_override
-                        elif embed_type == "external":
-                            ydl_opts["embedsubtitles"] = False
+                    # 这条路径没有逐任务的嵌入覆盖（原先那个 `embed_override` 恒为 None，
+                    # 整段分支是死代码）——「精选字幕」走的是上面 `pick` 那一支。
 
                 # Check explicit conflict
                 from ....utils.container_compat import (
@@ -4271,7 +4258,10 @@ class DownloadConfigWindow(FramelessWindow):
 
         # 只能局部 import：模块顶层的 `subtitle_service` 这个名字被
         # `processing/__init__.py` 重导出的**单例**占了，不是子模块本身。
-        from ....processing.subtitle_service import declare_subtitle_intent
+        from ....processing.subtitle_service import (
+            apply_subtitle_delivery,
+            declare_subtitle_intent,
+        )
 
         # Prepare Overrides
         pl_sub_override = copy.deepcopy(config_manager.get_subtitle_config())
@@ -4373,9 +4363,11 @@ class DownloadConfigWindow(FramelessWindow):
                                     trace=self.trace,
                                 )
                             )
-                            if pl_sub_override.embed_type == "external":
-                                if pl_sub_override.output_format:
-                                    row_opts["convertsubtitles"] = pl_sub_override.output_format
+                            # 纯字幕任务的交付**恒为**外置文件 —— 没有容器可嵌。旧代码把
+                            # 这一行挂在 `embed_type == "external"` 上，于是默认的 `soft`
+                            # 会让用户选的 SRT 被静默忽略、只落一份原始 VTT。
+                            if pl_sub_override.output_format:
+                                row_opts["convertsubtitles"] = pl_sub_override.output_format
 
                 self._apply_download_dir_to_opts(row_opts)
                 tasks.append((f"[字幕] {title}", url, row_opts, thumb))
@@ -4604,13 +4596,10 @@ class DownloadConfigWindow(FramelessWindow):
                             )
                         )
 
-                        # Embed
-                        if pl_sub_override.embed_type == "soft":
-                            row_opts["embedsubtitles"] = pl_sub_override.embed_mode != "never"
-                        elif pl_sub_override.embed_type == "external":
-                            row_opts["embedsubtitles"] = False
-                            if pl_sub_override.output_format:
-                                row_opts["convertsubtitles"] = pl_sub_override.output_format
+                        # 交付：两个开关的翻译只有 `apply_subtitle_delivery()` 一份。
+                        # 放在 `declare_subtitle_intent` 之后是刻意的 —— 第四态
+                        # （都不要）要能把上面那两行 write 旗标一起否掉。
+                        apply_subtitle_delivery(row_opts, pl_sub_override, trace=self.trace)
 
             self._apply_download_dir_to_opts(row_opts)
 

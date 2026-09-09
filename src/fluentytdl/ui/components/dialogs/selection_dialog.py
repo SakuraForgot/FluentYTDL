@@ -3036,8 +3036,6 @@ class SelectionDialog(MessageBoxBase):
 
             # 【关键修复】集成字幕服务到新格式选择器路径
             if self.video_info:
-                embed_override = None
-
                 subtitle_opts = subtitle_service.apply(
                     video_id=(dto.video_id if dto is not None else self.video_info.get("id", "")),
                     video_info=self.video_info,
@@ -3045,25 +3043,9 @@ class SelectionDialog(MessageBoxBase):
                 )
                 ydl_opts.update(subtitle_opts)
 
-                # 如果用户明确选择了嵌入选项，需要根据 embed_type 来决定行为
-                if embed_override is not None:
-                    from ....core.config_manager import config_manager as cfg
-
-                    embed_type = cfg.get_subtitle_config().embed_type
-
-                    if embed_type == "soft":
-                        # 软嵌入：用户选择覆盖 embedsubtitles
-                        ydl_opts["embedsubtitles"] = embed_override
-                    elif embed_type == "external":
-                        # 外置文件：始终不嵌入，忽略用户的弹窗选择
-                        ydl_opts["embedsubtitles"] = False
-
-                    logger.debug(
-                        "get_selected_tasks: embed_type={}, embed_override={}, final embedsubtitles={}",
-                        embed_type,
-                        embed_override,
-                        ydl_opts.get("embedsubtitles"),
-                    )
+                # 这条路径没有逐任务的嵌入覆盖（原先那个 `embed_override` 恒为 None，
+                # 整段分支是死代码），交付判定全由 `apply_subtitle_delivery()` 在
+                # `subtitle_service.apply()` 内部给出。
 
                 # 确保容器格式兼容字幕嵌入
                 ensure_subtitle_compatible_container(ydl_opts, trace=self.trace)
@@ -3700,15 +3682,19 @@ class SelectionDialog(MessageBoxBase):
                 )
                 opts.update(subtitle_opts)
 
-                # 根据 embed_type 应用覆盖选项
-                if embed_subtitles_override is not None:
+                # 弹窗那个 ComboBox 是 XOR（「软嵌入」/「外置字幕文件」），翻译成两个
+                # 开关的知识只在 `apply_subtitle_embed_choice()` 里。`writesubtitles`
+                # 为假说明本任务压根没要字幕（`NoneStrategy`），此时覆盖没有意义。
+                if embed_subtitles_override is not None and opts.get("writesubtitles"):
                     from ....core.config_manager import config_manager as cfg
+                    from ....processing.subtitle_service import apply_subtitle_embed_choice
 
-                    embed_type = cfg.get_subtitle_config().embed_type
-                    if embed_type == "soft":
-                        opts["embedsubtitles"] = embed_subtitles_override
-                    else:
-                        opts["embedsubtitles"] = False
+                    apply_subtitle_embed_choice(
+                        opts,
+                        cfg.get_subtitle_config(),
+                        embed=embed_subtitles_override,
+                        trace=self.trace,
+                    )
 
                 ensure_subtitle_compatible_container(opts, trace=self.trace)
 
@@ -3740,15 +3726,17 @@ class SelectionDialog(MessageBoxBase):
             )
             opts.update(subtitle_opts)
 
-            # 根据 embed_type 应用覆盖选项
-            if embed_subtitles_override is not None:
+            # 同上：XOR ComboBox → 两个开关，唯一一处翻译在 subtitle_service 里
+            if embed_subtitles_override is not None and opts.get("writesubtitles"):
                 from ....core.config_manager import config_manager as cfg
+                from ....processing.subtitle_service import apply_subtitle_embed_choice
 
-                embed_type = cfg.get_subtitle_config().embed_type
-                if embed_type == "soft":
-                    opts["embedsubtitles"] = embed_subtitles_override
-                else:
-                    opts["embedsubtitles"] = False
+                apply_subtitle_embed_choice(
+                    opts,
+                    cfg.get_subtitle_config(),
+                    embed=embed_subtitles_override,
+                    trace=self.trace,
+                )
 
             ensure_subtitle_compatible_container(opts, trace=self.trace)
 

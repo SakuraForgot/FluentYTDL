@@ -56,7 +56,9 @@ class SubtitlePickerDialog(MessageBoxBase):
 
         if initial_result:
             self._embed_combo.setCurrentIndex(0 if initial_result.embed_subtitles else 1)
-        elif config.embed_type == "external":
+        elif not config.embed:
+            # 这个 ComboBox 是 XOR，表达不了「都要」/「都不要」——它决定的只是本次
+            # 覆盖里的 `embed_subtitles`，另存开关仍由全局 `keep_external` 说话。
             self._embed_combo.setCurrentIndex(1)
 
         self._embed_row.addWidget(CaptionLabel(self.tr("嵌入方式:"), self))

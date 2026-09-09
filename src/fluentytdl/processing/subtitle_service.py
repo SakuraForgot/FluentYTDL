@@ -17,7 +17,7 @@ resolution，所以只能自己记一条 `mode=disabled`。而"字幕功能其�
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 from ..core.config_manager import config_manager
@@ -308,11 +308,15 @@ def build_deferred_opts(
     `no_match` 处理。此时只声明意图，`workers.py` 拿到完整 info 之后再解析。
     """
     opts = build_embed_opts(config, trace=trace)
-    # `build_embed_opts` 只管人工字幕（`writesubtitles`），自动字幕得单独开 ——
+    # `apply_subtitle_delivery` 只管人工字幕（`writesubtitles`），自动字幕得单独开 ——
     # 少了这一行，推迟解析的行永远拿不到自动生成字幕，而 YouTube 上
     # 6 Minute English 这类视频的中文字幕**只有**自动翻译版本。
-    opts["writeautomaticsub"] = config.enable_auto_captions
-    opts.update(declare_subtitle_intent(prefs, config, strategy=strategy, trace=trace))
+    #
+    # 但**第四态（不嵌入也不另存）不能被这一行推翻**：那时交付层已经显式把两个 write
+    # 旗标关掉了，这里再无条件写回去就等于「用户说不要字幕，我们照样下自动字幕」。
+    if opts.get("writesubtitles"):
+        opts["writeautomaticsub"] = config.enable_auto_captions
+        opts.update(declare_subtitle_intent(prefs, config, strategy=strategy, trace=trace))
     return opts
 
 
@@ -465,61 +469,63 @@ def resolve_deferred_langs(
     )
 
 
-def should_embed_subtitles(config: SubtitleConfig) -> bool:
-    """
-    判断是否应该嵌入字幕到视频容器（软嵌入）
+def apply_subtitle_delivery(
+    opts: dict[str, Any],
+    config: SubtitleConfig,
+    *,
+    embed_override: bool | None = None,
+    trace: Any = None,
+) -> None:
+    """把「嵌入 / 另存」两个开关翻译成 ydl_opts —— **全项目唯一一处**。
+
+    旧模型是 `embed_type: soft | external` 这个 XOR，于是每个调用点都得自己写一遍
+    `if embed_type == "soft": ... elif == "external": ...`，全项目约 8 处，谁漏一个
+    分支谁就静默改变交付行为。收敛到一处之后，四种组合的真值表只有这一份：
+
+    | `embed` | `keep_external` | `writesubtitles` | `embedsubtitles` | `__fluentytdl_keep_subtitle` |
+    |---|---|---|---|---|
+    | True | False | True | True | False |
+    | True | True | True | True | True |
+    | False | True | True | False | True |
+    | False | False | **False** | False | —（不请求字幕，无从谈保留）|
+
+    第四态是旧模型表达不出来的「这次不要字幕」，所以它必须**显式**关掉两个 write
+    旗标：不写就等于沿用 yt-dlp 的默认，而上游可能已经设过 `writeautomaticsub=True`。
+
+    `keepsubtitles` 恒为 True 是刻意的 —— 先让所有字幕都留在 payload 里，「留哪些」
+    这个决策交给 Manifest 在后处理之后做（`SubtitleFeature._dispose_external_subtitles`
+    读的就是 `__fluentytdl_keep_subtitle`）。yt-dlp 自己在嵌入后删外置文件的话，
+    完整性校验和「嵌入其实失败了」的兜底都没有东西可看。
+
+    **`writeautomaticsub` 只在第四态被碰。** 交付路径上它归调用方 —— 自动字幕要不要
+    下是轨道解析的结论（`type_preference` / `enable_auto_captions`），不是交付开关的
+    结论；这里多设一个就会踩掉纯字幕模式等调用点自己的判断。
 
     Args:
-        config: 字幕配置对象
-
-    Returns:
-        True 表示应该嵌入，False 表示不嵌入
-    """
-    # 只有软嵌入类型才使用容器嵌入
-    if config.embed_type != "soft":
-        return False
-
-    # 检查嵌入模式
-    return config.embed_mode != "never"
-
-
-def build_embed_opts(config: SubtitleConfig, *, trace: Any = None) -> dict[str, Any]:
-    """
-    根据 embed_type 构建完整的嵌入相关选项
-
-    这是统一的入口，确保 embedsubtitles、merge_output_format、
-    writesubtitles 等选项的一致性。
-
-    Args:
-        config: 字幕配置对象
+        opts: 就地修改的 ydl_opts
+        config: 字幕配置
+        embed_override: 单次覆盖「嵌入」开关（UI 的每任务选择）。**不覆盖另存开关** ——
+            那是全局偏好，没有任何 UI 提供逐任务的另存选择。
         trace: 可选的 `FlowTrace` / `TaskTrace`，只用于观测
-
-    Returns:
-        嵌入相关的 yt-dlp 选项
     """
-    opts: dict[str, Any] = {}
+    embed = config.embed if embed_override is None else embed_override
+    keep = config.keep_external
 
-    if config.embed_type == "soft":
-        # 软嵌入：封装到视频容器中
-        if config.embed_mode != "never":
-            opts["embedsubtitles"] = True
-            # 注意：不在此处设置 merge_output_format
-            # MP4 和 MKV 都支持字幕嵌入（FFmpeg 会自动将 SRT 转为 mov_text）
-            # 只有 WebM 不支持 SRT/ASS 嵌入
-            # 容器格式由格式选择器决定，仅在必要时（WebM/未指定）才覆盖
-        else:
-            opts["embedsubtitles"] = False
-        opts["writesubtitles"] = True  # 需要先下载字幕才能嵌入
-
-    elif config.embed_type == "external":
-        # 外置文件：只下载字幕，不嵌入
+    if not embed and not keep:
+        opts["writesubtitles"] = False
+        opts["writeautomaticsub"] = False
         opts["embedsubtitles"] = False
-        opts["writesubtitles"] = True
-
-    # 统一转换格式处理
-    out_fmt = config.output_format
-    if out_fmt:
-        opts["convertsubtitles"] = out_fmt
+        opts.pop("convertsubtitles", None)
+    else:
+        opts["writesubtitles"] = True  # 具体语言仍由迟解析 / 轨道选择决定
+        opts["embedsubtitles"] = embed
+        # 注意：不在此处设置 merge_output_format —— MP4 和 MKV 都支持字幕嵌入
+        # （FFmpeg 会把 SRT 转成 mov_text），只有 WebM 不支持。容器由格式选择器决定，
+        # 仅在必要时（WebM/未指定）由 `SubtitleFeature` 覆盖。
+        opts["keepsubtitles"] = True
+        opts["__fluentytdl_keep_subtitle"] = keep
+        if config.output_format:
+            opts["convertsubtitles"] = config.output_format
 
     # 一条事件顶掉原先进出各一行的 `[SubEmbed]` INFO：两行都是 INFO，播放列表逐行
     # 走一遍就把控制台刷满，而"嵌入判成了什么"这个结论一行就说完了。
@@ -529,11 +535,52 @@ def build_embed_opts(config: SubtitleConfig, *, trace: Any = None) -> dict[str, 
         level="DEBUG",
         stage="select",
         subsystem="subtitle_embed",
-        embed_type=config.embed_type,
-        embed_mode=config.embed_mode,
-        embed=bool(opts.get("embedsubtitles")),
+        embed=embed,
+        keep_external=keep,
+        overridden=embed_override is not None,
+        write=bool(opts.get("writesubtitles")),
         convert_to=opts.get("convertsubtitles") or None,
     )
+
+
+def apply_subtitle_embed_choice(
+    opts: dict[str, Any],
+    config: SubtitleConfig,
+    *,
+    embed: bool,
+    trace: Any = None,
+) -> None:
+    """把弹窗里那个 **XOR** ComboBox（「软嵌入到视频」/「外置字幕文件」）翻成两个开关。
+
+    `SubtitlePickerDialog` / `PlaylistSubtitleConfigDialog` / 播放列表逐行覆盖都只有
+    一个二选一控件（`SubtitlePickerResult.embed_subtitles`、
+    `PlaylistSubtitleOverride.embed_subtitles`），表达不出四态。直接把它当成
+    `apply_subtitle_delivery(embed_override=False)` 会踩一个坑：全局
+    `keep_external=False` 时那正好落进第四态「都不要」，于是用户在弹窗里**明确勾了**
+    的字幕会被整个关掉。所以「外置」这一侧必须连带把另存打开 ——
+    `keep_external = keep_external or not embed`，两个新态只能由设置页选出来。
+
+    判据仍然只有 `apply_subtitle_delivery()` 一份，这里只做 XOR → 两开关的翻译，
+    好让这条知识不必在 3 个 UI 文件里各写一遍。
+
+    调用方仍要自己判断「本任务到底要不要字幕」（`opts.get("writesubtitles")`）——
+    `NoneStrategy` 关掉字幕后再进来一次会把它重新打开。
+    """
+    apply_subtitle_delivery(
+        opts,
+        replace(config, keep_external=config.keep_external or not embed),
+        embed_override=embed,
+        trace=trace,
+    )
+
+
+def build_embed_opts(config: SubtitleConfig, *, trace: Any = None) -> dict[str, Any]:
+    """`apply_subtitle_delivery()` 的返回值形态包装，供 `opts.update(...)` 的调用点用。
+
+    判据一份都不在这里 —— 见 `apply_subtitle_delivery()`。
+    """
+    opts: dict[str, Any] = {}
+    apply_subtitle_delivery(opts, config, trace=trace)
     return opts
 
 
