@@ -6,13 +6,12 @@ runs:
     - id: versions
       shell: bash
       run: python scripts/build_environment.py
-    - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
-      with:
-        python-version: ${{ steps.versions.outputs.python }}
     - shell: bash
       env:
         UV_VERSION: ${{ steps.versions.outputs.uv }}
+        BUILD_PYTHON: ${{ steps.versions.outputs.python }}
       run: |
         python -m pip install "uv==$UV_VERSION"
-        uv sync --locked --extra dev --extra build
+        uv python install "$BUILD_PYTHON"
+        uv sync --python "$BUILD_PYTHON" --locked --extra dev --extra build
         uv run --locked --no-sync python scripts/build_environment.py --check
