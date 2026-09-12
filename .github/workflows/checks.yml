@@ -41,11 +41,13 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Ruff failed' }
           uv run --locked --no-sync ruff format --check src tests scripts
           if ($LASTEXITCODE -ne 0) { throw 'Formatting failed' }
-      - name: Prepare latest real decoder for integration tests
-        run: uv run --locked --no-sync python scripts/prepare_7zip.py
+      - name: Prepare latest components for integration tests
+        run: uv run --locked --no-sync python scripts/fetch_tools.py --destination build/test-components
       - name: Tests
         env:
           FLUENTYTDL_DATA_DIR_OVERRIDE: ${{ runner.temp }}/fluentytdl-tests
+          FLUENTYTDL_TEST_YTDLP: ${{ github.workspace }}/build/test-components/bin/yt-dlp/yt-dlp.exe
+          FLUENTYTDL_7ZIP_DIR: ${{ github.workspace }}/build/test-components/7zip
         run: uv run --locked --no-sync pytest tests -q --tb=short --junitxml=build/tests.xml
       - name: Pyright (advisory)
         continue-on-error: true
@@ -55,4 +57,6 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: test-reports
-          path: build/tests.xml
+          path: |
+            build/tests.xml
+            build/test-components/snapshot.json

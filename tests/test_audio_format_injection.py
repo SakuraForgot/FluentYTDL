@@ -251,7 +251,9 @@ def test_strategy_is_reported_for_the_log():
 
 
 def _ytdlp_binary() -> str | None:
-    """开发树里的 yt-dlp（`scripts/fetch_tools.py` 放在 `assets/bin/`）。"""
+    """Use the CI snapshot explicitly; retain the developer's existing tool fallback."""
+    if configured := os.environ.get("FLUENTYTDL_TEST_YTDLP"):
+        return configured if Path(configured).is_file() else None
     exe = (
         Path(__file__).resolve().parent.parent
         / "assets"
@@ -278,7 +280,9 @@ def test_real_ytdlp_accepts_the_generated_format_string(strategy: str) -> None:
     """
     exe = _ytdlp_binary()
     if not exe:
-        pytest.skip("assets/bin 下没有 yt-dlp，跳过真实语法校验")
+        if os.environ.get("FLUENTYTDL_REQUIRE_BUILD_TESTS"):
+            pytest.fail("Required yt-dlp test executable was not prepared")
+        pytest.skip("yt-dlp 未准备，跳过真实语法校验")
 
     fmt = _plan(["ja", "zh-Hans"], strategy).fmt
     proc = subprocess.run(  # noqa: S603

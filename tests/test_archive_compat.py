@@ -97,7 +97,7 @@ def test_launch_failure_falls_back(tmp_path, monkeypatch):
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Windows console integration")
 def test_cli_real_dlls_and_marker(tmp_path):
-    tool = ROOT / "build/tools/7zip/7za.exe"
+    tool = Path(os.environ.get("FLUENTYTDL_7ZIP_DIR", ROOT / "build/tools/7zip")) / "7za.exe"
     if not tool.is_file():
         if os.environ.get("FLUENTYTDL_REQUIRE_BUILD_TESTS"):
             pytest.fail("Required build decoder was not prepared")
