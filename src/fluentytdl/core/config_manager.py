@@ -224,6 +224,12 @@ class ConfigManager(QObject):
         # Dev: repo root config.json; Frozen: user-writable Documents/FluentYTDL/config.json
         self.config_file = config_path()
         self.config: dict[str, Any] = self._load_config()
+        from ..utils.paths import frozen_app_dir, is_frozen
+
+        if is_frozen() and (frozen_app_dir() / "install-language.txt").is_file():
+            from ..utils.install_registration import register_data_root
+
+            register_data_root(frozen_app_dir(), self.config_file.parent)
 
         # 启动时进行一次配置瘦身：剔除不再使用的僵尸字段
         obsolete_keys = [k for k in self.config if k not in self.DEFAULT_CONFIG]
@@ -245,7 +251,16 @@ class ConfigManager(QObject):
 
         existing = next((p for p in candidates if p.exists()), None)
         if existing is None:
-            return self.DEFAULT_CONFIG.copy()
+            defaults = self.DEFAULT_CONFIG.copy()
+            from ..utils.paths import frozen_app_dir, is_frozen
+
+            if is_frozen():
+                seed = frozen_app_dir() / "install-language.txt"
+                if seed.is_file():
+                    language = seed.read_text(encoding="utf-8-sig").strip()
+                    if language in ("zh_CN", "en_US"):
+                        defaults["app_language"] = language
+            return defaults
 
         # Migration: legacy -> new
         if existing == legacy and legacy != self.config_file:

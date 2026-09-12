@@ -18,18 +18,19 @@
 
 from __future__ import annotations
 
+import importlib.metadata
 import re
 from pathlib import Path
 
 _ROOT = Path(__file__).resolve().parent.parent
 _PYPROJECT = _ROOT / "pyproject.toml"
-_WORKFLOW = _ROOT / ".github" / "workflows" / "release.yml"
+_WORKFLOW = _ROOT / "build-environment.json"
 _SPEC = _ROOT / "scripts" / "updater.spec"
 
 #: `py7zr==X.Y.Z`，允许等号两侧无空格（requirement 规范写法）
 _REQ_RE = re.compile(r"py7zr==([0-9]+(?:\.[0-9]+)*)")
 #: `PY7ZR_VERSION: '1.1.3'` —— 引号可选，单双引号都收
-_ENV_RE = re.compile(r"""PY7ZR_VERSION:\s*['"]?([0-9]+(?:\.[0-9]+)*)['"]?""")
+_ENV_RE = re.compile(r'"py7zr":\s*"([0-9.]+)"')
 
 
 def _pins(pattern: re.Pattern[str], path: Path) -> list[str]:
@@ -65,6 +66,7 @@ def test_all_three_pins_agree():
     workflow = set(_pins(_ENV_RE, _WORKFLOW))
     spec = set(_pins(_REQ_RE, _SPEC))
 
+    assert importlib.metadata.version("py7zr") in pyproject
     assert pyproject == workflow == spec, (
         "py7zr 版本钉子出现漂移 —— "
         f"pyproject.toml={sorted(pyproject)}, "

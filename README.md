@@ -20,7 +20,7 @@
 <p align="center">
   <a href="https://github.com/SakuraForgot/FluentYTDL/releases/latest"><img src="https://img.shields.io/github/v/release/SakuraForgot/FluentYTDL?style=flat-square&color=7c3aed&label=release" alt="Latest release"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0-2563eb.svg?style=flat-square" alt="GPL-3.0 license"></a>
-  <img src="https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python 3.10 or newer">
+  <img src="https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python 3.12 or newer">
   <img src="https://img.shields.io/badge/platform-Windows-0078D4?style=flat-square&logo=windows&logoColor=white" alt="Windows">
   <a href="https://github.com/SakuraForgot/FluentYTDL/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/SakuraForgot/FluentYTDL/ci.yml?branch=main&style=flat-square&label=CI" alt="CI status"></a>
 </p>
@@ -66,7 +66,7 @@ FluentYTDL makes advanced yt-dlp and FFmpeg workflows accessible to Windows user
 | ▶️ YouTube | Videos, Shorts, live/video URLs, playlists, channels, subtitles, covers, and VR workflows |
 | 𝕏 X (Twitter) | Individual post URLs with downloadable media |
 | 🌐 Other yt-dlp sites | Not part of the supported product scope |
-| 🐍 Source runtime | Python 3.10 or newer |
+| 🐍 Source runtime | Python 3.12 or newer |
 
 > [!IMPORTANT]
 > FluentYTDL depends on upstream services and tools. Site changes, expired media URLs, account or region restrictions, and yt-dlp regressions can temporarily affect extraction or downloads.
@@ -95,7 +95,7 @@ git clone https://github.com/SakuraForgot/FluentYTDL.git
 cd FluentYTDL
 
 # Recommended: uv
-uv sync --extra dev
+uv sync --locked --extra dev --extra build
 uv run python main.py
 ```
 
@@ -111,13 +111,13 @@ Alternatively, use a Python virtual environment and install the project with `pi
 | Layer | Implementation |
 | --- | --- |
 | 🖼️ Desktop UI | PySide6 and PySide6-Fluent-Widgets |
-| 🐍 Application core | Python 3.10+ with a `src/` package layout |
+| 🐍 Application core | Python 3.12.12 with a `src/` package layout |
 | ⬇️ Download engine | yt-dlp behind a CLI subprocess boundary |
 | 🎞️ Media pipeline | FFmpeg and companion media tools |
 | 🧱 Service boundaries | Authentication, download, processing, storage, and YouTube services |
 
 ```powershell
-uv sync --extra dev
+uv sync --locked --extra dev --extra build
 uv run ruff check src tests
 
 $env:QT_QPA_PLATFORM = "offscreen"

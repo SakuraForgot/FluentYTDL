@@ -22,13 +22,13 @@ Bug reports should include:
 
 ## Development setup
 
-FluentYTDL requires Python 3.10 or newer. Windows is the primary development and release platform.
+FluentYTDL requires Python 3.12 or newer. Windows is the primary development and release platform.
 
 ```powershell
 git clone https://github.com/SakuraForgot/FluentYTDL.git
 cd FluentYTDL
 
-uv sync --extra dev
+uv sync --locked --extra dev --extra build
 uv run python main.py
 ```
 

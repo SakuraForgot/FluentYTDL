@@ -175,11 +175,15 @@ class TestLockedChannel:
 class TestCompareAppVersion:
     """Test _compare_app_version with mocked manifest."""
 
-    def test_stable_filters_prerelease(self, manager, qapp):
+    @pytest.mark.parametrize(
+        ("version", "flag"),
+        [("3.0.18", True), ("3.0.18-rc.1", False), ("3.0.18-beta.1", False)],
+    )
+    def test_stable_filters_prerelease(self, manager, qapp, version, flag):
         """Stable channel should ignore prerelease manifests."""
         manager._manifest = {
-            "app_version": "3.0.18",
-            "_is_prerelease": True,
+            "app_version": version,
+            "_is_prerelease": flag,
             "_release_body": "",
             "components": {"app-core": {"url": "", "sha256": ""}},
         }
@@ -192,13 +196,7 @@ class TestCompareAppVersion:
                 "fluentytdl.core.component_update_manager._get_update_channel",
                 return_value="stable",
             ),
-            patch(
-                "fluentytdl.core.component_update_manager._parse_version",
-                side_effect=lambda v: tuple(
-                    int(x)
-                    for x in v.replace("v-", "").replace("pre-", "").replace("beta-", "").split(".")
-                ),
-            ),
+            patch("fluentytdl.__version__", "3.0.17"),
         ):
             manager._compare_app_version()
 
@@ -221,13 +219,7 @@ class TestCompareAppVersion:
                 "fluentytdl.core.component_update_manager._get_update_channel",
                 return_value="stable",
             ),
-            patch(
-                "fluentytdl.core.component_update_manager._parse_version",
-                side_effect=lambda v: tuple(
-                    int(x)
-                    for x in v.replace("v-", "").replace("pre-", "").replace("beta-", "").split(".")
-                ),
-            ),
+            patch("fluentytdl.__version__", "3.0.17"),
             patch(
                 "fluentytdl.core.component_update_manager.config_manager",
                 get=lambda k, d=None: "3.0.18" if k == "skipped_stable_version" else d,

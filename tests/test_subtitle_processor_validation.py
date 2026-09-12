@@ -127,9 +127,7 @@ def test_process_accepts_a_generator(tmp_path: Path) -> None:
     video = _video(tmp_path, "Plain Title")
     sub = _sub(tmp_path, "Plain Title.en-GB.vtt")
 
-    result = subtitle_processor.process(
-        str(video), (str(p) for p in (sub,)), dict(SUB_ENABLED)
-    )
+    result = subtitle_processor.process(str(video), (str(p) for p in (sub,)), dict(SUB_ENABLED))
 
     assert result.success
     assert result.processed_files == [str(sub)]

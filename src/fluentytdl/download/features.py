@@ -460,7 +460,9 @@ class ThumbnailFeature(DownloadFeature):
             return
 
         for art in manifest.kept("thumbnail"):
-            manifest.drop(id=art.id, reason="embedded_successfully" if embed_requested else "not_requested")
+            manifest.drop(
+                id=art.id, reason="embedded_successfully" if embed_requested else "not_requested"
+            )
 
 
 class VRFeature(DownloadFeature):

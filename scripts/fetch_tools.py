@@ -36,6 +36,7 @@ import argparse
 import hashlib
 import io
 import json
+import os
 import re
 import shutil
 import ssl
@@ -444,9 +445,7 @@ class ToolLock:
 
         print(f"  ✓ {tool} {version} 与锁文件一致")
 
-    def _record(
-        self, tool: str, version: str, observed: dict, asset: dict | None = None
-    ) -> None:
+    def _record(self, tool: str, version: str, observed: dict, asset: dict | None = None) -> None:
         entry: dict = {"version": version, "files": observed}
         keep = asset
         if keep is None:
@@ -709,6 +708,9 @@ SENTINELS = [TARGET_DIR / subdir / files[0] for _, subdir, _, files, _ in FETCHE
 
 def _load_lock_tools() -> dict[str, dict]:
     """读锁文件的 tools 段，读不出来就当空 —— 调用方都能靠降级路径继续。"""
+    snapshot = os.environ.get("FLUENTYTDL_COMPONENT_SNAPSHOT")
+    if snapshot:
+        return json.loads(Path(snapshot).read_text(encoding="utf-8"))["tools"]
     if not TOOLS_LOCK.exists():
         return {}
     try:
@@ -754,73 +756,19 @@ def load_tool_assets() -> dict[str, dict]:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="FluentYTDL 外部工具下载器")
+    """Standalone fetch is also latest-only and isolated; historical locks are read-only."""
+    import uuid
+
+    from component_snapshot import prepare
+
+    parser = argparse.ArgumentParser(description="Fetch all latest release components")
     parser.add_argument(
-        "--force",
-        "-f",
-        action="store_true",
-        help="强制重新下载（忽略已存在的工具）",
+        "--force", "-f", action="store_true", help="Compatibility alias: always fetch latest"
     )
-    parser.add_argument(
-        "--update-lock",
-        action="store_true",
-        help="主动升级工具：重新下载、接受上游新版本并刷新 scripts/TOOLS.lock.json",
-    )
-    parser.add_argument(
-        "--strict",
-        action="store_true",
-        help="工具版本与锁文件不一致时直接失败（完全可复现构建）",
-    )
+    parser.add_argument("--destination", type=Path, help="New empty snapshot directory")
     args = parser.parse_args()
-
-    print("=" * 50)
-    print("FluentYTDL 外部工具下载器")
-    print("=" * 50)
-    print(f"目标目录: {TARGET_DIR}")
-    print(f"锁文件  : {TOOLS_LOCK.relative_to(ROOT)}")
-
-    download = args.force or args.update_lock or not all(p.exists() for p in SENTINELS)
-    rebuild = args.force or args.update_lock
-
-    if rebuild and TARGET_DIR.exists():
-        print("\n🧹 清理现有工具...")
-        shutil.rmtree(TARGET_DIR)
-    elif not download:
-        print("\n✓ 所有工具已存在，跳过下载，只校验锁文件")
-        print("  使用 --force 强制重新下载 / --update-lock 升级并刷新锁文件")
-
-    TARGET_DIR.mkdir(parents=True, exist_ok=True)
-
-    try:
-        lock = ToolLock(TOOLS_LOCK, strict=args.strict, update=args.update_lock)
-
-        for tool_name, subdir, fetcher, filenames, probe in FETCHERS:
-            dest = TARGET_DIR / subdir
-            asset: dict | None = None
-            if download:
-                version, files, asset = fetcher(dest)
-            else:
-                # 只校验：不联网，直接对已落盘的文件重算哈希并比对锁文件。
-                # 本地被替换/篡改的工具会在这里暴露。
-                # 资产元数据拿不到（没下载过），交给 reconcile 决定是否沿用锁里已有的。
-                files = {name: dest / name for name in filenames}
-                exe_name, probe_args, pattern = probe
-                version = probe_version(dest / exe_name, probe_args, pattern)
-            lock.reconcile(tool_name, version, files, asset)
-
-        lock.save()
-    except Exception as e:
-        print(f"\n❌ 工具校验/下载失败: {e}")
-        sys.exit(1)
-
-    print("\n" + "=" * 50)
-    print("🎉 外部工具就绪!" if not download else "🎉 所有工具下载完成!")
-    print("=" * 50)
-
-    print("\n已就位的文件:")
-    for sentinel in SENTINELS:
-        if sentinel.exists():
-            print(f"  ✓ {sentinel.relative_to(TARGET_DIR)} ({sentinel.stat().st_size:,} bytes)")
+    destination = args.destination or ROOT / "build/components" / uuid.uuid4().hex
+    print(prepare(destination))
 
 
 if __name__ == "__main__":

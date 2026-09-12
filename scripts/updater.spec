@@ -20,6 +20,15 @@ import sys
 spec_dir = SPECPATH if 'SPECPATH' in dir() else os.path.abspath(os.path.dirname(__file__))
 entry_script = os.path.join(spec_dir, '..', 'src', 'fluentytdl', 'core', 'updater.py')
 
+# Preparation verifies both official downloads before executing the bootstrap.
+sys.path.insert(0, spec_dir)
+from build_environment import versions
+from importlib.metadata import version
+if version('py7zr') != versions()['py7zr']:
+    raise SystemExit('Actual py7zr version differs from build-environment.json')
+from prepare_7zip import prepare
+sevenzip_dir = prepare()
+
 # ----------------------------------------------------------------------------
 # 1b. 解析 build.py 注入的参数（PE 资源）
 #
@@ -63,7 +72,7 @@ if not hiddenimports:
         "======================================================================\n"
         " updater.exe 构建中止：当前 Python 环境里找不到 py7zr。\n"
         "\n"
-        " py7zr 是 updater 解压 app-core 归档的唯一手段。缺了它，打出来的\n"
+        " py7zr 是旧版兼容校验及 updater 的回退解压器。缺了它，打出来的\n"
         " updater.exe 会在用户机器上解压失败（而且是在已经动过安装目录之后）。\n"
         "\n"
         " 修复：\n"
@@ -83,7 +92,8 @@ a = Analysis(
     [entry_script],
     pathex=[],
     binaries=[],
-    datas=[],
+    datas=[(str(sevenzip_dir / name), 'tools/7zip')
+           for name in ('7za.exe', 'License.txt', 'version.json')],
     hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},

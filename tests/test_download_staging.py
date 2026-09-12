@@ -401,9 +401,7 @@ def test_04b_register_generated_rejects_missing_and_outside(tmp_path, events):
     """前置条件全部强制：必须已存在、必须在沙盒内、`producer` 必填。"""
     area = make_area(tmp_path)
     with pytest.raises(StagingError):
-        area.register_generated(
-            os.path.join(area.work_dir, "nope.mp4"), kind="media", producer="X"
-        )
+        area.register_generated(os.path.join(area.work_dir, "nope.mp4"), kind="media", producer="X")
 
     outside = write(str(tmp_path / "outside.mp4"), 128)
     with pytest.raises(StagingEscape):
@@ -430,7 +428,10 @@ def test_05_vr_keep_source_delivers_both(tmp_path, events):
 
     work = write(area.reserve_workfile("Title", ".mp4"), MEDIA_BYTES, b"e")
     equi = area.register_generated(
-        work, kind="media", producer="VRFeature", parent_ids=[ids["media"]],
+        work,
+        kind="media",
+        producer="VRFeature",
+        parent_ids=[ids["media"]],
         target_name="Title_equi.mp4",
     )
     area.rename_artifact(ids["media"], "Title.eac.mp4")
@@ -1059,7 +1060,9 @@ def test_15b_consumed_needs_structured_evidence(tmp_path, events):
     人类日志行只作 fallback / 显示，不作 authority，也不再把结论绑在 yt-dlp 的 rc 上。
     """
     for evidence, expect in ((False, "missing"), (True, "consumed")):
-        area = make_area(tmp_path, task=f"e{int(evidence)}", dl=make_dl(tmp_path, f"e{int(evidence)}"))
+        area = make_area(
+            tmp_path, task=f"e{int(evidence)}", dl=make_dl(tmp_path, f"e{int(evidence)}")
+        )
         ids = seed_group(area, langs=("en",), thumb=False)
         if evidence:
             area.manifest.embed_evidence.add("subtitle")
@@ -1395,7 +1398,9 @@ def test_22_finalize_failure_decides_by_phase(tmp_path, events):
 def test_22b_retain_intent_survives_safe_phases(tmp_path, events):
     """`retain_staging=True` 的异常在 `downloading` / `prepared` 下也保留现场。"""
     for exc in (StagingEscape("x"), VerifyBlocked("y"), CommitFailed("z")):
-        area = make_area(tmp_path, task=type(exc).__name__, dl=make_dl(tmp_path, type(exc).__name__))
+        area = make_area(
+            tmp_path, task=type(exc).__name__, dl=make_dl(tmp_path, type(exc).__name__)
+        )
         assert area.finalize_failure(exc) == "failed"
         assert os.path.isdir(area.txn_dir)
         assert "staging_retained" in codes(events)

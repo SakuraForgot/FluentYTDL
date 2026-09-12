@@ -1,3 +1,4 @@
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -45,7 +46,7 @@ def _write_language_aliases(locales_dir: Path) -> None:
 
 def main():
     root_dir = Path(__file__).resolve().parent.parent
-    locales_dir = root_dir / "assets" / "locales"
+    locales_dir = Path(os.environ.get("FLUENTYTDL_LOCALES_DIR", root_dir / "assets" / "locales"))
 
     if not locales_dir.exists():
         print("No locales directory found.")

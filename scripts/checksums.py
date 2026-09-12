@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 import sys
 from pathlib import Path
 
@@ -41,14 +42,17 @@ def generate_checksums(release_dir: Path) -> Path:
     print()
 
     checksums = []
-    extensions = {".exe", ".7z", ".zip", ".msi"}
-
-    for file in sorted(release_dir.iterdir()):
-        if file.is_file() and file.suffix.lower() in extensions:
-            print(f"📋 计算: {file.name}...", end=" ", flush=True)
-            hash_value = sha256_file(file)
-            checksums.append(f"{hash_value}  {file.name}")
-            print(f"{hash_value[:16]}...")
+    result_file = ROOT / "build/latest-result.json"
+    result = json.loads(result_file.read_text(encoding="utf-8"))
+    for artifact in result["artifacts"]:
+        file = Path(artifact["path"])
+        if file.name == "SHA256SUMS.txt":
+            continue
+        if file.parent.resolve() != release_dir.resolve():
+            raise ValueError("Requested directory is not the successful build output")
+        if sha256_file(file) != artifact["sha256"]:
+            raise ValueError(f"Artifact changed since verification: {file}")
+        checksums.append(f"{artifact['sha256']}  {file.name}")
 
     if not checksums:
         print("⚠ 未找到需要计算校验和的文件")

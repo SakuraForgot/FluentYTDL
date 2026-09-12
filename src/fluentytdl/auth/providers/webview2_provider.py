@@ -24,6 +24,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+from ...observability.sanitize import sanitize_exception
 from ...utils.logger import logger
 from ..webview2_runtime import WEBVIEW2_DOWNLOAD_URL, is_webview2_runtime_available
 
@@ -162,6 +163,37 @@ def _webview_subprocess(
     except Exception as e:
         _log(f"代理配置注入失败: {e}")
 
+    # Load the bridge separately so a CLR failure is not labelled WebView2 missing.
+    import sys
+
+    if sys.platform == "win32":
+        try:
+            import clr  # noqa: F401
+        except Exception as exc:
+            import json
+
+            from ..pythonnet_diagnostics import runtime_evidence
+
+            error_msg = f"Python.NET 加载失败: {sanitize_exception(exc)}"
+            _log(error_msg)
+            code = "pythonnet_load_failed"
+            try:
+                evidence = runtime_evidence()
+                _log("runtime_evidence=" + json.dumps(evidence, ensure_ascii=False))
+                files = evidence.get("files", {})
+                if any(info.get("exists") is False for info in files.values()):
+                    code = "runtime_dll_missing"
+                    error_msg += "\n运行库文件缺失，请重新完整解压或使用安装包覆盖安装。"
+                elif any(info.get("zone_identifier") for info in files.values()):
+                    error_msg += (
+                        "\n运行库带有下载来源标记，可能被系统阻止加载。"
+                        "请确认压缩包来自官方且校验正确，在文件属性中解除锁定后重新解压。"
+                    )
+            except Exception:
+                pass  # Diagnostics must never prevent delivery of the original error.
+            _send_and_close({"error": error_msg, "code": code, "stage": "pythonnet"})
+            return
+
     # ── 导入 pywebview ──
     try:
         import webview
@@ -179,7 +211,7 @@ def _webview_subprocess(
         tb = traceback.format_exc()
         error_msg = f"pywebview 加载失败: {exc}\n{tb}"
         _log(error_msg)
-        _send_and_close({"error": error_msg})
+        _send_and_close({"error": error_msg, "code": "pywebview_load_failed", "stage": "import"})
         return
 
     # ── 创建窗口 ──
@@ -212,12 +244,11 @@ def _webview_subprocess(
         import traceback
 
         tb = traceback.format_exc()
-        error_msg = (
-            f"创建登录窗口失败: {exc}\n"
-            f"这通常意味着系统缺少 Microsoft Edge WebView2 运行时。\n{tb}"
-        )
+        error_msg = f"创建登录窗口失败: {exc}\n{tb}"
         _log(error_msg)
-        _send_and_close({"error": error_msg, "code": "webview2_unavailable"})
+        _send_and_close(
+            {"error": error_msg, "code": "window_create_failed", "stage": "create_window"}
+        )
         return
 
     # ── 后台轮询线程 ──
@@ -364,12 +395,11 @@ def _webview_subprocess(
         import traceback
 
         tb = traceback.format_exc()
-        error_msg = (
-            f"启动登录窗口失败: {exc}\n"
-            f"这通常意味着系统缺少 Microsoft Edge WebView2 运行时。\n{tb}"
-        )
+        error_msg = f"启动登录窗口失败: {exc}\n{tb}"
         _log(error_msg)
-        _send_and_close({"error": error_msg, "code": "webview2_unavailable"})
+        _send_and_close(
+            {"error": error_msg, "code": "window_start_failed", "stage": "start_window"}
+        )
         return
     _log("webview.start() 已返回（子进程即将退出）")
 
@@ -437,6 +467,12 @@ class WebView2CookieProvider:
     替代旧的 WebView2Provider (Deno + CDP + 临时扩展)。
     """
 
+    def __init__(self) -> None:
+        self._last_error: dict[str, str] = {}
+
+    def get_last_error(self) -> dict[str, str]:
+        return dict(self._last_error)
+
     def extract_cookies(
         self,
         platform: str = "youtube",
@@ -447,6 +483,7 @@ class WebView2CookieProvider:
         reveal_after_seconds: int = 8,
     ) -> list[dict[str, Any]] | None:
         """启动 WebView2 登录窗口并提取 Cookie。"""
+        self._last_error = {}
         # **服务层兜底预检。** UI 层（settings_page）也会先探测一次并给出可操作的
         # 引导，但这里必须再挡一道：下载失败自动修复等路径不经过 UI，直接调到这里。
         available, _version = is_webview2_runtime_available()
@@ -457,7 +494,7 @@ class WebView2CookieProvider:
                 + WEBVIEW2_DOWNLOAD_URL
             )
             logger.warning("[WebView2] 预检失败：缺少 WebView2 运行时，已跳过子进程启动")
-            self._set_error_status(msg)
+            self._set_error_status(msg, "webview2_unavailable", "preflight")
             return None
 
         login_url = X_HOME if platform == "twitter" else YOUTUBE_HOME
@@ -508,19 +545,21 @@ class WebView2CookieProvider:
 
             if result is None:
                 logger.warning("[WebView2] 未收到子进程响应 (超时)")
-                self._set_error_status("登录超时，未收到 Cookie 数据")
+                self._set_error_status("登录超时，未收到 Cookie 数据", "login_timeout", "wait")
                 return None
 
             if "error" in result:
                 error_msg = result["error"]
-                logger.warning(f"[WebView2] 子进程报告错误: {error_msg}")
-                self._set_error_status(error_msg)
+                code = result.get("code", "login_failed")
+                stage = result.get("stage", "login")
+                logger.warning(f"[WebView2] code={code} stage={stage} 子进程报告错误: {error_msg}")
+                self._set_error_status(error_msg, code, stage)
                 return None
 
             cookies = result.get("cookies", [])
             if not cookies:
                 logger.warning("[WebView2] 子进程返回空 Cookie 列表")
-                self._set_error_status("未提取到有效的 Cookie")
+                self._set_error_status("未提取到有效的 Cookie", "empty_cookies", "cookies")
                 return None
 
             logger.info(f"[WebView2] 成功提取 {len(cookies)} 个 Cookie")
@@ -569,21 +608,24 @@ class WebView2CookieProvider:
                         pass
                     logger.warning("[WebView2] 子进程意外退出且未回传任何结果")
                     return {
-                        "error": (
-                            "登录窗口意外退出。\n"
-                            "最常见的原因是系统缺少 Microsoft Edge WebView2 运行时，"
-                            "可前往以下地址安装后重试：\n" + WEBVIEW2_DOWNLOAD_URL
-                        ),
-                        "code": "webview2_unavailable",
+                        "error": "登录窗口意外退出且未回传结果，请查看登录子进程日志。",
+                        "code": "subprocess_exited",
+                        "stage": "wait",
                     }
             except Exception as e:
                 logger.warning(f"[WebView2] 读取子进程队列异常: {e}")
-                return None
+                return {
+                    "error": f"登录结果读取失败: {sanitize_exception(e)}",
+                    "code": "queue_read_failed",
+                    "stage": "wait",
+                }
 
         return None
 
-    @staticmethod
-    def _set_error_status(message: str) -> None:
+    def _set_error_status(
+        self, message: str, code: str = "login_failed", stage: str = "login"
+    ) -> None:
+        self._last_error = {"error": message, "code": code, "stage": stage}
         try:
             from ..auth_service import AuthStatus, auth_service
 

@@ -30,6 +30,7 @@ qt_excludes = [m.strip() for m in qt_excludes_raw.split(',') if m.strip()]
 # ----------------------------------------------------------------------------
 datas = [
     ('../docs', 'docs'),
+    ('../scripts/diagnose_webview2.ps1', 'docs'),
     ('../assets/FluentYTDL_v2.ico', 'assets'),
     ('../assets/logo.png', 'assets'),
     # 托盘 / 窗口图标的多尺寸位图，由 utils/icons.py 组装成 QIcon。
@@ -39,12 +40,12 @@ datas = [
     ('../assets/logo_32.png', 'assets'),
     ('../assets/logo_64.png', 'assets'),
     ('../assets/logo_128.png', 'assets'),
-    ('../assets/locales', 'assets/locales'),
+    (os.environ.get('FLUENTYTDL_LOCALES_DIR', '../assets/locales'), 'assets/locales'),
     # 错误诊断规则表，diagnostics/rules.py 通过 resource_path 加载。
     # 漏掉它会让所有错误退化成 unknown 兜底文案。
     ('../assets/error_rules.json', 'assets'),
     ('../src/fluentytdl/yt_dlp_plugins_ext', 'fluentytdl/yt_dlp_plugins_ext'),
-    ('../VERSION', '.'),  # 版本文件，运行时 __init__.py 读取
+    (os.environ.get('FLUENTYTDL_VERSION_SOURCE', '../VERSION'), '.'),  # 版本文件，运行时 __init__.py 读取
 ]
 
 # 自动收集子模块和元数据
@@ -63,6 +64,8 @@ hiddenimports += collect_submodules('qfluentwidgets')
 hiddenimports += collect_submodules('qframelesswindow')
 
 datas += copy_metadata('rookiepy')
+for package in ('pythonnet', 'clr-loader', 'pywebview'):
+    datas += copy_metadata(package)
 
 # pythonnet / clr 需要的运行时 DLL 和数据文件
 datas += collect_data_files('pythonnet')

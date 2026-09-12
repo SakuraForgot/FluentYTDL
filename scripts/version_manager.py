@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import argparse
 import re
+import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -121,8 +122,8 @@ class VersionManager:
             pattern=r'#define\s+MyAppVersion\s+"([^"]+)"',
             template='#define MyAppVersion "{version}"',
             description="Inno Setup 默认版本",
-            # Inno Setup 的 VersionInfoVersion 只接受纯数字，故只写 X.Y.Z
-            writes_full=False,
+            # Display keeps the channel; the installer derives numeric PE fields separately.
+            writes_full=True,
         ),
     ]
 
@@ -152,7 +153,7 @@ class VersionManager:
         """检查版本一致性。
 
         VERSION / pyproject.toml / __init__.py 存储完整版本（含预发布后缀），
-        .iss 只存储 X.Y.Z 数字部分。
+        .iss 的显示版本也保留后缀，PE 数字版本由安装脚本单独派生。
         """
         print("🔍 检查版本号一致性...\n")
 
@@ -273,7 +274,12 @@ class VersionManager:
                 print(f"  ❌ {vf.description:20s}: 失败 - {e}")
 
         print(f"\n✅ 已更新 {success_count}/{len(self.VERSION_FILES)} 个文件")
-        return success_count == len([vf for vf in self.VERSION_FILES if vf.path.exists()])
+        complete = success_count == len([vf for vf in self.VERSION_FILES if vf.path.exists()])
+        if complete:
+            from build_environment import versions
+
+            subprocess.run(["uv", "lock", "--python", versions()["python"]], cwd=ROOT, check=True)
+        return complete
 
     def bump_version(
         self,

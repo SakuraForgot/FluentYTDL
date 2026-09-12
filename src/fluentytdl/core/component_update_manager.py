@@ -449,6 +449,13 @@ class ComponentUpdateManager(QObject):
         manifest_version = str(self._manifest.get("app_version", "")).strip()
         manifest_tag = self._manifest.get("release_tag", "") or f"v{manifest_version}"
 
+        # Stable clients must reject prerelease payloads even if a mirror/cache serves one.
+        if self._manifest.get("_is_prerelease") or not re.fullmatch(
+            r"v?\d+\.\d+\.\d+", manifest_version
+        ):
+            self.app_no_update.emit()
+            return
+
         current = _parse_version(__version__)
         latest = _parse_version(manifest_version)
 

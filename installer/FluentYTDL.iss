@@ -12,7 +12,7 @@
 
 ; --- 版本定义 (可通过命令行覆盖) ---
 #ifndef MyAppVersion
-  #define MyAppVersion "3.7.1"
+  #define MyAppVersion "3.7.2-rc.1"
 #endif
 
 #ifndef SourceDir
@@ -33,9 +33,9 @@
 ; --- 应用程序信息 ---
 #define MyAppName "FluentYTDL"
 #define MyAppPublisher "FluentYTDL Team"
-#define MyAppURL "https://github.com/FluentYTDL/FluentYTDL"
+#define MyAppURL "https://github.com/SakuraForgot/FluentYTDL"
 #define MyAppExeName "FluentYTDL.exe"
-#define MyAppDescription "专业 YouTube 下载器"
+#define MyAppDescription "YouTube and X video downloader"
 
 ; ============================================================================
 ; [Setup] 安装程序配置
@@ -81,17 +81,22 @@ LZMANumFastBytes=273
 WizardStyle=modern
 WizardSizePercent=110,100
 
-; 权限配置
-; 使用 admin 是因为程序安装到 Program Files，需要管理员权限
-; UsedUserAreasWarning=no 抑制关于用户区域的警告，因为我们有意在卸载时清理用户数据
-PrivilegesRequired=admin
+PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog commandline
-UsedUserAreasWarning=no
+UsePreviousPrivileges=yes
+ChangesEnvironment=yes
+CloseApplications=yes
+RestartApplications=no
+LanguageDetectionMethod=uilanguage
+ShowLanguageDialog=yes
 
 ; 卸载配置
 UninstallDisplayIcon={app}\{#MyAppExeName}
 UninstallDisplayName={#MyAppName}
 Uninstallable=yes
+; Old logs contain global process termination and recursive data deletion instructions.
+; Never inherit these commands when upgrading from the previous installer.
+UninstallLogMode=overwrite
 CreateUninstallRegKey=yes
 
 ; 兼容性
@@ -102,232 +107,113 @@ ArchitecturesInstallIn64BitMode=x64compatible
 ; 日志
 SetupLogging=yes
 
-; ============================================================================
-; [Languages] 多语言支持
-; ============================================================================
 [Languages]
-; 注意: 中文语言包需要单独下载安装
-; 下载地址: https://github.com/jrsoftware/issrc/tree/main/Files/Languages/Unofficial
 Name: "english"; MessagesFile: "compiler:Default.isl"
+Name: "chinesesimp"; MessagesFile: "languages\ChineseSimplified.isl"
 
-; ============================================================================
-; [CustomMessages] 自定义消息
-; ============================================================================
 [CustomMessages]
-english.AddToPath=Add tools directory to system PATH (enables command-line usage of yt-dlp, etc.)
-english.SystemIntegration=System Integration:
+english.AppDescription=YouTube and X video downloader
+chinesesimp.AppDescription=YouTube 和 X 视频下载器
+english.AddToPath=Add command-line tools to PATH for the selected installation scope
+chinesesimp.AddToPath=将命令行工具加入所选安装范围的 PATH
+english.SystemIntegration=Command-line tools:
+chinesesimp.SystemIntegration=命令行工具：
+english.CleanupWarning=Uninstall removes accounts, cookies, settings and download history for this installation. Downloaded media files are kept. For an all-users installation, application data for all users will be cleared.
+chinesesimp.CleanupWarning=卸载将清除本安装的账号、Cookie、配置和下载历史，保留已下载的媒体文件。所有用户安装将清理各用户的应用数据。
+english.MaintenanceFailed=Could not finish application maintenance. See the uninstall/setup log; remaining application data has not been reported as cleared.
+chinesesimp.MaintenanceFailed=应用维护未完成，请查看安装或卸载日志。残留数据尚未清理完成。
+english.ScopeConflict=An installation in the other scope already exists. Use its existing scope to upgrade. Uninstalling it first will clear its accounts, settings and history.
+chinesesimp.ScopeConflict=检测到另一安装范围的旧版本，请沿用旧范围升级。若先卸载旧版本，其账号、配置和历史记录将被清空。
 
-; ============================================================================
-; [Tasks] 安装任务选项
-; ============================================================================
+[Messages]
+english.ConfirmUninstall=Are you sure you want to uninstall %1? Accounts, cookies, settings and download history will be deleted. Downloaded media files are kept.
+chinesesimp.ConfirmUninstall=确定卸载 %1 吗？账号、Cookie、配置和下载历史将全部删除，已下载媒体文件保留。
+
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
-Name: "quicklaunchicon"; Description: "{cm:CreateQuickLaunchIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 Name: "addtopath"; Description: "{cm:AddToPath}"; GroupDescription: "{cm:SystemIntegration}"; Flags: unchecked
 
-; ============================================================================
-; [Dirs] 目录创建
-; ============================================================================
 [Dirs]
-Name: "{app}\logs"; Permissions: users-modify
-Name: "{app}\bin"; Permissions: users-modify
-Name: "{app}\state"; Permissions: users-modify
+; Authentication and component updates still write below bin; data relocation is out of scope.
+Name: "{app}\bin"; Permissions: users-modify; Check: IsAdminInstallMode
 
-; ============================================================================
-; [Files] 文件部署
-; ============================================================================
 [Files]
-; 主程序和运行时
-; Excludes "portable.txt" 是纯保险：便携标记只由 scripts/build.py::create_7z() 追加进
-; full.7z，本来就不该出现在 {#SourceDir}（= dist/FluentYTDL/）里。真出现了就意味着
-; 安装版会把配置/任务库/日志写进 Program Files —— 普通权限写不进、提权会话写得进，
-; 同一台机器的数据分裂成两棵树。构建侧还有 assert_dist_clean() 拦一道。
 Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "portable.txt"
+Source: "maintenance.ps1"; DestDir: "{app}\_internal\installer"; Flags: ignoreversion
+Source: "maintenance.ps1"; Flags: dontcopy
 
-; ============================================================================
-; [Icons] 快捷方式
-; ============================================================================
 [Icons]
-; AppUserModelID 必须与 main.py 里 SetCurrentProcessExplicitAppUserModelID("FluentYTDL")
-; 声明的字符串逐字一致。不一致时 Windows 会把"从快捷方式启动的窗口"和"固定项"
-; 当成两个不同的应用，在任务栏上分成两格；而覆盖安装后的图标缓存也更容易失准
-; （隐式归组是按 exe 路径算的）。
-; 开始菜单
-Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Comment: "{#MyAppDescription}"; AppUserModelID: "FluentYTDL"
+Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Comment: "{cm:AppDescription}"; AppUserModelID: "FluentYTDL"
 Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
+Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon; Comment: "{cm:AppDescription}"; AppUserModelID: "FluentYTDL"
 
-; 桌面图标
-Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon; Comment: "{#MyAppDescription}"; AppUserModelID: "FluentYTDL"
-
-; 快速启动栏
-Name: "{userappdata}\Microsoft\Internet Explorer\Quick Launch\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: quicklaunchicon
-
-; ============================================================================
-; [Registry] 注册表项
-; ============================================================================
-[Registry]
-; 添加 PATH 环境变量 (仅当用户选择时)
-; 注意: 使用 HKCU 是因为 PATH 修改应针对当前用户
-; 如果以管理员身份安装但想修改当前用户的 PATH，这是正确的做法
-Root: HKCU; Subkey: "Environment"; ValueType: expandsz; ValueName: "Path"; ValueData: "{olddata};{app}\bin"; Tasks: addtopath; Check: NeedsAddPath(ExpandConstant('{app}\bin')); Flags: uninsdeletekeyifempty
-
-; ============================================================================
-; [Run] 安装后运行
-; ============================================================================
 [Run]
-Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#MyAppName}}"; Flags: nowait postinstall skipifsilent runasoriginaluser
 
-; ============================================================================
-; [UninstallDelete] 卸载时删除
-; ============================================================================
-[UninstallDelete]
-; 清理安装目录中的用户数据和日志
-Type: filesandordirs; Name: "{app}\logs"
-Type: filesandordirs; Name: "{app}\config.json"
-Type: filesandordirs; Name: "{app}\*.log"
-Type: filesandordirs; Name: "{app}\cache"
-Type: filesandordirs; Name: "{app}\data"
-Type: filesandordirs; Name: "{app}\state"
-
-; 清理用户目录中的应用数据 (AppData)
-; 注意: 这些是用户数据目录，卸载时清理是预期行为
-; 如果以管理员身份卸载，将清理运行卸载程序的用户的数据
-Type: filesandordirs; Name: "{userappdata}\FluentYTDL"
-Type: filesandordirs; Name: "{localappdata}\FluentYTDL"
-
-; 清理旧版 Documents 中的应用数据
-Type: filesandordirs; Name: "{userdocs}\FluentYTDL"
-
-; 清理应用创建的注册表 (通过 [UninstallRun] 或 [Code] 实现)
-
-[UninstallRun]
-; 确保关闭正在运行的程序
-; RunOnceId 确保此条目在卸载时只执行一次
-Filename: "taskkill"; Parameters: "/F /IM FluentYTDL.exe"; Flags: runhidden nowait; RunOnceId: "KillFluentYTDL"
-
-[Registry]
-; 卸载时删除应用程序可能创建的注册表项 (Flags: uninsdeletekey)
-Root: HKCU; Subkey: "Software\FluentYTDL"; Flags: uninsdeletekey dontcreatekey
-
-; ============================================================================
-; [Code] Pascal 脚本
-; ============================================================================
 [Code]
-const
-  WM_SETTINGCHANGE = $001A;
-  SMTO_ABORTIFHUNG = $0002;
-
-// ========== 工具函数 ==========
-
-// 检查是否需要添加 PATH
-function NeedsAddPath(Param: string): Boolean;
-var
-  OrigPath: string;
-  SearchPath: string;
+function InstallScope: String;
 begin
-  Result := True;
-  
-  if not RegQueryStringValue(HKEY_CURRENT_USER, 'Environment', 'Path', OrigPath) then
-    Exit;
-  
-  // 规范化路径以进行比较
-  SearchPath := ';' + UpperCase(Param) + ';';
-  OrigPath := ';' + UpperCase(OrigPath) + ';';
-  
-  // 检查路径是否已存在
-  Result := Pos(SearchPath, OrigPath) = 0;
+  if IsAdminInstallMode then Result := 'machine' else Result := 'user';
 end;
 
-// 从 PATH 中移除指定路径
-procedure RemoveFromPath(PathToRemove: string);
+function Maintain(Action, Script: String): Boolean;
 var
-  OrigPath: string;
-  NewPath: string;
-  PathUpper: string;
-  OrigUpper: string;
-  StartPos: Integer;
+  Code: Integer;
+  Args: String;
 begin
-  if not RegQueryStringValue(HKEY_CURRENT_USER, 'Environment', 'Path', OrigPath) then
+  Args := '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' + Script +
+    '" -Action ' + Action + ' -AppDirectory "' + ExpandConstant('{app}') +
+    '" -Scope ' + InstallScope;
+  Result := ExecAndLogOutput(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
+    Args, '', SW_SHOWNORMAL, ewWaitUntilTerminated, Code, nil);
+  Result := Result and (Code = 0);
+  Log('Maintenance ' + Action + ': exit=' + IntToStr(Code));
+end;
+
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  OtherRoot: Integer;
+  Key: String;
+begin
+  Result := '';
+  Key := 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{E8F3A9D2-4B7C-4E1F-9A3D-2C8B6F4E7A1D}_is1';
+  if IsAdminInstallMode then OtherRoot := HKCU else OtherRoot := HKLM64;
+  if RegKeyExists(OtherRoot, Key) then begin
+    Result := CustomMessage('ScopeConflict');
     Exit;
-  
-  PathUpper := UpperCase(PathToRemove);
-  OrigUpper := UpperCase(OrigPath);
-  
-  // 查找并移除路径 (处理各种边界情况)
-  NewPath := OrigPath;
-  
-  // 情况 1: ;path;
-  StartPos := Pos(';' + PathUpper + ';', ';' + OrigUpper + ';');
-  if StartPos > 0 then
-  begin
-    if StartPos = 1 then
-      // 在开头: path;...
-      Delete(NewPath, 1, Length(PathToRemove) + 1)
-    else
-      // 在中间或结尾: ...;path;... 或 ...;path
-      Delete(NewPath, StartPos, Length(PathToRemove) + 1);
   end;
-  
-  // 清理可能的双分号
-  while Pos(';;', NewPath) > 0 do
-    StringChangeEx(NewPath, ';;', ';', True);
-  
-  // 清理首尾分号
-  if (Length(NewPath) > 0) and (NewPath[1] = ';') then
-    Delete(NewPath, 1, 1);
-  if (Length(NewPath) > 0) and (NewPath[Length(NewPath)] = ';') then
-    Delete(NewPath, Length(NewPath), 1);
-  
-  // 写回注册表
-  if NewPath <> OrigPath then
-    RegWriteStringValue(HKEY_CURRENT_USER, 'Environment', 'Path', NewPath);
+  ExtractTemporaryFile('maintenance.ps1');
+  if not Maintain('Stop', ExpandConstant('{tmp}\maintenance.ps1')) then
+    Result := CustomMessage('MaintenanceFailed');
 end;
 
-// ========== 安装过程钩子 ==========
-
-// 安装前初始化
-function InitializeSetup(): Boolean;
-var
-  ResultCode: Integer;
-begin
-  Result := True;
-  
-  // 尝试关闭正在运行的程序实例
-  Exec('taskkill', '/F /IM FluentYTDL.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-  
-  // 等待进程完全退出
-  Sleep(500);
-end;
-
-// 安装完成后
 procedure CurStepChanged(CurStep: TSetupStep);
-begin
-  // PATH 更改将在下次登录或重启资源管理器后生效
-end;
-
-// ========== 卸载过程钩子 ==========
-
-// 卸载前初始化
-function InitializeUninstall(): Boolean;
 var
-  ResultCode: Integer;
+  Language: String;
 begin
-  Result := True;
-  
-  // 关闭正在运行的程序
-  Exec('taskkill', '/F /IM FluentYTDL.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-  Sleep(500);
+  if CurStep = ssPostInstall then begin
+    if not Maintain('Register', ExpandConstant('{tmp}\maintenance.ps1')) then
+      RaiseException(CustomMessage('MaintenanceFailed'));
+    if ActiveLanguage = 'chinesesimp' then Language := 'zh_CN' else Language := 'en_US';
+    if not FileExists(ExpandConstant('{app}\install-language.txt')) then
+      if not SaveStringToFile(ExpandConstant('{app}\install-language.txt'), Language, False) then
+        RaiseException(CustomMessage('MaintenanceFailed'));
+    if WizardIsTaskSelected('addtopath') then
+      if not Maintain('AddPath', ExpandConstant('{tmp}\maintenance.ps1')) then
+        RaiseException(CustomMessage('MaintenanceFailed'));
+  end;
 end;
 
-// 卸载过程钩子
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
-  BinPath: string;
+  Script: String;
 begin
-  if CurUninstallStep = usPostUninstall then
-  begin
-    // 从 PATH 中移除 bin 目录
-    BinPath := ExpandConstant('{app}\bin');
-    RemoveFromPath(BinPath);
+  if CurUninstallStep = usUninstall then begin
+    Script := ExpandConstant('{app}\_internal\installer\maintenance.ps1');
+    if not Maintain('Stop', Script) then RaiseException(CustomMessage('MaintenanceFailed'));
+    if not Maintain('Clean', Script) then RaiseException(CustomMessage('MaintenanceFailed'));
+    if not Maintain('RemovePath', Script) then RaiseException(CustomMessage('MaintenanceFailed'));
+    DeleteFile(ExpandConstant('{app}\install-language.txt'));
+    DeleteFile(ExpandConstant('{app}\.install-owner.json'));
   end;
 end;

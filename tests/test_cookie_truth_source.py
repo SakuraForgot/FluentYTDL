@@ -51,8 +51,10 @@ def _netscape(rows: list[tuple[str, int, str, str]]) -> str:
 
 def _youtube_full(expires: int = FUTURE) -> str:
     return _netscape(
-        [(".youtube.com", expires, name, f"v-{name}") for name in
-         ("SID", "HSID", "SSID", "SAPISID", "APISID")]
+        [
+            (".youtube.com", expires, name, f"v-{name}")
+            for name in ("SID", "HSID", "SSID", "SAPISID", "APISID")
+        ]
         + [(".youtube.com", expires, "LOGIN_INFO", "v-LOGIN_INFO")]
     )
 
@@ -67,10 +69,14 @@ def _youtube_google_only(expires: int = FUTURE) -> str:
     `.youtube.com` 上一个登录态 marker 都没有（LOGIN_INFO 被剥掉），只剩访客态 Cookie。
     name-only 必需字段检查会被它骗过（SID/HSID/... 名字都在），域感知闸门必须挡下。"""
     return _netscape(
-        [(".google.com", expires, name, f"v-{name}") for name in
-         ("SID", "HSID", "SSID", "SAPISID", "APISID")]
-        + [(".youtube.com", expires, "VISITOR_INFO1_LIVE", "v-guest"),
-           (".youtube.com", expires, "PREF", "v-pref")]
+        [
+            (".google.com", expires, name, f"v-{name}")
+            for name in ("SID", "HSID", "SSID", "SAPISID", "APISID")
+        ]
+        + [
+            (".youtube.com", expires, "VISITOR_INFO1_LIVE", "v-guest"),
+            (".youtube.com", expires, "PREF", "v-pref"),
+        ]
     )
 
 
@@ -78,10 +84,14 @@ def _youtube_login_realistic(expires: int = FUTURE) -> str:
     """更贴近真实登录 jar 的形态：SID 家族在 `.google.com`，LOGIN_INFO 在 `.youtube.com`。
     必需字段齐全，且 `.youtube.com` 上有登录态 marker —— 闸门应放行。"""
     return _netscape(
-        [(".google.com", expires, name, f"v-{name}") for name in
-         ("SID", "HSID", "SSID", "SAPISID", "APISID")]
-        + [(".youtube.com", expires, "LOGIN_INFO", "v-LOGIN_INFO"),
-           (".youtube.com", expires, "__Secure-1PSID", "v-1psid")]
+        [
+            (".google.com", expires, name, f"v-{name}")
+            for name in ("SID", "HSID", "SSID", "SAPISID", "APISID")
+        ]
+        + [
+            (".youtube.com", expires, "LOGIN_INFO", "v-LOGIN_INFO"),
+            (".youtube.com", expires, "__Secure-1PSID", "v-1psid"),
+        ]
     )
 
 
@@ -270,10 +280,22 @@ def test_twitter_commit_leaves_youtube_untouched(sentinel, tmp_path):
 def test_cleaner_preserves_x_cookies_with_correct_platform():
     """twitter 分支不做 name 过滤 —— auth_token / ct0 必须活着"""
     x_cookies = [
-        {"domain": ".x.com", "path": "/", "secure": True, "expires": FUTURE,
-         "name": "auth_token", "value": "a"},
-        {"domain": ".x.com", "path": "/", "secure": True, "expires": FUTURE,
-         "name": "ct0", "value": "c"},
+        {
+            "domain": ".x.com",
+            "path": "/",
+            "secure": True,
+            "expires": FUTURE,
+            "name": "auth_token",
+            "value": "a",
+        },
+        {
+            "domain": ".x.com",
+            "path": "/",
+            "secure": True,
+            "expires": FUTURE,
+            "name": "ct0",
+            "value": "c",
+        },
     ]
 
     kept = {c["name"] for c in CookieCleaner.clean(x_cookies, "twitter", True)}
@@ -283,10 +305,22 @@ def test_cleaner_preserves_x_cookies_with_correct_platform():
 def test_cleaner_washes_x_cookies_when_platform_is_wrong():
     """传错 platform 就会被 YOUTUBE_ALLOWED_NAMES 剥光 —— 串台调用的回归护栏"""
     x_cookies = [
-        {"domain": ".x.com", "path": "/", "secure": True, "expires": FUTURE,
-         "name": "auth_token", "value": "a"},
-        {"domain": ".x.com", "path": "/", "secure": True, "expires": FUTURE,
-         "name": "ct0", "value": "c"},
+        {
+            "domain": ".x.com",
+            "path": "/",
+            "secure": True,
+            "expires": FUTURE,
+            "name": "auth_token",
+            "value": "a",
+        },
+        {
+            "domain": ".x.com",
+            "path": "/",
+            "secure": True,
+            "expires": FUTURE,
+            "name": "ct0",
+            "value": "c",
+        },
     ]
 
     assert CookieCleaner.clean(x_cookies, "youtube", True) == []
@@ -299,20 +333,44 @@ def test_cleaner_rejects_bare_tld_domain():
     于是任何顶级域 Cookie 都能混进 X 的真相源。只保留"相等或子域"。
     """
     cookies = [
-        {"domain": ".com", "path": "/", "secure": True, "expires": FUTURE,
-         "name": "auth_token", "value": "a"},
-        {"domain": "notx.com", "path": "/", "secure": True, "expires": FUTURE,
-         "name": "ct0", "value": "c"},
+        {
+            "domain": ".com",
+            "path": "/",
+            "secure": True,
+            "expires": FUTURE,
+            "name": "auth_token",
+            "value": "a",
+        },
+        {
+            "domain": "notx.com",
+            "path": "/",
+            "secure": True,
+            "expires": FUTURE,
+            "name": "ct0",
+            "value": "c",
+        },
     ]
 
     assert CookieCleaner.clean(cookies, "twitter", True) == []
 
     # 真正的子域照常放行，前缀点在两边都不影响判定
     subdomain = [
-        {"domain": "mobile.twitter.com", "path": "/", "secure": True, "expires": FUTURE,
-         "name": "auth_token", "value": "a"},
-        {"domain": "x.com", "path": "/", "secure": True, "expires": FUTURE,
-         "name": "ct0", "value": "c"},
+        {
+            "domain": "mobile.twitter.com",
+            "path": "/",
+            "secure": True,
+            "expires": FUTURE,
+            "name": "auth_token",
+            "value": "a",
+        },
+        {
+            "domain": "x.com",
+            "path": "/",
+            "secure": True,
+            "expires": FUTURE,
+            "name": "ct0",
+            "value": "c",
+        },
     ]
     assert len(CookieCleaner.clean(subdomain, "twitter", True)) == 2
 
@@ -320,10 +378,22 @@ def test_cleaner_rejects_bare_tld_domain():
 def test_cleaner_expiry_drop_is_independent_of_cleaning_switch():
     """丢弃过期是独立维度：`enable_cleaning=False` 不再顺手替用户丢掉过期条目"""
     rows = [
-        {"domain": ".x.com", "path": "/", "secure": True, "expires": PAST,
-         "name": "auth_token", "value": "a"},
-        {"domain": ".x.com", "path": "/", "secure": True, "expires": 0,
-         "name": "ct0", "value": "c"},  # 会话 Cookie，expires==0 不算过期
+        {
+            "domain": ".x.com",
+            "path": "/",
+            "secure": True,
+            "expires": PAST,
+            "name": "auth_token",
+            "value": "a",
+        },
+        {
+            "domain": ".x.com",
+            "path": "/",
+            "secure": True,
+            "expires": 0,
+            "name": "ct0",
+            "value": "c",
+        },  # 会话 Cookie，expires==0 不算过期
     ]
 
     # 默认行为不变：过期的被丢，会话 Cookie 留下
@@ -338,8 +408,16 @@ def test_cleaner_expiry_drop_is_independent_of_cleaning_switch():
 def test_cleaner_drops_the_bogus_flag_key():
     """输出只允许 Netscape 七字段的子集，`flag` 是写文件时才推算的，不该留在数据里"""
     cookies = [
-        {"domain": ".x.com", "path": "/", "secure": True, "expires": FUTURE,
-         "name": "auth_token", "value": "a", "httpOnly": True, "sameSite": "None"},
+        {
+            "domain": ".x.com",
+            "path": "/",
+            "secure": True,
+            "expires": FUTURE,
+            "name": "auth_token",
+            "value": "a",
+            "httpOnly": True,
+            "sameSite": "None",
+        },
     ]
 
     out = CookieCleaner.clean(cookies, "twitter", True)

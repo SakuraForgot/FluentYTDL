@@ -448,7 +448,9 @@ class CookieSentinel(QObject):
             {platform: {"enabled", "exists", "valid", "expiring_soon",
                         "expiry_seconds", "reason", "commit_warning"}}
         """
-        return {platform: self._get_platform_health(platform) for platform in ("youtube", "twitter")}
+        return {
+            platform: self._get_platform_health(platform) for platform in ("youtube", "twitter")
+        }
 
     def _get_platform_health(self, platform: str) -> dict:
         """单个平台的健康度快照（不做任何提取，只读现有真相源）"""
@@ -468,7 +470,9 @@ class CookieSentinel(QObject):
                 valid = bool(validation.get("valid"))
                 reason = validation.get("message") or ""
             except OSError as e:
-                reason = QCoreApplication.translate("CookieSentinel", "读取 Cookie 文件失败: {}").format(e)
+                reason = QCoreApplication.translate(
+                    "CookieSentinel", "读取 Cookie 文件失败: {}"
+                ).format(e)
 
         return {
             "enabled": self._is_platform_enabled(platform),
@@ -550,9 +554,7 @@ class CookieSentinel(QObject):
                         )
                         if not (cache_file and Path(cache_file).exists()):
                             # 该平台用户从未登录过，这不是错误
-                            logger.debug(
-                                f"[CookieSentinel] {plat} 尚无 WebView2 登录态，跳过同步"
-                            )
+                            logger.debug(f"[CookieSentinel] {plat} 尚无 WebView2 登录态，跳过同步")
                             continue
 
                         account = auth_service.get_current_webview2_account(platform=plat)

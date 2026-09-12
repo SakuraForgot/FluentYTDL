@@ -461,3 +461,86 @@ class TestDecideWatchOutcome:
         """未知 watch_mode 按 survival 处理 —— 宁可漏判也绝不误杀。"""
         assert decide_watch_outcome("", None, 4242, "", True, SURVIVAL_GRACE + 1) == "commit"
         assert decide_watch_outcome("bogus", None, 4242, "", True, 1.0) == "wait"
+
+
+@pytest.mark.parametrize("watch_mode", ["ready", "survival"])
+@pytest.mark.parametrize("new_version", ["3.8.0", "3.8.0-rc.1"])
+def test_failed_update_restores_bundled_version_and_user_data(
+    tmp_path, monkeypatch, watch_mode, new_version
+):
+    """Exercise real archive/file operations; never launch a process or elevate."""
+    from fluentytdl import _read_version
+
+    app = tmp_path / "installed"
+    internal = app / "_internal"
+    internal.mkdir(parents=True)
+    (internal / "VERSION").write_text("3.7.1", encoding="utf-8")
+    maintenance = internal / "installer/maintenance.ps1"
+    maintenance.parent.mkdir()
+    maintenance.write_bytes(b"old installer maintenance")
+    exe = app / "FluentYTDL.exe"
+    exe.write_bytes(b"old executable")
+    (app / "updater.exe").write_bytes(b"old updater")
+    # A stale legacy root VERSION must not override the bundled version.
+    (app / "VERSION").write_text("3.0.0", encoding="utf-8")
+    preserved = [
+        "config.json",
+        "state/tasks/tasks.db",
+        "state/tasks/tasks.db-wal",
+        "state/tasks/tasks.db-shm",
+        "bin/dle_user/accounts.json",
+        "bin/cookies_youtube.txt",
+        "install-language.txt",
+        ".install-owner.json",
+        ".migrated_v2",
+        "downloads/video.mp4",
+        "user-note.txt",
+    ]
+    for name in preserved:
+        path = app / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"user data sentinel")
+
+    package = tmp_path / "app-core.zip"
+    with zipfile.ZipFile(package, "w") as archive:
+        archive.writestr("FluentYTDL.exe", b"new executable")
+        archive.writestr("_internal/VERSION", new_version)
+        archive.writestr("_internal/installer/maintenance.ps1", b"new maintenance")
+        archive.writestr("updater.exe.new", b"new updater")
+    staged = tmp_path / "extracted"
+    extract_archive(package, staged)
+    assert not (staged / "VERSION").exists()
+    internal_old = app / "_internal_old"
+    exe_old = app / "FluentYTDL.exe.old"
+    internal.rename(internal_old)
+    exe.rename(exe_old)
+    assert _move_extracted_files(staged, app)
+
+    def installed_version():
+        with monkeypatch.context() as frozen:
+            frozen.setattr(sys, "frozen", True, raising=False)
+            frozen.setattr(sys, "_MEIPASS", str(internal), raising=False)
+            frozen.setattr(sys, "executable", str(exe))
+            return _read_version()
+
+    assert installed_version() == new_version
+    assert decide_watch_outcome(watch_mode, None, 4242, "nonce", False, 1.0) == "rollback"
+    launches = []
+
+    def launch_old(executable, directory, arguments, origin_sid):
+        launches.append((executable, directory, arguments))
+        return None, 0, "test-no-launch"
+
+    monkeypatch.setattr(_updater_mod, "_launch_medium", launch_old)
+    monkeypatch.setattr(_updater_mod, "_close_handle", lambda handle: None)
+    _updater_mod._rollback_update(exe, internal, internal_old, exe_old, "")
+
+    assert installed_version() == "3.7.1"
+    assert exe.read_bytes() == b"old executable"
+    assert maintenance.read_bytes() == b"old installer maintenance"
+    assert (app / "updater.exe").read_bytes() == b"old updater"
+    assert not (app / "updater.exe.new").exists()
+    assert not internal_old.exists() and not exe_old.exists()
+    assert launches == [(exe, app, [])]
+    for name in preserved:
+        assert (app / name).read_bytes() == b"user data sentinel"

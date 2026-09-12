@@ -748,9 +748,7 @@ class StagingArea:
         """
         sid = staging_id or uuid.uuid4().hex
         download_dir = os.path.abspath(download_dir)
-        txn_dir = os.path.join(
-            download_dir, SANDBOX_ROOT_NAME, f"task_{task_key}", f"txn_{sid}"
-        )
+        txn_dir = os.path.join(download_dir, SANDBOX_ROOT_NAME, f"task_{task_key}", f"txn_{sid}")
         os.makedirs(os.path.dirname(txn_dir), exist_ok=True)
         os.makedirs(txn_dir, exist_ok=False)
 
@@ -1127,7 +1125,9 @@ class StagingArea:
         """
         old = self.manifest.require(old_id)
         self.manifest.require(new_id)
-        dst = os.path.join(self.internal_dir, f"{uuid.uuid4().hex[:8]}-{os.path.basename(old.path)}")
+        dst = os.path.join(
+            self.internal_dir, f"{uuid.uuid4().hex[:8]}-{os.path.basename(old.path)}"
+        )
         os.replace(old.path, dst)
         self.manifest.rename(old_id, dst)
         self.manifest.supersede(old_id, new_id, reason=reason)
@@ -1242,9 +1242,7 @@ class StagingArea:
                 )
             )
         if inexact:
-            self._signal(
-                "member_tail_rebuilt", level="WARNING", stage="finalize", count=inexact
-            )
+            self._signal("member_tail_rebuilt", level="WARNING", stage="finalize", count=inexact)
         if not members:
             raise StagingError("没有任何可交付成员，build_plan() 拒绝产出空计划")
 
@@ -1636,11 +1634,11 @@ class StagingArea:
         except OSError as err:
             # journal 写不动是严重问题（崩溃将不可检出），但不该在这里改变事务走向：
             # 让真正的失败原因来决定终态。
-            self._signal(
-                "journal_write_failed", level="ERROR", stage="finalize", error=repr(err)
-            )
+            self._signal("journal_write_failed", level="ERROR", stage="finalize", error=repr(err))
 
-    def _signal(self, code: str, *, level: str = "INFO", stage: str = "download", **fields: Any) -> None:
+    def _signal(
+        self, code: str, *, level: str = "INFO", stage: str = "download", **fields: Any
+    ) -> None:
         emit_event(
             "signal",
             trace=self.trace,
@@ -1661,7 +1659,11 @@ class StagingArea:
         except OSError as err:
             # 清不掉不该盖住真正的失败原因；沙盒留给 GC。
             self._signal(
-                "staging_discard_failed", level="WARNING", stage="finalize", why=why, error=repr(err)
+                "staging_discard_failed",
+                level="WARNING",
+                stage="finalize",
+                why=why,
+                error=repr(err),
             )
 
 

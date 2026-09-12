@@ -18,6 +18,7 @@ import argparse
 import hashlib
 import io
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -51,22 +52,11 @@ def load_app_core_include() -> list[str]:
     归档内容的权威在 build.py 的白名单拷贝，不在这里。
     """
     pyproject = ROOT / "pyproject.toml"
-    try:
-        import tomllib
+    import tomllib
 
-        with open(pyproject, "rb") as f:
-            data = tomllib.load(f)
-        items = data.get("tool", {}).get("fluentytdl", {}).get("build", {}).get("app_core_include")
-    except ImportError:
-        # Python 3.10 无 tomllib —— 回退到行解析（数组在 pyproject 里写成单行）
-        items = None
-        for line in pyproject.read_text(encoding="utf-8").splitlines():
-            stripped = line.strip()
-            if stripped.startswith("app_core_include") and "=" in stripped:
-                raw = stripped.split("=", 1)[1].strip()
-                if raw.startswith("[") and raw.endswith("]"):
-                    items = [x.strip(" '\"") for x in raw[1:-1].split(",") if x.strip()]
-                break
+    with open(pyproject, "rb") as stream:
+        data = tomllib.load(stream)
+    items = data["tool"]["fluentytdl"]["build"]["app_core_include"]
 
     if not items:
         raise RuntimeError(
@@ -86,6 +76,14 @@ def sha256_file(file_path: Path) -> str:
 
 def detect_component_versions(release_dir: Path) -> dict[str, dict]:
     """检测 bin/ 工具版本。从 assets/bin/ 目录的 exe 文件中获取。"""
+    snapshot = os.environ.get("FLUENTYTDL_COMPONENT_SNAPSHOT")
+    if snapshot:
+        entries = json.loads(Path(snapshot).read_text(encoding="utf-8"))["tools"]
+        return {
+            key: {"version": value["version"], "repo": value["repo"]}
+            for key, value in entries.items()
+            if key != "7zip"
+        }
     bin_dir = ROOT / "assets" / "bin"
     components: dict[str, dict] = {}
 
@@ -243,7 +241,7 @@ def generate_manifest(
         }
         print(f"  app-core: {app_core_name} (SHA256 OK)")
     else:
-        print(f"  ⚠ app-core 归档不存在: {app_core_name}")
+        print(f"  app-core archive missing: {app_core_name}")
 
     # bin/ 工具组件（版本来自 assets/bin/ 的实测，制品元数据来自 TOOLS.lock.json）
     #
@@ -330,6 +328,8 @@ def main():
 
     manifest = generate_manifest(version, args.release_dir, base_url, release_tag=tag)
 
+    if "app-core" not in manifest["components"]:
+        raise FileNotFoundError("Cannot publish a manifest without its app-core archive")
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(
         json.dumps(manifest, indent=2, ensure_ascii=False) + "\n",

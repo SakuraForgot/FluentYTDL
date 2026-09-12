@@ -1,0 +1,58 @@
+name: Shared checks
+on:
+  workflow_call:
+permissions:
+  contents: read
+jobs:
+  checks:
+    name: Checks
+    runs-on: windows-2022
+    timeout-minutes: 30
+    env:
+      PYTHONIOENCODING: utf-8
+      QT_QPA_PLATFORM: offscreen
+      FLUENTYTDL_REQUIRE_BUILD_TESTS: '1'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-build
+      - name: Version and lock consistency
+        run: |
+          uv lock --check
+          if ($LASTEXITCODE -ne 0) { throw 'Lock file is stale' }
+          uv run --locked --no-sync python scripts/version_manager.py check
+          if ($LASTEXITCODE -ne 0) { throw 'Version files disagree' }
+      - name: Generated rules
+        run: |
+          uv run --locked --no-sync python scripts/sync_rules.py
+          if ($LASTEXITCODE -ne 0) { throw 'Rule generation failed' }
+          git diff --exit-code -- AGENTS.md CLAUDE.md .github/copilot-instructions.md
+          if ($LASTEXITCODE -ne 0) { throw 'Generated rule files differ' }
+      - name: Translation catalogs
+        run: |
+          uv run --locked --no-sync python scripts/i18n_update.py
+          if ($LASTEXITCODE -ne 0) { throw 'Translation extraction failed' }
+          git diff --exit-code -- assets/locales
+          if ($LASTEXITCODE -ne 0) { throw 'Translation catalogs differ' }
+      - name: Ruff
+        run: |
+          uv run --locked --no-sync ruff check src tests scripts
+          if ($LASTEXITCODE -ne 0) { throw 'Ruff failed' }
+          uv run --locked --no-sync ruff format --check src tests scripts
+          if ($LASTEXITCODE -ne 0) { throw 'Formatting failed' }
+      - name: Prepare latest real decoder for integration tests
+        run: uv run --locked --no-sync python scripts/prepare_7zip.py
+      - name: Tests
+        env:
+          FLUENTYTDL_DATA_DIR_OVERRIDE: ${{ runner.temp }}/fluentytdl-tests
+        run: uv run --locked --no-sync pytest tests -q --tb=short --junitxml=build/tests.xml
+      - name: Pyright (advisory)
+        continue-on-error: true
+        run: uv run --locked --no-sync pyright src
+      - name: Test reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: test-reports
+          path: build/tests.xml

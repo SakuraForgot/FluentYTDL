@@ -252,9 +252,7 @@ def test_exact_request_with_no_files_hints_at_throttling(tmp_path: Path) -> None
 def test_warning_even_without_resolution_metadata(tmp_path: Path) -> None:
     """没有解析元数据（迟解析路径、旧任务）也不能沉默。"""
     bench = _Bench(tmp_path)
-    context = bench.context(
-        bench.video(), {"writesubtitles": True, "subtitleslangs": ["en-GB"]}
-    )
+    context = bench.context(bench.video(), {"writesubtitles": True, "subtitleslangs": ["en-GB"]})
 
     SubtitleFeature().on_post_process(context)
 
@@ -412,7 +410,7 @@ def test_embed_without_evidence_keeps_the_files(tmp_path: Path) -> None:
 
 
 def test_keep_external_survives_a_successful_embed(tmp_path: Path) -> None:
-    """"嵌入"和"另存"是两个独立开关 —— 都要就都给。
+    """ "嵌入"和"另存"是两个独立开关 —— 都要就都给。
 
     旧的 `embed_type` 是 `soft` XOR `external`，这一格根本表达不出来。
     """

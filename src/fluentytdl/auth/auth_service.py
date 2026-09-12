@@ -140,6 +140,7 @@ def browser_combo_index(source: AuthSourceType) -> int:
             return i
     return 0
 
+
 # 需要管理员权限的浏览器（Chromium 内核 v130+）
 ADMIN_REQUIRED_BROWSERS = [
     AuthSourceType.EDGE,
@@ -534,7 +535,8 @@ class AuthService:
 
                         if cookies is None:
                             raise RuntimeError(
-                                "WebView2 登录流程超时或返回空数据（详情请见上方日志或检查是否有模块级错误防止了数据回调）"
+                                provider.get_last_error().get("error")
+                                or "登录失败，未返回 Cookie 数据"
                             )
 
                         # 清洗 Cookie（合规过滤）

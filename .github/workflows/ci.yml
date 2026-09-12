@@ -1,211 +1,48 @@
-# ==============================================================================
-#  FluentYTDL - 持续集成
-# ==============================================================================
-# 与 release.yml 的分工：
-#   ci.yml      —— 每次 push/PR 跑的快速门禁（lint / 类型 / 测试 / PyInstaller 蓝图）
-#   release.yml —— 打 tag 时跑的完整流水线（真实产物 + GitHub Release）
-#
-# 依赖安装统一走 `uv sync --frozen`，从仓库内的 uv.lock 装精确版本，
-# 避免 PySide6 / PyInstaller 在两次构建之间静默漂移（可复现性）。
-# 所有 Action 固定到 commit SHA —— 浮动 tag 可被重打，属供应链风险。
-# Dependabot 已配置 github-actions ecosystem，会自动提 PR 升级这些 SHA。
-# ==============================================================================
-
 name: CI
-
 on:
   push:
     branches: [main, dev]
-    paths-ignore:
-      - "**.md"
-      - "docs/**"
-      - ".gitignore"
   pull_request:
     branches: [main]
-    paths-ignore:
-      - "**.md"
-      - "docs/**"
-
+permissions:
+  contents: read
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
+  group: ci-${{ github.ref }}
   cancel-in-progress: true
-
-env:
-  PYTHON_VERSION: "3.12"
-  PYTHONIOENCODING: "utf-8"
-  # uv 自身也固定版本，否则"锁定安装"这一层仍有一个浮动组件
-  UV_VERSION: "0.11.24"
-
 jobs:
-  lint:
-    name: Lint and version consistency
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-
-      - name: Set up Python
-        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: Install locked dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install "uv==${UV_VERSION}"
-          uv sync --frozen --extra dev
-
-      - name: Check version consistency
-        run: uv run python scripts/version_manager.py check
-
-      # 生成文件（CLAUDE.md / AGENTS.md / copilot-instructions.md）必须与
-      # docs/RULES*.md 同步。手改生成文件会在这里被抓出来。
-      - name: Check generated rule files are in sync
-        run: |
-          uv run python scripts/sync_rules.py
-          if ! git diff --quiet; then
-            echo "::error::规则生成文件与 docs/RULES*.md 不同步，请运行 python scripts/sync_rules.py 后提交"
-            git diff --stat
-            exit 1
-          fi
-
-      - name: Run Ruff
-        run: uv run ruff check src tests
-
-      - name: Check Ruff formatting
-        run: uv run ruff format --check src tests
-        continue-on-error: true
-
-      # 源码里新增的 self.tr() / QT_TRANSLATE_NOOP 必须抽取进 assets/locales/*.ts，
-      # 否则英文界面会静默回退成中文源串 —— 这正是 ISSUE #88 的成因：
-      # build.py 只跑 i18n_release.py（ts→qm），从来没有任何环节跑 i18n_update.py（源码→ts），
-      # 于是漂移无界累积。这里只做**只读校验**，不提交任何东西。
-      # 保持 continue-on-error（与本仓库其余检查一致）：它是提示，不是合并闸门。
-      - name: Check i18n catalogs are up to date
-        continue-on-error: true
-        run: |
-          uv run python scripts/i18n_update.py
-          if ! git diff --quiet -- assets/locales; then
-            echo "::warning::有新字符串未抽取到 .ts，请运行 python scripts/i18n_update.py 并补齐译文后提交"
-            git diff --stat -- assets/locales
-          fi
-
-  typecheck:
-    name: Pyright (advisory)
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-
-      - name: Set up Python
-        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: Install locked dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install "uv==${UV_VERSION}"
-          uv sync --frozen --extra dev
-
-      - name: Run Pyright without blocking the build
-        run: uv run pyright src
-        continue-on-error: true
-
-  test:
-    name: Tests (Windows, Python ${{ matrix.python-version }})
-    runs-on: windows-latest
-    timeout-minutes: 25
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ["3.10", "3.12"]
-    env:
-      QT_QPA_PLATFORM: offscreen
-
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-
-      - name: Set up Python
-        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
-        with:
-          python-version: ${{ matrix.python-version }}
-
-      - name: Install locked dependencies
-        shell: pwsh
-        env:
-          MATRIX_PYTHON: ${{ matrix.python-version }}
-        run: |
-          $ErrorActionPreference = 'Stop'
-          python -m pip install --upgrade pip
-          if ($LASTEXITCODE -ne 0) { throw 'pip 自举失败' }
-          pip install "uv==$env:UV_VERSION"
-          if ($LASTEXITCODE -ne 0) { throw 'uv 安装失败' }
-          uv sync --frozen --extra dev --python $env:MATRIX_PYTHON
-          if ($LASTEXITCODE -ne 0) { throw '依赖同步失败' }
-
-      - name: Run test suite
-        run: uv run pytest tests -q --tb=short
-
-  build-check:
-    name: PyInstaller blueprint (Windows)
-    runs-on: windows-latest
+  checks:
+    uses: ./.github/workflows/checks.yml
+  build:
+    name: Frozen application
+    needs: checks
+    runs-on: windows-2022
     timeout-minutes: 40
-    needs: [lint, test]
-
     steps:
-      - name: Check out repository
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-
-      - name: Set up Python
-        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: Install locked dependencies
-        shell: pwsh
+          persist-credentials: false
+      - uses: ./.github/actions/setup-build
+      - name: Compile and verify frozen application
+        run: uv run --locked --no-sync python scripts/build.py --target spec
+      - name: Source must remain unchanged
         run: |
-          $ErrorActionPreference = 'Stop'
-          python -m pip install --upgrade pip
-          if ($LASTEXITCODE -ne 0) { throw 'pip 自举失败' }
-          pip install "uv==$env:UV_VERSION"
-          if ($LASTEXITCODE -ne 0) { throw 'uv 安装失败' }
-          uv sync --frozen --extra dev
-          if ($LASTEXITCODE -ne 0) { throw '依赖同步失败' }
-
-      # 走 build.py 的真实路径（--target spec 只到 PyInstaller 落地为止）：
-      #   - 注入 FLUENTYTDL_QT_EXCLUDES（33 项）与 FLUENTYTDL_VERSION_FILE
-      #   - 生成 version_info.txt 并写进 PE 资源
-      #   - 编译 i18n 翻译
-      #   - 执行 strip_qt_bloat()
-      # 历史上这一步直接跑 spec，excludes 为空 → 验证的不是真实配置，绿了也不作数。
-      # spec 目标不下载 assets/bin 外部工具，也不做 7z/Inno 打包，保持 CI 轻量。
-      - name: Verify PyInstaller blueprint
-        shell: pwsh
-        env:
-          PYTHONIOENCODING: utf-8
-        run: |
-          $ErrorActionPreference = 'Stop'
-          uv run python scripts/build.py --target spec
-          if ($LASTEXITCODE -ne 0) { throw 'PyInstaller 蓝图验证失败' }
-
-          $exe = 'dist/FluentYTDL/FluentYTDL.exe'
-          if (-not (Test-Path $exe)) { throw "未生成可执行文件: $exe" }
-          Write-Host "✓ 蓝图验证通过: $exe"
-
-      # 构建不得回写版本文件（P0-1 的 CI 侧回归）
-      - name: Assert the build did not mutate tracked files
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $changed = git status --porcelain -- VERSION pyproject.toml src/fluentytdl/__init__.py installer/FluentYTDL.iss
-          if ($changed) {
-            Write-Host $changed
-            throw '构建过程修改了版本文件 —— 未指定 --version 时不应回写任何版本载体'
-          }
-          Write-Host '✓ 版本文件未被构建改写'
+          git diff --exit-code
+          if ($LASTEXITCODE -ne 0) { throw 'Build modified tracked source files' }
+      - name: Build reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: frozen-reports
+          path: |
+            build/runs/*/build-result.json
+            build/runs/*/self-test.json
+  required:
+    name: Required checks
+    if: always()
+    needs: [checks, build]
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          CHECKS: ${{ needs.checks.result }}
+          BUILD: ${{ needs.build.result }}
+        run: test "$CHECKS" = success && test "$BUILD" = success

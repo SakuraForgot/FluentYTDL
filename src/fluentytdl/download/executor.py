@@ -167,7 +167,7 @@ class PathCallback(Protocol):
 
 
 class FileCreatedCallback(Protocol):
-    """"yt-dlp 报告创建了一个文件"的唯一通道。
+    """ "yt-dlp 报告创建了一个文件"的唯一通道。
 
     `role` 是 yt-dlp **自己声明**的角色（`media` / `subtitle` / `thumbnail`），
     `None` 表示报告者没说 —— 见 `output_parser.ParsedLine.role`。消费方
@@ -432,9 +432,7 @@ class DownloadExecutor:
         from ..auth.cookie_runfile import cookie_runfile
 
         self._cookie_stack = ExitStack()
-        _run_cf = self._cookie_stack.enter_context(
-            cookie_runfile(ydl_opts.get("cookiefile"))
-        )
+        _run_cf = self._cookie_stack.enter_context(cookie_runfile(ydl_opts.get("cookiefile")))
         run_opts = {**ydl_opts, "cookiefile": _run_cf}
         cmd += ydl_opts_to_cli_args(run_opts)
         cmd.append(url)

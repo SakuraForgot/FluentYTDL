@@ -45,9 +45,7 @@ class WebView2MissingDialog(MessageBoxBase):
         platform_name = "YouTube" if self.platform == "youtube" else "X (Twitter)"
 
         # 标题
-        self.title_label = StrongBodyLabel(
-            self.tr("⚠️ 缺少 WebView2 运行时"), self
-        )
+        self.title_label = StrongBodyLabel(self.tr("⚠️ 缺少 WebView2 运行时"), self)
         self.title_label.setStyleSheet("font-size: 16px;")
         self.viewLayout.addWidget(self.title_label)
 
@@ -107,7 +105,9 @@ class WebView2MissingDialog(MessageBoxBase):
         self.reject()
 
 
-def show_webview2_missing_dialog(parent: QWidget | None = None, platform: str = "youtube") -> WebView2Action:
+def show_webview2_missing_dialog(
+    parent: QWidget | None = None, platform: str = "youtube"
+) -> WebView2Action:
     """
     显示 WebView2 缺失对话框（便捷函数）
 

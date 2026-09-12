@@ -16,8 +16,10 @@ import re
 import shutil
 import subprocess
 import sys
-import time
-from datetime import datetime, timezone
+import tempfile
+import tomllib
+import uuid
+from datetime import UTC, datetime
 from pathlib import Path
 
 # 修复 Windows 控制台 GBK 编码问题
@@ -42,6 +44,12 @@ LICENSES_DIR = ROOT / "licenses"
 
 # 版本解析统一走 version_manager，避免出现第二份规则实现
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from archive_compat import (  # noqa: E402
+    CLI_OPTIONS,
+    python_filters,
+    verify_archive,
+    verify_frozen_updater,
+)
 from fetch_tools import load_tool_versions  # noqa: E402
 from version_manager import parse_version, strip_v_prefix, tag_for  # noqa: E402
 
@@ -113,9 +121,9 @@ def _build_timestamp() -> str:
     """
     epoch = os.environ.get("SOURCE_DATE_EPOCH")
     if epoch and epoch.isdigit():
-        dt = datetime.fromtimestamp(int(epoch), tz=timezone.utc)
+        dt = datetime.fromtimestamp(int(epoch), tz=UTC)
     else:
-        dt = datetime.now(timezone.utc)
+        dt = datetime.now(UTC)
     return dt.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
@@ -123,7 +131,7 @@ def _git_commit() -> str:
     """当前 HEAD 的短 commit；非 git 环境（如从 sdist 构建）返回 unknown。"""
     try:
         proc = subprocess.run(
-            ["git", "-C", str(ROOT), "rev-parse", "--short", "HEAD"],
+            ["git", "-C", str(ROOT), "rev-parse", "HEAD"],
             capture_output=True,
             text=True,
             timeout=10,
@@ -135,6 +143,22 @@ def _git_commit() -> str:
     return (proc.stdout or "").strip() or "unknown"
 
 
+def source_fingerprint() -> str:
+    digest = hashlib.sha256(subprocess.check_output(["git", "diff", "--binary", "HEAD"], cwd=ROOT))
+    digest.update(_git_commit().encode())
+    for name in (
+        subprocess.check_output(
+            ["git", "ls-files", "--others", "--exclude-standard", "-z"], cwd=ROOT
+        )
+        .decode("utf-8")
+        .split("\0")
+    ):
+        if name and (ROOT / name).is_file():
+            digest.update(name.encode())
+            digest.update((ROOT / name).read_bytes())
+    return digest.hexdigest()
+
+
 def _dist_version(name: str) -> str:
     """已安装发行包的版本；未安装返回 unknown。"""
     try:
@@ -143,33 +167,6 @@ def _dist_version(name: str) -> str:
         return importlib.metadata.version(name)
     except Exception:
         return "unknown"
-
-
-def _terminate_processes(exe_names: list[str]) -> None:
-    for exe in exe_names:
-        try:
-            subprocess.run(["taskkill", "/F", "/IM", exe], capture_output=True, timeout=5)
-        except Exception:
-            pass
-
-
-def _safe_rmtree(path: Path, retries: int = 3, delay: float = 1.0) -> bool:
-    if not path.exists():
-        return True
-    for attempt in range(retries):
-        try:
-            shutil.rmtree(path, ignore_errors=False)
-            return True
-        except PermissionError:
-            if attempt < retries - 1:
-                _terminate_processes(["FluentYTDL.exe", "yt-dlp.exe", "ffmpeg.exe", "deno.exe"])
-                time.sleep(delay)
-                delay *= 2
-            else:
-                return False
-        except Exception:
-            return False
-    return False
 
 
 def sha256_file(file_path: Path) -> str:
@@ -346,10 +343,13 @@ class Builder:
         override_version: str | None = None,
         skip_hygiene: bool = False,
         strict_tools: bool = False,
+        replay_snapshot: Path | None = None,
     ):
         self.arch = "win64" if sys.maxsize > 2**32 else "win32"
         self.skip_hygiene = skip_hygiene
         self.strict_tools = strict_tools
+        self.replay_snapshot = replay_snapshot
+        self.snapshot = {}
         self.config = self._load_config()
         # 是否由调用方显式指定版本 —— 决定 VERSION 文件是否可被回写（见 _sync_version_to_all）
         self._version_overridden = override_version is not None
@@ -366,59 +366,11 @@ class Builder:
         self.tag = tag_for(self._full_version)
 
     def _load_config(self) -> dict:
-        """读取构建配置。
-
-        版本号来源是 VERSION 文件（唯一 source of truth），而不是 pyproject.toml —
-        后者由 version_manager 派生，一旦回落读它就会在 _sync_version_to_all 里
-        把派生值写回 VERSION，造成 source of truth 被静默改写。
-        """
-        cfg: dict = {}
-
-        version_file = ROOT / "VERSION"
-        if version_file.exists():
-            content = version_file.read_text(encoding="utf-8").strip()
-            if content:
-                cfg["version"] = content
-
-        pyproject = ROOT / "pyproject.toml"
-        if not pyproject.exists():
-            return cfg
-
-        try:
-            import tomllib
-
-            with open(pyproject, "rb") as f:
-                data = tomllib.load(f)
-                cfg.setdefault("version", data.get("project", {}).get("version", "0.0.0"))
-                b_cfg = data.get("tool", {}).get("fluentytdl", {}).get("build", {})
-                cfg.update(b_cfg)
-                return cfg
-        except ImportError:
-            # Fallback 粗糙解析
-            content = pyproject.read_text(encoding="utf-8")
-            in_build = False
-            for line in content.splitlines():
-                line = line.strip()
-                if line.startswith("version =") and not in_build:
-                    cfg.setdefault("version", line.split("=", 1)[1].strip(" '\""))
-                if line == "[tool.fluentytdl.build]":
-                    in_build = True
-                    continue
-                elif line.startswith("["):
-                    in_build = False
-                if in_build and "=" in line:
-                    k, v = line.split("=", 1)
-                    k, v = k.strip(), v.strip()
-                    if v == "true":
-                        cfg[k] = True
-                    elif v == "false":
-                        cfg[k] = False
-                    elif v.startswith("[") and v.endswith("]"):
-                        items = [x.strip(" '\"") for x in v[1:-1].split(",") if x.strip()]
-                        cfg[k] = items
-                    else:
-                        cfg[k] = v.strip(" '\"")
-            return cfg
+        data = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+        return {
+            **data["tool"]["fluentytdl"]["build"],
+            "version": (ROOT / "VERSION").read_text(encoding="utf-8").strip(),
+        }
 
     def _check_hygiene(self):
         """确保在一个干净的打包环境中"""
@@ -442,105 +394,31 @@ class Builder:
         print("  ✓ 环境干净，准许打包")
 
     def _sync_version_to_all(self) -> None:
-        """将版本号同步到所有需要版本号的文件。
-
-        VERSION / __init__.py / pyproject.toml 写完整版本（含 -rc.N 后缀），
-        .iss 只写 X.Y.Z（Inno Setup 的 VersionInfoVersion 只接受纯数字）。
-
-        VERSION 文件只在调用方显式传了 --version 时才回写。没传版本时版本本来
-        就是从 VERSION 读出来的，回写除了制造 source of truth 被改写的风险外
-        没有任何收益 —— 历史上正是这条路径把 VERSION 里的内容悄悄换掉的。
-        """
-        full = self._full_version
-        numeric = self.version
-
-        # 1. VERSION 文件 (source of truth) — 仅在显式指定版本时写入
-        if self._version_overridden:
-            (ROOT / "VERSION").write_text(full + "\n", encoding="utf-8")
-        else:
-            print("  ℹ 未指定 --version，保持 VERSION 文件原样")
-
-        # 2. __init__.py — 运行时动态读 VERSION 时无需写入
-        init_file = ROOT / "src" / "fluentytdl" / "__init__.py"
-        if init_file.exists():
-            content = init_file.read_text(encoding="utf-8")
-            if "_read_version()" not in content:
-                content = re.sub(
-                    r'^__version__\s*=\s*["\'][^"\']+["\']',
-                    f'__version__ = "{full}"',
-                    content,
-                    flags=re.MULTILINE,
-                )
-                init_file.write_text(content, encoding="utf-8")
-
-        # 3. pyproject.toml — 完整版本（"3.5.6-rc.1" 规范化为 PEP 440 的 3.5.6rc1）
-        pyproject = ROOT / "pyproject.toml"
-        if pyproject.exists():
-            content = pyproject.read_text(encoding="utf-8")
-            content = re.sub(
-                r'^version\s*=\s*["\'][^"\']+["\']',
-                f'version = "{full}"',
-                content,
-                flags=re.MULTILINE,
-            )
-            # 如果使用 dynamic，替换为固定 version
-            if 'dynamic = ["version"]' in content:
-                content = content.replace('dynamic = ["version"]', "")
-                content = re.sub(
-                    r"\[project\]",
-                    f'[project]\nversion = "{full}"',
-                    content,
-                    count=1,
-                )
-                content = re.sub(r"\[tool\.setuptools\.dynamic\]\n[^\[]*", "", content)
-            pyproject.write_text(content, encoding="utf-8")
-
-        # 4. FluentYTDL.iss — 纯数字版本（Inno Setup 要求）
-        iss_file = ROOT / "installer" / "FluentYTDL.iss"
-        if iss_file.exists():
-            content = iss_file.read_text(encoding="utf-8")
-            content = re.sub(
-                r'#define\s+MyAppVersion\s+"[^"]+"',
-                f'#define MyAppVersion "{numeric}"',
-                content,
-            )
-            iss_file.write_text(content, encoding="utf-8")
-
-        print(f"  ✓ 版号已同步至所有位置: {full} (数字: {numeric}, tag: {self.tag})")
+        """Stage VERSION for PyInstaller; never modify a source version carrier."""
+        version = self.work_dir / "VERSION"
+        version.write_text(self._full_version + "\n", encoding="utf-8")
+        os.environ["FLUENTYTDL_VERSION_SOURCE"] = str(version)
 
     def clean(self) -> None:
-        print("🧹 清理历史构建...")
-        _terminate_processes(["FluentYTDL.exe", "yt-dlp.exe", "ffmpeg.exe", "deno.exe"])
-        time.sleep(0.5)
-        for d in [DIST_DIR, ROOT / "build"]:
-            if d.exists() and _safe_rmtree(d):
-                print(f"  ✓ 已删除: {d.name}")
+        """A fresh UUID workspace has no historical outputs to delete."""
+        if not self.work_dir.resolve().is_relative_to((ROOT / "build/runs").resolve()):
+            raise RuntimeError("Build workspace escaped build/runs")
 
     def ensure_tools(self) -> None:
-        """确保 assets/bin 下的外部工具就位，并校验 TOOLS.lock.json。
+        from component_snapshot import prepare, replay, verify
 
-        这里无条件调用 fetch_tools —— 它自己判断该下载还是只校验。
-        以前只在文件缺失时才调用，等于工具一旦存在就永远不校验哈希，
-        而"工具已存在但被替换过"正是锁文件要挡的场景。
-
-        --strict-tools 会把"上游版本与锁文件不一致"也升级为硬失败，
-        用于需要完全可复现的正式发布构建。
-        """
-        fetch_script = ROOT / "scripts" / "fetch_tools.py"
-        if not fetch_script.exists():
-            raise FileNotFoundError(f"工具下载脚本不存在: {fetch_script}")
-
-        cmd = [sys.executable, str(fetch_script)]
-        if self.strict_tools:
-            cmd.append("--strict")
-
-        print("\n🔧 校验外部工具与 TOOLS.lock.json...")
-        result = subprocess.run(cmd)
-        if result.returncode != 0:
-            raise RuntimeError(
-                "外部工具校验失败（见上方输出）。\n"
-                "  确认上游升级无误后运行: python scripts/fetch_tools.py --update-lock"
-            )
+        if getattr(self, "snapshot_path", None):
+            return
+        directory = self.work_dir / "components"
+        self.snapshot_path = (
+            replay(self.replay_snapshot, directory) if self.replay_snapshot else prepare(directory)
+        )
+        self.snapshot = verify(self.snapshot_path)
+        global ASSETS_BIN
+        ASSETS_BIN = directory / "bin"
+        os.environ["FLUENTYTDL_COMPONENT_SNAPSHOT"] = str(self.snapshot_path)
+        os.environ["FLUENTYTDL_ASSETS_BIN"] = str(ASSETS_BIN)
+        os.environ["FLUENTYTDL_7ZIP_DIR"] = str(directory / "7zip")
 
     def build_spec(self) -> Path:
         """根据 FluentYTDL.spec 核心蓝图进行构建。
@@ -561,7 +439,7 @@ class Builder:
         else:
             print("  ⚠️ 未找到翻译构建脚本，跳过...")
 
-        version_file = ROOT / "build" / "version_info.txt"
+        version_file = self.work_dir / "version_info.txt"
         generate_version_info(self.version, version_file)
 
         spec_file = ROOT / "scripts" / "FluentYTDL.spec"
@@ -579,9 +457,9 @@ class Builder:
             "PyInstaller",
             "--noconfirm",
             "--workpath",
-            str(ROOT / "build"),
+            str(self.work_dir / "pyinstaller"),
             "--distpath",
-            str(ROOT / "dist"),
+            str(DIST_DIR),
             str(spec_file),
         ]
 
@@ -763,6 +641,9 @@ class Builder:
                 shutil.copy2(src_doc, target_dir / doc)
         print("✓ 捆绑核心说明与法律协议文档")
 
+        helpers = target_dir / "_internal/installer"
+        helpers.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(INSTALLER_DIR / "maintenance.ps1", helpers / "maintenance.ps1")
         self.write_build_info(target_dir)
 
     def write_build_info(self, target_dir: Path) -> Path:
@@ -786,6 +667,8 @@ class Builder:
             "pyinstaller_version": _dist_version("pyinstaller"),
             "pyside6_version": _dist_version("PySide6"),
             "bundled_tools": load_tool_versions(),
+            "component_snapshot": self.snapshot,
+            "dirty": self.dirty,
         }
 
         out = target_dir / "BUILD_INFO.json"
@@ -842,17 +725,21 @@ class Builder:
             marker = Path(tmp_dir) / "portable.txt"
             marker.write_text(self.PORTABLE_MARKER_TEXT, encoding="utf-8")
 
-            sevenzip = shutil.which("7z") or shutil.which("7za")
+            sevenzip = (
+                str(Path(os.environ["FLUENTYTDL_7ZIP_DIR"]) / "7za.exe")
+                if os.environ.get("FLUENTYTDL_7ZIP_DIR")
+                else shutil.which("7z") or shutil.which("7za")
+            )
             if sevenzip:
                 subprocess.run(
-                    [sevenzip, "a", "-t7z", "-mx=9", "-mmt=on", str(output_path), "."],
+                    [sevenzip, "a", *CLI_OPTIONS, str(output_path), "."],
                     check=True,
                     cwd=source_dir,
                 )
                 # 第二次 `a` 是追加：路径给绝对路径时 7z 会剥掉目录部分，
                 # 文件正好落在归档根 —— 与 exe 同级，这是 paths.py 找它的地方。
                 subprocess.run(
-                    [sevenzip, "a", "-t7z", "-mx=9", str(output_path), str(marker)],
+                    [sevenzip, "a", *CLI_OPTIONS, str(output_path), str(marker)],
                     check=True,
                 )
             else:
@@ -861,9 +748,14 @@ class Builder:
                 py7zr = importlib.import_module("py7zr")
                 # 必须在**同一个 "w" 会话**里写：py7zr 的 "w" 是截断重写，
                 # 二次打开会把上面 writeall 的结果整棵覆盖掉。
-                with py7zr.SevenZipFile(output_path, "w") as archive:
-                    archive.writeall(source_dir, arcname=".")
+                with py7zr.SevenZipFile(output_path, "w", filters=python_filters()) as archive:
+                    archive.set_encoded_header_mode(False)
+                    for item in sorted(source_dir.iterdir()):
+                        archive.writeall(item, arcname=item.name)
                     archive.write(marker, arcname="portable.txt")
+
+            verify_archive(output_path, source_dir, {"portable.txt": marker})
+            verify_frozen_updater(output_path, source_dir / "updater.exe")
 
         print(f"📦 压缩包: {output_path.name} (含 portable.txt)")
         return output_path
@@ -877,13 +769,16 @@ class Builder:
                 "  安装包目标需要该脚本；若只想产出便携包请改用 --target 7z"
             )
 
+        from build_environment import find_iscc
+
         iscc_paths = [
+            find_iscc(),
             Path(os.environ.get("ProgramFiles(x86)", "C:/Program Files (x86)"))
             / "Inno Setup 6/ISCC.exe",
             Path("C:/Program Files (x86)/Inno Setup 6/ISCC.exe"),
             Path("C:/Program Files/Inno Setup 6/ISCC.exe"),
         ]
-        iscc = next((p for p in iscc_paths if p.exists()), None)
+        iscc = next((p for p in iscc_paths if p and p.exists()), None)
         if not iscc:
             raise FileNotFoundError(
                 "未找到 Inno Setup 编译器 ISCC.exe，无法生成安装包。\n"
@@ -896,7 +791,7 @@ class Builder:
         out_name = f"FluentYTDL-{self._full_version}-{self.arch}-setup"
         cmd = [
             str(iscc),
-            f"/DMyAppVersion={self.version}",
+            f"/DMyAppVersion={self._full_version}",
             f"/DSourceDir={source_dir}",
             f"/DOutputDir={RELEASE_DIR}",
             f"/DOutputBaseFilename={out_name}",
@@ -913,11 +808,15 @@ class Builder:
 
         print(f"========== FluentYTDL Pipelined Build {self._full_version} ==========")
 
-        # 1. 编译核心依赖
+        self.initialize_workspace(effective_target)
+        if effective_target != "spec":
+            self.ensure_tools()
         app_dir = self.build_spec()
+        self.smoke_app(app_dir)
 
         # "spec" 只验证 PyInstaller 蓝图能否落地（CI 用），不产出发布物
         if effective_target == "spec":
+            self.write_result(effective_target, app_dir)
             print(f"\n✅ .spec 验证通过: {app_dir}")
             return
 
@@ -958,7 +857,7 @@ class Builder:
 
         # 生成更新清单（只在产出 app-core 时才有意义，见 TARGET_OUTPUTS 注释）
         if "manifest" in wanted:
-            self.generate_update_manifest()
+            results.append(self.generate_update_manifest())
 
         # 计算指纹 —— 只覆盖本次产出，不再把 release/ 里的陈年旧物一起列进去
         if "checksums" in wanted:
@@ -967,12 +866,90 @@ class Builder:
         # 校验目标要求的产物是否真的落盘 —— 否则"构建成功"是假的
         self._assert_expected_artifacts(effective_target)
 
+        self.write_result(effective_target, app_dir)
         print("\n✅ 流水线完成！")
         for res in results:
             size_mb = res.stat().st_size / 1024 / 1024
             print(f"   ► {res.name} ({size_mb:.1f} MB)")
 
         self._warn_foreign_release_files(effective_target)
+
+    def initialize_workspace(self, target: str) -> None:
+        from build_environment import preflight
+
+        failures = [message for failed, message in preflight(target) if failed]
+        if failures:
+            raise RuntimeError("\n".join(failures))
+        if self.strict_tools:
+            raise ValueError(
+                "--strict-tools retired: builds fetch latest; use --snapshot for diagnostics"
+            )
+        self.source_hash = source_fingerprint()
+        self.dirty = bool(subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT))
+        self.work_dir = ROOT / "build" / "runs" / uuid.uuid4().hex
+        self.work_dir.mkdir(parents=True)
+        global DIST_DIR, RELEASE_DIR
+        DIST_DIR = self.work_dir / "dist"
+        RELEASE_DIR = self.work_dir / "release"
+        os.environ["FLUENTYTDL_BUILD_REPORTS"] = str(self.work_dir / "archive-reports")
+        (self.work_dir / "source-state.json").write_text(
+            json.dumps(
+                {
+                    "git_commit": _git_commit(),
+                    "dirty": self.dirty,
+                    "source_fingerprint": self.source_hash,
+                }
+            ),
+            encoding="utf-8",
+        )
+        locale_dir = self.work_dir / "locales"
+        shutil.copytree(ROOT / "assets/locales", locale_dir)
+        os.environ["FLUENTYTDL_LOCALES_DIR"] = str(locale_dir)
+
+    def smoke_app(self, app_dir: Path) -> None:
+        with tempfile.TemporaryDirectory(prefix="fluentytdl_app_smoke_") as tmp:
+            try:
+                subprocess.run(
+                    [str(app_dir / "FluentYTDL.exe"), "--build-self-test", tmp],
+                    check=True,
+                    timeout=120,
+                    env={**os.environ, "QT_QPA_PLATFORM": "offscreen"},
+                )
+            finally:
+                report = Path(tmp) / "self-test.json"
+                if report.is_file():
+                    shutil.copy2(report, self.work_dir / "self-test.json")
+            if not report.is_file():
+                raise RuntimeError("Frozen application produced no self-test report")
+
+    def write_result(self, target: str, app_dir: Path) -> None:
+        if source_fingerprint() != self.source_hash:
+            raise RuntimeError("Source changed during build; artifacts not promoted")
+        files = self._expected_paths(target)
+        report = {
+            "schema_version": 1,
+            "target": target,
+            "version": self._full_version,
+            "git_commit": _git_commit(),
+            "dirty": self.dirty,
+            "component_policy": "replay" if self.replay_snapshot else "latest",
+            "source_fingerprint": self.source_hash,
+            "workspace": str(self.work_dir),
+            "app_dir": str(app_dir),
+            "snapshot": str(getattr(self, "snapshot_path", "")),
+            "artifacts": [
+                {"name": p.name, "path": str(p), "sha256": sha256_file(p), "size": p.stat().st_size}
+                for p in files
+            ],
+            "checks": {"frozen_startup": "passed"},
+        }
+        result = self.work_dir / "build-result.json"
+        result.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+        # Stable pointer is updated only after every required artifact passed validation.
+        pointer_tmp = ROOT / "build" / f"{self.work_dir.name}-result.tmp"
+        pointer_tmp.write_text(result.read_text(encoding="utf-8"), encoding="utf-8")
+        pointer_tmp.replace(ROOT / "build/latest-result.json")
+        print(f"BUILD_RESULT={result}")
 
     def _warn_foreign_release_files(self, effective_target: str) -> None:
         """列出 release/ 里不属于本次目标的残留文件。
@@ -1008,7 +985,11 @@ class Builder:
         历史上 build_setup() 在缺少 ISCC 时静默返回空路径，流水线照样打印
         "✅ 流水线完成"，导致零产物的构建被当成成功。
         """
-        missing = [p for p in self._expected_paths(effective_target) if not p.exists()]
+        missing = [
+            p
+            for p in self._expected_paths(effective_target)
+            if not p.is_file() or p.stat().st_size == 0
+        ]
         if missing:
             raise FileNotFoundError(
                 "构建目标 '"
@@ -1042,7 +1023,7 @@ class Builder:
                 "updater.exe 是自动更新功能的必要组件，请确保 scripts/updater.spec 已提交到仓库。"
             )
 
-        # 前置检查：py7zr 是 updater 解压 app-core 归档的唯一手段。
+        # 前置检查：py7zr 是旧版兼容校验及 updater 的回退解压器。
         # updater.spec 里也有一道同样的断言（collect_submodules 返回 [] 时 SystemExit），
         # 这里再拦一次是为了让 `--target all` 在几秒内失败，而不是先花几分钟
         # 打完主程序再倒在 updater 这一步。
@@ -1065,7 +1046,7 @@ class Builder:
         # updater.exe 的这份资源做能力探测，决定能不能传 --data-dir /
         # --origin-user-sid（旧 updater 见到未知参数会 SystemExit(2)）。
         # 版本号缺失 → 一律当旧版 → 看门狗永远退化成 survival 模式。
-        updater_version_file = ROOT / "build" / "updater_version_info.txt"
+        updater_version_file = self.work_dir / "updater_version_info.txt"
         generate_version_info(
             self.version,
             updater_version_file,
@@ -1083,14 +1064,14 @@ class Builder:
             "PyInstaller",
             "--noconfirm",
             "--workpath",
-            str(ROOT / "build" / "updater"),
+            str(self.work_dir / "updater"),
             "--distpath",
-            str(ROOT / "dist"),
+            str(DIST_DIR),
             str(spec_file),
         ]
         subprocess.run(cmd, env=env, check=True, cwd=ROOT)
 
-        updater_exe = ROOT / "dist" / "updater.exe"
+        updater_exe = DIST_DIR / "updater.exe"
         if not updater_exe.exists():
             raise ChildProcessError(
                 "updater.exe 构建失败：PyInstaller 运行完成但未生成 updater.exe，请检查构建日志。"
@@ -1191,10 +1172,14 @@ class Builder:
                     shutil.copy2(item, dest)
 
             # 压缩
-            sevenzip = shutil.which("7z") or shutil.which("7za")
+            sevenzip = (
+                str(Path(os.environ["FLUENTYTDL_7ZIP_DIR"]) / "7za.exe")
+                if os.environ.get("FLUENTYTDL_7ZIP_DIR")
+                else shutil.which("7z") or shutil.which("7za")
+            )
             if sevenzip:
                 subprocess.run(
-                    [sevenzip, "a", "-t7z", "-mx=9", "-mmt=on", str(output_path), "."],
+                    [sevenzip, "a", *CLI_OPTIONS, str(output_path), "."],
                     check=True,
                     cwd=tmp_path,
                 )
@@ -1202,8 +1187,13 @@ class Builder:
                 import importlib
 
                 py7zr = importlib.import_module("py7zr")
-                with py7zr.SevenZipFile(output_path, "w") as archive:
-                    archive.writeall(tmp_path, arcname=".")
+                with py7zr.SevenZipFile(output_path, "w", filters=python_filters()) as archive:
+                    archive.set_encoded_header_mode(False)
+                    for item in sorted(tmp_path.iterdir()):
+                        archive.writeall(item, arcname=item.name)
+
+            verify_archive(output_path, tmp_path)
+            verify_frozen_updater(output_path, source_dir / "updater.exe")
 
         print(f"📦 app-core 归档: {output_path.name}")
         return output_path
@@ -1212,8 +1202,7 @@ class Builder:
         """生成更新清单 update-manifest.json。"""
         manifest_script = ROOT / "scripts" / "generate_manifest.py"
         if not manifest_script.exists():
-            print("⚠ generate_manifest.py 不存在，跳过清单生成")
-            return Path()
+            raise FileNotFoundError(manifest_script)
 
         print("📋 生成更新清单...")
         cmd = [
@@ -1271,11 +1260,14 @@ def main():
             "在工作流里手抄一份的话，目标语义一变就立刻误报"
         ),
     )
+    parser.add_argument(
+        "--snapshot", type=Path, help="Replay a verified snapshot for diagnostics only"
+    )
     parser.add_argument("--skip-hygiene", action="store_true", help="强制无视黑名单环境污染告警")
     parser.add_argument(
         "--strict-tools",
         action="store_true",
-        help="外部工具版本与 scripts/TOOLS.lock.json 不一致时直接失败（完全可复现构建）",
+        help="已废弃；诊断重现请显式使用 --snapshot，正式构建始终获取最新组件",
     )
 
     args = parser.parse_args()
@@ -1284,6 +1276,7 @@ def main():
         override_version=args.version,
         skip_hygiene=args.skip_hygiene,
         strict_tools=args.strict_tools,
+        replay_snapshot=args.snapshot,
     )
 
     if args.print_names:

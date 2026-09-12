@@ -1324,8 +1324,12 @@ class YoutubeService:
             info = _do_extract(ydl_opts)
             # SABR 标记本趟刚翻转：重建 opts（含 web_safari）重解析一次拿回高清档。
             retried = self._maybe_reparse_after_sabr_flip(
-                url, options, _sabr_before, cancel_event,
-                tuned_overrides={}, extra_args=["--no-playlist"],
+                url,
+                options,
+                _sabr_before,
+                cancel_event,
+                tuned_overrides={},
+                extra_args=["--no-playlist"],
             )
             if retried is not None:
                 info = retried
@@ -1674,12 +1678,17 @@ class YoutubeService:
             # 立即用**重新构建**的 opts（build_ydl_options 会追加 web_safari）重解析一次，
             # 让用户当场看到高清档。缓存 key 含 extractor_args，天然不撞旧的 360p 结果。
             retried = self._maybe_reparse_after_sabr_flip(
-                url, options, _sabr_before, cancel_event, tuned_overrides={
+                url,
+                options,
+                _sabr_before,
+                cancel_event,
+                tuned_overrides={
                     "skip_download": True,
                     "extract_flat": "in_playlist",
                     "lazy_playlist": True,
                     "ignoreerrors": False,
-                }, extra_args=["--flat-playlist", "--lazy-playlist"]
+                },
+                extra_args=["--flat-playlist", "--lazy-playlist"],
             )
             if retried is not None:
                 info = retried

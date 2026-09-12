@@ -1,503 +1,99 @@
-# ==============================================================================
-#  FluentYTDL - GitHub Actions 自动发布工作流 v5
-# ==============================================================================
-# 触发条件:
-#   - 推送 v* 标签自动构建并发布 (例: v3.5.5 / v3.5.6-rc.1 / v3.6.0-beta.1)
-#   - 手动 workflow_dispatch
-#
-# 版本规范 (详见 docs/RULES.md §10):
-#   VERSION 文件存裸版本号 (3.5.5)，Git tag = "v" + 版本号 (v3.5.5)
-#   X.Y.Z          → stable → GitHub Release (Latest)
-#   X.Y.Z-rc.N     → rc     → GitHub Release (Pre-release)
-#   X.Y.Z-beta.N   → beta   → 仅 Artifacts，不创建 Release
-#
-# 发布产物 (target=all 才全产):
-#   1. full.7z              - 便携完整版 (首要推荐)
-#   2. setup.exe            - Inno Setup 安装向导
-#   3. app-core.7z          - 增量更新内部包 (供程序内自动更新，非用户下载项)
-#   4. update-manifest.json - 程序内更新器读的清单
-#   5. SHA256SUMS.txt       - 本次产物校验和
-#
-# 构建目标 (scripts/build.py TARGET_OUTPUTS 是唯一事实源):
-#   all       上面五项全产 —— 标签推送与 publish=true 只走这个
-#   7z/full   只产 full.7z
-#   app-core  只产 app-core.7z + update-manifest.json
-#   setup     只产 setup.exe
-#   非 all 目标只能配 publish=false，产物从 Artifacts 取
-# ==============================================================================
-
 name: Build and Release
-
 on:
   push:
-    tags:
-      - 'v*'
+    tags: ['v*']
   workflow_dispatch:
     inputs:
       version:
-        description: '版本号 (裸版本号，不带 v 前缀，例如 3.5.6 或 3.5.6-rc.1)'
-        required: false
+        description: Bare version override (non-publishing builds only)
         default: ''
+        type: string
       targets:
-        description: '构建目标（非 all 只产该目标的发布物，不能用于 publish）'
-        required: true
-        default: 'all'
+        description: Artifact target
+        default: all
         type: choice
-        options:
-          - all
-          - 7z
-          - app-core
-          - setup
-          - full
+        options: [all, 7z, app-core, setup, full]
       publish:
-        description: '是否发布 GitHub Release'
-        required: true
+        description: Publish an existing validated tag
         default: false
         type: boolean
-      strict_version_check:
-        description: '严格校验版本一致性'
-        required: true
-        default: true
-        type: boolean
-      run_quality_gates:
-        description: '运行发布前质量门禁 (ruff / pytest / pyright)'
-        required: true
-        default: true
-        type: boolean
-
 permissions:
-  contents: write
-
+  contents: read
 concurrency:
-  group: release-${{ github.workflow }}-${{ github.ref }}
+  group: release-publication
   cancel-in-progress: false
-
-env:
-  PYTHON_VERSION: '3.12'
-  PYTHONIOENCODING: 'utf-8'
-  # 固定 Inno Setup 版本，避免 Chocolatey 上游更新导致安装包产物漂移
-  INNOSETUP_VERSION: '6.7.1'
-  # 依赖装到 uv.lock 的精确版本；uv 与 py7zr 自身也固定，否则"锁定"这层仍是浮动的
-  UV_VERSION: '0.11.24'
-  PY7ZR_VERSION: '1.1.3'
-
 jobs:
+  checks:
+    uses: ./.github/workflows/checks.yml
   build-release:
-    runs-on: windows-latest
-    timeout-minutes: 60
-
+    needs: checks
+    runs-on: windows-2022
+    timeout-minutes: 90
+    permissions:
+      contents: write
+    env:
+      PYTHONIOENCODING: utf-8
+      IN_VERSION: ${{ inputs.version }}
+      IN_TARGET: ${{ inputs.targets || 'all' }}
+      IN_PUBLISH: ${{ inputs.publish }}
     steps:
-      # ========================================
-      # 1. 环境准备
-      # ========================================
-      - name: "📥 检出代码"
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          fetch-depth: 0  # 完整历史用于 release notes 生成
-
-      - name: "🐍 设置 Python ${{ env.PYTHON_VERSION }}"
-        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
-      # ========================================
-      # 2. 解析版本号 / 通道 / 发布策略
-      # ========================================
-      - name: "🔢 解析版本号"
-        id: version
-        shell: pwsh
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: ./.github/actions/setup-build
+      - name: Resolve release policy
+        id: policy
+        run: uv run --locked --no-sync python scripts/release_pipeline.py resolve
+      - name: Read toolchain
+        id: versions
+        run: python scripts/build_environment.py
+      - name: Install Inno Setup
+        if: steps.policy.outputs.target == 'all' || steps.policy.outputs.target == 'setup'
         env:
-          # 经 env 传入而非直接内插到脚本里 —— 避免 tag / 输入值中的引号构成脚本注入
-          IN_VERSION: ${{ inputs.version }}
-          IN_TARGETS: ${{ inputs.targets }}
-          IN_PUBLISH: ${{ inputs.publish }}
-          IN_STRICT: ${{ inputs.strict_version_check }}
-          REF_NAME: ${{ github.ref_name }}
-          REF_TYPE: ${{ github.ref_type }}
-          EVENT_NAME: ${{ github.event_name }}
+          INNO_VERSION: ${{ steps.versions.outputs.inno }}
         run: |
-          $ErrorActionPreference = 'Stop'
-
-          $raw     = ''
-          $targets = 'all'
-          $publish = 'false'
-          $strict  = 'true'
-
-          if ($env:EVENT_NAME -eq 'workflow_dispatch') {
-            $targets = $env:IN_TARGETS
-            $publish = $env:IN_PUBLISH
-            $strict  = $env:IN_STRICT
-            $raw     = "$($env:IN_VERSION)".Trim()
-
-            if ($raw -eq '') {
-              if ($publish -eq 'true') {
-                throw 'publish=true 时必须显式提供 inputs.version，避免误发 VERSION 文件里的开发版本'
-              }
-              $raw = (Get-Content 'VERSION' -Raw).Trim()
-              Write-Host "未提供 version，回落到 VERSION 文件: $raw"
-            } else {
-              Write-Host "使用 workflow_dispatch 输入版本: $raw"
-            }
-          } elseif ($env:REF_TYPE -eq 'tag') {
-            $raw     = $env:REF_NAME
-            $targets = 'all'
-            $publish = 'true'
-            $strict  = 'true'
-            Write-Host "使用 Git 标签: $raw"
-          } else {
-            $raw = (Get-Content 'VERSION' -Raw).Trim()
-            Write-Host "使用 VERSION 文件: $raw"
-          }
-
-          # tag 形式 (v3.5.5) 归一化为裸版本号 (3.5.5)。
-          # 旧的 v-/pre-/beta- 前缀不会被剥离，会在下面的校验里显式报错。
-          $version = $raw -replace '^v(?=\d)', ''
-
-          if ($version -notmatch '^(\d+\.\d+\.\d+)(?:-(rc|beta)\.(\d+))?$') {
-            throw "版本号不符合规范: '$raw'`n  期望 X.Y.Z / X.Y.Z-rc.N / X.Y.Z-beta.N（tag 可带 v 前缀）`n  旧的 v- / pre- / beta- 前缀已废弃，详见 docs/RULES.md §10"
-          }
-          $numeric = $Matches[1]
-          $channel = if ($Matches[2]) { $Matches[2] } else { 'stable' }
-          $tag     = "v$version"
-
-          # 允许值须与 scripts/build.py 的 TARGET_OUTPUTS 键集合一致（full 是 7z 的别名）。
-          # 校验产物那一步会直接读 build.py 的表，两边真要是对不上会在那里炸出来。
-          if ($targets -notin @('all', '7z', 'full', 'app-core', 'setup')) {
-            throw "未知构建目标: '$targets'"
-          }
-
-          # 非 all 目标只产出该目标那几个文件 —— 缺 update-manifest.json 会让老用户的
-          # 程序内更新检查不到新版本，缺 full.7z / setup.exe 会让 Release 正文里的
-          # 下载链接全部 404。这种 Release 发出去比不发更糟，所以直接拦在这里。
-          if ($publish -eq 'true' -and $targets -ne 'all') {
-            throw "publish=true 只允许 targets=all，当前为 '$targets'`n  非 all 目标不产出完整发布物（清单/校验和/安装包会缺），发出去的 Release 会缺资产且中断程序内自动更新`n  只想验证单个产物请用 publish=false，产物在 Artifacts 里取"
-          }
-
-          $prerelease = if ($channel -eq 'stable') { 'false' } else { 'true' }
-
-          # beta 通道只产出 Artifacts，由项目负责人在群/频道内分发
-          if ($channel -eq 'beta' -and $publish -eq 'true') {
-            Write-Host '⚠ beta 通道不创建 GitHub Release，仅上传 Artifacts'
-            $publish = 'false'
-          }
-
-          Write-Host ''
-          Write-Host "  版本    : $version"
-          Write-Host "  数字版本: $numeric"
-          Write-Host "  Git tag : $tag"
-          Write-Host "  通道    : $channel (prerelease=$prerelease)"
-          Write-Host "  构建目标: $targets"
-          Write-Host "  发布    : $publish (strict=$strict)"
-
-          "VERSION=$version"           >> $env:GITHUB_OUTPUT
-          "NUMERIC_VERSION=$numeric"   >> $env:GITHUB_OUTPUT
-          "TAG=$tag"                   >> $env:GITHUB_OUTPUT
-          "CHANNEL=$channel"           >> $env:GITHUB_OUTPUT
-          "IS_PRERELEASE=$prerelease"  >> $env:GITHUB_OUTPUT
-          "TARGETS=$targets"           >> $env:GITHUB_OUTPUT
-          "PUBLISH=$publish"           >> $env:GITHUB_OUTPUT
-          "STRICT=$strict"             >> $env:GITHUB_OUTPUT
-
-          # 预发布横幅：多行输出走 heredoc 分隔符语法，正式版为空串
-          $banner = @()
-          if ($channel -ne 'stable') {
-            $banner = @(
-              '> [!WARNING]'
-              "> **这是预发布版本（$channel），可能包含未完全验证的改动。**"
-              '> 程序内自动更新不会推送该版本；追求稳定请使用 [最新正式版](https://github.com/${{ github.repository }}/releases/latest)。'
-              ''
-            )
-          }
-          "PRERELEASE_BANNER<<__FLUENTYTDL_EOF__" >> $env:GITHUB_OUTPUT
-          $banner | ForEach-Object { $_ >> $env:GITHUB_OUTPUT }
-          "__FLUENTYTDL_EOF__" >> $env:GITHUB_OUTPUT
-
-      - name: "📦 安装项目依赖 (uv.lock 锁定)"
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          python -m pip install --upgrade pip
-          if ($LASTEXITCODE -ne 0) { throw 'pip 自举失败' }
-
-          # 锁定 uv 版本 —— 否则"锁定安装"这一层自己就是浮动的
-          pip install "uv==$env:UV_VERSION"
-          if ($LASTEXITCODE -ne 0) { throw 'uv 安装失败' }
-
-          # --frozen: 严格按 uv.lock 装，lock 与 pyproject 不一致时直接失败，
-          # 保证两次构建拿到完全相同的 PySide6 / PyInstaller
-          uv sync --frozen --extra dev
-          if ($LASTEXITCODE -ne 0) { throw '项目依赖安装失败（uv.lock 可能已过期，请本地运行 uv lock 后提交）' }
-
-          # py7zr 有两个用途：7z 打包的纯 Python 回退路径，以及 updater.exe 的
-          # 解压后端（打进 exe，见 scripts/updater.spec）。后者是硬依赖 —— 缺了它
-          # 打出来的 updater.exe 会在用户机器上解压失败。
-          # 版本须与 pyproject.toml 的 [project.optional-dependencies].build 严格一致，
-          # tests/test_py7zr_pin.py 断言这两处字符串相同。
-          uv pip install "py7zr==$env:PY7ZR_VERSION"
-          if ($LASTEXITCODE -ne 0) { throw 'py7zr 安装失败' }
-
-      # ========================================
-      # 3. 质量门禁（发布前必须绿）
-      # ========================================
-      - name: "🔍 质量门禁 (ruff / pytest / pyright)"
-        if: inputs.run_quality_gates != 'false'
-        shell: pwsh
+          choco install innosetup --version=$env:INNO_VERSION -y --no-progress
+          if ($LASTEXITCODE -ne 0) { throw 'Inno Setup installation failed' }
+      - name: Build with all latest components and verify artifacts
         env:
-          QT_QPA_PLATFORM: offscreen
-        run: |
-          $ErrorActionPreference = 'Stop'
-
-          Write-Host '--- ruff check ---'
-          uv run ruff check src tests
-          if ($LASTEXITCODE -ne 0) { throw 'ruff check 未通过，发布中止' }
-
-          Write-Host '--- pytest ---'
-          uv run pytest tests -q --tb=short
-          if ($LASTEXITCODE -ne 0) { throw '测试未通过，发布中止' }
-
-          # pyright 是 advisory —— 但 pwsh 步骤的退出码取最后一个原生命令的
-          # $LASTEXITCODE，Write-Host 不会重置它。不显式清零的话 pyright 的 1
-          # 会成为整个步骤的退出码，"不阻塞"的注释旁边照样中止发布。
-          Write-Host '--- pyright (advisory) ---'
-          uv run pyright src
-          if ($LASTEXITCODE -ne 0) {
-            Write-Host "::warning::pyright 报告 $LASTEXITCODE 号退出码（advisory，不阻塞发布，与 ci.yml 保持一致）"
-          }
-          $global:LASTEXITCODE = 0
-          exit 0
-
-      - name: "🧾 校验版本一致性"
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $expected = '${{ steps.version.outputs.VERSION }}'
-          $tag      = '${{ steps.version.outputs.TAG }}'
-          $publish  = '${{ steps.version.outputs.PUBLISH }}'
-          $strict   = '${{ steps.version.outputs.STRICT }}'
-
-          uv run python scripts/version_manager.py check
-          if ($LASTEXITCODE -ne 0) {
-            if ($strict -eq 'true') { throw 'version_manager.py check 未通过：仓库内版本号不一致' }
-            Write-Host '::warning::version_manager.py check 未通过，strict=false，继续'
-            # 同上：非零 $LASTEXITCODE 会一路传到步骤退出码，把"继续"变成失败
-            $global:LASTEXITCODE = 0
-          }
-
-          if ($publish -ne 'true') {
-            Write-Host 'publish=false，跳过 VERSION ↔ tag 比对'
-            exit 0
-          }
-
-          # VERSION 文件存裸版本号，tag 带 v 前缀 —— 比对前已由上一步归一化
-          $fileVersion = ''
-          if (Test-Path 'VERSION') { $fileVersion = (Get-Content 'VERSION' -Raw).Trim() }
-
-          if ($fileVersion -eq $expected) {
-            Write-Host "✓ VERSION ($fileVersion) 与发布目标 ($tag) 一致"
-            exit 0
-          }
-
-          $msg = "版本不一致: VERSION 文件为 '$fileVersion'，但发布目标为 '$expected' (tag $tag)"
-          if ($strict -eq 'true') { throw $msg }
-          Write-Host "::warning::$msg"
-          exit 0
-
-      # ========================================
-      # 4. 外部工具与打包器
-      # ========================================
-      # --force 拉最新工具；同版本号但哈希与 scripts/TOOLS.lock.json 不符时
-      # fetch_tools.py 会硬失败（供应链投毒信号）。上游正常发版属于版本号变化，
-      # 会刷新锁文件并在下一步记录到构建日志里。
-      - name: "🔧 下载外部工具 (yt-dlp / ffmpeg / deno / AtomicParsley)"
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          uv run python scripts/fetch_tools.py --force
-          if ($LASTEXITCODE -ne 0) { throw '外部工具下载/校验失败' }
-
-      - name: "🔎 记录工具版本漂移"
-        shell: pwsh
-        run: |
-          $drift = git status --porcelain -- scripts/TOOLS.lock.json
-          if ($drift) {
-            Write-Host '::warning::外部工具版本较 scripts/TOOLS.lock.json 已升级，本次发布使用的是上游最新版本。请在合并回主干时提交刷新后的锁文件。'
-            git --no-pager diff -- scripts/TOOLS.lock.json
-          } else {
-            Write-Host '✓ 外部工具与 TOOLS.lock.json 完全一致'
-          }
-          # 这一步纯属记录，任何 git 退出码都不该影响发布
-          exit 0
-
-      - name: "📦 安装 Inno Setup ${{ env.INNOSETUP_VERSION }}"
-        if: steps.version.outputs.TARGETS == 'all' || steps.version.outputs.TARGETS == 'setup'
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          choco install innosetup --version=$env:INNOSETUP_VERSION -y --no-progress
-          if ($LASTEXITCODE -ne 0) { throw 'Inno Setup 安装失败' }
-
-          $iscc = 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
-          if (-not (Test-Path $iscc)) { throw "ISCC.exe 未找到: $iscc" }
-          Write-Host "✓ Inno Setup 就绪: $iscc"
-
-      # ========================================
-      # 5. 构建
-      # ========================================
-      - name: "🔨 构建 (target=${{ steps.version.outputs.TARGETS }})"
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          uv run python scripts/build.py --target '${{ steps.version.outputs.TARGETS }}' --version '${{ steps.version.outputs.VERSION }}'
-          if ($LASTEXITCODE -ne 0) { throw '构建失败' }
-
-      # build.py 内部已按 target 生成产物并断言齐全，这里再从 CI 侧独立校验一次落盘
-      # 结果，防止脚本内断言被绕过。**预期清单向 build.py --print-names 要** ——
-      # 以前这里手抄了一份"总是有 SHA256SUMS.txt 和 update-manifest.json"的判断，
-      # target 收紧后立刻变成误报。核对的是磁盘实况，读同一张表不影响这层独立性。
-      - name: "✅ 校验构建产物"
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $targets = '${{ steps.version.outputs.TARGETS }}'
-          $version = '${{ steps.version.outputs.VERSION }}'
-          $tag     = '${{ steps.version.outputs.TAG }}'
-          $dir     = 'release'
-
-          if (-not (Test-Path $dir)) { throw 'release 目录不存在' }
-
-          # 预期清单由 build.py 自己吐出（--print-names 只读表不构建），CI 侧不留副本
-          $expected = @(
-            uv run python scripts/build.py --print-names --target $targets --version $version |
-              Where-Object { $_ -ne '' }
-          )
-          if ($LASTEXITCODE -ne 0) { throw '无法从 build.py 读取预期产物清单' }
-          if ($expected.Count -eq 0) {
-            throw "build.py 认为 target='$targets' 不产出任何发布物 —— 目标名或 TARGET_OUTPUTS 有问题"
-          }
-          Write-Host "预期产物 ($($expected.Count)): $($expected -join ', ')"
-
-          function Assert-Exists([string]$name) {
-            $path = Join-Path $dir $name
-            if (-not (Test-Path -LiteralPath $path)) { throw "缺少产物: $name" }
-            if ((Get-Item -LiteralPath $path).Length -le 0) { throw "产物为空文件: $name" }
-          }
-
-          foreach ($name in $expected) { Assert-Exists $name }
-
-          # 更新清单里的版本必须与本次构建一致，否则程序内自动更新会指向错误资产。
-          # 只有产出清单的目标才校验（7z / setup 目标压根不生成它）。
-          if ($expected -contains 'update-manifest.json') {
-            $manifest = Get-Content (Join-Path $dir 'update-manifest.json') -Raw | ConvertFrom-Json
-            if ($manifest.app_version -ne $version) {
-              throw "update-manifest.json 版本不匹配: $($manifest.app_version) != $version"
-            }
-            if ($manifest.release_tag -ne $tag) {
-              throw "update-manifest.json tag 不匹配: $($manifest.release_tag) != $tag"
-            }
-            Write-Host "✓ 清单校验通过 (app_version=$($manifest.app_version), release_tag=$($manifest.release_tag))"
-          }
-          Write-Host "✓ 产物校验通过 (target=$targets)"
-
-      - name: "📋 列出构建产物"
-        shell: pwsh
-        run: |
-          Write-Host '=== 构建产物 ===' -ForegroundColor Cyan
-          Get-ChildItem -Path release -File | ForEach-Object {
-            Write-Host ("  {0,-52} {1,10:N2} MB" -f $_.Name, ($_.Length / 1MB))
-          }
-
-      # ========================================
-      # 6. 上传 Artifacts
-      # ========================================
-      - name: "📤 上传构建产物"
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+          BUILD_VERSION: ${{ steps.policy.outputs.version }}
+          BUILD_TARGET: ${{ steps.policy.outputs.target }}
+        run: uv run --locked --no-sync python scripts/build.py --target $env:BUILD_TARGET --version $env:BUILD_VERSION
+      - name: Installer lifecycle verification (isolated runner)
+        if: steps.policy.outputs.target == 'all' || steps.policy.outputs.target == 'setup'
+        run: uv run --locked --no-sync python scripts/test_installer.py --allow-isolated-runner
+      - name: Stage verified artifacts
+        id: stage
+        env:
+          BUILD_VERSION: ${{ steps.policy.outputs.version }}
+          BUILD_TARGET: ${{ steps.policy.outputs.target }}
+        run: uv run --locked --no-sync python scripts/release_pipeline.py stage
+      - name: Upload verified artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: FluentYTDL-${{ steps.version.outputs.TAG }}-builds
-          path: release/*
-          retention-days: 30
+          name: FluentYTDL-${{ steps.policy.outputs.tag }}-builds
+          path: ${{ steps.stage.outputs.artifacts }}/*
           if-no-files-found: error
-
-      # ========================================
-      # 7. 创建 GitHub Release
-      # ========================================
-      - name: "🚀 创建 GitHub Release"
-        if: success() && steps.version.outputs.PUBLISH == 'true'
-        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65  # v2.6.2
+      - name: Upload verification reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: FluentYTDL ${{ steps.version.outputs.TAG }}
-          tag_name: ${{ steps.version.outputs.TAG }}
-          target_commitish: ${{ github.sha }}
-          draft: false
-          prerelease: ${{ steps.version.outputs.IS_PRERELEASE == 'true' }}
-          generate_release_notes: true
-          files: |
-            release/*.exe
-            release/*.7z
-            release/update-manifest.json
-            release/SHA256SUMS.txt
-          body: |
-            ${{ steps.version.outputs.PRERELEASE_BANNER }}
-            ## 🚀 推荐下载
-
-            ### [⬇️ FluentYTDL-${{ steps.version.outputs.VERSION }}-win64-full.7z](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.TAG }}/FluentYTDL-${{ steps.version.outputs.VERSION }}-win64-full.7z)
-
-            **便携完整版 — 解压即用，无需安装。**
-
-            已内置 `yt-dlp`、`ffmpeg`、`deno`、`AtomicParsley` 全部依赖工具，解压后双击 `FluentYTDL.exe` 即可开始下载，不需要任何额外配置。
-
-            > 💡 **使用提示**
-            > - 需要 [7-Zip](https://www.7-zip.org/) 或 WinRAR 解压
-            > - 请解压到**非系统盘**的独立文件夹（例如 `D:\FluentYTDL`），避免 UAC 权限问题
-            > - 升级时直接解压覆盖原目录即可，配置与下载记录不受影响
-            > - 首次运行若被 SmartScreen 拦截，点击「更多信息」→「仍要运行」
-
-            ---
-
-            <details>
-            <summary><b>📦 其他下载方式</b>（安装向导 / 校验文件）</summary>
-
-            <br>
-
-            **安装向导** — [`FluentYTDL-${{ steps.version.outputs.VERSION }}-win64-setup.exe`](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.TAG }}/FluentYTDL-${{ steps.version.outputs.VERSION }}-win64-setup.exe)
-
-            写入注册表、创建开始菜单与桌面快捷方式，需要管理员权限。适合希望「像普通软件一样安装」的用户。功能与便携版完全一致。
-
-            **校验文件** — [`SHA256SUMS.txt`](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.TAG }}/SHA256SUMS.txt)
-
-            用于验证下载完整性。PowerShell 中执行：
-
-            ```powershell
-            Get-FileHash .\FluentYTDL-${{ steps.version.outputs.VERSION }}-win64-full.7z -Algorithm SHA256
-            ```
-
-            将输出的哈希值与 `SHA256SUMS.txt` 中对应行比对即可。
-
-            </details>
-
-            <details>
-            <summary><b>⚙️ 内部文件</b>（普通用户请忽略）</summary>
-
-            <br>
-
-            | 文件 | 用途 |
-            | --- | --- |
-            | `FluentYTDL-${{ steps.version.outputs.VERSION }}-win64-app-core.7z` | **增量更新包，供程序内自动更新使用，请勿手动下载。** 不含 `bin/` 工具目录，单独解压无法运行。 |
-            | `update-manifest.json` | 程序内更新器读取的版本清单。 |
-
-            </details>
-
-            ---
-
-            ## 🔄 更新方式
-
-            已安装旧版本的用户无需手动下载：打开 **设置 → 检查更新**，程序会自动获取并应用增量更新包。
-
-            ## 🐛 反馈
-
-            使用中遇到问题请提交 [Issue](https://github.com/${{ github.repository }}/issues)，附上日志文件（**设置 → 打开日志目录**）可以大幅加快排查速度。
-
-            ---
-
-            <sub>版本 `${{ steps.version.outputs.VERSION }}` · 通道 `${{ steps.version.outputs.CHANNEL }}` · 构建自 [`${{ github.sha }}`](https://github.com/${{ github.repository }}/commit/${{ github.sha }})</sub>
+          name: build-verification-reports
+          path: |
+            build/runs/*/build-result.json
+            build/runs/*/self-test.json
+            build/runs/*/archive-reports/*.json
+            build/runs/*/components/snapshot.json
+            build/installer-tests/**
+          if-no-files-found: ignore
+      - name: Publish verified draft and check public downloads
+        if: steps.policy.outputs.publish == 'true'
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+        run: uv run --locked --no-sync python scripts/release_pipeline.py publish
+      - name: Report failed publication or verification
+        if: failure()
+        run: |
+          '::error::Build/release verification failed. Check reports; an existing public release was not removed.' | Write-Output
+          'Release pipeline failed; inspect the failed step and uploaded verification reports.' >> $env:GITHUB_STEP_SUMMARY

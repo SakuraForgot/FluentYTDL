@@ -29,7 +29,10 @@ _WEBVIEW2_CLIENT_GUID = "{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
 #:   2. 原生位宽（ARM64 / 纯 32 位系统）
 #:   3. 用户级安装（非管理员装的 Runtime）
 _REGISTRY_PATHS: list[tuple[str, str]] = [
-    ("HKEY_LOCAL_MACHINE", rf"SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{_WEBVIEW2_CLIENT_GUID}"),
+    (
+        "HKEY_LOCAL_MACHINE",
+        rf"SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{_WEBVIEW2_CLIENT_GUID}",
+    ),
     ("HKEY_LOCAL_MACHINE", rf"SOFTWARE\Microsoft\EdgeUpdate\Clients\{_WEBVIEW2_CLIENT_GUID}"),
     ("HKEY_CURRENT_USER", rf"Software\Microsoft\EdgeUpdate\Clients\{_WEBVIEW2_CLIENT_GUID}"),
 ]

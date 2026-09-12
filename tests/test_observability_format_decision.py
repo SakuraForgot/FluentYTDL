@@ -458,7 +458,9 @@ def test_global_preset_uses_the_same_field_names(qapp, events):
     # 全局侧的 `prefer_ext` 是真的 "mp4"（预设意图里带），所以 m4a 这次**该**拿到
     # +2000 亲和加分 —— 同一个字段名，两边各自记的是各自那份 ctx 算出来的分。
     # 语言名次同样是 (命中唯一偏好 → 1) × _LANG_SCRIPT_SPAN(2) = 2 × 1e6。
-    assert _score_of(decision["audio_ranked"], "140") == 3 * 100_000_000 + 2 * 1_000_000 + 2_000 + 128
+    assert (
+        _score_of(decision["audio_ranked"], "140") == 3 * 100_000_000 + 2 * 1_000_000 + 2_000 + 128
+    )
 
 
 def test_global_preset_without_formats_reports_the_bare_selector(qapp, events):

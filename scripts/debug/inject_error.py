@@ -60,9 +60,7 @@ SCENARIOS: dict[str, dict] = {
         "desc": "视频已删除 → retry=never 且无 fix_action，走 InfoBar 而非弹框",
         "exit_code": 1,
         "fail_times": -1,
-        "stderr": (
-            "ERROR: [youtube] dQw4w9WgXcQ: This video has been removed by the uploader"
-        ),
+        "stderr": ("ERROR: [youtube] dQw4w9WgXcQ: This video has been removed by the uploader"),
     },
     "age": {
         "desc": "年龄限制 → retry=after_fix，应挂起弹框且「导入 Cookie」可用",

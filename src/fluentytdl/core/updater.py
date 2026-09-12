@@ -373,69 +373,62 @@ def extract_archive(archive_path: Path, dest_dir: Path) -> None:
         raise ValueError(f"不支持的归档格式: {archive_path.suffix}")
 
 
-def _extract_7z(archive_path: Path, dest_dir: Path) -> None:
-    """解压 7z 文件。优先使用 py7zr，回退到系统 7z CLI。"""
-    # 尝试 py7zr
+def _bundled_7za() -> Path | None:
+    """Resolve onefile resources, never the staging directory or system PATH."""
+    root = getattr(sys, "_MEIPASS", None)
+    if root is None:
+        return None
+    candidate = Path(root) / "tools" / "7zip" / "7za.exe"
+    return candidate if candidate.is_file() else None
+
+
+def _extract_7z(archive_path: Path, dest_dir: Path, *, require_native: bool = False) -> None:
+    """Use the bundled console; fall back only when it cannot be launched."""
+    sevenzip = _bundled_7za()
+    launch_error = "内嵌 7za 不存在"
+    if sevenzip is not None:
+        try:
+            metadata = json.loads(sevenzip.with_name("version.json").read_text(encoding="utf-8"))
+            log(f"内嵌 7za version={metadata.get('version', 'unknown')}")
+        except (OSError, ValueError):
+            log("内嵌 7za version=unknown")
+        try:
+            result = subprocess.run(
+                [
+                    str(sevenzip),
+                    "x",
+                    str(archive_path.resolve()),
+                    f"-o{dest_dir.resolve()}",
+                    "-aoa",
+                    "-y",
+                    "-sccUTF-8",
+                ],
+                shell=False,
+                capture_output=True,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            )
+        except OSError as exc:
+            launch_error = f"内嵌 7za 无法启动: {exc}"
+            log(launch_error)
+        else:
+            if result.returncode != 0:
+                detail = (result.stderr or result.stdout).decode("utf-8", errors="replace").strip()
+                raise RuntimeError(f"7za 解压失败 (exit {result.returncode}): {detail[-4000:]}")
+            log("通过内嵌 7za 解压完成")
+            return
+    if require_native:
+        raise RuntimeError(launch_error)
+    log(f"{launch_error}，尝试 py7zr")
     try:
         import py7zr
-
+    except ImportError as exc:
+        raise RuntimeError(f"{launch_error}；py7zr 依赖加载失败: {exc}") from exc
+    try:
         with py7zr.SevenZipFile(archive_path, "r") as archive:
             archive.extractall(dest_dir)
-        log("通过 py7zr 解压完成")
-        return
-    except ImportError:
-        log("py7zr 未安装，尝试 7z CLI")
-    except Exception as e:
-        log(f"py7zr 解压失败: {e}，尝试 7z CLI")
-
-    # 回退到 7z CLI
-    # 优先使用应用自带的 bin/7z.exe
-    sevenzip: str | None = None
-    for candidate in [
-        dest_dir / "bin" / "7z.exe",
-        dest_dir / "bin" / "7z" / "7z.exe",
-    ]:
-        if candidate.exists():
-            sevenzip = str(candidate)
-            log(f"使用应用自带 7z: {sevenzip}")
-            break
-
-    if not sevenzip:
-        sevenzip = shutil.which("7z") or shutil.which("7za")
-        if sevenzip:
-            log(f"使用系统 7z: {sevenzip}")
-
-    if not sevenzip:
-        raise RuntimeError("无法解压 7z 文件: py7zr 不支持此压缩格式且系统中未找到 7z")
-
-    # 使用 shell 模式避免路径含空格/括号时 -o 参数解析失败
-    # 7z 的 -o 参数格式要求: -o"path with spaces"
-    # Python subprocess 列表模式会将整个 "-opath (1)" 加引号导致 7z 解析错误
-    cmd = f'"{sevenzip}" x "{archive_path}" -o"{dest_dir}" -aoa -y'
-    log(f"7z 命令: {cmd}")
-
-    kwargs: dict = {}
-    if sys.platform == "win32":
-        kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
-
-    result = subprocess.run(
-        cmd,
-        shell=True,
-        capture_output=True,
-        **kwargs,
-    )
-
-    if result.returncode != 0:
-        stderr = result.stderr.decode("utf-8", errors="replace").strip()
-        stdout = result.stdout.decode("utf-8", errors="replace").strip()
-        log(f"7z 退出码: {result.returncode}")
-        if stderr:
-            log(f"7z stderr: {stderr}")
-        if stdout:
-            log(f"7z stdout: {stdout}")
-        raise RuntimeError(f"7z 解压失败 (exit {result.returncode}): {stderr or stdout}")
-
-    log("通过 7z CLI 解压完成")
+    except Exception as exc:
+        raise RuntimeError(f"py7zr 解压失败 ({type(exc).__name__}): {exc}") from exc
+    log("通过 py7zr 解压完成")
 
 
 def _extract_zip(archive_path: Path, dest_dir: Path) -> None:
@@ -1703,4 +1696,12 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    # Release smoke test: extract only, never wait for/replace/restart an application.
+    if len(sys.argv) == 4 and sys.argv[1] == "--verify-archive":
+        try:
+            _extract_7z(Path(sys.argv[2]), Path(sys.argv[3]), require_native=True)
+        except Exception:
+            logging.exception("Archive smoke test failed")
+            sys.exit(1)
+        sys.exit(0)
     sys.exit(main())

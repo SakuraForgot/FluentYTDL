@@ -383,6 +383,7 @@ def test_baseline_has_no_stale_entries():
 #
 # 一个悄悄失效的架构测试比没有更糟：它会一直绿。
 
+
 def test_detector_ignores_strings_and_comments():
     """docstring / 注释 / 普通字符串里的同名文本不算命中。
 

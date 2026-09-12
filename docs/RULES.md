@@ -5,7 +5,7 @@
 ## 1. 项目身份
 
 - **名称**：FluentYTDL — 专业 YouTube/视频下载器
-- **语言**：Python 3.10+
+- **语言**：Python 3.12.12
 - **UI 框架**：PySide6 (Qt6) + QFluentWidgets（Fluent 设计）
 - **下载引擎**：yt-dlp CLI 子进程（非 Python API）
 - **媒体处理**：FFmpeg
@@ -58,7 +58,7 @@ UI 层 (ui/)
 ### Ruff（强制）
 
 ```toml
-target-version = "py310"
+target-version = "py312"
 line-length = 100
 select = ["E", "F", "I", "UP", "B"]
 ignore = ["E501"]  # 允许长行
@@ -70,7 +70,7 @@ ignore = ["E501"]  # 允许长行
 ### Pyright（建议性）
 
 ```toml
-pythonVersion = "3.10"
+pythonVersion = "3.12"
 # 很多 report* 设置已放宽 — 不要随意添加新的 type:ignore
 ```
 
@@ -224,7 +224,7 @@ retry  transition  outcome  config  argv  identity
 - 测试文件在 `tests/` 目录
 - **尚无 conftest.py** — 每个测试自行设置 `sys.path`
 - 部分测试需要 `QApplication` —— 在**导入 fluentytdl 之前**设好 `QT_QPA_PLATFORM=offscreen` 与 `FLUENTYTDL_DATA_DIR_OVERRIDE` 即可无头运行（照抄 `tests/test_subtitle_selector_ux.py` 的文件头）。别写死"有几个 GUI 测试"，这个数字每加一个测试就过期
-- CI 所有检查使用 `continue-on-error: true` — 没有阻塞合并的检查
+- CI 对 lint、格式、版本与锁文件、翻译同步及测试实行硬门禁；仅 Pyright 保持提示性质。
 - 添加新测试时：优先使用普通 pytest 函数而非 unittest.TestCase
 
 ## 9. 禁止事项
@@ -258,107 +258,16 @@ retry  transition  outcome  config  argv  identity
 
 ## 11. 打包与发布规则
 
-### 版本管理
-
-- **唯一真相源**：项目根目录的 `VERSION` 文件，存**裸版本号**，**不带 `v` 前缀**
-- **不要手改** `__init__.py`、`pyproject.toml`、`FluentYTDL.iss` 里的版本号 —— 一律走 `scripts/version_manager.py`
-- Git tag 恒为 `"v" + VERSION` —— `v` 只存在于 tag，不存在于文件里
-
-### 版本格式（PEP 440 / SemVer）
-
-```text
-MAJOR.MINOR.PATCH[-(rc|beta).N]
-```
-
-| VERSION 文件 | Git tag | 通道 | 分发方式 |
-| --- | --- | --- | --- |
-| `3.5.5` | `v3.5.5` | stable | GitHub Release (Latest) —— 接收程序内自动更新 |
-| `3.5.6-rc.1` | `v3.5.6-rc.1` | rc | GitHub Release (Pre-release) —— 自动更新 **locked** |
-| `3.6.0-beta.1` | `v3.6.0-beta.1` | beta | 仅 Artifacts，群/频道分发 —— 自动更新 **locked** |
-
-- **不再使用前缀。** 旧的 `v-` / `pre-` / `beta-` 前缀体系已废弃。运行时代码仍能*读取*这些格式，用于兼容 3.5.5 之前的安装，但不会再写出。
-- `3.5.6-rc.1` 是合法 PEP 440（规范化为 `3.5.6rc1`），因此 `pyproject.toml` 存完整版本号。
-- **Inno Setup / PE 资源只接受纯数字版本。** `FluentYTDL.iss` 存数字段（`3.5.6`），其 `MyAppVersionNumeric` 宏会在第一个连字符处截断。
-- 预发布通道只认 `rc` 和 `beta`。`alpha`、裸 `-rc`、`3.5.5rc1` 一律拒绝。
-
-### AI Agent：发布流程
-
-**正式版**：
-
-1. `python scripts/version_manager.py set 3.5.6`
-2. `python scripts/version_manager.py check`（校验 4 个文件一致）
-3. `git add -A && git commit -m "release: v3.5.6"`
-4. `git tag v3.5.6`
-5. `git push && git push --tags`
-6. CI 自动触发 `release.yml` → 构建 → GitHub Release (Latest)
-
-**预发布 (rc)**：`python scripts/version_manager.py set 3.5.6-rc.1`（或 `bump patch --pre rc`），之后同上 2-5 步，tag 为 `v3.5.6-rc.1` → GitHub Release 标记为 Pre-release。
-
-**测试版 (beta)**：`python scripts/version_manager.py set 3.6.0-beta.1`，之后同上 2-5 步 → 仅产出 Artifacts，不创建 GitHub Release，由项目负责人从 GitHub Actions Artifacts 下载分发。
-
-### 本地构建
-
-- GUI：`python scripts/build_gui.py` → 版本框**留空**即使用 `VERSION` → 点击构建
-- CLI：`python scripts/build.py --target all`（版本从 `VERSION` 读取）
-- **`build.py` 仅在显式传入 `--version` 时才回写 `VERSION`。** 不传 `--version` 的构建绝不会篡改真相源。
-- 向 `build.py` / `version_manager.py set` 传入带 `v` 前缀的版本会被拒绝并给出纠正提示。
-
-### 构建目标 [关键]
-
-**目标 → 产出物的映射唯一事实源是 `scripts/build.py` 的 `TARGET_OUTPUTS`。** `run_all()` 的分发、`_assert_expected_artifacts()`、`build_gui.py` 的产出面板、release.yml 的校验步骤全都读这一张表，**不要写第二份**。
-
-| `--target` | 产出 |
-| --- | --- |
-| `all` | `full.7z` + `app-core.7z` + `setup.exe` + `update-manifest.json` + `SHA256SUMS.txt` |
-| `7z`（或 `full`） | **只有** `full.7z` |
-| `app-core` | `app-core.7z` + `update-manifest.json` |
-| `setup` | **只有** `setup.exe` |
-| `spec` | 不产出发布物，只验证 PyInstaller 蓝图后返回 |
-
-- **目标是严格的：目标没点名的一律不生成。** 以前这里是三处各写一遍 `if target in ("all", "7z")`，加上无条件生成清单与校验和，于是「只要便携版」照样吐出 `app-core.7z`、`update-manifest.json`，以及一份把 `release/` 里所有历史遗留文件都列进去的 `SHA256SUMS.txt`。新增目标是往表里加一行，不是再加一个 `if`。
-- **`manifest` 绑定 `app-core`，绝不单独产出。** 清单里唯一有实质内容的组件就是 app-core 归档，缺了它 `generate_manifest.py` 只会打印「⚠ app-core 归档不存在」并写出一份空壳清单 —— 那种清单一旦发布，程序内更新器会认为新版本无可下载载荷。宁可没有清单，也不要空壳清单。
-- **`generate_checksums()` 只哈希本次构建的产物**，不再遍历整个 `release/`。以前遍历目录，这正是「只打便携版」却发出一份点名了其他版本包的校验文件的原因。
-- **`clean()` 从不清 `release/`。** 历史产物按设计原地保留（那是本地唯一副本），所以按目标构建时自己的产物旁边必然躺着无关文件。`build_gui.py` 会把它们标为「历史遗留」并提供「构建前清空 `release/`」勾选项；`_warn_foreign_release_files()` 只点名，绝不删除。
-- **`--print-names --target X` 只打印该目标的预期文件名后退出，不构建。** release.yml 的校验步骤向它索取清单而不是硬编码一份 —— 那份硬编码清单正是目标收紧后立刻变成误报的东西。
-- **`publish=true` 只允许 `targets=all`**（在 release.yml 的版本解析步骤里拦截）。非 `all` 目标填不满 Release 正文里的下载链接，也不产出 `update-manifest.json`，发出去会中断所有已安装用户的自动更新。标签推送始终强制 `all`。
-
-### 发布产物
-
-| 产物 | 面向对象 |
-| --- | --- |
-| `FluentYTDL-{VERSION}-win64-full.7z` | **首要推荐** —— 便携免安装，解压即用，内置全部 `bin/` 工具 |
-| `FluentYTDL-{VERSION}-win64-setup.exe` | Inno Setup 安装向导 —— 写注册表、建快捷方式，需要管理员权限 |
-| `FluentYTDL-{VERSION}-win64-app-core.7z` | **内部包** —— 供程序内自动更新使用的增量载荷，不含 `bin/` 与 `updater.exe`，单独解压无法运行；**绝不可**作为用户下载项展示 |
-| `update-manifest.json` | 程序内更新器通过 `releases/latest/download/` RAW 直链消费 |
-| `SHA256SUMS.txt` | 完整性校验 —— 只覆盖**本次构建**的产物（`--target all`） |
-
-资产下载 URL 以 **tag** 而非版本号为键 —— `generate_manifest.py` 的 `--tag` 参数正是为此存在（`/releases/download/v3.5.5/FluentYTDL-3.5.5-win64-full.7z`）。
-
-### 打包卫生 [关键]
-
-- **`pyproject.toml [tool.fluentytdl.build]` 是"发布物包含什么"的唯一事实源。** `app_core_include`（白名单）、`app_core_exclude`（已知且故意不收）、`dist_forbidden`（运行期垃圾黑名单）只写在这里。`dist/` 顶层出现两张名单都没登记的条目时 `classify_app_core_items()` 直接让构建失败 —— 白名单真正的风险是"以后新增的合法发布物被静默丢掉"，这条断言把它变成一盏红灯。每个数组都必须写成**单行**：`_load_config()` 在没有 `tomllib` 的 Python 3.10 上会退化成只认 `key = [...]` 的行解析器，多行数组会解析成空数组，从而静默地让整道检查失效。
-- **`assert_dist_clean()` 对三个发布目标全都跑**（`full.7z`、`app-core.7z`、`setup.exe`），不是只跑一个。任何人从 `dist/` 直接启动过程序，自己的 `config.json`、`logs/`、`state/tasks/tasks.db` 就留在了那里，而 `bin/cookies_*.txt` 与 `bin/dle_user/` 里是**真实凭据** —— 这些进了公开归档是会话泄漏，不是观感问题。`full.7z` 合法地包含 `bin/` 与 `updater.exe`，套不了 app-core 的白名单，兜住它的正是这份黑名单。
-- **构建 `updater.exe` 需要 build extra：`uv sync --extra build`。** `py7zr` 是 updater 解压 app-core 归档的唯一手段。钉住的版本必须三处一致 —— `pyproject.toml` 的 `build` extra、`.github/workflows/release.yml` 的 `PY7ZR_VERSION`、以及 `scripts/updater.spec` 里那道断言。
-- **`updater.exe.new` 随 app-core 投递，app-core 里没有 `updater.exe`。** 用户机器上正在运行的 `updater.exe` 覆写不了自己，所以修复只能以"归档里一个普通文件"的形式送到已安装用户手上：`build_updater()` 把产物额外拷成 `dist/updater.exe.new`，真正的替换由 `main.py::_cleanup_update_residuals()`（便携版 / 可写安装路径）或提权 updater 退出后的 helper `updater.py::_self_update_updater()`（Program Files）完成。两条路径互为兜底 —— 替换失败时**绝不要删掉** `updater.exe.new`，它就是下次重试的素材。
-
-### 数据位置 [关键]
-
-`utils/paths.py::user_data_dir()` 用**双轨**决定数据根目录，**绝不做写权限探测**：
-
-| 场景 | 位置 |
-| --- | --- |
-| 传了 `--data-dir` / `FLUENTYTDL_DATA_DIR_OVERRIDE` | 该路径（updater 降权重启新版时用） |
-| frozen 且 exe 同级有 `portable.txt` | exe 所在目录（便携版 `full.7z`） |
-| frozen 且无标记 | `%LOCALAPPDATA%\FluentYTDL`（安装版） |
-| 非 frozen | `project_root()` |
-
-- **绝不要重新引入 `.writetest` 写探测。** 同一台机器的数据分裂成两棵树就是它造成的：提权会话写得进 `C:\Program Files\FluentYTDL`，普通会话写不进，用户看到的就是"更新把我的设置和任务全弄没了"。
-- **`portable.txt` 只进 `full.7z`**，由 `create_7z()` 从 `tempfile.TemporaryDirectory()` 追加。绝不能写进 `dist/` —— `dist/` 是 app-core 与 `setup.exe` 的共同取材地，`dist_forbidden` 里列着它，写进去会直接打断构建。`.iss` 另有 `Excludes: "portable.txt"` 作为纯保险。
-- **迁移只复制、绝不删除遗留位置**（`migrate_user_data()`），因为二进制回滚必须等价于数据兼容的回滚。`.migrated_v2` 标记只由 `finalize_startup()` → `commit_migration_marker()` 写出，且只在本次零失败时写 —— 写早了，被回滚的旧版会继续往旧路径写数据，而下次更新看到标记就跳过迁移、直接采用陈旧副本。
-- **`paths.py` 永远不能 import loguru。** `utils/logger.py:13` 在导入期就求值 `LOG_DIR = str(user_data_dir() / "logs")`，反向 import 会成环；迁移消息先攒在模块级列表里，由 `utils/startup_info.py::log_startup_info()` 回放。
-
-### 注意事项
-
-- `build.py` 构建前会把版本同步到 `pyproject.toml`、`__init__.py`、`.iss`；当 `__init__.py` 动态读取 `VERSION` 时跳过同步
-- 产物文件名带的是裸版本号，不是 tag：`FluentYTDL-3.5.5-win64-full.7z`
-- 缺失 ISCC 或 `.iss` 属于**硬失败** —— 构建绝不会在零产物的情况下报成功
+- 统一 Windows x64、Python 3.12.12，工具链读取 build-environment.json。依赖使用 `uv sync --locked --extra dev --extra build`，构建和检查不得自动刷新锁文件。
+- VERSION 保存裸版本；tag 为 v+VERSION。仅 version_manager set/bump 修改源码版本并刷新 uv.lock；build --version 只覆盖本次暂存输入。
+- 每次发布必须拉取最新 yt-dlp、FFmpeg/ffprobe、Deno、AtomicParsley、POT Provider 和内嵌 7-Zip，沿用原渠道。TOOLS.lock.json 仅作历史参考，不阻止上游升级；下载校验失败禁止退回旧工具。
+- 每次构建解析一次组件快照，记录资产标识、URL、版本、哈希与大小，供所有产物共用。回放快照仅供诊断，不允许发布。
+- TARGET_OUTPUTS 是产物集合唯一事实源；正式发布必须 target=all。构建使用 build/runs/<id>，build/latest-result.json 仅指向成功构建。禁止按进程名全局强杀和删除历史发布物。
+- app-core 白名单及污染排除来自 pyproject.toml；未知顶层项目和运行数据污染必须失败。portable.txt 只进入 Full；updater.exe.new 随 app-core 投递，失败保留重试材料。
+- COPY/LZMA2 归档必须经真实解压与哈希比对，冻结 updater 在空 PATH、中文路径验证。冻结主程序必须通过隔离自检。卸载维护脚本随共享 _internal 分发，应用更新不能把它移除。
+- 数据根不能混淆：便携配置/数据库通常在应用目录，安装版配置/数据库通常在 LocalAppData；账号仍在应用 bin/dle_user。保留现有路径和复制迁移机制，迁移标记仅在启动验收后提交。
+- Inno 支持中英文，默认当前用户、可选所有用户，保留 AppId 和旧安装范围；首次启动语言不覆盖已有配置。
+- **卸载彻底清理账号、Cookie、配置、数据库历史、缓存及日志，不提供保留选项；所有用户卸载覆盖实际使用者。** 下载成品及未知文件保留，不递归删除整个安装/下载/Documents 根，不跟随目录联接。清理失败必须报告失败。
+- 覆盖安装、更新及回滚保留数据，不能调用卸载清理。
+- stable 发布 Latest，rc 为预发布，beta 仅 Artifacts。发布验证 tag/提交/main 祖先关系、共用检查和产物，Draft 校验后原样公开并验证下载。禁止替换已公开版本资产。
+- 具体命令和验收限制见 docs/build_release.md。

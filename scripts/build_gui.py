@@ -53,9 +53,9 @@ CLAUDE.md 要求所有 UI 必须使用 QFluentWidgets。本文件**刻意**使�
 
 from __future__ import annotations
 
+import json
 import os
 import re
-import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -146,10 +146,15 @@ def read_version_file() -> str:
 
 
 def find_iscc() -> Path | None:
-    return next((p for p in ISCC_CANDIDATES if p.exists()), None)
+    from build_environment import find_iscc as shared_find_iscc
+
+    return shared_find_iscc()
 
 
 def release_dir() -> Path:
+    pointer = ROOT / "build/latest-result.json"
+    if pointer.is_file():
+        return Path(json.loads(pointer.read_text(encoding="utf-8"))["workspace"]) / "release"
     return ROOT / "release"
 
 
@@ -278,141 +283,9 @@ class BuildWorker(QThread):
 
 
 def check_environment(target: str) -> list[tuple[bool, str]]:
-    """构建前环境自检。
+    from build_environment import preflight
 
-    返回 [(是否致命, 描述)]。致命项会在启动构建前拦截 —— 以前全靠 build.py
-    跑到一半才失败，用户得翻几百行日志才知道是缺了 ISCC。
-
-    是否致命取决于构建目标：只做便携包时缺 ISCC 无所谓。
-    """
-    spec = next(t for t in TARGETS if t["value"] == target)
-    results: list[tuple[bool, str]] = []
-
-    # PyInstaller —— 任何目标都必须有
-    try:
-        import importlib.metadata
-
-        ver = importlib.metadata.version("pyinstaller")
-        results.append((False, f"✓ PyInstaller {ver}"))
-    except Exception:
-        results.append(
-            (
-                True,
-                "❌ 未安装 PyInstaller —— 运行 `uv sync --extra dev` 或 `pip install pyinstaller`",
-            )
-        )
-
-    # 压缩器：7z 命令行优先，py7zr 是纯 Python 回退
-    sevenzip = shutil.which("7z") or shutil.which("7za")
-    if sevenzip:
-        results.append((False, f"✓ 7-Zip: {sevenzip}"))
-    else:
-        try:
-            import importlib
-
-            importlib.import_module("py7zr")
-            results.append((False, "✓ py7zr（未找到 7z 命令行，将走纯 Python 回退，速度较慢）"))
-        except ImportError:
-            fatal = spec["value"] in ("all", "7z")
-            results.append(
-                (
-                    fatal,
-                    "❌ 既没有 7z 命令行也没有 py7zr —— 安装 7-Zip 或 `pip install py7zr`",
-                )
-            )
-
-    # Inno Setup —— 只有含 setup 的目标才需要
-    if spec["needs_iscc"]:
-        iscc = find_iscc()
-        if iscc:
-            results.append((False, f"✓ Inno Setup: {iscc}"))
-        else:
-            results.append(
-                (
-                    True,
-                    "❌ 未找到 ISCC.exe —— 安装 Inno Setup 6 (https://jrsoftware.org/isdl.php)，"
-                    "或改选「便携版 (7z)」目标",
-                )
-            )
-    else:
-        results.append((False, "· 当前目标不需要 Inno Setup，跳过"))
-
-    # release/ 历史遗留 —— "选了目标却像全部打包" 的直接成因
-    stale = stale_artifacts(target, read_version_file() or "")
-    if stale:
-        results.append(
-            (
-                False,
-                f"⚠ release/ 存在 {len(stale)} 个不属于本次目标的文件"
-                f"（{', '.join(f.name for f in stale[:3])}"
-                f"{' 等' if len(stale) > 3 else ''}）—— 本次不会重建也不会删除，"
-                "留在那里容易被误认成本次产物。勾选「构建前清空 release/」可避免。",
-            )
-        )
-
-    # 外部工具 —— setup 目标同样要打进安装包，所以一律检查
-    tools_lock = ROOT / "scripts" / "TOOLS.lock.json"
-    missing_tools = [
-        name
-        for name, rel in [
-            ("yt-dlp", "yt-dlp/yt-dlp.exe"),
-            ("ffmpeg", "ffmpeg/ffmpeg.exe"),
-            ("deno", "deno/deno.exe"),
-            ("AtomicParsley", "atomicparsley/AtomicParsley.exe"),
-            ("POT Provider", "pot-provider/bgutil-pot-provider.exe"),
-        ]
-        if not (ROOT / "assets" / "bin" / rel).exists()
-    ]
-    if missing_tools:
-        results.append(
-            (
-                False,
-                f"⚠ assets/bin 缺少 {', '.join(missing_tools)} —— 构建时会自动下载"
-                "（点「📥 下载工具」可提前拉取）",
-            )
-        )
-    else:
-        results.append((False, "✓ assets/bin 外部工具齐备"))
-
-    if tools_lock.exists():
-        results.append((False, "✓ scripts/TOOLS.lock.json 存在，构建时会校验工具哈希"))
-    else:
-        results.append((False, "⚠ 无 scripts/TOOLS.lock.json —— 首次构建会生成初始锁文件"))
-
-    # 版本文件
-    version = read_version_file()
-    if version and VERSION_PATTERN.match(version):
-        results.append((False, f"✓ VERSION = {version}"))
-    elif version:
-        results.append((True, f"❌ VERSION 文件内容不符合规范: '{version}'（期望 X.Y.Z[-rc.N]）"))
-    else:
-        results.append((True, "❌ VERSION 文件缺失或为空"))
-
-    # 环境污染黑名单（与 build.py _check_hygiene 同源，这里只提示不拦截）
-    try:
-        import importlib.metadata
-
-        installed = {d.metadata["Name"].lower() for d in importlib.metadata.distributions()}
-        polluted = installed & {"torch", "pandas", "tensorflow", "scipy", "matplotlib"}
-        if polluted:
-            results.append(
-                (
-                    False,
-                    f"⚠ 环境中存在重型依赖 {', '.join(sorted(polluted))} —— "
-                    "会显著增大产物体积，build.py 会拦截（可勾选 --skip-hygiene 强行打包）",
-                )
-            )
-        else:
-            results.append((False, "✓ 未发现黑名单重型依赖"))
-    except Exception:
-        pass
-
-    return results
-
-
-# ============================================================================
-# 主窗口
-# ============================================================================
+    return preflight(target)
 
 
 class BuildGUI(QMainWindow):
@@ -486,7 +359,9 @@ class BuildGUI(QMainWindow):
         )
         options_row.addWidget(self.skip_hygiene_cb)
 
-        self.strict_tools_cb = QCheckBox("锁定外部工具版本 (--strict-tools)")
+        self.strict_tools_cb = QCheckBox("每次构建获取全部最新组件")
+        self.strict_tools_cb.setChecked(False)
+        self.strict_tools_cb.hide()
         self.strict_tools_cb.setToolTip(
             "要求 assets/bin 下的工具版本与 scripts/TOOLS.lock.json 完全一致。\n"
             "上游发新版会导致构建失败，需先运行 fetch_tools.py --update-lock 确认升级。"
@@ -503,6 +378,7 @@ class BuildGUI(QMainWindow):
             "让「仅安装向导」这类目标看起来像是全部打包了一遍。\n"
             "勾选后删除前会列出待删文件并二次确认。"
         )
+        self.clean_release_cb.hide()
         clean_row.addWidget(self.clean_release_cb)
         clean_row.addStretch()
         target_layout.addLayout(clean_row)
@@ -776,7 +652,7 @@ class BuildGUI(QMainWindow):
 
         self._log(f"🚀 开始执行编排流水线: 目标 {target}", "#4ec9b0")
         if version:
-            self._log(f"   覆盖版本号: {version}（将写入 VERSION 及全部版本载体）", "#cca700")
+            self._log(f"   覆盖版本号: {version}（仅覆盖本次构建，不修改源码）", "#cca700")
         else:
             self._log(f"   使用 VERSION 文件: {read_version_file()}（不会改写）", "#808080")
         if skip_hygiene:
@@ -924,27 +800,12 @@ class BuildGUI(QMainWindow):
             self._log(text)
 
     def _list_artifacts(self):
-        """构建成功后列出 release/ 下的实际产物与体积。"""
-        rel = release_dir()
-        if not rel.exists():
-            return
-        files = sorted(
-            (f for f in rel.iterdir() if f.is_file()),
-            key=lambda f: f.stat().st_size,
-            reverse=True,
-        )
-        if not files:
-            return
-        # 标注哪些是本次目标真正产出的 —— 其余是 release/ 里的历史遗留。
-        # 现在 SHA256SUMS.txt 只收录本次产物，残留文件不再被算进校验和。
-        mine = set(release_names(self._get_target(), read_version_file() or "").values())
-        self._log("\n📂 release/ 产物：", "#4fc1ff")
-        for f in files:
-            size = f.stat().st_size / 1024 / 1024
-            if f.name in mine:
-                self._log(f"   {f.name:<52} {size:>8.2f} MB", "#9cdcfe")
-            else:
-                self._log(f"   {f.name:<52} {size:>8.2f} MB  ← 历史遗留，非本次目标", "#cca700")
+        pointer = ROOT / "build/latest-result.json"
+        if pointer.is_file():
+            result = json.loads(pointer.read_text(encoding="utf-8"))
+            self._log(f"\n本次构建目录: {result['workspace']}")
+            for artifact in result["artifacts"]:
+                self._log(f"  {artifact['name']}  {artifact['size'] / 1024**2:.2f} MB")
 
     def _reclaim_worker(self):
         """断开并回收当前 worker。

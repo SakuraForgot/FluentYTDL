@@ -7,7 +7,7 @@
 ## 1. Project Identity
 
 - **Name**: FluentYTDL — Professional YouTube/video downloader
-- **Language**: Python 3.10+
+- **Language**: Python 3.12.12
 - **UI Framework**: PySide6 (Qt6) + QFluentWidgets (Fluent Design)
 - **Download Engine**: yt-dlp CLI subprocess (NOT Python API)
 - **Media Processing**: FFmpeg
@@ -60,7 +60,7 @@ When modifying download logic, consider the impact on ALL 6 modes.
 ### Ruff (enforced)
 
 ```toml
-target-version = "py310"
+target-version = "py312"
 line-length = 100
 select = ["E", "F", "I", "UP", "B"]
 ignore = ["E501"]  # long lines allowed
@@ -72,7 +72,7 @@ ignore = ["E501"]  # long lines allowed
 ### Pyright (advisory)
 
 ```toml
-pythonVersion = "3.10"
+pythonVersion = "3.12"
 # Many report* settings are relaxed — do not add new type:ignore without discussion
 ```
 
@@ -228,7 +228,7 @@ The startup refresh is **silent**. `get_startup_health()` returns per-platform `
 - Test files in `tests/` directory
 - **No conftest.py yet** — each test does its own `sys.path` setup
 - Some tests need a `QApplication` — they run headless as long as `QT_QPA_PLATFORM=offscreen` and `FLUENTYTDL_DATA_DIR_OVERRIDE` are set **before** importing fluentytdl (copy the header of `tests/test_subtitle_selector_ux.py`). Do not hardcode "N GUI tests" here; that number goes stale on every added test
-- CI uses `continue-on-error: true` on all checks — nothing blocks merges
+- CI enforces lint, formatting, version/lock consistency, translation synchronization and tests; Pyright alone remains advisory.
 - When adding tests: prefer plain pytest functions over unittest.TestCase
 
 ## 9. What NOT To Do
@@ -262,107 +262,19 @@ The startup refresh is **silent**. `get_startup_health()` returns per-platform `
 
 ## 11. Build & Release Rules
 
-### Version Management
-
-- **Source of truth**: `VERSION` file (project root), holding a **bare** version with **no `v` prefix**
-- **Do not manually edit** version numbers in `__init__.py`, `pyproject.toml`, or `FluentYTDL.iss` — use `scripts/version_manager.py`
-- The Git tag is always `"v" + VERSION` — the `v` lives in the tag, never in the file
-
-### Version Format (PEP 440 / SemVer)
-
-```text
-MAJOR.MINOR.PATCH[-(rc|beta).N]
-```
-
-| VERSION file | Git tag | Channel | Distribution |
-| --- | --- | --- | --- |
-| `3.5.5` | `v3.5.5` | stable | GitHub Release (Latest) — receives in-app auto-update |
-| `3.5.6-rc.1` | `v3.5.6-rc.1` | rc | GitHub Release (Pre-release) — auto-update **locked** |
-| `3.6.0-beta.1` | `v3.6.0-beta.1` | beta | Artifacts only, distributed in groups/channels — auto-update **locked** |
-
-- **No prefixes.** The legacy `v-` / `pre-` / `beta-` prefix scheme is retired. Runtime code still *reads* those formats for backward compatibility with installs predating 3.5.5, but nothing writes them.
-- `3.5.6-rc.1` is valid PEP 440 (normalizes to `3.5.6rc1`), so `pyproject.toml` stores the full version.
-- **Inno Setup / PE resources accept only numeric versions.** `FluentYTDL.iss` stores the numeric part (`3.5.6`); its `MyAppVersionNumeric` macro truncates at the first hyphen.
-- Only `rc` and `beta` are accepted as pre-release channels. `alpha`, bare `-rc`, and `3.5.5rc1` are rejected.
-
-### AI Agent: Release Workflow
-
-**Stable release**:
-
-1. `python scripts/version_manager.py set 3.5.6`
-2. `python scripts/version_manager.py check` (verify consistency across all 4 files)
-3. `git add -A && git commit -m "release: v3.5.6"`
-4. `git tag v3.5.6`
-5. `git push && git push --tags`
-6. CI auto-triggers `release.yml` → build → GitHub Release (Latest)
-
-**Release candidate**: `python scripts/version_manager.py set 3.5.6-rc.1` (or `bump patch --pre rc`), then steps 2-5 with tag `v3.5.6-rc.1` → GitHub Release marked Pre-release.
-
-**Beta**: `python scripts/version_manager.py set 3.6.0-beta.1`, then steps 2-5 → Artifacts only, no GitHub Release. Project lead downloads from GitHub Actions Artifacts.
-
-### Local Build
-
-- GUI: `python scripts/build_gui.py` → leave the version field blank to use `VERSION` → click Build
-- CLI: `python scripts/build.py --target all` (version read from `VERSION`)
-- **`build.py` only writes back to `VERSION` when `--version` is passed explicitly.** Building without `--version` never mutates the source of truth.
-- Passing a `v`-prefixed version to `build.py` / `version_manager.py set` is rejected with a corrective hint.
-
-### Build Targets [CRITICAL]
-
-**`TARGET_OUTPUTS` in `scripts/build.py` is the single source of truth for target → artifacts.** `run_all()`'s dispatch, `_assert_expected_artifacts()`, `build_gui.py`'s output panel, and release.yml's verification step all read that one table. Never write a second copy.
-
-| `--target` | Produces |
-| --- | --- |
-| `all` | `full.7z` + `app-core.7z` + `setup.exe` + `update-manifest.json` + `SHA256SUMS.txt` |
-| `7z` (or `full`) | `full.7z` **only** |
-| `app-core` | `app-core.7z` + `update-manifest.json` |
-| `setup` | `setup.exe` **only** |
-| `spec` | nothing — validates the PyInstaller blueprint and returns |
-
-- **Targets are strict: anything the target does not name is not generated.** This used to be three separate `if target in ("all", "7z")` blocks plus unconditional manifest/checksum generation, so "portable only" still emitted `app-core.7z`, `update-manifest.json`, and a `SHA256SUMS.txt` that listed every historical leftover in `release/`. Adding a target means adding a row to the table, not another `if`.
-- **`manifest` is bound to `app-core`, never produced alone.** The only component with real content in the manifest is the app-core archive; without it `generate_manifest.py` prints "⚠ app-core 归档不存在" and writes a hollow manifest whose publication makes the in-app updater believe the new version has no downloadable payload. Better no manifest than a hollow one.
-- **`generate_checksums()` hashes only this build's artifacts**, not everything in `release/`. It walked the directory before, which is why a portable-only build shipped a checksum file naming other versions' packages.
-- **`clean()` never touches `release/`.** Previous artifacts stay put by design (they are the only local copy), so a target-scoped build leaves unrelated files next to its own output. `build_gui.py` labels those 历史遗留 and offers a "clear `release/` first" checkbox; `_warn_foreign_release_files()` lists them but never deletes.
-- **`--print-names --target X` prints that target's expected filenames and exits without building.** release.yml's verification step queries it instead of hardcoding a list — that hardcoded list is exactly what turned into a false failure when targets became strict.
-- **`publish=true` requires `targets=all`** (enforced in release.yml's version step). A non-`all` target cannot fill the Release body's download links and omits `update-manifest.json`, which would break auto-update for every installed user. Tag pushes always force `all`.
-
-### Release Artifacts
-
-| Artifact | Audience |
-| --- | --- |
-| `FluentYTDL-{VERSION}-win64-full.7z` | **Primary recommendation** — portable, extract and run, bundles all `bin/` tools |
-| `FluentYTDL-{VERSION}-win64-setup.exe` | Inno Setup installer — registry entries, shortcuts, requires admin |
-| `FluentYTDL-{VERSION}-win64-app-core.7z` | **Internal** — incremental payload for in-app auto-update. Excludes `bin/` and `updater.exe`. Not standalone-runnable; never present it as a user download. |
-| `update-manifest.json` | Consumed by the in-app updater via the `releases/latest/download/` RAW redirect |
-| `SHA256SUMS.txt` | Integrity verification — covers the artifacts of **this build** only (`--target all`) |
-
-Asset download URLs are keyed by **tag**, not version — `generate_manifest.py` takes `--tag` for exactly this reason (`/releases/download/v3.5.5/FluentYTDL-3.5.5-win64-full.7z`).
-
-### Packaging Hygiene [CRITICAL]
-
-- **`pyproject.toml [tool.fluentytdl.build]` is the single source of truth for what ships.** `app_core_include` (whitelist), `app_core_exclude` (known-and-deliberately-dropped), and `dist_forbidden` (runtime-garbage denylist) live there and nowhere else. `classify_app_core_items()` fails the build when a top-level `dist/` entry matches neither list — the whitelist's real hazard is a *new legitimate* artifact being silently dropped, and that assertion turns it into a red light. Keep each array on a **single line**: `_load_config()` falls back to a `key = [...]` line parser on Python 3.10 (no `tomllib`), and a multi-line array parses as empty, which silently disables the check.
-- **`assert_dist_clean()` runs for all three release targets** (`full.7z`, `app-core.7z`, `setup.exe`), never just one. Anyone who launches the app from `dist/` leaves their own `config.json`, `logs/`, `state/tasks/tasks.db` behind, and `bin/cookies_*.txt` + `bin/dle_user/` hold **real credentials** — shipping those in a public archive is a session leak, not a cosmetic flaw. `full.7z` legitimately contains `bin/` and `updater.exe`, so it cannot reuse the app-core whitelist; the denylist is what covers it.
-- **Building `updater.exe` requires the `build` extra: `uv sync --extra build`.** `py7zr` is the updater's only way to unpack an app-core archive. The pinned version must match in three places — `pyproject.toml`'s `build` extra, `.github/workflows/release.yml`'s `PY7ZR_VERSION`, and the assertion inside `scripts/updater.spec`.
-- **`updater.exe.new` is delivered *with* app-core; `updater.exe` is not in it.** On a user's machine the running `updater.exe` cannot overwrite itself, so fixes reach installed users as a plain file in the archive: `build_updater()` copies its output to `dist/updater.exe.new`, and the actual swap happens either in `main.py::_cleanup_update_residuals()` (portable / writable install paths) or in the elevated post-exit helper `updater.py::_self_update_updater()` (Program Files). The two are each other's fallback — never "clean up" `updater.exe.new` on failure, it is the retry material.
-
-### Data Location [CRITICAL]
-
-`utils/paths.py::user_data_dir()` resolves the data root by **double track, never by probing for write permission**:
-
-| Situation | Location |
-| --- | --- |
-| `--data-dir` / `FLUENTYTDL_DATA_DIR_OVERRIDE` set | that path (used when the updater relaunches the new build de-elevated) |
-| frozen + `portable.txt` next to the exe | the exe's own directory (portable `full.7z`) |
-| frozen, no marker | `%LOCALAPPDATA%\FluentYTDL` (installed builds) |
-| not frozen | `project_root()` |
-
-- **Never reintroduce a `.writetest` write probe.** That is exactly what split one machine's data into two trees: an elevated session could write into `C:\Program Files\FluentYTDL` while a normal session could not, and the user saw "the update ate my settings and my task list".
-- **`portable.txt` goes only into `full.7z`**, appended by `create_7z()` from a `tempfile.TemporaryDirectory()`. It must never be written into `dist/` — `dist/` is the shared source for app-core and `setup.exe`, and `dist_forbidden` lists it so a slip breaks the build. `.iss` also carries `Excludes: "portable.txt"` as belt-and-braces.
-- **Migration copies and never deletes the legacy location** (`migrate_user_data()`), because a binary rollback must stay a data-compatible rollback. The `.migrated_v2` marker is written only by `finalize_startup()` → `commit_migration_marker()`, only when the run had zero failures — writing it earlier would let a rolled-back build keep using the old path while the next update skips migration and adopts a stale copy.
-- **`paths.py` must never import loguru.** `utils/logger.py:13` evaluates `LOG_DIR = str(user_data_dir() / "logs")` at import time, so the import would cycle; migration messages are queued in module-level lists and replayed by `utils/startup_info.py::log_startup_info()`.
-
-### Notes
-
-- `build.py` syncs the version to `pyproject.toml`, `__init__.py`, and `.iss` before building; `__init__.py` is skipped when it reads `VERSION` dynamically
-- Output filenames carry the bare version, never the tag: `FluentYTDL-3.5.5-win64-full.7z`
-- Missing ISCC or a missing `.iss` is a **hard failure** — the build never reports success with zero artifacts
+- Build contract: Windows x64, Python **3.12.12**. Read `build-environment.json`; run `uv sync --locked --extra dev --extra build`. Do not silently re-lock during checks/builds.
+- VERSION contains the bare version. Tags use `v` + VERSION. Only `version_manager.py set/bump` changes source versions and refreshes uv.lock. Build overrides are staged and NEVER modify source files.
+- Accepted versions: X.Y.Z, X.Y.Z-rc.N, X.Y.Z-beta.N. Stable releases are Latest, rc releases are prereleases, beta produces Actions artifacts only.
+- **Every new release MUST fetch the latest yt-dlp, FFmpeg/ffprobe, Deno, AtomicParsley, POT Provider AND embedded 7-Zip.** Keep existing upstream channels. Historical TOOLS.lock.json is an audit baseline, never a version ceiling. Fail download/integrity errors; never silently reuse older tools.
+- Resolve releases once into a build-local snapshot with asset identity, URL, size and hashes. All artifacts in that build share it. Snapshot replay is diagnostic-only and forbidden for publication.
+- `scripts/build.py::TARGET_OUTPUTS` is the only artifact contract: all=full+app-core+setup+manifest+checksums; 7z/full=full only; app-core=archive+manifest; setup=setup only; spec=frozen smoke only. Publication requires all.
+- Each build has its own `build/runs/<id>` workspace. Never kill processes globally by executable name or delete historical release artifacts. `build/latest-result.json` points only to a successful build; publish only the explicit artifact paths and hashes in that report.
+- App-core include/exclude and runtime-data exclusions come from pyproject.toml. Unknown top-level payload entries and polluted payloads fail packaging. All release targets share hygiene validation.
+- `portable.txt` belongs only to full.7z; never place it in the shared dist tree. Frozen portable data uses the exe directory; installed config/database/logs use LocalAppData unless explicitly overridden. Authentication still uses app/bin/dle_user. Do not assume those roots are identical.
+- updater.exe.new travels in app-core; never remove the updater self-update delivery/retry mechanism. Bundle the uninstall maintenance helper in the shared _internal tree so automatic updates do not remove uninstall support.
+- Archive encoding is COPY/LZMA2 only. Verify real file hashes with py7zr and the frozen updater with empty PATH and Unicode paths. The frozen application must pass its isolated build self-test.
+- Inno supports English/Simplified Chinese; current-user installation is default, all-users is optional. Preserve AppId and existing install scope. First-run language defaults never overwrite user settings.
+- **Uninstall clears ALL accounts, cookies, config, task databases/history, logs and application caches, without a retention option.** All-users uninstall covers actual Windows users. Preserve downloaded media and unknown files. Never recursively delete an entire install/download/Documents root or follow reparse points. Cleanup failures must be reported as failures.
+- Updates, overwrite installs and rollback preserve data; they must never call uninstall cleanup. Migration remains copy-only until startup acceptance, preserving rollback compatibility.
+- Release validates tag/commit/main ancestry, executes shared checks and artifact tests, verifies a draft, publishes those exact bytes, then verifies public downloads/latest. Never replace public release assets under an existing version.
+- Operational details and acceptance limits: `docs/build_release.md`.

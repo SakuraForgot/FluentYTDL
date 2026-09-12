@@ -474,7 +474,6 @@ class LanguageSelectionDialog(MessageBox):
         row = 0
         col = 0
         for code, name in languages:
-
             display_name = QCoreApplication.translate("Subtitle", name)
             checkbox = CheckBox(f"{display_name} ({code})", checkbox_container)
             checkbox.setChecked(code in self.selected_languages)
@@ -812,7 +811,6 @@ class WebView2AccountNameDialog(MessageBox):
 
     def get_account_name(self) -> str:
         return (self.nameEdit.text() or "").strip()
-
 
 
 class InlinePathPickerCard(SettingCard):

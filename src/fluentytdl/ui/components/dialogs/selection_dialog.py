@@ -1481,9 +1481,7 @@ class SelectionDialog(MessageBoxBase):
             else:
                 from ..common.custom_info_bar import InfoBar
 
-                InfoBar.error(
-                    self.tr("刷新 Cookie 失败"), msg, duration=8000, parent=self.window()
-                )
+                InfoBar.error(self.tr("刷新 Cookie 失败"), msg, duration=8000, parent=self.window())
 
         worker.finished.connect(_on_refreshed, Qt.ConnectionType.QueuedConnection)
         worker.start()

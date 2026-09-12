@@ -346,7 +346,7 @@ def test_embed_evidence_only_fires_on_finished(monkeypatch, tmp_path):
         [
             "FLUENTYTDL|postprocess|started|FFmpegEmbedSubtitle",
             "FLUENTYTDL|postprocess|processing|FFmpegEmbedSubtitle",
-            "[EmbedSubtitle] Embedding subtitles in \"Title.mp4\"",
+            '[EmbedSubtitle] Embedding subtitles in "Title.mp4"',
             "FLUENTYTDL|postprocess|finished|FFmpegEmbedSubtitle",
             "FLUENTYTDL|postprocess|finished|EmbedThumbnail",
             # 非嵌入类后处理器跑完不产出任何证据

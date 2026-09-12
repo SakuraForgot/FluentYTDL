@@ -4,6 +4,11 @@ import os
 import sys
 from pathlib import Path
 
+# Frozen build verification exits before importing services or touching real accounts.
+if len(sys.argv) == 3 and sys.argv[1] == "--build-self-test":
+    from fluentytdl.utils.build_selftest import run_selftest
+    raise SystemExit(run_selftest(Path(sys.argv[2])))
+
 # === 优先检测特殊模式（必须在导入任何GUI库之前） ===
 
 # 检测管理员模式（整个程序以管理员身份运行，用于 Cookie 提取）

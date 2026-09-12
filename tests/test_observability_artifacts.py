@@ -378,8 +378,12 @@ def test_delivery_expectation_hangs_on_the_keep_flags():
 def test_missing_keep_flag_still_expects_delivery():
     """硬约束 2：保留标志缺失 ⇒ 保留。所以缺省也要期望交付。"""
     expected = expected_artifacts(
-        {"skip_download": True, "writesubtitles": True, "subtitleslangs": ["ja"],
-         "writethumbnail": True}
+        {
+            "skip_download": True,
+            "writesubtitles": True,
+            "subtitleslangs": ["ja"],
+            "writethumbnail": True,
+        }
     )
     assert "delivered:subtitle:ja" in expected
     assert DELIVERED_THUMBNAIL in expected
@@ -420,8 +424,9 @@ def test_physical_loss_becomes_degraded_through_the_delivery_layer(events):
     所以存在性搬到交付侧表达，两件事各有各的 token。
     """
     trace = _trace()
-    emit_expect({"skip_download": True, "writesubtitles": True, "subtitleslangs": ["ja"]},
-                trace=trace)
+    emit_expect(
+        {"skip_download": True, "writesubtitles": True, "subtitleslangs": ["ja"]}, trace=trace
+    )
     emit_actual(
         ["/sandbox/payload/Title.ja.vtt"],  # 报告过创建，历史事实不丢
         trace=trace,

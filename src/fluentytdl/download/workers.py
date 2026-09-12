@@ -858,9 +858,7 @@ class DownloadWorker(QThread):
             try:
                 # 只有第一条算 primary：播放列表模式下这个文件会有多行，而
                 # `primary_media()` 是单数概念。
-                art = staging.add_reported(
-                    path, "media", primary=(idx == 0), opts=opts
-                )
+                art = staging.add_reported(path, "media", primary=(idx == 0), opts=opts)
             except Exception:
                 logger.exception("主媒体登记失败: {}", path)
                 continue
@@ -1777,9 +1775,7 @@ class DownloadWorker(QThread):
             if isinstance(paths, dict) and paths.get("home"):
                 self.download_dir = os.path.abspath(str(paths.get("home")))
             elif isinstance(outtmpl, str) and outtmpl.strip():
-                self.download_dir = os.path.abspath(
-                    os.path.dirname(outtmpl.strip()) or os.getcwd()
-                )
+                self.download_dir = os.path.abspath(os.path.dirname(outtmpl.strip()) or os.getcwd())
             else:
                 self.download_dir = os.path.abspath(os.getcwd())
         except Exception:
@@ -1857,9 +1853,7 @@ class DownloadWorker(QThread):
             # cover-direct 用 `outtmpl` 声明是同一件事，只是判据换成了实际产物。
             kept = sorted(staging.manifest.kept(), key=lambda art: art.id)
             if kept:
-                staging.manifest.group_stem = os.path.splitext(
-                    os.path.basename(kept[0].path)
-                )[0]
+                staging.manifest.group_stem = os.path.splitext(os.path.basename(kept[0].path))[0]
                 staging.manifest.stem_authority = "explicit"
 
         self._clean_logger.force_update("completed", 99.0, "📦 正在整理文件...")
@@ -2255,9 +2249,7 @@ class DownloadWorker(QThread):
             )
             # 失败裁决单点：`_fastpath_land()` 已 commit、之后才出的异常（清洁失败、
             # 观测失败）返回 True（= already_succeeded），outcome 必须保持 success。
-            if self._fastpath_fail(
-                exc, component="lightweight_extract", done_text="✅ 提取完成"
-            ):
+            if self._fastpath_fail(exc, component="lightweight_extract", done_text="✅ 提取完成"):
                 return
             self._run_outcome = "failed"
             self.error.emit(err)
