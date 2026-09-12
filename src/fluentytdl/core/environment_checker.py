@@ -14,6 +14,7 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from fluentytdl.utils.localized_log import log_text
 from fluentytdl.utils.logger import logger
 from fluentytdl.utils.paths import find_bundled_executable, get_clean_env
 
@@ -78,14 +79,14 @@ class EnvironmentChecker:
         )
         if bundled is not None:
             self._ffmpeg_exe = str(bundled.absolute())
-            logger.info(f"使用内置 FFmpeg: {self._ffmpeg_exe}")
+            log_text(logger, "info", "使用内置 FFmpeg: {0}", self._ffmpeg_exe)
             return True
 
         # 2. 最后检查 PATH (最通用且便携的方式)
         path = shutil.which("ffmpeg")
         if path:
             self._ffmpeg_exe = "ffmpeg"
-            logger.info(f"使用系统 FFmpeg: {path}")
+            log_text(logger, "info", "使用系统 FFmpeg: {0}", path)
             return True
 
         return False
@@ -148,7 +149,7 @@ class EnvironmentChecker:
 
             self._encoders = encoders
         except Exception as e:
-            logger.error(f"检测 GPU 编码器失败: {e}")
+            log_text(logger, "error", "检测 GPU 编码器失败: {0}", e)
 
         return encoders
 

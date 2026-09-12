@@ -226,6 +226,7 @@ scratch/
 # 临时数据与状态缓存
 # ==============================================================================
 update_manifest_cache.json
+announcements.sqlite3*
 translated*.json
 untranslated*.json
 state/
@@ -233,3 +234,6 @@ temp/
 
 # 运行期迁移标记 (utils/paths.py::commit_migration_marker)
 .migrated_v2
+
+# Local verification screenshots and reports
+/artifacts/

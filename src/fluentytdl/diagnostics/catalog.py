@@ -106,18 +106,14 @@ _ENTRIES: dict[str, tuple[str, str]] = {
         QT_TRANSLATE_NOOP("Diagnostics", "缺少 JS Runtime"),
         QT_TRANSLATE_NOOP(
             "Diagnostics",
-            "yt-dlp 找不到可用的 JavaScript 运行时（Deno/Node/Bun/QuickJS）。"
-            "没有它就无法解出 YouTube 的挑战参数，会缺失大量高画质格式。"
-            "注意这不是 yt-dlp 版本过旧，更新组件不会解决 —— 需要安装 Deno，"
-            "或在设置页的「JS Runtime」里指定可执行文件路径。",
+            "yt-dlp 找不到可用的 JavaScript 运行时，部分 YouTube 格式可能无法获取。请在“设置 → 更新”安装 Deno，或在“设置 → 系统 → 高级”指定已安装运行时的路径。",
         ),
     ),
     "nsig_extraction_failed": (
         QT_TRANSLATE_NOOP("Diagnostics", "nsig 提取失败"),
         QT_TRANSLATE_NOOP(
             "Diagnostics",
-            "yt-dlp 未能解出播放地址的 nsig 参数，部分格式会缺失或下载到一半被拒。"
-            "这几乎总是站点改版导致，更新核心组件即可解决。",
+            "yt-dlp 未能处理播放地址的 nsig 参数，部分格式可能不可用。请检查 yt-dlp 和 JavaScript 运行时的版本与安装状态，然后重试。",
         ),
     ),
     "signature_extraction_failed": (
@@ -135,16 +131,14 @@ _ENTRIES: dict[str, tuple[str, str]] = {
         QT_TRANSLATE_NOOP("Diagnostics", "POT 服务不可用"),
         QT_TRANSLATE_NOOP(
             "Diagnostics",
-            "PO Token 提供程序（bgutil provider）没有响应。缺少 PO Token 时 YouTube 会"
-            "拒绝大部分格式的下载请求。",
+            "PO Token 提供程序没有响应。需要令牌的请求可能失败，请检查 POT 服务和网络连接。",
         ),
     ),
     "pot_token_required": (
         QT_TRANSLATE_NOOP("Diagnostics", "需要 PO Token 验证"),
         QT_TRANSLATE_NOOP(
             "Diagnostics",
-            "服务端要求提供 PO Token 才肯下发播放地址。请确认 POT 服务正在运行，"
-            "并且 Cookie 关联的账号状态正常。",
+            "此请求需要 PO Token。请确认 POT 服务已就绪；若内容需要登录，也请检查 Cookie 和账号权限。",
         ),
     ),
     "extractor_broken": (
@@ -177,15 +171,14 @@ _ENTRIES: dict[str, tuple[str, str]] = {
         QT_TRANSLATE_NOOP("Diagnostics", "人机验证拦截 (Bot 检测)"),
         QT_TRANSLATE_NOOP(
             "Diagnostics",
-            "服务提供商认为当前请求来自自动化工具。通常是节点 IP 触发了风控，"
-            "或者当前 Cookie 已被标记。换一个干净的节点并重新导入 Cookie 往往能恢复。",
+            "平台要求进一步验证此请求。请先检查 yt-dlp 更新和网络连接；若内容需要登录，请重新获取 Cookie。此提示本身不能确定账号或 IP 是否被限制。",
         ),
     ),
     "cookie_expired": (
         QT_TRANSLATE_NOOP("Diagnostics", "Cookie 已失效"),
         QT_TRANSLATE_NOOP(
             "Diagnostics",
-            "账号 Cookie 已过期或被服务端轮换。重新提取一份新的 Cookie 即可继续。",
+            "账号 Cookie 可能已过期或失效。请重新获取 Cookie，并确认账号能访问目标内容后重试。",
         ),
     ),
     "cookie_file_invalid": (
@@ -301,9 +294,7 @@ _ENTRIES: dict[str, tuple[str, str]] = {
         QT_TRANSLATE_NOOP("Diagnostics", "YouTube 限制了可下载的流"),
         QT_TRANSLATE_NOOP(
             "Diagnostics",
-            "YouTube 对本次使用的客户端强制了 SABR 流式传输，带下载链接的格式被丢弃，"
-            "选片器因此挑不到任何格式。这不是画质不存在，换档位没有用。"
-            "启用 POT 引擎（bgutil）或更新 yt-dlp 后重试。",
+            "YouTube 为当前请求返回了 SABR 流，未提供本次下载所需的直接链接。仅切换画质不能解决缺少直接链接的问题。请按提示检查 POT 服务及 yt-dlp 更新后重试；无法据此确定源视频是否有更高画质。",
         ),
     ),
     "input_filter_skipped": (
@@ -394,7 +385,7 @@ _ENTRIES: dict[str, tuple[str, str]] = {
         QT_TRANSLATE_NOOP("Diagnostics", "域名解析失败"),
         QT_TRANSLATE_NOOP(
             "Diagnostics",
-            "无法把域名解析成 IP。可能是本机 DNS 被污染或断网，也可能是代理未生效。",
+            "无法解析目标域名。请检查网络连接、DNS 设置及代理是否正常工作。",
         ),
     ),
     "connection_timeout": (

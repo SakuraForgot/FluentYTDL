@@ -17,6 +17,9 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
+from fluentytdl.utils.localized_log import log_text
+from fluentytdl.utils.ui_text import tr_text
+
 from ..utils.logger import logger
 
 
@@ -48,7 +51,7 @@ class TimeRange:
 
     def __str__(self) -> str:
         if self.end_seconds is None:
-            return f"{self.start_str}-结尾"
+            return tr_text("{0}-结尾", self.start_str)
         return f"{self.start_str}-{self.end_str}"
 
 
@@ -81,7 +84,7 @@ def parse_time_input(text: str) -> float:
     """
     text = text.strip()
     if not text:
-        raise ValueError("时间不能为空")
+        raise ValueError(tr_text("时间不能为空"))
 
     # 格式 1: HH:MM:SS 或 MM:SS
     if ":" in text:
@@ -93,7 +96,7 @@ def parse_time_input(text: str) -> float:
             h, m, s = parts
             return int(h) * 3600 + int(m) * 60 + float(s)
         else:
-            raise ValueError(f"无效的时间格式: {text}")
+            raise ValueError(tr_text("无效的时间格式: {0}", text))
 
     # 格式 2: 1h30m15s
     match = re.match(
@@ -117,7 +120,7 @@ def parse_time_input(text: str) -> float:
     try:
         return float(text)
     except ValueError:
-        raise ValueError(f"无法解析时间: {text}") from None
+        raise ValueError(tr_text("无法解析时间: {0}", text)) from None
 
 
 def parse_time_range(start: str, end: str | None = None) -> TimeRange:
@@ -137,7 +140,7 @@ def parse_time_range(start: str, end: str | None = None) -> TimeRange:
     if end and end.strip():
         end_sec = parse_time_input(end)
         if end_sec <= start_sec:
-            raise ValueError("结束时间必须大于开始时间")
+            raise ValueError(tr_text("结束时间必须大于开始时间"))
 
     return TimeRange(start_seconds=start_sec, end_seconds=end_sec)
 
@@ -284,9 +287,9 @@ def lossless_cut(
             else 0,
         )
         if result.returncode != 0:
-            raise RuntimeError(f"ffmpeg 剪切失败: {result.stderr}")
+            raise RuntimeError(tr_text("ffmpeg 剪切失败: {0}", result.stderr))
     except subprocess.TimeoutExpired as e:
-        raise RuntimeError("剪切操作超时") from e
+        raise RuntimeError(tr_text("剪切操作超时")) from e
 
     return output_path
 
@@ -342,9 +345,9 @@ def extract_frame(
             else 0,
         )
         if result.returncode != 0:
-            raise RuntimeError(f"抓帧失败: {result.stderr}")
+            raise RuntimeError(tr_text("抓帧失败: {0}", result.stderr))
     except subprocess.TimeoutExpired as e:
-        raise RuntimeError("抓帧操作超时") from e
+        raise RuntimeError(tr_text("抓帧操作超时")) from e
 
     return output_path
 
@@ -388,10 +391,10 @@ def get_video_duration(
             else 0,
         )
         if result.returncode != 0:
-            raise RuntimeError(f"获取时长失败: {result.stderr}")
+            raise RuntimeError(tr_text("获取时长失败: {0}", result.stderr))
         return float(result.stdout.strip())
     except (subprocess.TimeoutExpired, ValueError) as e:
-        raise RuntimeError(f"获取视频时长失败: {e}") from e
+        raise RuntimeError(tr_text("获取视频时长失败: {0}", e)) from e
 
 
 def generate_preview_frames(
@@ -445,6 +448,6 @@ def generate_preview_frames(
             )
             frames.append(frame_path)
         except RuntimeError as e:
-            logger.warning(f"抓帧失败 ({time_sec}s): {e}")
+            log_text(logger, "warning", "抓帧失败 ({0}s): {1}", time_sec, e)
 
     return frames

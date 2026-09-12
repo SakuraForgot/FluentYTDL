@@ -11,6 +11,10 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
+from PySide6.QtCore import QT_TRANSLATE_NOOP
+
+from fluentytdl.utils.ui_text import tr_text
+
 # ── 解析结果类型 ──────────────────────────────────────────
 
 
@@ -164,25 +168,25 @@ class YtDlpOutputParser:
     # ExtractAudio (完成)」这种半英文状态就是这么来的。长键一并留着：不命中即死键，
     # 代价为零，而版本改回长名时它就是兜底。
     _PP_NAMES: dict[str, str] = {
-        "MoveFiles": "移动文件",
-        "Merger": "合并音视频",
-        "EmbedThumbnail": "嵌入封面",
-        "EmbedSubtitle": "嵌入字幕",
-        "Metadata": "嵌入元数据",
-        "ThumbnailsConvertor": "转换封面格式",
-        "ExtractAudio": "提取音频",
-        "VideoConvertor": "转换视频格式",
-        "SubtitlesConvertor": "转换字幕格式",
-        "SponsorBlock": "跳过赞助片段",
-        "ModifyChapters": "修改章节",
+        "MoveFiles": QT_TRANSLATE_NOOP("RuntimeText", "移动文件"),
+        "Merger": QT_TRANSLATE_NOOP("RuntimeText", "合并音视频"),
+        "EmbedThumbnail": QT_TRANSLATE_NOOP("RuntimeText", "嵌入封面"),
+        "EmbedSubtitle": QT_TRANSLATE_NOOP("RuntimeText", "嵌入字幕"),
+        "Metadata": QT_TRANSLATE_NOOP("RuntimeText", "嵌入元数据"),
+        "ThumbnailsConvertor": QT_TRANSLATE_NOOP("RuntimeText", "转换封面格式"),
+        "ExtractAudio": QT_TRANSLATE_NOOP("RuntimeText", "提取音频"),
+        "VideoConvertor": QT_TRANSLATE_NOOP("RuntimeText", "转换视频格式"),
+        "SubtitlesConvertor": QT_TRANSLATE_NOOP("RuntimeText", "转换字幕格式"),
+        "SponsorBlock": QT_TRANSLATE_NOOP("RuntimeText", "跳过赞助片段"),
+        "ModifyChapters": QT_TRANSLATE_NOOP("RuntimeText", "修改章节"),
         # ── 长拼写兜底（当前版本不会命中）──
-        "FFmpegMerger": "合并音视频",
-        "FFmpegMetadata": "嵌入元数据",
-        "FFmpegThumbnailsConvertor": "转换封面格式",
-        "FFmpegExtractAudio": "提取音频",
-        "FFmpegVideoConvertor": "转换视频格式",
-        "FFmpegEmbedSubtitle": "嵌入字幕",
-        "FFmpegSubtitlesConvertor": "转换字幕格式",
+        "FFmpegMerger": QT_TRANSLATE_NOOP("RuntimeText", "合并音视频"),
+        "FFmpegMetadata": QT_TRANSLATE_NOOP("RuntimeText", "嵌入元数据"),
+        "FFmpegThumbnailsConvertor": QT_TRANSLATE_NOOP("RuntimeText", "转换封面格式"),
+        "FFmpegExtractAudio": QT_TRANSLATE_NOOP("RuntimeText", "提取音频"),
+        "FFmpegVideoConvertor": QT_TRANSLATE_NOOP("RuntimeText", "转换视频格式"),
+        "FFmpegEmbedSubtitle": QT_TRANSLATE_NOOP("RuntimeText", "嵌入字幕"),
+        "FFmpegSubtitlesConvertor": QT_TRANSLATE_NOOP("RuntimeText", "转换字幕格式"),
     }
 
     def parse_line(self, line: str) -> ParsedLine:
@@ -344,15 +348,19 @@ class YtDlpOutputParser:
         if len(parts) >= 3 and parts[1] == "postprocess":
             status = parts[2] if len(parts) > 2 else ""
             pp = parts[3] if len(parts) > 3 else ""
-            pp_display = self._PP_NAMES.get(pp, pp) if pp else "处理"
-            status_names = {"started": "开始", "processing": "处理中", "finished": "完成"}
+            pp_display = tr_text(self._PP_NAMES.get(pp, pp)) if pp else tr_text("处理")
+            status_names = {
+                "started": tr_text("开始"),
+                "processing": tr_text("处理中"),
+                "finished": tr_text("完成"),
+            }
             status_display = status_names.get(status, status) if status else ""
             if pp_display and status_display:
-                msg = f"后处理: {pp_display} ({status_display})"
+                msg = tr_text("后处理: {0} ({1})", pp_display, status_display)
             elif pp_display:
-                msg = f"后处理: {pp_display}..."
+                msg = tr_text("后处理: {0}...", pp_display)
             else:
-                msg = "后处理中..."
+                msg = tr_text("后处理中...")
             return ParsedLine(
                 type="postprocess",
                 postprocessor=pp,

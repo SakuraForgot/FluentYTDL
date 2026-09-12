@@ -46,6 +46,8 @@ from qfluentwidgets import (
     SubtitleLabel,
 )
 
+from fluentytdl.utils.localized_log import log_text
+
 from ..utils.logger import logger
 from .delegates.download_item_delegate import DownloadItemDelegate
 from .models.download_list_model import DownloadListModel
@@ -1193,15 +1195,15 @@ class UnifiedTaskListPage(QWidget):
                     self.tr("没有已完成的任务"),
                     self.tr("完成的任务会显示在这里"),
                 ),
-                "failed": ("❌", self.tr("没有失败的任务"), self.tr("太棒了，一切顺利！")),
+                "failed": ("❌", self.tr("没有失败的任务"), self.tr("当前没有失败的任务")),
                 "queued": ("📋", self.tr("没有排队中的任务"), self.tr("所有任务已开始")),
                 "paused": ("⏸️", self.tr("没有暂停的任务"), self.tr("所有任务运行中")),
                 "quality_guard": (
                     "🛡️",
                     self.tr("没有被质量守卫拦下的任务"),
-                    self.tr("画质都符合预期"),
+                    self.tr("当前没有因画质检查而暂停的任务"),
                 ),
-                "cancelled": ("🚫", self.tr("没有已取消的任务"), self.tr("没有中途放弃的下载")),
+                "cancelled": ("🚫", self.tr("没有已取消的任务"), self.tr("当前没有已取消的任务")),
                 # 存在性检查是流式回来的，所以这里不能写死「都还在」的结论
                 "missing": (
                     "🔍",
@@ -1281,7 +1283,7 @@ class UnifiedTaskListPage(QWidget):
                 try:
                     self.model.remove_task(row)
                 except Exception:
-                    logger.exception(f"从模型移除第 {row} 行失败")
+                    log_text(logger, "exception", "从模型移除第 {0} 行失败", row)
 
     def rebind_worker(self, source_row: int, worker) -> None:
         """替换某一行的 worker 并重绑信号。

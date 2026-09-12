@@ -25,7 +25,7 @@ import zipfile
 from collections import deque
 from pathlib import Path
 
-from PySide6.QtCore import Slot
+from PySide6.QtCore import Qt, QTimer, Signal, Slot
 from PySide6.QtGui import QColor, QFont, QTextCharFormat, QTextCursor
 from PySide6.QtWidgets import (
     QHBoxLayout,
@@ -47,10 +47,14 @@ from qfluentwidgets import (
     ToolTipPosition,
 )
 
+from ....utils.localized_log import render_record
+from ....utils.log_history import match_display_records, read_display_records
+from ....utils.log_runtime import SESSION_ID
 from ....utils.log_signal_handler import log_signal_handler
 from ....utils.logger import LOG_DIR
 from ..common.custom_info_bar import InfoBar
 from ..common.event_timeline import EventTimelineView
+from ..common.log_jobs import LogJobs
 from ..common.standalone_window import StandaloneWindow
 
 # 日志级别颜色映射
@@ -81,6 +85,8 @@ _FILE_LINE_RE = re.compile(
 class LogViewerWindow(StandaloneWindow):
     """实时日志查看器（独立窗口）"""
 
+    export_requested = Signal(dict)
+
     MAX_LINES = 1000  # 缓冲区与文本页共同的最大行数
 
     #: 再小四列就排不开了。`SIZE_BOUNDS` 的下限（760×520）是"我替你选的初始大小"，
@@ -92,6 +98,8 @@ class LogViewerWindow(StandaloneWindow):
         self.setWindowTitle(self.tr("运行日志"))
 
         self._log_buffer: deque[tuple[str, str, str, str]] = deque(maxlen=self.MAX_LINES)
+        self._raw_messages: dict[tuple[str, str], str] = {}
+        self._record_ids: deque[str] = deque(maxlen=self.MAX_LINES)
         self._current_filter_level = self.tr("全部")
         self._current_search = ""
         self._auto_scroll = True
@@ -99,14 +107,160 @@ class LogViewerWindow(StandaloneWindow):
 
         self._setup_ui()
         self._connect_signals()
-        # 先回填历史、再接实时信号：反过来的话，这中间产生的日志会排在历史前面，
-        # 而时间线页更糟 —— 同一条事件可能既在 JSONL 里又从信号来一遍。
-        self._load_existing_logs()
-        self.timelineView.load_recent()
-        # 回填完再套一次筛选。少了这一句，下拉框写着一个级别、树里却是全量事件 ——
-        # 用户得先随便动一下控件才会一致，在此之前界面在说谎。
         self.timelineView.apply_filter(self._should_show)
+        self._jobs = LogJobs(self)
+        self._jobs.history_ready.connect(self._on_history_ready, Qt.ConnectionType.QueuedConnection)
+        self._jobs.export_ready.connect(self._on_export_ready, Qt.ConnectionType.QueuedConnection)
+        self.export_requested.connect(self._jobs.export)
+        self._jobs.export_progress.connect(
+            self._on_export_progress, Qt.ConnectionType.QueuedConnection
+        )
+        self._generation = 0
+        self._history_loading = False
+        self._history_buffer = deque(maxlen=4000)
+        self._render_pending = deque(maxlen=4000)
+        self._render_timer = QTimer(self)
+        self._render_timer.setInterval(1)
+        self._render_timer.timeout.connect(self._render_next)
+        self._batching = False
+        self._cursor = None
+        self._range_since = self._range_until = None
+        self._loaded_count = 0
+        self._timeline_shown = False
+        self._debounce = QTimer(self)
+        self._debounce.setSingleShot(True)
+        self._debounce.setInterval(200)
+        self._debounce.timeout.connect(self._query_history)
         self._start_log_capture()
+        QTimer.singleShot(0, self._query_history)
+
+    def _query_history(self, older=False):
+        from datetime import datetime
+
+        self._generation += 1
+        self._history_loading = True
+        self._history_buffer.clear()
+        self.olderBtn.setEnabled(False)
+        try:
+            since = (
+                datetime.fromisoformat(self.sinceEdit.text()).timestamp()
+                if self.sinceEdit.text()
+                else None
+            )
+            until = (
+                datetime.fromisoformat(self.untilEdit.text()).timestamp()
+                if self.untilEdit.text()
+                else None
+            )
+        except ValueError:
+            self.statusLabel.setText(self.tr("时间格式：YYYY-MM-DD HH:MM:SS"))
+            self._history_loading = False
+            return
+        self._range_since, self._range_until = since, until
+        self._jobs.load(
+            self._generation,
+            LOG_DIR,
+            before=self._cursor if older else None,
+            limit=HISTORY_LINES,
+            session=SESSION_ID if self.sessionCombo.currentIndex() == 0 else "",
+            query=self._current_search,
+            since=since,
+            until=until,
+        )
+
+    @Slot(int, dict)
+    def _on_history_ready(self, generation, page):
+        if generation != self._generation:
+            return
+        self._history_loading = False
+        buffered = list(self._history_buffer)
+        self._history_buffer.clear()
+        self._clear_log()
+        self._cursor = page.get("before")
+        self.olderBtn.setEnabled(bool(page.get("has_more")))
+        self._on_record_batch(page.get("records", []) + buffered)
+        self._loaded_count = page.get("count", 0)
+        self.statusLabel.setText(
+            self.tr("已加载部分历史：{} 条；日志目录：{}").format(self._loaded_count, LOG_DIR)
+        )
+        if page.get("error"):
+            self.statusLabel.setText(self.tr("历史读取失败：{}").format(page["error"]))
+
+    @Slot(list)
+    def _on_record_batch(self, records):
+        if self._history_loading:
+            if len(self._history_buffer) + len(records) > self._history_buffer.maxlen:
+                from ....utils.log_runtime import record_failure
+
+                record_failure("history_handoff_overflow")
+            self._history_buffer.extend(records)
+            return
+        if len(records) > 75:
+            if len(self._render_pending) + len(records) > self._render_pending.maxlen:
+                from ....utils.log_runtime import record_failure
+
+                record_failure("render_queue_overflow")
+            self._render_pending.extend(records)
+            self._render_timer.start()
+            return
+        self._batching = True
+        text_scroll, tree_scroll = self._auto_scroll, self.timelineView._auto_scroll
+        self._auto_scroll = self.timelineView._auto_scroll = False
+        self.logView.setUpdatesEnabled(False)
+        self.timelineView.setUpdatesEnabled(False)
+        try:
+            for record in records:
+                stamp = float(record.get("_ts") or 0)
+                if self._range_since is not None and stamp < self._range_since:
+                    continue
+                if self._range_until is not None and stamp > self._range_until:
+                    continue
+                if self.sessionCombo.currentIndex() == 0 and record.get("session") != SESSION_ID:
+                    continue
+                identity = record.get("id")
+                if identity and identity in self._record_ids:
+                    continue
+                self._on_display_record(record)
+                event = record.get("event")
+                if isinstance(event, dict):
+                    self._on_event_received(
+                        dict(
+                            event,
+                            _event_id=identity,
+                            _ts=record.get("_ts"),
+                            _time=record.get("time"),
+                            _level=record.get("level"),
+                        )
+                    )
+        finally:
+            self.logView.setUpdatesEnabled(True)
+            self.timelineView.setUpdatesEnabled(True)
+            self._batching = False
+            self._auto_scroll, self.timelineView._auto_scroll = text_scroll, tree_scroll
+        if text_scroll:
+            self.logView.verticalScrollBar().setValue(self.logView.verticalScrollBar().maximum())
+        if tree_scroll and self.timelineView._leaves:
+            self.timelineView.scrollToItem(self.timelineView._leaves[-1])
+        self._update_line_count()
+        self.summaryLabel.setText(
+            self.timelineView.selection_summary() or self.tr("当前会话") + ": " + SESSION_ID[:8]
+        )
+
+    def _render_next(self):
+        batch = [self._render_pending.popleft() for _ in range(min(75, len(self._render_pending)))]
+        if not self._render_pending:
+            self._render_timer.stop()
+        self._on_record_batch(batch)
+
+    @Slot(dict)
+    def _on_health_changed(self, health):
+        if health.get("total"):
+            self.statusLabel.setText(
+                self.tr("日志系统异常 {} 次：{}").format(
+                    health["total"],
+                    str(health.get("failures", {})) + " " + health.get("last_error", ""),
+                )
+            )
 
     # ── 历史回填 ─────────────────────────────────────────────
 
@@ -129,7 +283,10 @@ class LogViewerWindow(StandaloneWindow):
                 entries[:0] = self._parse_lines(lines)  # 旧文件排在前面
                 budget -= len(lines)
 
-            for time_str, level, module, msg in entries:
+            records = read_display_records(Path(LOG_DIR), HISTORY_LINES)
+            self._record_ids.extend(record["id"] for record in records)
+            for (time_str, level, module, msg), raw in match_display_records(entries, records):
+                self._remember_raw(level, msg, raw)
                 self._log_buffer.append((time_str, level, module, msg))
                 if self._should_show(level, msg):
                     self._append_log_line(time_str, level, module, msg)
@@ -237,7 +394,7 @@ class LogViewerWindow(StandaloneWindow):
 
         # 搜索框
         self.searchEdit = SearchLineEdit()
-        self.searchEdit.setPlaceholderText(self.tr("搜索日志..."))
+        self.searchEdit.setPlaceholderText(self.tr("搜索任务 / run / 错误码 / 日志"))
         self.searchEdit.setFixedWidth(200)
         toolbar_layout.addWidget(self.searchEdit)
 
@@ -245,7 +402,7 @@ class LogViewerWindow(StandaloneWindow):
 
         # 导出 bug 包（只在时间线页有意义：要先有选中的任务）
         self.exportBtn = ToolButton(FluentIcon.ZIP_FOLDER)
-        self.exportBtn.setToolTip(self.tr("导出选中任务的 bug 包"))
+        self.exportBtn.setToolTip(self.tr("导出所选任务的诊断包"))
         self.exportBtn.installEventFilter(
             ToolTipFilter(self.exportBtn, showDelay=300, position=ToolTipPosition.BOTTOM)
         )
@@ -269,6 +426,20 @@ class LogViewerWindow(StandaloneWindow):
         toolbar_layout.addWidget(self.openDirBtn)
 
         self.viewLayout.addWidget(toolbar)
+        filters = QHBoxLayout()
+        self.sessionCombo = ComboBox()
+        self.sessionCombo.addItems([self.tr("当前会话"), self.tr("全部历史")])
+        self.olderBtn = ToolButton(FluentIcon.HISTORY)
+        self.olderBtn.setToolTip(self.tr("加载更早记录"))
+        self.sinceEdit = SearchLineEdit()
+        self.sinceEdit.setPlaceholderText(self.tr("开始时间 YYYY-MM-DD HH:MM:SS"))
+        self.untilEdit = SearchLineEdit()
+        self.untilEdit.setPlaceholderText(self.tr("结束时间 YYYY-MM-DD HH:MM:SS"))
+        filters.addWidget(self.sessionCombo)
+        filters.addWidget(self.sinceEdit)
+        filters.addWidget(self.untilEdit)
+        filters.addWidget(self.olderBtn)
+        self.viewLayout.addLayout(filters)
 
         # 日志显示区。这一页刻意保留控制台配色：`LEVEL_COLORS` 那六个值是照着深色
         # 背景调的，跟着主题变浅只会让 DEBUG 的灰字消失。新的时间线页走 isDarkTheme()。
@@ -294,6 +465,13 @@ class LogViewerWindow(StandaloneWindow):
 
         # 任务时间线
         self.timelineView = EventTimelineView(self)
+        self.summaryLabel = CaptionLabel("")
+        self.summaryLabel.setWordWrap(True)
+        self.summaryLabel.setTextColor(QColor(96, 96, 96), QColor(210, 210, 210))
+        self.viewLayout.addWidget(self.summaryLabel)
+        self.timelineView.itemSelectionChanged.connect(
+            lambda: self.summaryLabel.setText(self.timelineView.selection_summary())
+        )
         self.timelineView.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
         self.stack = QStackedWidget(self)
@@ -326,14 +504,18 @@ class LogViewerWindow(StandaloneWindow):
         self.exportBtn.clicked.connect(self._export_bundle)
         self.viewSwitcher.currentItemChanged.connect(self._on_view_changed)
 
+        self.sessionCombo.currentIndexChanged.connect(lambda: self._query_history())
+        self.olderBtn.clicked.connect(lambda: self._query_history(older=True))
+        self.sinceEdit.textChanged.connect(lambda: self._debounce.start())
+        self.untilEdit.textChanged.connect(lambda: self._debounce.start())
         # 滚动检测（用户滚动时暂停自动滚动）
         self.logView.verticalScrollBar().valueChanged.connect(self._on_scroll)
 
     def _start_log_capture(self):
         """开始捕获日志"""
-        log_signal_handler.install()
-        log_signal_handler.log_received.connect(self._on_log_received)
-        log_signal_handler.event_received.connect(self._on_event_received)
+        log_signal_handler.acquire()
+        log_signal_handler.records_received.connect(self._on_record_batch)
+        log_signal_handler.health_changed.connect(self._on_health_changed)
         self._capturing = True
 
     def _stop_log_capture(self):
@@ -348,13 +530,15 @@ class LogViewerWindow(StandaloneWindow):
             return
         self._capturing = False
         for signal, slot in (
-            (log_signal_handler.log_received, self._on_log_received),
-            (log_signal_handler.event_received, self._on_event_received),
+            (log_signal_handler.records_received, self._on_record_batch),
+            (log_signal_handler.health_changed, self._on_health_changed),
         ):
             try:
                 signal.disconnect(slot)
             except RuntimeError:
                 pass  # C++ 侧已经没了
+
+        log_signal_handler.release()
 
     # ── 文本页 ───────────────────────────────────────────────
 
@@ -366,6 +550,30 @@ class LogViewerWindow(StandaloneWindow):
         # 检查是否需要显示
         if self._should_show(level, message):
             self._append_log_line(time, level, module, message)
+
+    def _remember_raw(self, level: str, display: str, raw: str) -> None:
+        self._raw_messages[(level, display)] = raw
+        while len(self._raw_messages) > self.MAX_LINES:
+            self._raw_messages.pop(next(iter(self._raw_messages)))
+
+    @Slot(dict)
+    def _on_display_record(self, record: dict):
+        identity = record.get("id")
+        if identity and identity in self._record_ids:
+            return
+        if identity:
+            self._record_ids.append(identity)
+        display = render_record(record)
+        if record.get("exception"):
+            display += "\n" + record["exception"]
+        level = record.get("level", "INFO")
+        import json
+
+        searchable = (
+            record.get("raw", "") + "\n" + json.dumps(record.get("event") or {}, ensure_ascii=False)
+        )
+        self._remember_raw(level, display, searchable)
+        self._on_log_received(record.get("time", ""), level, record.get("module", ""), display)
 
     def _should_show(self, level: str, message: str) -> bool:
         """检查日志是否应该显示"""
@@ -381,7 +589,11 @@ class LogViewerWindow(StandaloneWindow):
 
         # 搜索过滤
         if self._current_search:
-            if self._current_search.lower() not in message.lower():
+            raw = self._raw_messages.get((level, message), "")
+            if (
+                self._current_search.lower() not in message.lower()
+                and self._current_search.lower() not in raw.lower()
+            ):
                 return False
 
         return True
@@ -410,7 +622,8 @@ class LogViewerWindow(StandaloneWindow):
             self.logView.verticalScrollBar().setValue(self.logView.verticalScrollBar().maximum())
 
         # 更新行数
-        self._update_line_count()
+        if not getattr(self, "_batching", False):
+            self._update_line_count()
 
     def _update_line_count(self):
         """更新计数显示（跟随当前页面：文本页数行，时间线页数事件）"""
@@ -436,28 +649,37 @@ class LogViewerWindow(StandaloneWindow):
         """切页：导出按钮只在时间线页出现（它要按选中的任务导）"""
         self.stack.setCurrentIndex(1 if key == "timeline" else 0)
         self.exportBtn.setVisible(key == "timeline")
+        if key == "timeline" and not self._timeline_shown:
+            self._timeline_shown = True
+            self.timelineView.setColumnWidth(0, 310)
+            self.timelineView.setColumnWidth(2, 230)
         self._update_line_count()
 
     @Slot()
     def _export_bundle(self):
         """把选中任务的现场打成 zip（JSONL + raw 原文 + 配置快照 + 工具链版本）"""
-        identity = self.timelineView.selected_identity()
-        if identity is None:
+        selection = self.timelineView.selected_scope()
+        if selection is None:
             InfoBar.warning(
                 title=self.tr("请先选中一个任务"),
-                content=self.tr("在时间线里点一下 task 节点或它下面的任意事件"),
+                content=self.tr("选择任务或解析流程后导出"),
                 position=InfoBarPosition.TOP,
                 parent=self,
             )
             return
+        self.exportBtn.setEnabled(False)
+        self.export_requested.emit(selection)
 
-        task_id, flow_id = identity
-        # 函数级 import：`bundle` 只在这一处用到，且会拉起 zipfile —— 没必要让每次
-        # 打开日志窗口都为它付启动开销。
-        from ....observability.bundle import export_bug_bundle
+    @Slot(dict)
+    def _on_export_progress(self, progress):
+        self.statusLabel.setText(
+            self.tr("正在导出诊断包：{} 个文件").format(progress.get("files", 0))
+        )
 
-        path = export_bug_bundle(task_id, flow_id=flow_id or None)
-        if path is None:
+    @Slot(dict)
+    def _on_export_ready(self, result):
+        self.exportBtn.setEnabled(True)
+        if not result.get("path"):
             InfoBar.error(
                 title=self.tr("导出失败"),
                 content=self.tr("详情见日志"),
@@ -465,12 +687,14 @@ class LogViewerWindow(StandaloneWindow):
                 parent=self,
             )
             return
-        InfoBar.success(
-            title=self.tr("已导出 bug 包"),
-            content=f"logs/bundles/{path.name}",
-            duration=4000,
+        partial = result.get("manifest", {}).get("partial", False)
+        notify = InfoBar.warning if partial else InfoBar.success
+        notify(
+            title=self.tr("诊断包部分导出") if partial else self.tr("诊断包已导出"),
+            content=result["path"],
             position=InfoBarPosition.TOP,
             parent=self,
+            duration=5000,
         )
 
     # ── 过滤 / 清屏 ──────────────────────────────────────────
@@ -485,7 +709,7 @@ class LogViewerWindow(StandaloneWindow):
     def _on_search_changed(self, text: str):
         """搜索变化"""
         self._current_search = text
-        self._refresh_display()
+        self._debounce.start()
 
     def _refresh_display(self):
         """刷新显示（重新应用过滤）——两页共用同一个谓词"""
@@ -501,7 +725,11 @@ class LogViewerWindow(StandaloneWindow):
     @Slot()
     def _clear_log(self):
         """清屏"""
+        self._render_pending.clear()
+        self._render_timer.stop()
         self._log_buffer.clear()
+        self._raw_messages.clear()
+        self._record_ids.clear()
         self.logView.clear()
         self.timelineView.clear_all()
         self._update_line_count()
@@ -533,4 +761,7 @@ class LogViewerWindow(StandaloneWindow):
         `enqueue=True`（跨线程），队列里可能还压着几条要投给已死控件的记录。
         """
         self._stop_log_capture()
+        self._jobs.cancel()
+        self._debounce.stop()
+        self._render_timer.stop()
         super().closeEvent(event)

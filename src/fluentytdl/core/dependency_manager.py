@@ -4,16 +4,14 @@ import json
 import os
 import re
 import shutil
-import ssl
 import subprocess
 import sys
-import time
-import urllib.error
-import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 
 from PySide6.QtCore import QObject, QThread, QTimer, Signal
+
+from fluentytdl.utils.localized_log import log_text
 
 try:
     import psutil
@@ -227,25 +225,20 @@ class DependencyManager(QObject):
                 extra for extra in info.extra_exes if shutil.which(Path(extra).stem) is None
             ]
             if missing_extra:
-                logger.debug(
-                    f"{component_key}: PATH 上找到 {found}，但缺少 {missing_extra}，不计为可用"
+                log_text(
+                    logger,
+                    "debug",
+                    "{0}: PATH 上找到 {1}，但缺少 {2}，不计为可用",
+                    component_key,
+                    found,
+                    missing_extra,
                 )
                 continue
             return Path(found), "path"
 
         return None, ""
 
-    # 这里以前有个 `get_mirror_url()`，把下载地址拼到 `https://mirror.ghproxy.com/`
-    # 前面。那个域名早就解析不了了，所以只要用户把「组件更新源」切到 ghproxy，
-    # bin 工具的下载就必然失败 —— 它从来没成功过一次，删掉比换个新域名诚实。
-    #
-    # `component_update_manager._get_mirror_url()`（ghfast.top）是另一回事：那条是
-    # app-core 归档和 update-manifest.json 的真实通路，活着且有测试覆盖，别动。
-    #
-    # 顺带一个容易误解的事实：`api.github.com` 本来就不在 ghproxy 的代理范围内，
-    # 所以 bin 工具的**版本检查**从来不受这个设置影响。
-
-    def check_update(self, component_key: str, silent: bool = False):
+    def check_update(self, component_key: str, silent: bool = False, check_session=None):
         """Async check for updates.
 
         ``silent=True`` 表示这是自动（启动/定时）触发的检查：结果 dict 里会带上
@@ -260,11 +253,14 @@ class DependencyManager(QObject):
             # 用户手动点了检查 —— 即使有一次静默检查正在飞，也按手动对待
             self._silent_checks.discard(component_key)
 
-        worker = UpdateCheckerWorker(component_key, self)
+        existing = self._workers.get(f"check_{component_key}")
+        if existing and existing.isRunning():
+            return
+        worker = UpdateCheckerWorker(component_key, self, check_session)
         worker.finished_signal.connect(self._on_check_finished)
         worker.error_signal.connect(self.check_error)
-        worker.start()
         self._workers[f"check_{component_key}"] = worker
+        worker.start()
         self.check_started.emit(component_key)
 
     def _on_check_finished(self, key, result):
@@ -409,7 +405,7 @@ class DependencyManager(QObject):
                 invalidate_yt_dlp_exe_cache()
                 sync_pot_plugins_to_ytdlp()
             except Exception as e:  # noqa: BLE001 - 安装已经成功，善后失败不该反转结论
-                logger.warning(f"yt-dlp 安装后置处理失败: {e}")
+                log_text(logger, "warning", "yt-dlp 安装后置处理失败: {0}", e)
 
         _emit("stage", code="component_install_finished", component=key)
         self.install_finished.emit(key)
@@ -424,111 +420,31 @@ class DependencyManager(QObject):
         if worker:
             worker.deleteLater()
 
-    def _build_opener(self) -> urllib.request.OpenerDirector:
-        """
-        Builds a urllib OpenerDirector with proxy settings applied from the application config.
-        Also explicitly builds an SSL context that tries to use default verification,
-        but falls back to unverified if verification fails (to handle extremely broken setups).
-        """
-        handlers = []
-
-        # 1. Proxy Handler
-        proxy_url = config_manager.get("proxy_url")
-        if config_manager.get("proxy_mode") in ("http", "socks5") and proxy_url:
-            # urllib can handle http/https proxies.
-            # Note: For SOCKS5, urllib natively might not support it without PySocks,
-            # but typical standard SOCKS5 proxies can often be accessed if specified.
-            # We'll set it for both http and https as requests did.
-            proxies = {"http": proxy_url, "https": proxy_url}
-            handlers.append(urllib.request.ProxyHandler(proxies))
-
-        # 2. SSL Handler (use system certificates)
-        # Windows Python automatically loads system certs into default context.
-        ctx = ssl.create_default_context()
-        handlers.append(urllib.request.HTTPSHandler(context=ctx))
-
-        opener = urllib.request.build_opener(*handlers)
-        return opener
-
     def _fetch_json(self, url: str) -> dict:
-        """
-        Fetches a JSON payload from the given URL using the configured opener.
-        Handles basic SSL errors by attempting a fallback if the default system certs still fail.
-
-        带一层 `_API_CACHE_TTL_SEC` 的进程内缓存：现在每次检查都要真的打一次
-        api.github.com（清单不再决定"最新是什么"），未认证配额只有 60 次/小时，
-        用户在设置页连点五个组件的「检查更新」很容易打光。缓存不落盘。
-        """
-        cached = self._api_cache.get(url)
-        if cached is not None and (time.monotonic() - cached[0]) < _API_CACHE_TTL_SEC:
-            return cached[1]
-
-        data = self._fetch_json_uncached(url)
-        self._api_cache[url] = (time.monotonic(), data)
-        return data
+        return self._fetch_json_uncached(url)
 
     def _fetch_json_uncached(self, url: str) -> dict:
-        opener = self._build_opener()
-        req = urllib.request.Request(url, headers={"User-Agent": "FluentYTDL/DependencyManager"})
+        from .update_transport import configured_transport
 
-        try:
-            with opener.open(req, timeout=10) as response:
-                return json.loads(response.read().decode("utf-8"))
-        except urllib.error.URLError as e:
-            # If we hit an SSL verification error, fallback to unverified context as a last resort
-            if isinstance(e.reason, ssl.SSLCertVerificationError):
-                logger.warning(
-                    f"SSL verification failed for {url}. Attempting fallback with unverified context."
-                )
-
-                # Rebuild opener with unverified context
-                handlers = []
-                proxy_url = config_manager.get("proxy_url")
-                if config_manager.get("proxy_mode") in ("http", "socks5") and proxy_url:
-                    handlers.append(
-                        urllib.request.ProxyHandler({"http": proxy_url, "https": proxy_url})
-                    )
-
-                unverified_ctx = ssl._create_unverified_context()
-                handlers.append(urllib.request.HTTPSHandler(context=unverified_ctx))
-
-                fallback_opener = urllib.request.build_opener(*handlers)
-                with fallback_opener.open(req, timeout=10) as fb_response:
-                    return json.loads(fb_response.read().decode("utf-8"))
-            raise
+        return configured_transport().get_json(url)
 
     def _fetch_text(self, url: str) -> str:
-        """Fetches raw text payload from the given URL using the configured opener."""
-        opener = self._build_opener()
-        req = urllib.request.Request(url, headers={"User-Agent": "FluentYTDL/DependencyManager"})
+        from .update_transport import configured_transport
 
-        try:
-            with opener.open(req, timeout=10) as response:
-                return response.read().decode("utf-8", errors="ignore")
-        except urllib.error.URLError as e:
-            if isinstance(e.reason, ssl.SSLCertVerificationError):
-                handlers = []
-                proxy_url = config_manager.get("proxy_url")
-                if config_manager.get("proxy_mode") in ("http", "socks5") and proxy_url:
-                    handlers.append(
-                        urllib.request.ProxyHandler({"http": proxy_url, "https": proxy_url})
-                    )
-                unverified_ctx = ssl._create_unverified_context()
-                handlers.append(urllib.request.HTTPSHandler(context=unverified_ctx))
-                fallback_opener = urllib.request.build_opener(*handlers)
-                with fallback_opener.open(req, timeout=10) as fb_response:
-                    return fb_response.read().decode("utf-8", errors="ignore")
-            raise
+        return configured_transport().get_text(url)
 
 
 class UpdateCheckerWorker(QThread):
     finished_signal = Signal(str, dict)
     error_signal = Signal(str, str)
 
-    def __init__(self, key: str, manager: DependencyManager):
+    def __init__(self, key: str, manager: DependencyManager, check_session=None):
         super().__init__()
         self.key = key
         self.manager = manager
+        from .update_transport import configured_check
+
+        self.check_session = check_session or configured_check()
 
     @staticmethod
     def _parse_version_tuple(ver: str) -> tuple[int, ...] | None:
@@ -770,7 +686,7 @@ class UpdateCheckerWorker(QThread):
                     manifest_version=m_version,
                 )
                 return remote
-            if not m_url:
+            if not m_url or m_url != remote.url:
                 # 清单条目版本对得上但没带下载地址 —— 构建侧还没写 asset_url，
                 # 或者这个组件（ffmpeg）本来就只能走 API。不是错误，但值得记一条。
                 _emit(
@@ -804,43 +720,12 @@ class UpdateCheckerWorker(QThread):
         return self._overlay_manifest(key, remote)
 
     def _fetch_remote_from_api(self, key: str) -> RemoteVersion:
-        url = ""
-        channel_label = ""
-        if key == "yt-dlp":
-            channel = str(config_manager.get("ytdlp_channel", "stable")).strip()
-            channel_label = channel
-            if channel == "nightly":
-                url = "https://api.github.com/repos/yt-dlp/yt-dlp-nightly-builds/releases/latest"
-            elif channel == "master":
-                url = "https://api.github.com/repos/yt-dlp/yt-dlp-master-builds/releases/latest"
-            else:
-                url = "https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest"
-        elif key == "deno":
-            url = "https://api.github.com/repos/denoland/deno/releases/latest"
-        elif key == "ffmpeg":
-            url = "https://api.github.com/repos/yt-dlp/FFmpeg-Builds/releases/latest"
-        elif key == "pot-provider":
-            url = (
-                "https://api.github.com/repos/jim60105/bgutil-ytdlp-pot-provider-rs/releases/latest"
-            )
-        elif key == "atomicparsley":
-            url = "https://api.github.com/repos/wez/atomicparsley/releases/latest"
-        else:
-            return RemoteVersion()
-
-        try:
-            data = self.manager._fetch_json(url)
-        except Exception as e:
-            logger.error(f"Failed to fetch release info for {key}: {e}")
-            _emit(
-                "signal",
-                level="WARNING",
-                code="component_api_fetch_failed",
-                component=key,
-                error_type=type(e).__name__,
-                url=_sanitize_url(url),
-            )
-            return RemoteVersion(channel=channel_label)
+        channel_label = (
+            str(config_manager.get("ytdlp_channel", "stable")) if key == "yt-dlp" else ""
+        )
+        if channel_label not in {"", "stable", "nightly", "master"}:
+            channel_label = "stable"
+        data = self.check_session.release(key, channel_label or "stable")
 
         if key == "yt-dlp":
             tag = data.get("tag_name", "unknown")
@@ -1021,7 +906,7 @@ class DownloaderWorker(QObject):
         self._stall_timer.timeout.connect(self._on_stalled)
 
     def _on_stalled(self):
-        logger.warning(f"组件下载无响应超时，终止 worker: {self.key}")
+        log_text(logger, "warning", "组件下载无响应超时，终止 worker: {0}", self.key)
         self._emit_error(ERR_DOWNLOAD_STALLED)
         try:
             self.process.kill()
@@ -1061,7 +946,7 @@ class DownloaderWorker(QObject):
 
         self.process.start(exe, args)
         if not self.process.waitForStarted():
-            logger.error(f"启动更新 worker 失败: {self.process.errorString()}")
+            log_text(logger, "error", "启动更新 worker 失败: {0}", self.process.errorString())
             self._emit_error(ERR_WORKER_START_FAILED)
             return
 
@@ -1116,7 +1001,7 @@ class DownloaderWorker(QObject):
             self._emit_error(ERR_WORKER_CRASHED)
         elif exitCode != 0:
             err = self.process.readAllStandardError().data().decode("utf-8", errors="replace")
-            logger.error(f"更新 worker 退出码 {exitCode}: {err.strip()[:500]}")
+            log_text(logger, "error", "更新 worker 退出码 {0}: {1}", exitCode, err.strip()[:500])
             self._emit_error(ERR_WORKER_EXIT_NONZERO)
         else:
             if not self._is_finished_emitted and not self._error_emitted:
@@ -1124,7 +1009,7 @@ class DownloaderWorker(QObject):
                 self._is_finished_emitted = True
 
     def _on_error(self, error):
-        logger.error(f"更新 worker 进程错误: {error}")
+        log_text(logger, "error", "更新 worker 进程错误: {0}", error)
         self._emit_error(ERR_WORKER_START_FAILED)
 
 

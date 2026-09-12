@@ -1,6 +1,47 @@
+import ast
 import shutil
 import subprocess
 from pathlib import Path
+
+
+def update_runtime_markers(src_dir: Path) -> None:
+    """Make shared service/log templates visible to lupdate, deterministically."""
+    sources = set()
+    paths = sorted(src_dir.rglob("*.py"))
+    main = src_dir.parents[1] / "main.py"
+    if main.exists():
+        paths.append(main)
+    for path in paths:
+        tree = ast.parse(path.read_text(encoding="utf-8-sig"))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Name):
+                continue
+            index = {"tr_text": 0, "log_text": 2, "english": 0, "standalone_text": 0}.get(
+                node.func.id
+            )
+            if index is not None and len(node.args) > index:
+                arg = node.args[index]
+                if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
+                    sources.add(arg.value)
+    path = src_dir / "utils" / "ui_text.py"
+    raw = path.read_text(encoding="utf-8")
+    prefix, rest = raw.split("# BEGIN GENERATED MARKERS\n", 1)
+    _, suffix = rest.split("# END GENERATED MARKERS", 1)
+    import json
+
+    rows = [
+        f'    QT_TRANSLATE_NOOP("RuntimeText", {json.dumps(source, ensure_ascii=False)}),'
+        for source in sorted(sources)
+    ]
+    path.write_text(
+        prefix
+        + "# BEGIN GENERATED MARKERS\n# fmt: off\n_SOURCES = (\n"
+        + "\n".join(rows)
+        + "\n)\n# fmt: on\n# END GENERATED MARKERS"
+        + suffix,
+        encoding="utf-8",
+        newline="\n",
+    )
 
 
 def _find_lupdate() -> str:
@@ -36,9 +77,9 @@ def main():
     locales_dir = root_dir / "assets" / "locales"
 
     locales_dir.mkdir(parents=True, exist_ok=True)
+    update_runtime_markers(src_dir)
 
-    # 定义需要支持的目标语言，包含新增的日语和繁体中文
-    TARGET_LANGUAGES = ["en_US", "zh_CN", "ja_JP", "zh_TW"]
+    TARGET_LANGUAGES = ["en_US", "zh_CN"]
 
     lupdate_exe = _find_lupdate()
 

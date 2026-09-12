@@ -39,7 +39,11 @@ tag 发布须与 VERSION 和当前提交一致，提交必须属于 main 历史�
 
 使用 `version_manager.py set 3.7.2-rc.1` 同步版本及锁文件；准备分支可通过 `release.yml` 的手动入口选择 `targets=all`、`publish=false`，先验证完整构建及隔离 runner 安装生命周期。发布前必须将已验证改动合入 main。随后对应 tag 触发同一工作流，重新获取全部最新组件，通过检查后自动将已核验 Draft 公开为 Pre-release，显式设置 `prerelease=true`、`latest=false`。
 
-无需增加单独的 pre.yml，也不接受 `-pre` 作为新版本后缀；版本号使用 `-rc.N`。rc 客户端目前保持手动下载后续版本，稳定版用户不会通过 Latest 收到此预发布。恢复已有 Draft 时也重新设置并验证预发布标记。
+无需增加单独的 pre.yml，也不接受 `-pre` 作为新版本后缀；版本号使用 `-rc.N`。客户端默认使用 stable 更新通道（包括首次运行的 rc/beta 构建）；设置 → 更新的软件更新卡片可切换到 pre，必须先确认不稳定风险。pre 接收正式版和 rc，按完整版本排序（rc.2 < rc.10 < 同版本正式版）；stable 只接收正式版。切回 stable 不降级，等待版本号更高的正式版。跳过版本按通道隔离，仅影响静默检查，手动检查可重新显示。恢复已有 Draft 时也重新设置并验证预发布标记。
+
+GitHub pre 检查从最近 100 个 Release 中选取版本最高、非 Draft、具有更新清单的正式版或 rc；beta 不进入公开候选。Cloudflare 同步使用相同规则，分别保存 `update:app:stable` / `update:app:pre`，公开接口为 `/v1/updates/app?channel=stable|pre`（省略参数仍为 stable）。先部署 ControlCenter 的通道接口，再发布客户端；旧服务不带 pre 通道标记时客户端拒绝该响应并按既有策略换源。现有发布完成/定时同步工作流会刷新两个通道，同步脚本要求二者都返回成功。
+
+本地验收入口：`pytest tests/test_app_update_channels.py tests/test_component_update_manager.py tests/test_update_transport.py tests/test_release_protocol.py tests/test_release_pipeline.py tests/test_updater.py`；ControlCenter 运行 `npm run check`。本地测试不代表已部署 Worker、已发布 Release 或已完成真实安装升级验收。
 
 发布读取成功构建清单；上传 Draft 后下载核对，再公开同一批文件。公开后通过下载地址再次校验，stable 还检查 latest 清单入口。公开版本不可覆盖。失败不自动删除公开 Release；失败 Draft 只有资产完整且与当前产物逐字节一致才可恢复，否则需要维护者检查。
 

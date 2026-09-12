@@ -13,6 +13,8 @@ import re
 import unicodedata
 from pathlib import Path
 
+from fluentytdl.utils.message_catalog import english
+
 # Windows 非法文件名字符
 ILLEGAL_CHARS = r'[<>:"/\\|?*]'
 ILLEGAL_CHARS_PATTERN = re.compile(ILLEGAL_CHARS)
@@ -266,4 +268,4 @@ def get_unique_filename(directory: str | Path, filename: str) -> Path:
             return target
         counter += 1
         if counter > 9999:
-            raise RuntimeError("无法生成唯一文件名")
+            raise RuntimeError(english("无法生成唯一文件名"))

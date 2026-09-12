@@ -110,6 +110,8 @@ from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from typing import Any, Literal
 
+from fluentytdl.utils.message_catalog import english
+
 # 私有名的跨模块引用只有这一处，且是刻意的：`_subtitle_lang_from_name()` 的规则
 # （取紧贴后缀的那个点分段）必须与观测侧**逐字一致**，否则 manifest 里的 qualifier
 # 和 `actual` 里的 `subtitle:<lang>` 会各算一遍、慢慢漂开。抄一份 4 行实现才是错的。
@@ -398,7 +400,7 @@ class Manifest:
         `producer` 必填：没有产生者的「生成物」等于又一次匿名推断。
         """
         if not producer:
-            raise StagingError("register_generated 必须给出 producer")
+            raise StagingError(english("register_generated 必须给出 producer"))
         art = self._put(
             path,
             kind,
@@ -428,7 +430,7 @@ class Manifest:
         """指定主媒体。同一时刻只有一个 primary。"""
         art = self.require(artifact_id)
         if art.kind != "media":
-            raise StagingError(f"只有 media 能 promote，{artifact_id} 是 {art.kind}")
+            raise StagingError(english("只有 media 能 promote，{0} 是 {1}", artifact_id, art.kind))
         for other in self._items.values():
             if other.kind == "media":
                 other.primary = other.id == art.id
@@ -442,7 +444,9 @@ class Manifest:
         old = self.require(old_id)
         new = self.require(new_id)
         if new.presence != "present":
-            raise StagingError(f"替代品 {new_id} 当前 presence={new.presence}，不能顶位")
+            raise StagingError(
+                english("替代品 {0} 当前 presence={1}，不能顶位", new_id, new.presence)
+            )
         old.disposition = "internal"
         old.primary = False
         old.reason = reason
@@ -455,7 +459,7 @@ class Manifest:
         返回被标记的项数。注意这只改标记 —— 物理删除只发生在沙盒 `rmtree`。
         """
         if not reason:
-            raise StagingError("drop 必须给出 reason")
+            raise StagingError(english("drop 必须给出 reason"))
         targets = [self.require(id)] if id else [a for a in self._items.values() if a.kind == kind]
         for art in targets:
             art.keep = False
@@ -515,7 +519,7 @@ class Manifest:
     def require(self, artifact_id: str) -> StagedArtifact:
         art = self._items.get(artifact_id)
         if art is None:
-            raise StagingError(f"清单里没有 {artifact_id!r}")
+            raise StagingError(english("清单里没有 {0!r}", artifact_id))
         return art
 
     def __len__(self) -> int:
@@ -525,7 +529,9 @@ class Manifest:
 
     def _require_unsealed(self, op: str) -> None:
         if self.discovery_sealed:
-            raise StagingError(f"discovery 已封板，{op}() 不再可用（生产请走 register_generated）")
+            raise StagingError(
+                english("discovery 已封板，{0}() 不再可用（生产请走 register_generated）", op)
+            )
 
     def make_id(self, path: str) -> str:
         """稳定标识 = 首次登记时的 payload 内相对路径（normcase）。"""
@@ -542,7 +548,7 @@ class Manifest:
         metadata_deliver: bool = False,
     ) -> StagedArtifact:
         if kind not in ("media", "subtitle", "thumbnail", "metadata", "intermediate"):
-            raise StagingError(f"未知 kind: {kind!r}")
+            raise StagingError(english("未知 kind: {0!r}", kind))
         artifact_id = self.make_id(path)
         existing = self._items.get(artifact_id)
         if existing is not None:
@@ -987,7 +993,7 @@ class StagingArea:
         supersede 的旧内容永远不会被对账重新捡回来（那些内容只在封板**之后**产生）。
         """
         if self.manifest.discovery_sealed:
-            raise StagingError("discovery 已封板，reconcile() 不再可用")
+            raise StagingError(english("discovery 已封板，reconcile() 不再可用"))
 
         stats = {"added": 0, "missing": 0, "consumed": 0}
         seen: set[str] = set()
@@ -1093,7 +1099,7 @@ class StagingArea:
         `rmtree` 消失，清单无感。
         """
         if not os.path.isfile(work_path):
-            raise StagingError(f"register_generated: {work_path!r} 不存在")
+            raise StagingError(english("register_generated: {0!r} 不存在", work_path))
         if not self._is_inside_txn(work_path):
             raise StagingEscape(work_path)
         name = target_name or os.path.basename(work_path)
@@ -1143,11 +1149,11 @@ class StagingArea:
         """
         art = self.manifest.require(artifact_id)
         if not os.path.isfile(work_path):
-            raise StagingError(f"replace_artifact_content: {work_path!r} 不存在")
+            raise StagingError(english("replace_artifact_content: {0!r} 不存在", work_path))
         if not self._is_inside_txn(work_path):
             raise StagingEscape(work_path)
         if os.path.getsize(work_path) <= 0:
-            raise StagingError(f"replace_artifact_content: {work_path!r} 是空文件")
+            raise StagingError(english("replace_artifact_content: {0!r} 是空文件", work_path))
 
         backup = os.path.join(
             self.internal_dir, f"{uuid.uuid4().hex[:8]}-{os.path.basename(art.path)}"
@@ -1222,7 +1228,7 @@ class StagingArea:
         """读 `kept()`，产出整组计划。**只消费 `group_stem`，不推断。**"""
         stem = self.manifest.group_stem
         if not stem:
-            raise StagingError("group_stem 未确定，build_plan() 拒绝猜测")
+            raise StagingError(english("group_stem 未确定，build_plan() 拒绝猜测"))
 
         home = self.dest_intent.get("home") or self.download_dir
         members: list[PlannedMember] = []
@@ -1244,7 +1250,7 @@ class StagingArea:
         if inexact:
             self._signal("member_tail_rebuilt", level="WARNING", stage="finalize", count=inexact)
         if not members:
-            raise StagingError("没有任何可交付成员，build_plan() 拒绝产出空计划")
+            raise StagingError(english("没有任何可交付成员，build_plan() 拒绝产出空计划"))
 
         # 两个成员映射到同一个目标就是**静默数据丢失**：后搬的那个盖掉先搬的，用户少
         # 一个文件而日志一切正常。而且 `_reserve_group()` 会先撞上自己刚建的占位符，
@@ -1304,7 +1310,7 @@ class StagingArea:
             # （KeyboardInterrupt / SystemExit）原样上抛，不吞进事务语义里。
             if isinstance(exc, StagingError) or not isinstance(exc, Exception):
                 raise
-            raise CommitFailed(f"提交失败: {exc!r}") from exc
+            raise CommitFailed(english("提交失败: {0!r}", exc)) from exc
 
         with self._lock:
             self._phase = "committed"
@@ -1368,7 +1374,7 @@ class StagingArea:
                 self._write_journal()
             return n
 
-        raise CommitFailed(f"整组避让超过 {MAX_SUFFIX} 次仍撞名: {plan.group_stem!r}")
+        raise CommitFailed(english("整组避让超过 {0} 次仍撞名: {1!r}", MAX_SUFFIX, plan.group_stem))
 
     def _publish_group(self, plan: CommitPlan, n: int) -> None:
         for index, member in enumerate(plan.members):
@@ -1406,9 +1412,9 @@ class StagingArea:
             src_size = os.path.getsize(member.src)
             tmp_size = os.path.getsize(tmp)
             if src_size != tmp_size:
-                raise CommitFailed(f"跨卷复制大小不符: {src_size} != {tmp_size}")
+                raise CommitFailed(english("跨卷复制大小不符: {0} != {1}", src_size, tmp_size))
             if member.kind == "media" and tmp_size < MIN_VALID_MEDIA_BYTES:
-                raise CommitFailed(f"跨卷复制后主媒体过小: {tmp_size}")
+                raise CommitFailed(english("跨卷复制后主媒体过小: {0}", tmp_size))
             os.replace(tmp, dst)
         except BaseException:
             if os.path.exists(tmp):
@@ -1651,7 +1657,7 @@ class StagingArea:
 
     def _check_cancelled(self) -> None:
         if self._cancel_check is not None and self._cancel_check():
-            raise StagingCancelled("commit gate: 本次已被取消")
+            raise StagingCancelled(english("commit gate: 本次已被取消"))
 
     def _discard_quietly(self, why: str) -> None:
         try:
@@ -1674,10 +1680,10 @@ def _assert_under(path: str, root_real: str, root_display: str) -> str:
     actual = os.path.realpath(path)
     try:
         if os.path.commonpath([root_real, actual]) != root_real:
-            raise StagingEscape(f"{path!r} 不在 {root_display!r} 内")
+            raise StagingEscape(english("{0!r} 不在 {1!r} 内", path, root_display))
     except ValueError:
         # Windows 上不同盘 `commonpath` 直接抛 —— 那当然也是逃逸。
-        raise StagingEscape(f"{path!r} 与 {root_display!r} 不同卷") from None
+        raise StagingEscape(english("{0!r} 与 {1!r} 不同卷", path, root_display)) from None
     return actual
 
 

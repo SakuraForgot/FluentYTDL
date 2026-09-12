@@ -16,6 +16,8 @@ import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
+from fluentytdl.utils.ui_text import tr_text
+
 
 @dataclass
 class DiskSpaceInfo:
@@ -94,7 +96,7 @@ def get_disk_space(path: str | Path) -> DiskSpaceInfo:
     check_path = path
     while not check_path.exists():
         if check_path.parent == check_path:
-            raise FileNotFoundError(f"无法确定磁盘: {path}")
+            raise FileNotFoundError(tr_text("无法确定磁盘: {0}", path))
         check_path = check_path.parent
 
     usage = shutil.disk_usage(check_path)
@@ -128,7 +130,7 @@ def check_disk_space(
             sufficient=False,
             required_bytes=required_bytes,
             available_bytes=0,
-            message=f"无法检查磁盘空间: {e}",
+            message=tr_text("无法检查磁盘空间: {0}", e),
             error=type(e).__name__,
         )
 
@@ -140,7 +142,11 @@ def check_disk_space(
             sufficient=True,
             required_bytes=required_bytes,
             available_bytes=info.free,
-            message=f"空间充足 (需要 {_format_size(required_bytes)}，可用 {_format_size(info.free)})",
+            message=tr_text(
+                "空间充足 (需要 {0}，可用 {1})",
+                _format_size(required_bytes),
+                _format_size(info.free),
+            ),
         )
     else:
         shortfall = total_required - info.free
@@ -149,10 +155,12 @@ def check_disk_space(
             required_bytes=required_bytes,
             available_bytes=info.free,
             message=(
-                f"磁盘空间不足！\n"
-                f"需要: {_format_size(total_required)}\n"
-                f"可用: {_format_size(info.free)}\n"
-                f"缺少: {_format_size(shortfall)}"
+                tr_text(
+                    "磁盘空间不足！\n需要: {0}\n可用: {1}\n缺少: {2}",
+                    _format_size(total_required),
+                    _format_size(info.free),
+                    _format_size(shortfall),
+                )
             ),
         )
 

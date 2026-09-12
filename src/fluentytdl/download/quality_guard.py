@@ -4,6 +4,9 @@ import subprocess
 from dataclasses import dataclass
 from typing import Any
 
+from fluentytdl.utils.localized_log import log_text
+from fluentytdl.utils.ui_text import tr_text
+
 from ..core.config_manager import config_manager
 from ..utils.logger import logger
 
@@ -124,9 +127,9 @@ class QualityGuard:
         return QualityVerdict(
             passed=False,
             actual_height=max_available,
-            deviation=f"目标 {intent.target_height}p → 最高可用 {max_available}p",
+            deviation=tr_text("目标 {0}p → 最高可用 {1}p", intent.target_height, max_available),
             deviation_severity=severity,
-            suggestion=f"该视频最高仅支持 {max_available}p，请确认是否继续下载。",
+            suggestion=tr_text("该视频最高仅支持 {0}p，请确认是否继续下载。", max_available),
         )
 
     @staticmethod
@@ -168,7 +171,7 @@ class QualityGuard:
             passed=False,
             actual_height=actual_height,
             actual_format_id=actual_format_id,
-            deviation=f"目标 {intent.target_height}p → 实际 {actual_height}p",
+            deviation=tr_text("目标 {0}p → 实际 {1}p", intent.target_height, actual_height),
             deviation_severity=severity,
         )
 
@@ -309,8 +312,11 @@ class QualityGuardManager:
         threshold = int(config_manager.get("quality_guard_suspend_threshold", 3))
 
         if self._consecutive_failures >= threshold:
-            logger.warning(
-                f"质量守卫：连续 {self._consecutive_failures} 个任务出现质量异常，触发风控防御机制"
+            log_text(
+                logger,
+                "warning",
+                "画质检查：连续 {0} 个任务未达标，触发队列暂停阈值",
+                self._consecutive_failures,
             )
 
             suspended_count = download_manager.suspend_pending()
@@ -324,8 +330,12 @@ class QualityGuardManager:
                         Notification(
                             type="risk_control",
                             severity="critical",
-                            title="队列已自动暂停",
-                            message=f"连续 {self._consecutive_failures} 个任务出现质量降级异常，这可能意味着遭遇风控。已安全暂停排队中的 {suspended_count} 个任务以保护账号。",
+                            title=tr_text("队列已自动暂停"),
+                            message=tr_text(
+                                "连续 {0} 个任务画质未达标，已暂停排队中的 {1} 个任务。请检查源视频的可用格式、目标分辨率和访问权限后再继续。",
+                                self._consecutive_failures,
+                                suspended_count,
+                            ),
                         )
                     )
                 except Exception as e:

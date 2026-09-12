@@ -4,6 +4,8 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QAbstractItemView, QHeaderView, QTableWidgetItem
 from qfluentwidgets import BodyLabel, MessageBoxBase, SubtitleLabel, TableWidget
 
+from fluentytdl.utils.ui_text import tr_text
+
 if TYPE_CHECKING:
     from ...download.quality_guard import QualityVerdict
 
@@ -11,7 +13,7 @@ if TYPE_CHECKING:
 class QualityReportDialog(MessageBoxBase):
     def __init__(self, warnings: list[tuple[str, "QualityVerdict"]], parent=None):
         super().__init__(parent)
-        self.titleLabel = SubtitleLabel(f"🛡️ 质量守卫报告 ({len(warnings)} 项异常)", self)
+        self.titleLabel = SubtitleLabel(tr_text("🛡️ 质量守卫报告 ({0} 项异常)", len(warnings)), self)
         self.viewLayout.addWidget(self.titleLabel)
 
         msg = self.tr("以下任务无法达到目标画质，继续下载可能会输出较低质量的视频：")

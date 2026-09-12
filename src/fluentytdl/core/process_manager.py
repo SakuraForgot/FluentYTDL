@@ -15,6 +15,8 @@ import signal
 import sys
 from collections.abc import Callable
 
+from fluentytdl.utils.localized_log import log_text
+
 from ..utils.logger import logger
 
 # 尝试导入 psutil，如果不可用则使用降级方案
@@ -25,7 +27,7 @@ try:
 except ImportError:
     psutil = None
     HAS_PSUTIL = False
-    logger.warning("psutil 未安装，进程清理功能受限")
+    log_text(logger, "warning", "psutil 未安装，进程清理功能受限")
 
 
 # 需要监控的子进程名称
@@ -72,10 +74,10 @@ class ProcessManager:
             if hasattr(signal, "SIGINT"):
                 signal.signal(signal.SIGINT, self._signal_handler)
         except Exception as e:
-            logger.debug(f"信号处理注册失败 (可忽略): {e}")
+            log_text(logger, "debug", "信号处理注册失败 (可忽略): {0}", e)
 
         self._initialized = True
-        logger.debug("ProcessManager 初始化完成")
+        log_text(logger, "debug", "ProcessManager 初始化完成")
 
     def register(self, pid: int) -> None:
         """
@@ -85,7 +87,7 @@ class ProcessManager:
             pid: 进程 ID
         """
         self._child_pids.add(pid)
-        logger.debug(f"注册子进程 PID {pid}")
+        log_text(logger, "debug", "注册子进程 PID {0}", pid)
 
     def unregister(self, pid: int) -> None:
         """
@@ -95,7 +97,7 @@ class ProcessManager:
             pid: 进程 ID
         """
         self._child_pids.discard(pid)
-        logger.debug(f"注销子进程 PID {pid}")
+        log_text(logger, "debug", "注销子进程 PID {0}", pid)
 
     def on_cleanup(self, callback: Callable[[], None]) -> None:
         """注册清理前回调"""
@@ -115,7 +117,7 @@ class ProcessManager:
             try:
                 callback()
             except Exception as e:
-                logger.warning(f"清理回调失败: {e}")
+                log_text(logger, "warning", "清理回调失败: {0}", e)
 
         # 方法 1: 终止已注册的进程
         for pid in list(self._child_pids):
@@ -127,7 +129,7 @@ class ProcessManager:
             killed += self._cleanup_by_name()
 
         if killed > 0:
-            logger.info(f"已清理 {killed} 个子进程")
+            log_text(logger, "info", "已清理 {0} 个子进程", killed)
 
         return killed
 
@@ -183,10 +185,10 @@ class ProcessManager:
             self._child_pids.discard(pid)
             return False
         except psutil_mod.AccessDenied:
-            logger.warning(f"无权限终止进程 {pid}")
+            log_text(logger, "warning", "无权限终止进程 {0}", pid)
             return False
         except Exception as e:
-            logger.warning(f"终止进程 {pid} 失败: {e}")
+            log_text(logger, "warning", "终止进程 {0} 失败: {1}", pid, e)
             return False
 
     def _cleanup_by_name(self) -> int:
@@ -219,7 +221,7 @@ class ProcessManager:
                     continue
 
         except Exception as e:
-            logger.warning(f"进程扫描失败: {e}")
+            log_text(logger, "warning", "进程扫描失败: {0}", e)
 
         return killed
 

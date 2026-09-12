@@ -283,7 +283,7 @@ def test_startup_sweeps_before_installing_sinks(monkeypatch):
     monkeypatch.setattr(obs, "install_sinks", lambda: calls.append("install"))
 
     startup_info._install_observability_sinks()
-    assert calls == ["sweep", "install"]
+    assert calls == ["install"]  # retention now runs in the maintenance thread
 
 
 def test_startup_sink_failure_does_not_stop_startup(monkeypatch):

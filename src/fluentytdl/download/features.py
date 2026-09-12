@@ -4,6 +4,9 @@ import os
 import subprocess
 from typing import TYPE_CHECKING, Any
 
+from fluentytdl.utils.localized_log import log_text
+from fluentytdl.utils.ui_text import tr_text
+
 from ..core.config_manager import config_manager
 from ..core.hardware_manager import hardware_manager
 from ..models.subtitle_config import SUBTITLE_RESOLUTION_KEY
@@ -180,12 +183,12 @@ class SubtitleFeature(DownloadFeature):
                 logger.info("[SubEmbed] WebM → MKV")
             elif not fmt:
                 opts["merge_output_format"] = "mkv"
-                logger.info("[SubEmbed] 未指定 → MKV")
+                log_text(logger, "info", "[SubEmbed] 未指定 → MKV")
             # 外置字幕靠 `--write-sub` 保留即可（它与 `--embed-subs` 恒同发），yt-dlp 不会
             # 在嵌入后删它，on_post_process 因此能校验到。切勿在此设 `keepsubtitles`——它会
             # 被翻成 yt-dlp 根本不存在的 `--keep-subs`，在 parse 阶段崩掉整条下载。
         else:
-            logger.warning("[SubEmbed] embedsubtitles=False")
+            logger.debug("[SubEmbed] embedsubtitles=False")
 
     def on_post_process(self, context: DownloadContext) -> None:
         opts = context.opts
@@ -219,7 +222,9 @@ class SubtitleFeature(DownloadFeature):
             if not result.success:
                 # 字幕是 best-effort：任务照样算成功，但用户必须知道字幕去哪了。
                 # 以前这里只有一行 logger.warning，UI 上什么都看不到。
-                logger.warning(
+                log_text(
+                    logger,
+                    "warning",
                     "字幕后处理失败: {}（reason={}）",
                     result.message,
                     result.reason,
@@ -227,13 +232,13 @@ class SubtitleFeature(DownloadFeature):
                 if result.reason == "not_found":
                     context.emit_warning(self._explain_missing(opts))
                 elif result.reason == "all_invalid":
-                    context.emit_warning(f"字幕文件校验失败：{result.message}")
+                    context.emit_warning(tr_text("字幕文件校验失败：{0}", result.message))
                 # `video_missing` 不再提示：视频本身没落盘时早有各自的失败提示，
                 # 这里再冒一条字幕警告只会盖住真正的原因
 
             self._dispose_external_subtitles(context, artifacts, result)
         except Exception as e:
-            logger.exception("字幕后处理异常: {}", e)
+            log_text(logger, "exception", "字幕后处理异常: {}", e)
 
     @staticmethod
     def _dispose_external_subtitles(
@@ -286,9 +291,9 @@ class SubtitleFeature(DownloadFeature):
             dropped += 1
 
         if embed_requested and not embed_done:
-            context.emit_warning("字幕嵌入未完成，已保留外置字幕文件")
+            context.emit_warning(tr_text("字幕嵌入未完成，已保留外置字幕文件"))
         if dropped:
-            logger.info("{} 条字幕已嵌入容器，不再单独交付", dropped)
+            log_text(logger, "info", "{} 条字幕已嵌入容器，不再单独交付", dropped)
 
     @staticmethod
     def _explain_missing(opts: dict[str, Any]) -> str:
@@ -299,21 +304,25 @@ class SubtitleFeature(DownloadFeature):
         """
         meta = opts.get(SUBTITLE_RESOLUTION_KEY) or {}
         mode = meta.get("mode")
-        prefs = "、".join(meta.get("prefs") or []) or "默认语言"
+        prefs = "、".join(meta.get("prefs") or []) or tr_text("默认语言")
         matched = "、".join(meta.get("matched") or [])
         available = [str(x) for x in (meta.get("available") or [])]
         avail_txt = "、".join(available[:6]) + ("…" if len(available) > 6 else "")
 
         if mode == "no_match":
-            return f"字幕未命中任何可用语言（想要 {prefs}；该视频只有 {avail_txt or '无可用字幕'}）"
+            return tr_text(
+                "字幕未命中任何可用语言（想要 {0}；该视频只有 {1}）",
+                prefs,
+                avail_txt or tr_text("无可用字幕"),
+            )
         if mode == "pattern":
-            return f"未获取到字幕：按正则模式请求 {prefs}，yt-dlp 没有匹配到任何字幕轨道"
+            return tr_text("未获取到字幕：按正则模式请求 {0}，yt-dlp 没有匹配到任何字幕轨道", prefs)
         if matched:
-            return (
-                f"未获取到字幕：已请求 {matched}，但一个文件都没写出（可能被限速或需要 PO Token）"
+            return tr_text(
+                "未获取到字幕：已请求 {0}，但一个文件都没写出（可能被限速或需要 PO Token）", matched
             )
         langs = "、".join(str(x) for x in (opts.get("subtitleslangs") or [])) or prefs
-        return f"未获取到字幕：已请求 {langs}，但一个文件都没写出"
+        return tr_text("未获取到字幕：已请求 {0}，但一个文件都没写出", langs)
 
 
 class ThumbnailFeature(DownloadFeature):
@@ -333,7 +342,7 @@ class ThumbnailFeature(DownloadFeature):
         if not pairs:
             return
         if not thumbnail_embedder.is_available():
-            context.emit_thumbnail_warning("⚠️ 封面嵌入工具不可用")
+            context.emit_thumbnail_warning(tr_text("⚠️ 封面嵌入工具不可用"))
             return
         for video, thumb in pairs:
             self._process_single_file(context, video, thumb)
@@ -370,7 +379,7 @@ class ThumbnailFeature(DownloadFeature):
                 context.emit_thumbnail_warning(w)
             return
 
-        context.emit_status(f"[封面嵌入] 正在处理: {os.path.basename(video.path)}")
+        context.emit_status(tr_text("[封面嵌入] 正在处理: {0}", os.path.basename(video.path)))
         tool = thumbnail_embedder.get_recommended_tool(ext)
         work = staging.reserve_workfile(
             os.path.splitext(os.path.basename(video.path))[0],
@@ -381,16 +390,16 @@ class ThumbnailFeature(DownloadFeature):
             video.path,
             thumb.path,
             work,
-            progress_callback=lambda msg: context.emit_status(f"[封面嵌入] {msg}"),
+            progress_callback=lambda msg: context.emit_status(tr_text("[封面嵌入] {0}", msg)),
         )
         if res.success:
             staging.replace_artifact_content(video.id, work, producer="ThumbnailEmbedder")
             manifest.embed_evidence.add("thumbnail")
-            context.emit_status("[封面嵌入] ✓ 成功")
+            context.emit_status(tr_text("[封面嵌入] ✓ 成功"))
         elif res.skipped:
             context.emit_thumbnail_warning(res.message)
         else:
-            context.emit_thumbnail_warning(f"封面嵌入失败: {res.message}")
+            context.emit_thumbnail_warning(tr_text("封面嵌入失败: {0}", res.message))
         # 失败时 workfile 从未登记，随沙盒 `rmtree` 消失；主媒体原样不动
 
     def _locate_files(
@@ -477,13 +486,13 @@ class VRFeature(DownloadFeature):
 
         if not (proj and proj != "unknown") and not ((convert or auto_convert) and proj == "eac"):
             if (convert or auto_convert) and proj == "mesh":
-                context.emit_warning("Mesh 格式暂不支持转码")
+                context.emit_warning(tr_text("Mesh 格式暂不支持转码"))
             return
 
         staging = context.staging
         source = context.primary_media()
         if staging is None or source is None or not os.path.exists(source.path):
-            logger.warning("[VR] 无法找到最终文件")
+            log_text(logger, "warning", "[VR] 无法找到最终文件")
             return
         final_file = source.path
         context.output_path = final_file
@@ -495,19 +504,19 @@ class VRFeature(DownloadFeature):
         needs_convert = (convert or auto_convert) and proj == "eac"
         if needs_convert:
             if not self._check_ffmpeg_v360(ffmpeg_exe):
-                context.emit_warning("FFmpeg 不支持 v360")
+                context.emit_warning(tr_text("FFmpeg 不支持 v360"))
                 needs_convert = False
 
             h = int(opts.get("height") or 0)
             if h == 0:
                 h = 2160
             if h > int(config_manager.get("vr_max_resolution", 2160)):
-                context.emit_warning(f"跳过 VR 转码: 分辨率过高 ({h}p)")
+                context.emit_warning(tr_text("跳过 VR 转码: 分辨率过高 ({0}p)", h))
                 needs_convert = False
 
         target = source
         if needs_convert:
-            context.emit_status("VR 投影转换 (EAC -> Equi)...")
+            context.emit_status(tr_text("VR 投影转换 (EAC -> Equi)..."))
             stem, ext = os.path.splitext(os.path.basename(final_file))
             work = staging.reserve_workfile(f"{stem}.equi", ext)
 
@@ -522,7 +531,7 @@ class VRFeature(DownloadFeature):
                 target = self._adopt_transcode(staging, source, work, stem, ext)
                 proj = "equirectangular"
             else:
-                context.emit_warning("VR 转码失败")
+                context.emit_warning(tr_text("VR 转码失败"))
                 # workfile 从未登记，随沙盒 `rmtree` 消失 —— 这里不需要（也不许）动它
 
         self._inject_meta(context, target, proj, opts)
@@ -634,7 +643,7 @@ class VRFeature(DownloadFeature):
                     break
                 if line and "time=" in line:
                     t = line[line.find("time=") + 5 :].split(" ")[0]
-                    ctx.emit_status(f"VR 转换... ({t})")
+                    ctx.emit_status(tr_text("VR 转换... ({0})", t))
             return p.returncode == 0
         except Exception:
             return False
@@ -672,13 +681,13 @@ class VRFeature(DownloadFeature):
         if not md.stereo_mode and not md.projection:
             return
 
-        ctx.emit_status("注入 VR 元数据...")
+        ctx.emit_status(tr_text("注入 VR 元数据..."))
         stem, ext = os.path.splitext(os.path.basename(f))
         work = staging.reserve_workfile(f"{stem}.meta", ext)
         try:
             metadata_utils.inject_metadata(f, work, md, lambda x: None)
             if os.path.isfile(work):
                 staging.replace_artifact_content(art.id, work, producer="VRFeature")
-                ctx.emit_status("VR 元数据注入成功")
+                ctx.emit_status(tr_text("VR 元数据注入成功"))
         except Exception:
-            logger.exception("[VR] 元数据注入失败，保留原文件")
+            log_text(logger, "exception", "[VR] 元数据注入失败，保留原文件")

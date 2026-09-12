@@ -4,9 +4,12 @@ import time
 
 from PySide6.QtCore import QObject, Signal
 
+from fluentytdl.utils.localized_log import log_text
+
 from ..storage.task_db import task_db
 from ..utils.logger import logger
 from .notification_model import Notification
+from .notification_text import capture_fields
 
 
 class NotificationCenter(QObject):
@@ -21,6 +24,8 @@ class NotificationCenter(QObject):
     notification_updated = Signal(int)  # 传递通知 ID
     # 通知数量变化信号（未读数量，总数量）
     unread_count_changed = Signal(int)
+    announcement_requested = Signal(dict)
+    announcement_refresh_requested = Signal()
 
     _instance = None
 
@@ -43,6 +48,9 @@ class NotificationCenter(QObject):
         if notification.timestamp <= 0:
             notification.timestamp = time.time()
 
+        fields = capture_fields(notification)
+        if fields:
+            notification.metadata = {**notification.metadata, "display_text": fields}
         metadata_json = json.dumps(notification.metadata, ensure_ascii=False)
 
         try:
@@ -72,11 +80,17 @@ class NotificationCenter(QObject):
             self.notification_added.emit(notification)
             self._emit_unread_count()
 
-            logger.info(f"消息中心: 收到新通知 [{notification.severity}] {notification.title}")
+            log_text(
+                logger,
+                "info",
+                "消息中心: 收到新通知 [{0}] {1}",
+                notification.severity,
+                notification.title,
+            )
             return notif_id
 
         except sqlite3.Error as e:
-            logger.error(f"推送通知失败: {e}")
+            log_text(logger, "error", "推送通知失败: {0}", e)
             return 0
 
     def get_all(self, limit: int = 100, offset: int = 0) -> list[Notification]:
@@ -95,7 +109,7 @@ class NotificationCenter(QObject):
             rows = cursor.fetchall()
             return [self._row_to_notification(row) for row in rows]
         except sqlite3.Error as e:
-            logger.error(f"读取通知失败: {e}")
+            log_text(logger, "error", "读取通知失败: {0}", e)
             return []
 
     def get_unread_count(self) -> int:
@@ -106,7 +120,7 @@ class NotificationCenter(QObject):
             row = cursor.fetchone()
             return row[0] if row else 0
         except sqlite3.Error as e:
-            logger.error(f"获取未读通知数失败: {e}")
+            log_text(logger, "error", "获取未读通知数失败: {0}", e)
             return 0
 
     def mark_as_read(self, notif_id: int):
@@ -120,7 +134,7 @@ class NotificationCenter(QObject):
             self.notification_updated.emit(notif_id)
             self._emit_unread_count()
         except sqlite3.Error as e:
-            logger.error(f"标记通知已读失败: {e}")
+            log_text(logger, "error", "标记通知已读失败: {0}", e)
 
     def mark_all_as_read(self):
         """标记所有通知为已读。"""
@@ -131,7 +145,7 @@ class NotificationCenter(QObject):
             self.notification_updated.emit(0)  # 0代表所有
             self._emit_unread_count()
         except sqlite3.Error as e:
-            logger.error(f"标记全部通知已读失败: {e}")
+            log_text(logger, "error", "标记全部通知已读失败: {0}", e)
 
     def clear_all(self):
         """清空所有通知。"""
@@ -142,7 +156,7 @@ class NotificationCenter(QObject):
             self.notification_updated.emit(-1)  # -1代表清除
             self._emit_unread_count()
         except sqlite3.Error as e:
-            logger.error(f"清空通知失败: {e}")
+            log_text(logger, "error", "清空通知失败: {0}", e)
 
     def delete_notification(self, notif_id: int):
         """删除指定通知。"""
@@ -153,7 +167,7 @@ class NotificationCenter(QObject):
             self.notification_updated.emit(notif_id)
             self._emit_unread_count()
         except sqlite3.Error as e:
-            logger.error(f"删除通知失败: {e}")
+            log_text(logger, "error", "删除通知失败: {0}", e)
 
     def _row_to_notification(self, row: sqlite3.Row) -> Notification:
         try:

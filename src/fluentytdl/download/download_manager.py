@@ -9,6 +9,9 @@ from typing import Any
 
 from PySide6.QtCore import QObject, Qt, Signal
 
+from fluentytdl.utils.localized_log import log_text
+from fluentytdl.utils.ui_text import tr_text
+
 from ..core.config_manager import config_manager
 from ..observability import NO_ID, FlowTrace, emit_event, new_flow
 from ..storage.db_writer import db_writer
@@ -27,7 +30,7 @@ from .workers import DownloadWorker
 _SEALED_TRANSITION_SOURCES = frozenset({"completed", "cancelled"})
 
 
-def _emit_transition(worker: DownloadWorker, to_state: str, pct: float) -> None:
+def _emit_transition(worker: DownloadWorker, to_state: str, pct: float) -> bool:
     """状态迁移的**唯一**权威产生点（硬规则 1）。
 
     为什么是这里：它同时具备三个条件 —— 有 `db_id`、下一句就要写 `task_db`、
@@ -42,9 +45,26 @@ def _emit_transition(worker: DownloadWorker, to_state: str, pct: float) -> None:
     就把它改成了新值，而本闭包是 `QueuedConnection`，跑到这里时看到的已经是新值。
     所以基线单独存一份 `_last_transition_state`。
     """
+    run = getattr(getattr(worker, "trace", None), "run_id", None)
+    if getattr(worker, "_transition_run", None) != run:
+        worker._transition_run = run
+        worker._last_transition_state = None
+        worker._late_transition_reported = False
     prev = getattr(worker, "_last_transition_state", None)
     if to_state == prev:
-        return
+        return True
+    if prev in _SEALED_TRANSITION_SOURCES:
+        if not getattr(worker, "_late_transition_reported", False):
+            worker._late_transition_reported = True
+            emit_event(
+                "signal",
+                trace=worker.trace,
+                level="WARNING",
+                code="late_status_ignored",
+                previous=prev,
+                requested=to_state,
+            )
+        return False
     worker._last_transition_state = to_state
     emit_event(
         "transition",
@@ -53,6 +73,7 @@ def _emit_transition(worker: DownloadWorker, to_state: str, pct: float) -> None:
         # `from` 是 Python 关键字，只能走 `fields` 这条显式入口。
         fields={"from": prev or NO_ID, "to": to_state, "pct": round(pct, 1)},
     )
+    return True
 
 
 #: 上个会话遗留的 state → 本次启动该给那个 run 补记的 outcome。
@@ -217,7 +238,7 @@ class DownloadManager(QObject):
             # 恢复后会以过时的参数自动重跑，产生幽灵任务。
             if opts.get("skip_download", False):
                 task_db.update_task_status(
-                    row["id"], "error", 0.0, "⚠️ 提取任务未能完成（应用已重启）"
+                    row["id"], "error", 0.0, tr_text("⚠️ 提取任务未能完成（应用已重启）")
                 )
                 continue
 
@@ -228,7 +249,7 @@ class DownloadManager(QObject):
             if state in ("running", "downloading", "parsing", "processing", "queued"):
                 state = "paused"
                 task_db.update_task_status(
-                    row["id"], state, row.get("progress", 0.0), "⏸️ 下载已暂停 (应用重启)"
+                    row["id"], state, row.get("progress", 0.0), tr_text("⏸️ 下载已暂停 (应用重启)")
                 )
 
             # error 状态不入队也不 start，仅创建 Worker 壳展示在 UI
@@ -294,9 +315,9 @@ class DownloadManager(QObject):
                 try:
                     gc_orphans(d, live_ids)
                 except Exception:
-                    logger.exception("gc_orphans 失败: {}", d)
+                    log_text(logger, "exception", "gc_orphans 失败: {}", d)
         except Exception:
-            logger.exception("启动 GC 失败")
+            log_text(logger, "exception", "启动 GC 失败")
 
         # cookie 运行副本的启动兜底：`cookie_runfile()` 的 `finally` 已在子进程结束时确定性
         # 删除副本，这里只回收「崩溃 / TerminateProcess / IDE 强杀 / 断电」导致 `finally`
@@ -306,7 +327,7 @@ class DownloadManager(QObject):
 
             sweep_stale_cookie_runfiles()
         except Exception:
-            logger.exception("cookie 运行副本启动清理失败")
+            log_text(logger, "exception", "cookie 运行副本启动清理失败")
 
         # 最后不 pump()，要等 UI 初始化完后再由其他流程触发或用户手动恢复
 
@@ -422,7 +443,8 @@ class DownloadManager(QObject):
         def _on_unified_status(state: str, pct: float, msg: str):
             # 先落 transition 再写库：两句都在主线程、同一个 tick 内完成，顺序不影响
             # 结果，但"日志里看到已接受 → 库里才有"读起来才是因果顺序。
-            _emit_transition(worker, state, pct)
+            if not _emit_transition(worker, state, pct):
+                return
             db_writer.enqueue_status(worker.db_id, state, pct, msg)
 
         def _on_output_ready(path: str):
@@ -511,10 +533,13 @@ class DownloadManager(QObject):
             if not worker.isRunning() and not worker.isFinished():
                 worker._final_state = "quality_guard"
                 db_writer.enqueue_status(
-                    worker.db_id, "quality_guard", 0.0, "风控防御：质量异常过多，排队任务已挂起"
+                    worker.db_id,
+                    "quality_guard",
+                    0.0,
+                    tr_text("连续画质未达标，排队任务已暂停"),
                 )
                 if hasattr(worker, "unified_status"):
-                    worker.unified_status.emit("quality_guard", 0.0, "风控防御挂起")
+                    worker.unified_status.emit("quality_guard", 0.0, tr_text("画质检查暂停"))
                 count += 1
 
         if count > 0:

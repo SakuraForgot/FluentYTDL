@@ -18,6 +18,8 @@ from __future__ import annotations
 
 import sys
 
+from fluentytdl.utils.localized_log import log_text
+
 from ..utils.logger import logger
 
 #: WebView2 Runtime 的固定 GUID（Evergreen 与 Fixed Version 共用）。
@@ -61,9 +63,9 @@ def is_webview2_runtime_available(use_cache: bool = True) -> tuple[bool, str | N
     result = _probe()
 
     if result[0]:
-        logger.info(f"[WebView2Runtime] 已检测到运行时，版本 {result[1]}")
+        log_text(logger, "info", "[WebView2Runtime] 已检测到运行时，版本 {0}", result[1])
     else:
-        logger.warning("[WebView2Runtime] 未检测到 WebView2 运行时，登录模式不可用")
+        log_text(logger, "warning", "[WebView2Runtime] 未检测到 WebView2 运行时，登录模式不可用")
 
     _cached_result = result
     return result

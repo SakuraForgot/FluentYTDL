@@ -11,6 +11,8 @@
 
 from typing import Any
 
+from fluentytdl.utils.message_catalog import english
+
 from ..diagnostics import Diagnosis, diagnose
 
 
@@ -69,10 +71,17 @@ def generate_issue_url(title: str, raw_error: str) -> str:
     """生成预填内容的 GitHub Issue 链接"""
     import urllib.parse
 
+    from .log_privacy import redact_text
+
+    raw_error = redact_text(raw_error)
     max_err_len = 1500
     if len(raw_error) > max_err_len:
         raw_error = raw_error[:max_err_len] + "\n...[Truncated]"
     issue_title = urllib.parse.quote(f"[AutoReport] {title}")
-    body = f"### 错误描述\n自动捕获到的错误：\n**{title}**\n\n### 错误日志\n```text\n{raw_error}\n```\n\n### 其他信息\n- FluentYTDL 版本: \n- 操作系统: \n"
+    body = english(
+        "### 错误描述\n自动捕获到的错误：\n**{0}**\n\n### 错误日志\n```text\n{1}\n```\n\n### 其他信息\n- FluentYTDL 版本: \n- 操作系统: \n",
+        title,
+        raw_error,
+    )
     issue_body = urllib.parse.quote(body)
     return f"https://github.com/SakuraForgot/FluentYTDL/issues/new?title={issue_title}&body={issue_body}&labels=bug"

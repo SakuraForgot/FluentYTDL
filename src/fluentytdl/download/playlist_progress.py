@@ -1,6 +1,8 @@
 import re
 from dataclasses import dataclass
 
+from fluentytdl.utils.ui_text import tr_text
+
 
 def _format_speed(speed_bytes: int) -> str:
     """格式化速率: 1234567 -> '1.2MB/s'"""
@@ -116,7 +118,7 @@ class PlaylistProgressTracker:
         # ETA 格式化
         eta_str = ""
         if self.item_eta and self.item_eta > 0:
-            eta_str = f"⏳ 剩余: {_format_eta(self.item_eta)}"
+            eta_str = tr_text("⏳ 剩余: {0}", _format_eta(self.item_eta))
 
         # 下载量
         downloaded_str = ""
@@ -140,7 +142,7 @@ class PlaylistProgressTracker:
         elif self.item_percent > 0:
             line2 = f"⚡ {self.item_percent:.0f}%"
         else:
-            line2 = "⚡ 下载中..."
+            line2 = tr_text("⚡ 下载中...")
 
         return f"{line1}\n{line2}"
 
@@ -148,8 +150,14 @@ class PlaylistProgressTracker:
         """完成后的汇总文本。"""
         size_str = _format_size_human(self.total_downloaded_bytes)
         if self.failed_items > 0:
-            return f"已完成 {self.completed_items}/{self.total_items} · {self.failed_items} 个失败 · 总计 {size_str}"
-        return f"已完成 {self.total_items} 个视频 · 总计 {size_str}"
+            return tr_text(
+                "已完成 {0}/{1} · {2} 个失败 · 总计 {3}",
+                self.completed_items,
+                self.total_items,
+                self.failed_items,
+                size_str,
+            )
+        return tr_text("已完成 {0} 个视频 · 总计 {1}", self.total_items, size_str)
 
     @property
     def overall_percent(self) -> float:

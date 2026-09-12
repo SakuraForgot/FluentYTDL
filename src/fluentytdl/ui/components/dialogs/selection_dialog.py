@@ -44,6 +44,7 @@ from fluentytdl.ui.components.platforms.cover import CoverSelectorWidget
 from fluentytdl.ui.components.platforms.subtitle import SubtitleSelectorWidget
 from fluentytdl.ui.components.platforms.vr import VR_PRESETS, VRFormatSelectorWidget
 from fluentytdl.ui.components.platforms.youtube import VideoFormatSelectorWidget
+from fluentytdl.utils.ui_text import tr_text
 
 from ....download.extract_manager import AsyncExtractManager
 from ....download.workers import InfoExtractWorker, VRInfoExtractWorker
@@ -236,14 +237,16 @@ class SimplePresetWidget(QWidget):
             (
                 "best_mp4",
                 self.tr("🎬 最佳画质 (MP4)"),
-                self.tr("推荐。自动选择最佳画质并封装为 MP4，兼容性最好。"),
+                self.tr("优先选择适合 MP4 的视频和音频流；实际画质取决于源视频提供的格式。"),
                 "bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4] / bv*+ba/best",
                 {"merge_output_format": "mp4"},
             ),
             (
                 "best_raw",
-                self.tr("🎯 最佳画质 (原盘)"),
-                self.tr("追求极致画质。通常为 WebM/MKV 格式，适合本地播放。"),
+                self.tr("🎯 最佳画质（原始编码）"),
+                self.tr(
+                    "选择最佳可用的视频和音频流。保留源视频编码，播放兼容性取决于输出格式和播放器。"
+                ),
                 "bestvideo+bestaudio/best",
                 {},
             ),
@@ -251,28 +254,28 @@ class SimplePresetWidget(QWidget):
             (
                 "2160p",
                 "📺 2160p 4K (MP4)",
-                self.tr("限制最高分辨率为 4K，超高清画质。"),
+                self.tr("最高下载 2160p（4K），实际分辨率取决于可用的视频格式。"),
                 "bv*[height<=?2160][ext=mp4]+ba[ext=m4a]/b[height<=?2160][ext=mp4] / bv*[height<=?2160]+ba/best",
                 {"merge_output_format": "mp4"},
             ),
             (
                 "1440p",
                 "📺 1440p 2K (MP4)",
-                self.tr("限制最高分辨率为 2K，高清画质。"),
+                self.tr("最高下载 1440p，实际分辨率取决于可用的视频格式。"),
                 "bv*[height<=?1440][ext=mp4]+ba[ext=m4a]/b[height<=?1440][ext=mp4] / bv*[height<=?1440]+ba/best",
                 {"merge_output_format": "mp4"},
             ),
             (
                 "1080p",
                 self.tr("📺 1080p 高清 (MP4)"),
-                self.tr("限制最高分辨率为 1080p，平衡画质与体积。"),
+                self.tr("最高下载 1080p，兼顾清晰度与文件大小。"),
                 "bv*[height<=?1080][ext=mp4]+ba[ext=m4a]/b[height<=?1080][ext=mp4] / bv*[height<=?1080]+ba/best",
                 {"merge_output_format": "mp4"},
             ),
             (
                 "720p",
-                self.tr("📺 720p 标清 (MP4)"),
-                self.tr("限制最高分辨率为 720p，适合移动设备。"),
+                self.tr("📺 720p 高清 (MP4)"),
+                self.tr("最高下载 720p，适合较小屏幕或节省流量。"),
                 "bv*[height<=?720][ext=mp4]+ba[ext=m4a]/b[height<=?720][ext=mp4] / bv*[height<=?720]+ba/best",
                 {"merge_output_format": "mp4"},
             ),
@@ -286,7 +289,7 @@ class SimplePresetWidget(QWidget):
             (
                 "360p",
                 "📺 360p (MP4)",
-                self.tr("限制最高分辨率为 360p，最小体积。"),
+                self.tr("最高下载 360p，优先减少文件大小。"),
                 "bv*[height<=?360][ext=mp4]+ba[ext=m4a]/b[height<=?360][ext=mp4] / bv*[height<=?360]+ba/best",
                 {"merge_output_format": "mp4"},
             ),
@@ -845,10 +848,10 @@ class PlaylistFormatDialog(FramelessDialog):
             selected = self.selector.get_selected_tracks()  # type: ignore[attr-defined]
             if not selected:
                 return self.tr("未选择字幕")
-            return f"已选择 {len(selected)} 种语言"
+            return tr_text("已选择 {0} 种语言", len(selected))
         elif self._mode == "cover":
             ext = self.selector.get_selected_ext()  # type: ignore[attr-defined]
-            return f"已选择 {ext.upper()} 封面"
+            return tr_text("已选择 {0} 封面", ext.upper())
         else:
             return self.selector.get_summary_text()  # type: ignore[attr-defined]
 
@@ -1325,7 +1328,7 @@ class SelectionDialog(MessageBoxBase):
 
         text = f"{title}\n\n{content}"
         if suggestion:
-            text += f"\n\n建议操作：\n{suggestion}"
+            text += tr_text("\n\n建议操作：\n{0}", suggestion)
 
         fix_action = err_data.get("fix_action")
         if not fix_action and raw_error:
@@ -1562,7 +1565,7 @@ class SelectionDialog(MessageBoxBase):
 
         upload_date = _format_upload_date(info.get("upload_date"))
         view_count = info.get("view_count")
-        views_str = f"{int(view_count):,} 次观看" if view_count is not None else ""
+        views_str = tr_text("{0:,} 次观看", int(view_count)) if view_count is not None else ""
 
         title_label = SubtitleLabel(title, self)
         title_label.setWordWrap(True)
@@ -1699,7 +1702,7 @@ class SelectionDialog(MessageBoxBase):
         self.progressRing.setFixedSize(16, 16)
         self.progressRing.hide()
 
-        self.progressLabel = CaptionLabel(self.tr("详情补全：0/0"), self.contentWidget)
+        self.progressLabel = CaptionLabel(self.tr("已加载详情：0/0"), self.contentWidget)
         header_row.addStretch(1)
         header_row.addWidget(self.progressRing)
         header_row.addWidget(self.progressLabel)
@@ -2041,7 +2044,7 @@ class SelectionDialog(MessageBoxBase):
                 abr_int = int(a.get("abr") or 0)
             except Exception:
                 abr_int = 0
-            return f"音频{abr_int}k" if abr_int > 0 else self.tr("音频-")
+            return tr_text("音频{0}k", abr_int) if abr_int > 0 else self.tr("音频-")
 
         def _format_info_line(prefix: str, size_val: Any, ext_val: Any) -> str:
             size_str = _format_size(size_val)
@@ -2169,7 +2172,7 @@ class SelectionDialog(MessageBoxBase):
                         chosen_fmt = f
                         break
                 v_line = _format_info_line(
-                    f"{chosen or self.tr('视频')}",
+                    chosen or self.tr("视频"),
                     (chosen_fmt or {}).get("filesize"),
                     (chosen_fmt or {}).get("ext"),
                 )
@@ -2185,7 +2188,7 @@ class SelectionDialog(MessageBoxBase):
 
             # 仅视频
             v_line = _format_info_line(
-                f"{chosen or self.tr('已手动选择')}",
+                chosen or self.tr("已手动选择"),
                 (chosen_fmt or {}).get("filesize") if "chosen_fmt" in locals() else None,
                 None,
             )
@@ -2923,7 +2926,7 @@ class SelectionDialog(MessageBoxBase):
                 ydl_opts["sponsorblock_mark"] = None
                 ydl_opts["postprocessors"] = []
 
-                tasks.append((f"[字幕] {title}", url, ydl_opts, thumb))
+                tasks.append((tr_text("[字幕] {0}", title), url, ydl_opts, thumb))
                 return tasks
 
             elif self._mode == "cover":
@@ -2976,7 +2979,7 @@ class SelectionDialog(MessageBoxBase):
                     ydl_opts["sponsorblock_mark"] = None
                     ydl_opts["postprocessors"] = []
 
-                tasks.append((f"[封面] {title}", url, ydl_opts, thumb))
+                tasks.append((tr_text("[封面] {0}", title), url, ydl_opts, thumb))
                 return tasks
 
             # Delegate to the format selector component
@@ -3141,7 +3144,7 @@ class SelectionDialog(MessageBoxBase):
                 if pending:
                     box = MessageBox(
                         self.tr("仍在解析中"),
-                        f"还有 {len(pending)} 个已勾选条目正在补全信息。\n\n"
+                        tr_text("还有 {0} 个已勾选条目正在补全信息。\n\n", len(pending))
                         + self.tr(
                             "你可以继续下载（将按当前预设策略执行），或等待补全完成后再下载。"
                         ),
@@ -3266,7 +3269,11 @@ class SelectionDialog(MessageBoxBase):
             if mismatched:
                 box = MessageBox(
                     self.tr("预设质量不可用"),
-                    f"有 {len(mismatched)} 个已获取格式的条目最高画质低于 {preset_height}p。\n\n"
+                    tr_text(
+                        "有 {0} 个已获取格式的条目最高画质低于 {1}p。\n\n",
+                        len(mismatched),
+                        preset_height,
+                    )
                     + self.tr("可选择自动降低到该视频最高可用档位，或返回手动调整格式。"),
                     parent=self,
                 )

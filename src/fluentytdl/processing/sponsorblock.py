@@ -12,17 +12,48 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from PySide6.QtCore import QT_TRANSLATE_NOOP
+
+from fluentytdl.utils.ui_text import tr_text
+
 # SponsorBlock 片段类型
 SPONSOR_CATEGORIES = {
-    "sponsor": ("赞助广告", "跳过赞助商内容"),
-    "selfpromo": ("自我推广", "跳过频道推广"),
-    "interaction": ("互动提醒", "跳过订阅/点赞提醒"),
-    "intro": ("片头", "跳过视频片头"),
-    "outro": ("片尾", "跳过视频片尾"),
-    "preview": ("预告", "跳过预告片段"),
-    "music_offtopic": ("非音乐", "跳过非音乐部分"),
-    "poi_highlight": ("高光", "视频精华时刻"),
-    "filler": ("填充", "跳过无关内容"),
+    "sponsor": (
+        QT_TRANSLATE_NOOP("RuntimeText", "赞助广告"),
+        QT_TRANSLATE_NOOP("RuntimeText", "跳过赞助商内容"),
+    ),
+    "selfpromo": (
+        QT_TRANSLATE_NOOP("RuntimeText", "自我推广"),
+        QT_TRANSLATE_NOOP("RuntimeText", "跳过频道推广"),
+    ),
+    "interaction": (
+        QT_TRANSLATE_NOOP("RuntimeText", "互动提醒"),
+        QT_TRANSLATE_NOOP("RuntimeText", "跳过订阅/点赞提醒"),
+    ),
+    "intro": (
+        QT_TRANSLATE_NOOP("RuntimeText", "片头"),
+        QT_TRANSLATE_NOOP("RuntimeText", "跳过视频片头"),
+    ),
+    "outro": (
+        QT_TRANSLATE_NOOP("RuntimeText", "片尾"),
+        QT_TRANSLATE_NOOP("RuntimeText", "跳过视频片尾"),
+    ),
+    "preview": (
+        QT_TRANSLATE_NOOP("RuntimeText", "预告"),
+        QT_TRANSLATE_NOOP("RuntimeText", "跳过预告片段"),
+    ),
+    "music_offtopic": (
+        QT_TRANSLATE_NOOP("RuntimeText", "非音乐"),
+        QT_TRANSLATE_NOOP("RuntimeText", "跳过非音乐部分"),
+    ),
+    "poi_highlight": (
+        QT_TRANSLATE_NOOP("RuntimeText", "高光"),
+        QT_TRANSLATE_NOOP("RuntimeText", "视频精华时刻"),
+    ),
+    "filler": (
+        QT_TRANSLATE_NOOP("RuntimeText", "填充"),
+        QT_TRANSLATE_NOOP("RuntimeText", "跳过无关内容"),
+    ),
 }
 
 # 默认启用的类别
@@ -44,7 +75,7 @@ class SponsorSegment:
 
     @property
     def category_name(self) -> str:
-        return SPONSOR_CATEGORIES.get(self.category, (self.category, ""))[0]
+        return tr_text(SPONSOR_CATEGORIES.get(self.category, (self.category, ""))[0])
 
     def __str__(self) -> str:
         return f"{self.category_name} ({self.start:.1f}s - {self.end:.1f}s)"
@@ -187,7 +218,7 @@ def get_available_categories() -> list[dict[str, str]]:
         [{"id": "sponsor", "name": "赞助广告", "desc": "跳过赞助商内容"}, ...]
     """
     return [
-        {"id": cat_id, "name": name, "desc": desc}
+        {"id": cat_id, "name": tr_text(name), "desc": tr_text(desc)}
         for cat_id, (name, desc) in SPONSOR_CATEGORIES.items()
     ]
 

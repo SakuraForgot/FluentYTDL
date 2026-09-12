@@ -45,7 +45,7 @@ class ConfigManager(QObject):
         # Example value: "mweb.gvs+<TOKEN>" or "mweb.gvs+<TOKEN>,mweb.player+<TOKEN>"
         "youtube_po_token": "",
         # POT Provider (bgutil-ytdlp-pot-provider) 自动 PO Token 服务
-        "pot_provider_enabled": False,  # 启用内置 POT 服务
+        "pot_provider_enabled": True,  # 启用内置 POT 服务
         # yt-dlp YouTube EJS/JS runtime (yt-dlp issue #15012)
         # auto: prefer deno if available (default), else try node/bun/quickjs
         "js_runtime": "auto",  # auto / deno / node / bun / quickjs
@@ -91,7 +91,7 @@ class ConfigManager(QObject):
         "parse_cache_entry_max": 64,
         # Dependency update source
         # github: official github api/releases
-        # ghproxy: use ghproxy mirror
+        # cloudflare: cached update metadata; downloads stay on GitHub
         "update_source": "github",
         # Whether to check for component updates (yt-dlp, ffmpeg, etc.) on startup
         # If true, checks once every 24 hours.
@@ -161,6 +161,7 @@ class ConfigManager(QObject):
         # 更新通道跳过版本（按通道分别存储）
         "skipped_stable_version": "",
         "skipped_pre_version": "",
+        "app_update_channel": "stable",
         # === 快速模式 ===
         "quick_mode_initialized": False,
         "quick_playlist_strategy": "auto",
@@ -278,6 +279,11 @@ class ConfigManager(QObject):
                 return self.DEFAULT_CONFIG.copy()
             # 合并默认配置，防止新版本缺字段
             merged = {**self.DEFAULT_CONFIG, **data}
+            if merged.get("update_source") == "ghproxy":
+                merged["update_source"] = "cloudflare"
+            from ..utils.language import normalize_language_setting
+
+            merged["app_language"] = normalize_language_setting(merged["app_language"])
 
             # Migration: proxy_enabled/proxy_url -> proxy_mode
             if "proxy_mode" not in data:

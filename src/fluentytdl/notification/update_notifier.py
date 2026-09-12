@@ -18,6 +18,9 @@
 
 from __future__ import annotations
 
+from fluentytdl.utils.localized_log import log_text
+from fluentytdl.utils.ui_text import tr_text
+
 from ..utils.logger import logger
 from .notification_center import notification_center
 from .notification_model import Notification
@@ -50,12 +53,12 @@ def notify_app_update(info: dict) -> None:
     """app-core 有新版本。"""
     version = info.get("version", "?")
     is_pre = info.get("is_prerelease", False)
-    prefix = "预发布版本" if is_pre else "新版本"
+    prefix = tr_text("预发布版本") if is_pre else tr_text("新版本")
     _push(
         "app-core",
         version,
-        f"FluentYTDL {prefix} {version}",
-        f"{prefix} {version} 已可用，前往「设置 → 系统 → 关于」即可更新。",
+        tr_text("FluentYTDL {0} {1}", prefix, version),
+        tr_text("{0} {1} 已可用，前往「设置 → 更新」即可更新。", prefix, version),
     )
 
 
@@ -74,7 +77,7 @@ def notify_component_update(key: str, result: dict) -> None:
     # 这条曾经真的发生过：清单里 bin 组件的 url 全是空串，铃铛一直提示 deno 有更新，
     # 点进去只会得到一句"没能解析出下载地址"。
     if not result.get("url"):
-        logger.debug(f"[UpdateNotifier] 跳过 {key}：有更新但没有下载地址")
+        log_text(logger, "debug", "[UpdateNotifier] 跳过 {0}：有更新但没有下载地址", key)
         return
 
     try:
@@ -88,17 +91,27 @@ def notify_component_update(key: str, result: dict) -> None:
     latest_ch = str(result.get("latest_channel") or "")
     if current_ch and latest_ch and current_ch != latest_ch and current != "unknown":
         # 频道切换不是"升级"，版本号可能反而更小，说成"新版本"会让人困惑
-        title = f"{name} 需要切换频道"
-        message = (
-            f"{name} 将从 {current_ch} 频道切换到 {latest_ch} 频道"
-            f"（{current} → {latest}），前往「设置 → 组件」即可应用。"
+        title = tr_text("{0} 需要切换频道", name)
+        message = tr_text(
+            "{0} 将从 {1} 频道切换到 {2} 频道（{3} → {4}），前往「设置 → 更新」即可应用。",
+            name,
+            current_ch,
+            latest_ch,
+            current,
+            latest,
         )
     else:
-        title = f"{name} 有新版本 {latest}"
-        message = f"{name} {latest} 已可用（当前 {current}），前往「设置 → 组件」即可更新。"
+        title = tr_text("{0} 有新版本 {1}", name, latest)
+        message = tr_text(
+            "{0} {1} 已可用（当前 {2}），前往「设置 → 更新」即可更新。", name, latest, current
+        )
 
     if result.get("source") == "path":
-        message += "\n当前使用的是系统 PATH 上的版本，更新会在应用自带目录下安装一份并优先使用。"
+        message = tr_text(
+            "{0}{1}",
+            message,
+            tr_text("\n当前使用的是系统 PATH 上的版本，更新会在应用自带目录下安装一份并优先使用。"),
+        )
 
     _push(key, latest, title, message)
 
@@ -115,4 +128,4 @@ def install_update_notifier() -> None:
 
     component_update_manager.app_update_available.connect(notify_app_update)
     dependency_manager.check_finished.connect(notify_component_update)
-    logger.debug("[UpdateNotifier] 更新通知已接入消息中心")
+    log_text(logger, "debug", "[UpdateNotifier] 更新通知已接入消息中心")

@@ -28,6 +28,8 @@ import zipfile
 from collections.abc import Callable
 from pathlib import Path
 
+from fluentytdl.utils.message_catalog import english, standalone_text
+
 # Windows API 常量
 WAIT_OBJECT_0 = 0x00000000
 WAIT_TIMEOUT = 0x00000102
@@ -282,7 +284,7 @@ def log(msg: str) -> None:
         pass
 
 
-def _alert(msg: str, title: str = "FluentYTDL 更新") -> None:
+def _alert(msg: str, title: str = "") -> None:
     """弹一个模态错误框告知用户更新失败。
 
     updater.exe 是 console=False 的独立进程（scripts/updater.spec），既没有可见的
@@ -301,9 +303,11 @@ def _alert(msg: str, title: str = "FluentYTDL 更新") -> None:
         return
     try:
         user32 = ctypes.windll.user32
-        user32.MessageBoxW(0, msg, title, MB_ICONERROR | MB_TOPMOST)
+        user32.MessageBoxW(
+            0, msg, title or standalone_text("FluentYTDL 更新"), MB_ICONERROR | MB_TOPMOST
+        )
     except Exception as e:
-        log(f"MessageBoxW 失败（用户看不到这次失败）: {e}")
+        log(english("MessageBoxW 失败（用户看不到这次失败）: {0}", e))
 
 
 def wait_for_process(pid: int, timeout: int = 30) -> bool:
@@ -327,20 +331,20 @@ def _wait_windows(pid: int, timeout: int) -> bool:
     handle = kernel32.OpenProcess(0x00100000, False, pid)
     if not handle:
         # 进程不存在，视为已退出
-        log(f"进程 {pid} 不存在或已退出")
+        log(english("进程 {0} 不存在或已退出", pid))
         return True
 
     try:
         timeout_ms = timeout * 1000 if timeout > 0 else INFINITE
         result = kernel32.WaitForSingleObject(handle, timeout_ms)
         if result == WAIT_OBJECT_0:
-            log(f"进程 {pid} 已退出")
+            log(english("进程 {0} 已退出", pid))
             return True
         elif result == WAIT_TIMEOUT:
-            log(f"等待进程 {pid} 超时 ({timeout}s)")
+            log(english("等待进程 {0} 超时 ({1}s)", pid, timeout))
             return False
         else:
-            log(f"WaitForSingleObject 返回异常值: {result}")
+            log(english("WaitForSingleObject 返回异常值: {0}", result))
             return False
     finally:
         kernel32.CloseHandle(handle)
@@ -354,9 +358,9 @@ def _wait_polling(pid: int, timeout: int) -> bool:
             os.kill(pid, 0)  # 检查进程是否存在
             time.sleep(0.5)
         except OSError:
-            log(f"进程 {pid} 已退出")
+            log(english("进程 {0} 已退出", pid))
             return True
-    log(f"等待进程 {pid} 超时 ({timeout}s)")
+    log(english("等待进程 {0} 超时 ({1}s)", pid, timeout))
     return False
 
 
@@ -370,7 +374,7 @@ def extract_archive(archive_path: Path, dest_dir: Path) -> None:
     elif archive_path.suffix == ".zip":
         _extract_zip(archive_path, dest_dir)
     else:
-        raise ValueError(f"不支持的归档格式: {archive_path.suffix}")
+        raise ValueError(english("不支持的归档格式: {0}", archive_path.suffix))
 
 
 def _bundled_7za() -> Path | None:
@@ -385,13 +389,13 @@ def _bundled_7za() -> Path | None:
 def _extract_7z(archive_path: Path, dest_dir: Path, *, require_native: bool = False) -> None:
     """Use the bundled console; fall back only when it cannot be launched."""
     sevenzip = _bundled_7za()
-    launch_error = "内嵌 7za 不存在"
+    launch_error = english("内嵌 7za 不存在")
     if sevenzip is not None:
         try:
             metadata = json.loads(sevenzip.with_name("version.json").read_text(encoding="utf-8"))
-            log(f"内嵌 7za version={metadata.get('version', 'unknown')}")
+            log(english("内嵌 7za version={0}", metadata.get("version", "unknown")))
         except (OSError, ValueError):
-            log("内嵌 7za version=unknown")
+            log(english("内嵌 7za version=unknown"))
         try:
             result = subprocess.run(
                 [
@@ -408,34 +412,36 @@ def _extract_7z(archive_path: Path, dest_dir: Path, *, require_native: bool = Fa
                 creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
             )
         except OSError as exc:
-            launch_error = f"内嵌 7za 无法启动: {exc}"
+            launch_error = english("内嵌 7za 无法启动: {0}", exc)
             log(launch_error)
         else:
             if result.returncode != 0:
                 detail = (result.stderr or result.stdout).decode("utf-8", errors="replace").strip()
-                raise RuntimeError(f"7za 解压失败 (exit {result.returncode}): {detail[-4000:]}")
-            log("通过内嵌 7za 解压完成")
+                raise RuntimeError(
+                    english("7za 解压失败 (exit {0}): {1}", result.returncode, detail[-4000:])
+                )
+            log(english("通过内嵌 7za 解压完成"))
             return
     if require_native:
         raise RuntimeError(launch_error)
-    log(f"{launch_error}，尝试 py7zr")
+    log(english("{0}，尝试 py7zr", launch_error))
     try:
         import py7zr
     except ImportError as exc:
-        raise RuntimeError(f"{launch_error}；py7zr 依赖加载失败: {exc}") from exc
+        raise RuntimeError(english("{0}；py7zr 依赖加载失败: {1}", launch_error, exc)) from exc
     try:
         with py7zr.SevenZipFile(archive_path, "r") as archive:
             archive.extractall(dest_dir)
     except Exception as exc:
-        raise RuntimeError(f"py7zr 解压失败 ({type(exc).__name__}): {exc}") from exc
-    log("通过 py7zr 解压完成")
+        raise RuntimeError(english("py7zr 解压失败 ({0}): {1}", type(exc).__name__, exc)) from exc
+    log(english("通过 py7zr 解压完成"))
 
 
 def _extract_zip(archive_path: Path, dest_dir: Path) -> None:
     """解压 zip 文件。"""
     with zipfile.ZipFile(archive_path) as zf:
         zf.extractall(dest_dir)
-    log("通过 zipfile 解压完成")
+    log(english("通过 zipfile 解压完成"))
 
 
 def self_delete(exe_path: Path) -> None:
@@ -478,7 +484,7 @@ def _is_admin() -> bool:
         shell32 = ctypes.windll.shell32
         return bool(shell32.IsUserAnAdmin())
     except Exception as e:
-        log(f"IsUserAnAdmin 调用失败，按无管理员权限处理: {e}")
+        log(english("IsUserAnAdmin 调用失败，按无管理员权限处理: {0}", e))
         return False
 
 
@@ -500,7 +506,7 @@ def _can_write_dir(path: Path) -> bool:
             f.write(b"probe")
         return True
     except OSError as e:
-        log(f"写探测失败（目录不可写）: {path} — {e}")
+        log(english("写探测失败（目录不可写）: {0} — {1}", path, e))
         return False
 
 
@@ -529,12 +535,12 @@ def request_admin_if_needed(
     # 每次都弹框、每次都拉起一个新的 updater、永远走不到替换那一步。这正是
     # Program Files 安装用户"永远收不到更新"的直接成因。
     if already_elevated:
-        log("本进程已是提权实例（--elevated），跳过提权检查")
+        log(english("本进程已是提权实例（--elevated），跳过提权检查"))
         return False
 
     # 闸门 2：已经是管理员就没什么可提的。
     if is_admin_fn():
-        log("当前进程已具备管理员权限，无需提权")
+        log(english("当前进程已具备管理员权限，无需提权"))
         return False
 
     # 检测是否在 Program Files 目录下
@@ -549,13 +555,13 @@ def request_admin_if_needed(
 
     # 如果在 Program Files 下，需要提权
     if app_dir_str.startswith(program_files) or app_dir_str.startswith(program_files_x86):
-        log("检测到 Program Files 目录，尝试请求管理员权限...")
+        log(english("检测到 Program Files 目录，尝试请求管理员权限..."))
         return _elevate_self()
 
     # 兜底：前缀启发式覆盖不到自定义只读安装位置（如 D:\Apps\FluentYTDL 被管理员
     # 收紧了 ACL）。真探一次比猜路径可靠。
     if not _can_write_dir(app_dir):
-        log("目标目录不可写（自定义只读安装位置），尝试请求管理员权限...")
+        log(english("目标目录不可写（自定义只读安装位置），尝试请求管理员权限..."))
         return _elevate_self()
 
     return False
@@ -574,6 +580,16 @@ def _elevate_self() -> bool:
         forwarded = list(sys.argv[1:])
         if "--elevated" not in forwarded:
             forwarded.append("--elevated")
+        if not any(arg == "--language" or arg.startswith("--language=") for arg in forwarded):
+            from fluentytdl.utils.language import normalize_language
+
+            # UAC may rebuild the environment; explicitly preserve the selected language.
+            forwarded.extend(
+                [
+                    "--language",
+                    normalize_language(os.environ.get("FLUENTYTDL_UI_LANGUAGE", "en_US")),
+                ]
+            )
         args = " ".join(_quote(a) for a in forwarded)
 
         if getattr(sys, "frozen", False):
@@ -595,13 +611,13 @@ def _elevate_self() -> bool:
             0,  # SW_HIDE — 不显示窗口
         )
         if ret > 32:
-            log("已启动管理员权限进程，当前进程退出")
+            log(english("已启动管理员权限进程，当前进程退出"))
             return True
         else:
-            log(f"ShellExecuteW 返回 {ret}，提权失败")
+            log(english("ShellExecuteW 返回 {0}，提权失败", ret))
             return False
     except Exception as e:
-        log(f"提权失败: {e}")
+        log(english("提权失败: {0}", e))
         return False
 
 
@@ -618,28 +634,28 @@ def _verify_extraction(extract_dir: Path, exe_name: str) -> bool:
     """
     exe_path = extract_dir / exe_name
     if not exe_path.exists() or exe_path.stat().st_size == 0:
-        log(f"错误: {exe_name} 不存在或大小为 0")
+        log(english("错误: {0} 不存在或大小为 0", exe_name))
         return False
 
     internal_dir = extract_dir / "_internal"
     if not internal_dir.exists() or not any(internal_dir.iterdir()):
-        log("错误: _internal/ 目录不存在或为空")
+        log(english("错误: _internal/ 目录不存在或为空"))
         return False
 
     base_library = internal_dir / "base_library.zip"
     if not base_library.exists() or base_library.stat().st_size == 0:
-        log("错误: _internal/base_library.zip 不存在或大小为 0（归档不完整）")
+        log(english("错误: _internal/base_library.zip 不存在或大小为 0（归档不完整）"))
         return False
 
     python_dlls = [p for p in internal_dir.glob("python3*.dll") if p.stat().st_size > 0]
     if not python_dlls:
-        log("错误: _internal/ 下找不到 python3*.dll（归档不完整）")
+        log(english("错误: _internal/ 下找不到 python3*.dll（归档不完整）"))
         return False
-    log(f"  飞行前检查通过: base_library.zip + {python_dlls[0].name}")
+    log(english("  飞行前检查通过: base_library.zip + {0}", python_dlls[0].name))
 
     version_file = extract_dir / "VERSION"
     if not version_file.exists():
-        log("警告: VERSION 文件不存在（非致命）")
+        log(english("警告: VERSION 文件不存在（非致命）"))
 
     return True
 
@@ -684,7 +700,7 @@ def _move_extracted_files(tmp_dir: Path, dest_dir: Path) -> bool:
     """
     for item in tmp_dir.iterdir():
         if item.name.casefold() in _PROTECTED_CASEFOLDED:
-            log(f"  跳过受保护条目（归档不该含它）: {item.name}")
+            log(english("  跳过受保护条目（归档不该含它）: {0}", item.name))
             continue
         dest = dest_dir / item.name
         try:
@@ -695,9 +711,9 @@ def _move_extracted_files(tmp_dir: Path, dest_dir: Path) -> bool:
                 else:
                     dest.unlink(missing_ok=True)
             shutil.move(str(item), str(dest))
-            log(f"  移动: {item.name}")
+            log(english("  移动: {0}", item.name))
         except OSError as e:
-            log(f"移动 {item.name} 失败: {e}")
+            log(english("移动 {0} 失败: {1}", item.name, e))
             return False
     return True
 
@@ -734,9 +750,9 @@ def _notify_shell_icon_change(exe_path: Path) -> None:
             None,
         )
         shell32.SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST, None, None)
-        log("  已通知外壳刷新图标缓存")
+        log(english("  已通知外壳刷新图标缓存"))
     except Exception as e:  # 装饰性调用，任何异常都只记一行
-        log(f"  通知外壳刷新图标缓存失败（无害）: {e}")
+        log(english("  通知外壳刷新图标缓存失败（无害）: {0}", e))
 
 
 # ─── Step 6：降权启动新版 ──────────────────────────────────
@@ -788,7 +804,7 @@ def _token_user_sid(h_token: int) -> str:
         finally:
             ctypes.windll.kernel32.LocalFree(sid_str)
     except Exception as e:
-        log(f"  读取令牌 SID 失败: {e}")
+        log(english("  读取令牌 SID 失败: {0}", e))
         return ""
 
 
@@ -802,7 +818,7 @@ def _open_self_token() -> int | None:
             return None
         return h_token.value
     except Exception as e:
-        log(f"  打开自身令牌失败: {e}")
+        log(english("  打开自身令牌失败: {0}", e))
         return None
 
 
@@ -813,7 +829,7 @@ def _open_shell_token() -> int | None:
         u32 = ctypes.windll.user32
         hwnd = u32.GetShellWindow()
         if not hwnd:
-            log("  shell token: GetShellWindow 返回 0（Explorer 未运行？）")
+            log(english("  shell token: GetShellWindow 返回 0（Explorer 未运行？）"))
             return None
         pid = ctypes.c_ulong(0)
         u32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
@@ -821,20 +837,20 @@ def _open_shell_token() -> int | None:
             return None
         h_proc = k32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid.value)
         if not h_proc:
-            log("  shell token: OpenProcess 失败")
+            log(english("  shell token: OpenProcess 失败"))
             return None
         try:
             h_token = ctypes.c_void_p()
             if not ctypes.windll.advapi32.OpenProcessToken(
                 h_proc, TOKEN_QUERY | TOKEN_DUPLICATE, ctypes.byref(h_token)
             ):
-                log("  shell token: OpenProcessToken 失败")
+                log(english("  shell token: OpenProcessToken 失败"))
                 return None
             return h_token.value
         finally:
             _close_handle(h_proc)
     except Exception as e:
-        log(f"  取 shell token 失败: {e}")
+        log(english("  取 shell token 失败: {0}", e))
         return None
 
 
@@ -853,11 +869,11 @@ def _open_linked_token() -> int | None:
             ctypes.sizeof(linked),
             ctypes.byref(ret_len),
         ):
-            log("  linked token: GetTokenInformation(TokenLinkedToken) 失败")
+            log(english("  linked token: GetTokenInformation(TokenLinkedToken) 失败"))
             return None
         return linked.value
     except Exception as e:
-        log(f"  取 linked token 失败: {e}")
+        log(english("  取 linked token 失败: {0}", e))
         return None
     finally:
         _close_handle(h_self)
@@ -879,11 +895,11 @@ def _duplicate_primary(h_token: int) -> int | None:
             TOKEN_PRIMARY,
             ctypes.byref(h_new),
         ):
-            log(f"  DuplicateTokenEx 失败 (err={ctypes.get_last_error()})")
+            log(english("  DuplicateTokenEx 失败 (err={0})", ctypes.get_last_error()))
             return None
         return h_new.value
     except Exception as e:
-        log(f"  DuplicateTokenEx 异常: {e}")
+        log(english("  DuplicateTokenEx 异常: {0}", e))
         return None
 
 
@@ -908,7 +924,7 @@ def _create_process_with_token(
         if ctypes.windll.userenv.CreateEnvironmentBlock(ctypes.byref(env_block), h_token, False):
             have_env = True
         else:
-            log("  警告: CreateEnvironmentBlock 失败，退回继承父进程环境")
+            log(english("  警告: CreateEnvironmentBlock 失败，退回继承父进程环境"))
 
         si = _STARTUPINFOW()
         si.cb = ctypes.sizeof(si)
@@ -928,12 +944,12 @@ def _create_process_with_token(
             ctypes.byref(pi),
         )
         if not ok:
-            log(f"  CreateProcessWithTokenW 失败 (err={ctypes.get_last_error()})")
+            log(english("  CreateProcessWithTokenW 失败 (err={0})", ctypes.get_last_error()))
             return None, 0
         _close_handle(pi.hThread)
         return pi.hProcess, int(pi.dwProcessId)
     except Exception as e:
-        log(f"  CreateProcessWithTokenW 异常: {e}")
+        log(english("  CreateProcessWithTokenW 异常: {0}", e))
         return None, 0
     finally:
         if have_env:
@@ -959,15 +975,15 @@ def _shell_execute_ex(exe_path: Path, params: str, cwd: Path) -> tuple[int | Non
         sei.lpDirectory = str(cwd)
         sei.nShow = SW_SHOWNORMAL
         if not ctypes.windll.shell32.ShellExecuteExW(ctypes.byref(sei)):
-            log(f"  ShellExecuteExW 失败 (err={ctypes.get_last_error()})")
+            log(english("  ShellExecuteExW 失败 (err={0})", ctypes.get_last_error()))
             return None, 0
         h_proc = sei.hProcess
         if not h_proc:
-            log("  ShellExecuteExW 成功但未返回进程句柄")
+            log(english("  ShellExecuteExW 成功但未返回进程句柄"))
             return None, 0
         return h_proc, int(ctypes.windll.kernel32.GetProcessId(h_proc))
     except Exception as e:
-        log(f"  ShellExecuteExW 异常: {e}")
+        log(english("  ShellExecuteExW 异常: {0}", e))
         return None, 0
 
 
@@ -1028,20 +1044,24 @@ def _launch_medium(
         linked_sid = _token_user_sid(h_linked) if h_linked else None
         self_sid = _token_user_sid(h_self) if h_self else None
 
-        log(f"  origin SID : {origin_sid or '(未提供)'}")
-        log(f"  shell  SID : {shell_sid or '(取不到)'}")
-        log(f"  linked SID : {linked_sid or '(取不到)'}")
-        log(f"  self   SID : {self_sid or '(取不到)'}")
+        log(f"  origin SID : {origin_sid or english('(未提供)')}")
+        log(f"  shell  SID : {shell_sid or english('(取不到)')}")
+        log(f"  linked SID : {linked_sid or english('(取不到)')}")
+        log(f"  self   SID : {self_sid or english('(取不到)')}")
         if not origin_sid:
-            log("  警告: 未收到 --origin-user-sid（旧主程序），跳过身份校验，只看完整性级别")
+            log(
+                english(
+                    "  警告: 未收到 --origin-user-sid（旧主程序），跳过身份校验，只看完整性级别"
+                )
+            )
 
         rung = pick_launch_rung(shell_sid, linked_sid, self_sid, origin_sid)
-        log(f"  选定降权级别: {rung}")
+        log(english("  选定降权级别: {0}", rung))
 
         if rung is None:
             # OTS 提权：三级令牌没有一个属于发起更新的用户。宁可让用户多点一次
             # 桌面图标，也不能用 Bob 的身份去开 Alice 的数据目录。
-            log("  没有任何一级令牌的身份等于原用户（典型为 OTS 提权），不自动启动新版")
+            log(english("  没有任何一级令牌的身份等于原用户（典型为 OTS 提权），不自动启动新版"))
             return None, 0, "none"
 
         for candidate, h_token, label in (
@@ -1052,23 +1072,23 @@ def _launch_medium(
                 continue
             h_primary = _duplicate_primary(h_token) if h_token else None
             if not h_primary:
-                log(f"  {label}: 复制 primary token 失败，退化到 ShellExecuteExW")
+                log(english("  {0}: 复制 primary token 失败，退化到 ShellExecuteExW", label))
                 break
             try:
                 handle, pid = _create_process_with_token(h_primary, exe_path, params, cwd)
             finally:
                 _close_handle(h_primary)
             if handle:
-                log(f"  已用 {label} 降权启动新版 (pid={pid})")
+                log(english("  已用 {0} 降权启动新版 (pid={1})", label, pid))
                 return handle, pid, label
-            log(f"  {label}: CreateProcessWithTokenW 未成功，退化到 ShellExecuteExW")
+            log(english("  {0}: CreateProcessWithTokenW 未成功，退化到 ShellExecuteExW", label))
             break
 
         # 第 3 级：同一用户但完整性级别偏高。--data-dir 已转发，数据位置仍然正确。
-        log("  使用退化路径 ShellExecuteExW（新版将继承管理员令牌）")
+        log(english("  使用退化路径 ShellExecuteExW（新版将继承管理员令牌）"))
         handle, pid = _shell_execute_ex(exe_path, params, cwd)
         if handle:
-            log(f"  已启动新版 (pid={pid})，注意：该实例以管理员权限运行")
+            log(english("  已启动新版 (pid={0})，注意：该实例以管理员权限运行", pid))
             return handle, pid, "shell_execute"
         return None, 0, "none"
     finally:
@@ -1169,23 +1189,23 @@ def _commit_update(
     每一项都是 best-effort —— 走到这里更新**已经成功**，清理残留失败不该把
     成功报成失败。删不掉的备份由 main.py 的场景 A/B 兜底逻辑下次启动时重试。
     """
-    log("COMMIT: 新版本已就绪，清理回滚素材...")
+    log(english("COMMIT: 新版本已就绪，清理回滚素材..."))
     if internal_old.exists():
         shutil.rmtree(internal_old, ignore_errors=True)
         if internal_old.exists():
-            log("  _internal_old/ 清理未完全（主程序启动时会重试）")
+            log(english("  _internal_old/ 清理未完全（主程序启动时会重试）"))
         else:
-            log("  _internal_old/ 已删除")
+            log(english("  _internal_old/ 已删除"))
     if exe_old.exists():
         try:
             exe_old.unlink(missing_ok=True)
-            log("  .exe.old 已删除")
+            log(english("  .exe.old 已删除"))
         except OSError as e:
-            log(f"  .exe.old 清理失败（主程序启动时会重试）: {e}")
+            log(english("  .exe.old 清理失败（主程序启动时会重试）: {0}", e))
     shutil.rmtree(tmp_dir, ignore_errors=True)
     try:
         archive_path.unlink(missing_ok=True)
-        log("  归档文件已删除")
+        log(english("  归档文件已删除"))
     except OSError:
         pass
     # READY 文件是一次性握手凭据，用完即弃 —— 留着它下次启动会被当成陈旧信号
@@ -1253,9 +1273,9 @@ def _spawn_updater_swap_helper(target: Path, staged: Path) -> None:
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
-        log(f"  已 spawn updater 自更新 helper: {staged.name} → {target.name}")
+        log(english("  已 spawn updater 自更新 helper: {0} → {1}", staged.name, target.name))
     except OSError as e:
-        log(f"  spawn updater 自更新 helper 失败（.new 保留，下次重试）: {e}")
+        log(english("  spawn updater 自更新 helper 失败（.new 保留，下次重试）: {0}", e))
 
 
 def _self_update_updater(dest_dir: Path) -> None:
@@ -1289,24 +1309,24 @@ def _self_update_updater(dest_dir: Path) -> None:
         return
 
     target = dest_dir / "updater.exe"
-    log("Step 8: 发现 updater.exe.new，开始 updater 自更新")
+    log(english("Step 8: 发现 updater.exe.new，开始 updater 自更新"))
 
     try:
         if staged.resolve() == target.resolve():
             # 理论上不该发生（两个不同的文件名），但 resolve() 会跟符号链接，
             # 真撞上了就直接放手 —— 继续下去会把 updater.exe 自己删掉。
-            log("  跳过: .new 与 updater.exe 解析到同一路径")
+            log(english("  跳过: .new 与 updater.exe 解析到同一路径"))
             return
     except OSError:
         pass
 
     try:
         os.replace(staged, target)
-        log("  updater.exe 已就地替换（目标未被占用）")
+        log(english("  updater.exe 已就地替换（目标未被占用）"))
         return
     except OSError as e:
         # 绝大多数情况会走到这里：target 就是正在跑的这个 image。
-        log(f"  就地替换不可行（{e.__class__.__name__}），改用退出后 helper")
+        log(english("  就地替换不可行（{0}），改用退出后 helper", e.__class__.__name__))
 
     _spawn_updater_swap_helper(target, staged)
 
@@ -1324,37 +1344,37 @@ def _rollback_update(
     `_internal_old` 是提权进程创建的、继承 `{app}` 的 ACL，普通权限的新版
     连删都删不掉。这正是把回滚从应用侧搬到 updater 侧的根本原因。
     """
-    log("ROLLBACK: 还原到更新前的版本...")
+    log(english("ROLLBACK: 还原到更新前的版本..."))
     if internal_dir.exists():
         shutil.rmtree(internal_dir, ignore_errors=True)
     if internal_old.exists() and not internal_dir.exists():
         try:
             internal_old.rename(internal_dir)
-            log("  _internal_old/ → _internal/ 已还原")
+            log(english("  _internal_old/ → _internal/ 已还原"))
         except OSError as e:
-            log(f"  还原 _internal 失败: {e}")
+            log(english("  还原 _internal 失败: {0}", e))
     if exe_path.exists():
         try:
             exe_path.unlink(missing_ok=True)
         except OSError as e:
-            log(f"  删除新版 exe 失败: {e}")
+            log(english("  删除新版 exe 失败: {0}", e))
     if exe_old.exists() and not exe_path.exists():
         try:
             exe_old.rename(exe_path)
-            log(f"  .exe.old → {exe_path.name} 已还原")
+            log(english("  .exe.old → {0} 已还原", exe_path.name))
         except OSError as e:
-            log(f"  还原 exe 失败: {e}")
+            log(english("  还原 exe 失败: {0}", e))
 
     # 这一批 app-core 已被判定为坏的，同批投递的 updater.exe.new 同样不可信
     updater_new = exe_path.parent / "updater.exe.new"
     if updater_new.exists():
         try:
             updater_new.unlink(missing_ok=True)
-            log("  已删除同批投递的 updater.exe.new（该构建被判定为坏）")
+            log(english("  已删除同批投递的 updater.exe.new（该构建被判定为坏）"))
         except OSError:
             pass
 
-    log("  启动旧版本...")
+    log(english("  启动旧版本..."))
     # 回滚启动**不传** --data-dir / --update-ready-token：旧版不认识这些参数，
     # 传了会让它 SystemExit(2)，把"已还原"变成"什么都起不来"。
     h_old, old_pid, mode = _launch_medium(exe_path, exe_path.parent, [], origin_sid)
@@ -1362,22 +1382,22 @@ def _rollback_update(
     # 回收，但显式关掉才与 Step 6/7 的其余路径保持同一套约定。
     _close_handle(h_old)
     if old_pid:
-        log(f"  旧版本已启动 (pid={old_pid}, mode={mode})")
+        log(english("  旧版本已启动 (pid={0}, mode={1})", old_pid, mode))
     else:
-        log("  警告: 旧版本未能自动启动，需用户手动启动")
+        log(english("  警告: 旧版本未能自动启动，需用户手动启动"))
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="FluentYTDL 独立更新器")
-    parser.add_argument("--pid", type=int, required=True, help="主进程 PID")
-    parser.add_argument("--archive", required=True, help="更新归档文件路径 (7z/zip)")
-    parser.add_argument("--dest", required=True, help="应用安装目录")
-    parser.add_argument("--exe", default="FluentYTDL.exe", help="主程序可执行文件名")
-    parser.add_argument("--timeout", type=int, default=30, help="等待进程退出的超时秒数")
+    parser = argparse.ArgumentParser(description=english("FluentYTDL 独立更新器"))
+    parser.add_argument("--pid", type=int, required=True, help=english("主进程 PID"))
+    parser.add_argument("--archive", required=True, help=english("更新归档文件路径 (7z/zip)"))
+    parser.add_argument("--dest", required=True, help=english("应用安装目录"))
+    parser.add_argument("--exe", default="FluentYTDL.exe", help=english("主程序可执行文件名"))
+    parser.add_argument("--timeout", type=int, default=30, help=english("等待进程退出的超时秒数"))
     parser.add_argument(
         "--elevated",
         action="store_true",
-        help="内部哨兵：本进程由 _elevate_self 提权启动，禁止再次提权（防 UAC 递归）",
+        help=english("内部哨兵：本进程由 _elevate_self 提权启动，禁止再次提权（防 UAC 递归）"),
     )
     # 下面两个参数由**新**主程序传入（旧主程序不认识它们，见
     # component_update_manager::launch_pending_updater() 的 PE 版本资源能力探测）。
@@ -1385,14 +1405,19 @@ def main() -> int:
     parser.add_argument(
         "--data-dir",
         default="",
-        help="主程序的用户数据目录（.update_ready 信号落点）。为空则退化为 survival 监护",
+        help=english("主程序的用户数据目录（.update_ready 信号落点）。为空则退化为 survival 监护"),
     )
     parser.add_argument(
         "--origin-user-sid",
         default="",
-        help="发起更新的原用户 TokenUser SID（S-1-5-21-...），用于降权启动的身份准入",
+        help=english("发起更新的原用户 TokenUser SID（S-1-5-21-...），用于降权启动的身份准入"),
+    )
+    parser.add_argument(
+        "--language", choices=("zh_CN", "en_US"), default="", help="Application display language"
     )
     args = parser.parse_args()
+    if args.language:
+        os.environ["FLUENTYTDL_UI_LANGUAGE"] = args.language
 
     archive_path = Path(args.archive)
     dest_dir = Path(args.dest)
@@ -1404,30 +1429,35 @@ def main() -> int:
     log_path = dest_dir / "logs" / "updater.log"
 
     log("=" * 50)
-    log("FluentYTDL 更新器启动")
+    log(english("FluentYTDL 更新器启动"))
     log(f"  PID: {args.pid}")
-    log(f"  归档: {archive_path}")
-    log(f"  目标: {dest_dir}")
-    log(f"  可执行文件: {exe_name}")
-    log(f"  已提权实例: {args.elevated}")
-    log(f"  数据目录: {args.data_dir or '(未提供 → survival 监护模式)'}")
-    log(f"  原用户 SID: {args.origin_user_sid or '(未提供 → 跳过身份校验)'}")
+    log(english("  归档: {0}", archive_path))
+    log(english("  目标: {0}", dest_dir))
+    log(english("  可执行文件: {0}", exe_name))
+    log(english("  已提权实例: {0}", args.elevated))
+    log(english("  数据目录: {0}", args.data_dir or "(not supplied; survival watchdog mode)"))
+    log(
+        english(
+            "  原用户 SID: {0}", args.origin_user_sid or "(not supplied; identity check skipped)"
+        )
+    )
     log("=" * 50)
 
     # 验证归档文件存在
     if not archive_path.exists():
-        log(f"错误: 归档文件不存在: {archive_path}")
+        log(english("错误: 归档文件不存在: {0}", archive_path))
         _alert(
-            "更新未能开始：找不到已下载的更新包。\n\n"
-            f"{archive_path}\n\n"
-            "请重新在设置页检查更新。程序本体未被改动，可以照常使用。\n\n"
-            f"详细日志：{log_path}"
+            standalone_text(
+                "更新未能开始：找不到已下载的更新包。\n\n{0}\n\n请重新在设置页检查更新。程序本体未被改动，可以照常使用。\n\n详细日志：{1}",
+                archive_path,
+                log_path,
+            )
         )
         return 1
 
     # 验证目标目录存在
     if not dest_dir.exists():
-        log(f"错误: 目标目录不存在: {dest_dir}")
+        log(english("错误: 目标目录不存在: {0}", dest_dir))
         return 1
 
     # 检查是否需要管理员权限（Program Files / 只读安装位置场景）
@@ -1443,20 +1473,20 @@ def main() -> int:
     # 只是在 UAC 框上点了"否"，代价却是程序起不来了。前置中止让"拒绝提权"变成
     # 零副作用。
     if not _can_write_dir(dest_dir):
-        log("目标目录不可写且未获得管理员权限，中止更新（未做任何改动）")
+        log(english("目标目录不可写且未获得管理员权限，中止更新（未做任何改动）"))
         _alert(
-            "更新未能开始：没有权限修改安装目录。\n\n"
-            f"{dest_dir}\n\n"
-            "如果刚才的管理员授权对话框被取消，请重新检查更新并选择「是」。\n"
-            "程序本体未被改动，可以照常使用。\n\n"
-            f"详细日志：{log_path}"
+            standalone_text(
+                "更新未能开始：没有权限修改安装目录。\n\n{0}\n\n如果刚才的管理员授权对话框被取消，请重新检查更新并选择「是」。\n程序本体未被改动，可以照常使用。\n\n详细日志：{1}",
+                dest_dir,
+                log_path,
+            )
         )
         return 2
 
     # 等待主进程退出
-    log("等待主进程退出...")
+    log(english("等待主进程退出..."))
     if not wait_for_process(args.pid, args.timeout):
-        log("警告: 等待超时，尝试继续替换...")
+        log(english("警告: 等待超时，尝试继续替换..."))
 
     # 额外等待一小段时间，确保文件句柄释放
     time.sleep(0.5)
@@ -1467,39 +1497,41 @@ def main() -> int:
 
     # 清理可能残留的旧临时目录
     if tmp_dir.exists():
-        log("清理残留的 _update_tmp/ 目录...")
+        log(english("清理残留的 _update_tmp/ 目录..."))
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
     tmp_dir.mkdir(parents=True, exist_ok=True)
 
     # Step 1: 解压归档到临时目录（不触碰运行中的文件）
-    log("Step 1: 解压新版本到临时目录...")
+    log(english("Step 1: 解压新版本到临时目录..."))
     try:
         extract_archive(archive_path, tmp_dir)
     except Exception as e:
-        log(f"解压失败: {e}")
+        log(english("解压失败: {0}", e))
         shutil.rmtree(tmp_dir, ignore_errors=True)
         # 此刻安装目录一个文件都没动过（解压只写 _update_tmp/，已清理）→ 可以安全阻塞
         _alert(
-            "更新未能完成：更新包解压失败。\n\n"
-            f"{e}\n\n"
-            "程序本体未被改动，可以照常使用。请稍后重新检查更新。\n\n"
-            f"详细日志：{log_path}"
+            standalone_text(
+                "更新未能完成：更新包解压失败。\n\n{0}\n\n程序本体未被改动，可以照常使用。请稍后重新检查更新。\n\n详细日志：{1}",
+                e,
+                log_path,
+            )
         )
         return 1
 
     # Step 2: 验证解压结果
-    log("Step 2: 验证解压结果...")
+    log(english("Step 2: 验证解压结果..."))
     if not _verify_extraction(tmp_dir, exe_name):
-        log("解压验证失败，中止更新")
+        log(english("解压验证失败，中止更新"))
         shutil.rmtree(tmp_dir, ignore_errors=True)
         _alert(
-            "更新未能完成：更新包内容不完整，已中止。\n\n"
-            "程序本体未被改动，可以照常使用。请稍后重新检查更新。\n\n"
-            f"详细日志：{log_path}"
+            standalone_text(
+                "更新未能完成：更新包内容不完整，已中止。\n\n程序本体未被改动，可以照常使用。请稍后重新检查更新。\n\n详细日志：{0}",
+                log_path,
+            )
         )
         return 1
-    log("解压验证通过")
+    log(english("解压验证通过"))
 
     # Step 3: 准备备份变量
     internal_dir = dest_dir / "_internal"
@@ -1508,53 +1540,54 @@ def main() -> int:
 
     # 清理上次更新可能残留的旧备份
     if internal_old.exists():
-        log("清理旧备份目录 _internal_old/ ...")
+        log(english("清理旧备份目录 _internal_old/ ..."))
         shutil.rmtree(internal_old, ignore_errors=True)
     if exe_old.exists():
         exe_old.unlink(missing_ok=True)
 
     # Step 4: 重命名旧文件为备份
     if internal_dir.exists():
-        log("Step 4: 重命名 _internal/ → _internal_old/ ...")
+        log(english("Step 4: 重命名 _internal/ → _internal_old/ ..."))
         try:
             internal_dir.rename(internal_old)
         except OSError as e:
-            log(f"重命名 _internal 失败: {e}")
+            log(english("重命名 _internal 失败: {0}", e))
             shutil.rmtree(tmp_dir, ignore_errors=True)
             # rename 失败意味着它压根没动，状态已收敛
             _alert(
-                "更新未能完成：程序文件正被占用，无法替换。\n\n"
-                f"{e}\n\n"
-                "请确认 FluentYTDL 已完全退出（检查任务管理器与托盘图标）后重试。\n"
-                "程序本体未被改动，可以照常使用。\n\n"
-                f"详细日志：{log_path}"
+                standalone_text(
+                    "更新未能完成：程序文件正被占用，无法替换。\n\n{0}\n\n请确认 FluentYTDL 已完全退出（检查任务管理器与托盘图标）后重试。\n程序本体未被改动，可以照常使用。\n\n详细日志：{1}",
+                    e,
+                    log_path,
+                )
             )
             return 1
 
     if exe_path.exists():
-        log(f"重命名 {exe_name} → {exe_name}.old ...")
+        log(english("重命名 {0} → {1}.old ...", exe_name, exe_name))
         try:
             exe_path.rename(exe_old)
         except OSError as e:
-            log(f"重命名 {exe_name} 失败: {e}")
+            log(english("重命名 {0} 失败: {1}", exe_name, e))
             # 回滚 _internal 重命名
             if internal_old.exists() and not internal_dir.exists():
                 internal_old.rename(internal_dir)
             shutil.rmtree(tmp_dir, ignore_errors=True)
             # 上面这次回滚之后状态已收敛，才敢弹阻塞窗口
             _alert(
-                f"更新未能完成：{exe_name} 正被占用，无法替换。\n\n"
-                f"{e}\n\n"
-                "请确认 FluentYTDL 已完全退出（检查任务管理器与托盘图标）后重试。\n"
-                "已还原到更新前的状态，程序可以照常使用。\n\n"
-                f"详细日志：{log_path}"
+                standalone_text(
+                    "更新未能完成：{0} 正被占用，无法替换。\n\n{1}\n\n请确认 FluentYTDL 已完全退出（检查任务管理器与托盘图标）后重试。\n已还原到更新前的状态，程序可以照常使用。\n\n详细日志：{2}",
+                    exe_name,
+                    e,
+                    log_path,
+                )
             )
             return 1
 
     # Step 5: 从临时目录移动文件到目标目录
-    log("Step 5: 移动新文件到目标目录...")
+    log(english("Step 5: 移动新文件到目标目录..."))
     if not _move_extracted_files(tmp_dir, dest_dir):
-        log("移动文件失败，执行完整回滚...")
+        log(english("移动文件失败，执行完整回滚..."))
         # 删除可能已移动的不完整文件
         if internal_dir.exists():
             shutil.rmtree(internal_dir, ignore_errors=True)
@@ -1568,9 +1601,10 @@ def main() -> int:
         shutil.rmtree(tmp_dir, ignore_errors=True)
         # 回滚已完成（要么恢复了备份，要么本来就没备份可恢复）→ 状态收敛，可以阻塞
         _alert(
-            "更新未能完成：复制新版本文件时出错，已还原到旧版本。\n\n"
-            "程序可以照常使用。请稍后重新检查更新。\n\n"
-            f"详细日志：{log_path}"
+            standalone_text(
+                "更新未能完成：复制新版本文件时出错，已还原到旧版本。\n\n程序可以照常使用。请稍后重新检查更新。\n\n详细日志：{0}",
+                log_path,
+            )
         )
         return 1
 
@@ -1592,14 +1626,15 @@ def main() -> int:
     #   - 状态已收敛（`_internal_old` / `.exe.old` 只是待清理的备份，不是半残状态；
     #     `_update_tmp` 已在上面删掉），可以安全地弹阻塞窗口
     #   - 文案必须告诉用户"更新成功了，手动启动就行"，否则用户只会看到程序凭空消失
-    log(f"Step 6: 启动新版本: {exe_path}")
+    log(english("Step 6: 启动新版本: {0}", exe_path))
     if not exe_path.exists():
-        log(f"错误: 新版本 {exe_path} 不存在")
+        log(english("错误: 新版本 {0} 不存在", exe_path))
         _alert(
-            "更新已完成，但找不到新版本的可执行文件。\n\n"
-            f"{exe_path}\n\n"
-            "请从开始菜单或桌面快捷方式手动启动 FluentYTDL。\n\n"
-            f"详细日志：{log_path}"
+            standalone_text(
+                "更新已完成，但找不到新版本的可执行文件。\n\n{0}\n\n请从开始菜单或桌面快捷方式手动启动 FluentYTDL。\n\n详细日志：{1}",
+                exe_path,
+                log_path,
+            )
         )
         return 1
 
@@ -1616,7 +1651,7 @@ def main() -> int:
         try:
             ready_file.unlink(missing_ok=True)
         except OSError as e:
-            log(f"  警告: 无法删除陈旧的 .update_ready: {e}")
+            log(english("  警告: 无法删除陈旧的 .update_ready: {0}", e))
         # --data-dir 一路转发给新版：即使走第 3 级退化路径（继承管理员令牌），
         # 数据目录也不会随被继承的环境变量漂移。
         extra_args = ["--data-dir", args.data_dir, "--update-ready-token", ready_token]
@@ -1628,9 +1663,10 @@ def main() -> int:
     if launch_mode == "none" or not new_pid:
         _commit_update(internal_old, exe_old, tmp_dir, archive_path, ready_file)
         _alert(
-            "更新已完成，但新版本没能自动启动。\n\n"
-            "请手动双击 FluentYTDL 图标启动程序，你的配置与下载记录都还在。\n\n"
-            f"详细日志：{log_path}"
+            standalone_text(
+                "更新已完成，但新版本没能自动启动。\n\n请手动双击 FluentYTDL 图标启动程序，你的配置与下载记录都还在。\n\n详细日志：{0}",
+                log_path,
+            )
         )
         # Step 8 放在 _alert **之后**：helper 会延时约 3 秒再动手，而 _alert 是
         # 阻塞的 —— 放在前面的话，用户盯着弹窗那几分钟里 helper 早就跑完并因为
@@ -1641,7 +1677,14 @@ def main() -> int:
         return 1
 
     # Step 7: 看门狗 —— updater 不再打完就跑，它留下来看着新版起不起得来
-    log(f"Step 7: 看门狗接管 (watch_mode={watch_mode}, pid={new_pid}, mode={launch_mode})")
+    log(
+        english(
+            "Step 7: 看门狗接管 (watch_mode={0}, pid={1}, mode={2})",
+            watch_mode,
+            new_pid,
+            launch_mode,
+        )
+    )
     start = time.monotonic()
     outcome = "wait"
     alive = True
@@ -1658,7 +1701,11 @@ def main() -> int:
                 elapsed,
             )
             if outcome != "wait":
-                log(f"  看门狗判定: {outcome} (elapsed={elapsed:.1f}s, alive={alive})")
+                log(
+                    english(
+                        "  看门狗判定: {0} (elapsed={1:.1f}s, alive={2})", outcome, elapsed, alive
+                    )
+                )
                 break
             time.sleep(WATCH_POLL_INTERVAL)
 
@@ -1667,18 +1714,18 @@ def main() -> int:
             # Step 8: updater 自更新。只在 COMMIT 后执行 —— ROLLBACK 说明这批
             # 构建是坏的，同批的 .new 同样不可信（回滚流程里会删掉它）。
             _self_update_updater(dest_dir)
-            log("更新器退出 (COMMIT)")
+            log(english("更新器退出 (COMMIT)"))
             return 0
 
         # ROLLBACK。仅在进程还活着时才需要杀 —— 覆盖"90s 超时"与"READY 内容不匹配"
         # 两种分支；进程自己已经退出的情况下 TerminateProcess 毫无意义。
         if alive and watch_mode == "ready" and h_new:
-            log("  终止未能就绪的新版本进程...")
+            log(english("  终止未能就绪的新版本进程..."))
             try:
                 ctypes.windll.kernel32.TerminateProcess(h_new, 1)
                 ctypes.windll.kernel32.WaitForSingleObject(h_new, 5000)
             except Exception as e:
-                log(f"  TerminateProcess 失败: {e}")
+                log(english("  TerminateProcess 失败: {0}", e))
     finally:
         # 句柄必须活到 commit/rollback 判完，也必须在这里归还
         _close_handle(h_new)
@@ -1687,11 +1734,12 @@ def main() -> int:
     shutil.rmtree(tmp_dir, ignore_errors=True)
     # 回滚已全部完成、旧版已启动 → 状态收敛，才敢弹阻塞窗口
     _alert(
-        "新版本启动失败，已还原到旧版本。\n\n"
-        "旧版本正在启动，你的配置与下载记录都还在。请稍后重新检查更新。\n\n"
-        f"详细日志：{log_path}"
+        standalone_text(
+            "新版本启动失败，已还原到旧版本。\n\n旧版本正在启动，你的配置与下载记录都还在。请稍后重新检查更新。\n\n详细日志：{0}",
+            log_path,
+        )
     )
-    log("更新器退出 (ROLLBACK)")
+    log(english("更新器退出 (ROLLBACK)"))
     return 1
 
 

@@ -12,6 +12,9 @@ import sys
 import threading
 from pathlib import Path
 
+from fluentytdl.utils.localized_log import log_text
+from fluentytdl.utils.message_catalog import english
+
 # 启动日志里要报版本的外部组件。顺序决定日志里的行序。
 COMPONENTS: tuple[tuple[str, str], ...] = (
     ("yt-dlp", "yt-dlp/yt-dlp.exe"),
@@ -53,7 +56,7 @@ def _resolve_component(key: str, base: Path, rel_path: str) -> tuple[Path | None
     """
     bundled = base / rel_path
     if bundled.exists():
-        return bundled, "内置"
+        return bundled, english("内置")
 
     import shutil
 
@@ -67,7 +70,7 @@ def _resolve_component(key: str, base: Path, rel_path: str) -> tuple[Path | None
     for name in aliases:
         found = shutil.which(name)
         if found:
-            return Path(found), "环境 PATH"
+            return Path(found), english("环境 PATH")
 
     return None, ""
 
@@ -75,7 +78,7 @@ def _resolve_component(key: str, base: Path, rel_path: str) -> tuple[Path | None
 def _quick_detect_version(key: str, exe_path: Path) -> str:
     """快速检测组件版本，3 秒超时避免阻塞启动。"""
     if not exe_path.exists():
-        return "未安装"
+        return english("未安装")
 
     import re
 
@@ -99,7 +102,7 @@ def _quick_detect_version(key: str, exe_path: Path) -> str:
         )
         output = (result.stdout + result.stderr).strip()
         if not output:
-            return "已安装 (无版本输出)"
+            return english("已安装 (无版本输出)")
 
         first_line = output.split("\n")[0].strip()
 
@@ -130,9 +133,9 @@ def _quick_detect_version(key: str, exe_path: Path) -> str:
 
         return first_line[:40]  # 截断避免过长
     except subprocess.TimeoutExpired:
-        return "超时"
+        return english("超时")
     except Exception:
-        return "检测失败"
+        return english("检测失败")
 
 
 def log_startup_info() -> tuple[list[str], list[str]]:
@@ -171,9 +174,9 @@ def log_startup_info() -> tuple[list[str], list[str]]:
     app_dir = Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else Path.cwd()
 
     logger.info("=" * 50)
-    logger.info(f"  FluentYTDL {__version__} 启动")
+    log_text(logger, "info", "  FluentYTDL {0} 启动", __version__)
     logger.info(f"  Python {sys.version.split()[0]} | PySide6 {pyside_version} | Qt {qt_version}")
-    logger.info(f"  安装类型: {install_type} | 路径: {app_dir}")
+    log_text(logger, "info", "  安装类型: {0} | 路径: {1}", install_type, app_dir)
     logger.info("-" * 50)
 
     migration_failures, migration_conflicts = _replay_migration_report()
@@ -209,18 +212,24 @@ def log_component_versions() -> None:
 
     base = _component_base_dir()
     lines: list[str] = []
+    versions = {}
 
     for key, rel_path in COMPONENTS:
         exe_path, source = _resolve_component(key, base, rel_path)
         if exe_path is None:
-            lines.append(f"  {key:<16} 未安装")
+            lines.append(english("  {0:<16} 未安装", key))
             continue
         version = _quick_detect_version(key, exe_path)
+        versions[key] = {"version": version, "source": source}
         lines.append(f"  {key:<16} {version:<24} [{source}] {exe_path}")
+
+    from fluentytdl.observability import emit_event
+
+    emit_event("config", scope="toolchain", versions=versions)
 
     # 攒齐再一次性输出：这张表是排查工单时要整块读的，中间夹进别的线程写的行会打散它。
     logger.info("-" * 50)
-    logger.info("  组件版本:")
+    log_text(logger, "info", "  组件版本:")
     for line in lines:
         logger.info(line)
     logger.info("-" * 50)
@@ -249,12 +258,12 @@ def _spawn_component_version_probe() -> None:
         try:
             log_component_versions()
         except Exception as exc:  # noqa: BLE001 - 硬规则 5
-            logger.debug(f"组件版本探测失败: {exc}")
+            log_text(logger, "debug", "组件版本探测失败: {0}", exc)
 
     try:
         threading.Thread(target=run, name="StartupInfo-Components", daemon=True).start()
     except Exception as exc:  # noqa: BLE001 - 硬规则 5
-        logger.debug(f"启动组件版本探测线程失败: {exc}")
+        log_text(logger, "debug", "启动组件版本探测线程失败: {0}", exc)
 
 
 def _install_observability_sinks() -> None:
@@ -276,12 +285,11 @@ def _install_observability_sinks() -> None:
     from fluentytdl.utils.logger import logger
 
     try:
-        from fluentytdl.observability import install_sinks, sweep_trace_dir
+        from fluentytdl.observability import install_sinks
 
-        sweep_trace_dir()
         install_sinks()
     except Exception as exc:  # noqa: BLE001 - 硬规则 5
-        logger.debug(f"接入 Observability sink 失败: {exc}")
+        log_text(logger, "debug", "接入 Observability sink 失败: {0}", exc)
 
 
 def _log_config_snapshot() -> None:
@@ -302,10 +310,42 @@ def _log_config_snapshot() -> None:
         from fluentytdl.observability.config_snapshot import emit_config_snapshot
 
         emit_config_snapshot(config_manager.get)
+        import hashlib
+        import json
+
+        from fluentytdl import __version__
+        from fluentytdl.diagnostics.rules import get_rule_set
+        from fluentytdl.observability import emit_event
+        from fluentytdl.utils.log_runtime import SESSION_ID
+        from fluentytdl.utils.paths import frozen_app_dir, is_frozen, project_root
+
+        build = {"available": False, "mode": "frozen" if is_frozen() else "source"}
+        build_path = (frozen_app_dir() if is_frozen() else project_root()) / "BUILD_INFO.json"
+        try:
+            if build_path.is_file() and build_path.stat().st_size < 1024 * 1024:
+                data = json.loads(build_path.read_text(encoding="utf-8"))
+                build = {
+                    key: data.get(key)
+                    for key in ("app_version", "git_commit", "dirty", "built_at_utc", "release_tag")
+                }
+                build["available"] = True
+        except (OSError, ValueError):
+            pass
+        emit_event(
+            "config",
+            scope="runtime",
+            snapshot_id=SESSION_ID,
+            app_version=__version__,
+            python=sys.version.split()[0],
+            install_type=detect_install_type(),
+            rules_version=get_rule_set().version,
+            rules_hash=hashlib.sha256(repr(get_rule_set().rules).encode()).hexdigest(),
+            build=build,
+        )
     except Exception as exc:  # noqa: BLE001 - 硬规则 5
         from fluentytdl.utils.logger import logger
 
-        logger.debug(f"记录生效配置快照失败: {exc}")
+        log_text(logger, "debug", "记录生效配置快照失败: {0}", exc)
 
 
 def _replay_migration_report() -> tuple[list[str], list[str]]:
@@ -326,19 +366,19 @@ def _replay_migration_report() -> tuple[list[str], list[str]]:
 
         log, failures, conflicts = take_migration_report()
     except Exception as e:
-        logger.debug(f"读取数据迁移报告失败: {e}")
+        log_text(logger, "debug", "读取数据迁移报告失败: {0}", e)
         return [], []
 
     if not log and not failures and not conflicts:
         return [], []
 
-    logger.info("  数据迁移报告:")
+    log_text(logger, "info", "  数据迁移报告:")
     for line in log:
         logger.info(f"    {line}")
     for line in failures:
-        logger.warning(f"    迁移失败: {line}")
+        log_text(logger, "warning", "    迁移失败: {0}", line)
     for line in conflicts:
-        logger.warning(f"    迁移冲突: {line}")
+        log_text(logger, "warning", "    迁移冲突: {0}", line)
     logger.info("-" * 50)
 
     return failures, conflicts

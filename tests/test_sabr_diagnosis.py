@@ -66,7 +66,7 @@ def test_sabr_text_says_changing_quality_wont_help():
     diag = _diag(SABR_WARNINGS, FORMAT_UNAVAILABLE)
 
     assert "SABR" in diag.user_message
-    assert "换档位没有用" in diag.user_message
+    assert "仅切换画质不能解决缺少直接链接的问题" in diag.user_message
     assert diag.user_title != Diagnosis(code="format_unavailable").user_title
 
 

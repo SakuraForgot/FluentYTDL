@@ -88,26 +88,31 @@ class TestArtifactSource:
         assert got.url == API.url
         assert got.sha256 == API.sha256
 
-    def test_manifest_hit_overrides_url_and_sha256(self, worker, monkeypatch):
-        """版本精确相等且带 url —— 用清单的，省一次 GitHub API。"""
+    def test_manifest_cannot_replace_the_verified_release_url(self, worker, monkeypatch):
+        """A matching version must not redirect downloads to another artifact host."""
         m_url = "https://manifest.example.com/deno-2.9.5.zip"
         _patch_manifest(monkeypatch, {"version": "2.9.5", "url": m_url, "sha256": "c" * 64})
 
         got = worker._overlay_manifest("deno", API)
 
-        assert got.url == m_url
-        assert got.sha256 == "c" * 64
+        assert got.url == API.url
+        assert got.sha256 == API.sha256
         assert got.version == "2.9.5"  # 版本判定权始终在 API
 
     def test_manifest_without_sha256_keeps_api_hash(self, worker, monkeypatch):
         """清单只给了地址没给哈希时，别把 API 拿到的哈希丢掉 —— 否则下载不校验。"""
-        m_url = "https://manifest.example.com/deno-2.9.5.zip"
+        m_url = API.url
         _patch_manifest(monkeypatch, {"version": "2.9.5", "url": m_url, "sha256": ""})
 
         got = worker._overlay_manifest("deno", API)
 
         assert got.url == m_url
         assert got.sha256 == API.sha256
+
+    def test_exact_artifact_can_supply_a_manifest_hash(self, worker, monkeypatch):
+        _patch_manifest(monkeypatch, {"version": "2.9.5", "url": API.url, "sha256": "c" * 64})
+        got = worker._overlay_manifest("deno", API)
+        assert got.url == API.url and got.sha256 == "c" * 64
 
     def test_no_manifest_entry_uses_api(self, worker, monkeypatch):
         _patch_manifest(monkeypatch, None)

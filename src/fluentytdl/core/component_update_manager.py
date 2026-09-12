@@ -5,8 +5,8 @@ FluentYTDL 统一组件更新协调器
 通过 GitHub Release 的 update-manifest.json 统一管理所有组件版本。
 
 版本通道:
-  - X.Y.Z (stable): 检查 /releases/latest，接收稳定版自动更新
-  - X.Y.Z-rc.N / X.Y.Z-beta.N: 锁定更新，弹窗提示去 GitHub 手动下载
+  - stable（默认）：只接收正式版
+  - pre：接收正式版与 rc 预发布，所有已安装版本均可检查更新
 """
 
 from __future__ import annotations
@@ -15,10 +15,12 @@ import os
 import re
 import subprocess
 import sys
-import time
 from pathlib import Path
 
 from PySide6.QtCore import QObject, QThread, Signal
+
+from fluentytdl.utils.localized_log import log_text
+from fluentytdl.utils.ui_text import tr_text
 
 from ..utils.logger import logger
 from ..utils.paths import frozen_app_dir, is_frozen
@@ -113,125 +115,34 @@ def _read_pe_file_version(exe_path: Path) -> tuple[int, int, int] | None:
         ver_ms, ver_ls = fields[2], fields[3]
         return (ver_ms >> 16 & 0xFFFF, ver_ms & 0xFFFF, ver_ls >> 16 & 0xFFFF)
     except Exception as e:
-        logger.debug(f"[ComponentUpdate] 读取 PE 版本资源失败 ({exe_path}): {e}")
+        log_text(logger, "debug", "[ComponentUpdate] 读取 PE 版本资源失败 ({0}): {1}", exe_path, e)
         return None
 
 
 def _get_update_channel() -> str:
-    """根据当前版本号确定更新通道。
-
-    正式版（无预发布后缀）支持自动更新；rc / beta 一律 locked，
-    提示用户去 GitHub 手动下载。
-
-    同时容忍 3.5.5 之前的 `v-` / `pre-` / `beta-` 前缀格式：升级安装时
-    旧 VERSION 文件可能残留，不能因此把老用户判成 locked。
-    """
-    from fluentytdl import __version__
-
-    ver = str(__version__).strip()
-
-    # 旧格式兼容：v- 视为 stable，pre-/beta- 视为 locked
-    if ver.startswith("v-"):
-        return "stable"
-    if ver.startswith(("pre-", "beta-")):
-        return "locked"
-
-    # 新格式：X.Y.Z 为 stable，带 -rc.N / -beta.N 后缀为 locked
-    if re.match(r"^v?\d+\.\d+\.\d+$", ver):
-        return "stable"
-    return "locked"
-
-
-def _get_proxies() -> dict[str, str]:
-    """从 config 构建代理字典。"""
-    proxy_mode = str(config_manager.get("proxy_mode") or "off").lower()
-    proxy_url = str(config_manager.get("proxy_url") or "")
-
-    if proxy_mode in ("http", "socks5") and proxy_url:
-        scheme = "socks5h" if proxy_mode == "socks5" else "http"
-        url = proxy_url if "://" in proxy_url else f"{scheme}://{proxy_url}"
-        return {"http": url, "https": url}
-    return {}
-
-
-def _get_mirror_url(url: str) -> str:
-    """根据配置应用镜像。"""
-    source = str(config_manager.get("update_source") or "github").lower()
-    if source == "ghproxy" and url.startswith("https://github.com/"):
-        mirror = "https://ghfast.top/"
-        return mirror + url
-    return url
-
-
-# ─── 清单获取线程 ────────────────────────────────────────
+    """User preference is independent of the installed build; default to stable."""
+    return "pre" if config_manager.get("app_update_channel", "stable") == "pre" else "stable"
 
 
 class _ManifestWorker(QThread):
-    """后台线程：获取 update-manifest.json
+    """Fetch a fresh manifest through the selected update-check source."""
 
-    使用 RAW 直链 (releases/latest/download/) 替代 GitHub API，
-    彻底绕过 API 速率限制（无 token 时 60 次/小时）。
-    失败时回退到本地缓存清单（7 天有效期）。
-    """
-
-    finished = Signal(dict)  # manifest dict
+    finished = Signal(dict)
     error = Signal(str)
 
-    def __init__(self, release_tag: str = ""):
+    def __init__(self, release_tag: str = "", check_session=None):
         super().__init__()
+        from .update_transport import configured_check
+
         self.release_tag = release_tag
+        self.channel = _get_update_channel()
+        self.check_session = check_session or configured_check()
 
     def run(self) -> None:
         try:
-            import json
-
-            import requests
-
-            from ..utils.paths import user_data_dir
-
-            proxies = _get_proxies()
-
-            # RAW 直链下载 — 一步到位，无需 API 调用
-            manifest_url = _get_mirror_url(MANIFEST_RAW_URL)
-            sep = "&" if "?" in manifest_url else "?"
-            final_url = f"{manifest_url}{sep}t={int(time.time())}"
-
-            resp = requests.get(final_url, proxies=proxies, timeout=15)
-            resp.raise_for_status()
-            manifest = resp.json()
-
-            # 本地缓存（离线回退用）
-            try:
-                cache_path = user_data_dir() / "update_manifest_cache.json"
-                cache_path.parent.mkdir(parents=True, exist_ok=True)
-                cache_path.write_text(json.dumps(manifest, ensure_ascii=False), encoding="utf-8")
-            except Exception:
-                pass
-
-            self.finished.emit(manifest)
-
-        except Exception as e:
-            # 回退到本地缓存清单
-            try:
-                import json
-
-                from ..utils.paths import user_data_dir
-
-                cache_path = user_data_dir() / "update_manifest_cache.json"
-                if cache_path.exists():
-                    age = time.time() - cache_path.stat().st_mtime
-                    if age < 7 * 86400:  # 7 天有效期
-                        manifest = json.loads(cache_path.read_text(encoding="utf-8"))
-                        logger.info(
-                            f"[ComponentUpdate] 网络失败，使用缓存清单（{int(age / 3600)}小时前）"
-                        )
-                        self.finished.emit(manifest)
-                        return
-            except Exception:
-                pass
-
-            logger.error(f"[ComponentUpdate] 清单获取失败: {e}")
-            self.error.emit(str(e))
+            self.finished.emit(self.check_session.manifest(self.channel))
+        except Exception as error:
+            self.error.emit(str(error))
 
 
 # ─── 下载线程 ────────────────────────────────────────────
@@ -250,67 +161,28 @@ class _DownloadWorker(QThread):
         self.expected_sha256 = expected_sha256
 
     def run(self) -> None:
-        max_retries = 3
-        for attempt in range(max_retries):
-            try:
-                result = self._download_once()
-                if result:
-                    self.finished.emit(result)
-                    return
-            except Exception as e:
-                if attempt < max_retries - 1:
-                    wait = 2**attempt  # 1s, 2s
-                    logger.warning(
-                        f"[ComponentUpdate] 下载失败（尝试 {attempt + 1}/{max_retries}），"
-                        f"{wait}s 后重试: {e}"
-                    )
-                    self.progress.emit(0)
-                    time.sleep(wait)
-                else:
-                    logger.error(f"[ComponentUpdate] 下载失败（已重试 {max_retries} 次）: {e}")
-                    self.error.emit(str(e))
-                    return
+        try:
+            self.finished.emit(self._download_once())
+        except Exception as error:
+            self.error.emit(str(error))
 
-    def _download_once(self) -> str | None:
-        """单次下载尝试。成功返回文件路径，失败抛异常。"""
-        import hashlib
+    def _download_once(self) -> str:
         import tempfile
+        from urllib.parse import unquote, urlsplit
 
-        import requests
+        from .update_transport import configured_transport
 
-        final_url = _get_mirror_url(self.url)
-        proxies = _get_proxies()
-
-        tmp_dir = Path(tempfile.mkdtemp(prefix="fluentytdl_update_"))
-        filename = self.url.rsplit("/", 1)[-1]
-        dest = tmp_dir / filename
-
-        resp = requests.get(final_url, proxies=proxies, timeout=600, stream=True)
-        resp.raise_for_status()
-
-        total = int(resp.headers.get("Content-Length") or 0)
-        downloaded = 0
-        sha256 = hashlib.sha256()
-
-        with open(dest, "wb") as f:
-            for chunk in resp.iter_content(chunk_size=65536):
-                if not chunk:
-                    continue
-                f.write(chunk)
-                sha256.update(chunk)
-                downloaded += len(chunk)
-                if total > 0:
-                    self.progress.emit(int(downloaded / total * 100))
-
-        if self.expected_sha256:
-            actual = sha256.hexdigest().lower()
-            expected = self.expected_sha256.strip().lower()
-            if actual != expected:
-                dest.unlink(missing_ok=True)
-                raise ValueError(f"SHA256 校验失败\n预期: {expected}\n实际: {actual}")
-
-        self.progress.emit(100)
-        return str(dest)
+        directory = Path(tempfile.mkdtemp(prefix="fluentytdl_update_"))
+        filename = Path(unquote(urlsplit(self.url).path)).name
+        destination = directory / filename
+        try:
+            configured_transport().download(
+                self.url, destination, self.expected_sha256, self.progress.emit
+            )
+        except Exception:
+            directory.rmdir()
+            raise
+        return str(destination)
 
 
 # ─── 主管理器 ────────────────────────────────────────────
@@ -327,6 +199,7 @@ class ComponentUpdateManager(QObject):
     app_update_available = Signal(dict)  # {version, tag, changelog, url, sha256, is_prerelease}
     app_no_update = Signal()
     app_check_error = Signal(str)
+    app_check_started = Signal()
 
     # 下载信号
     download_progress = Signal(int)
@@ -339,10 +212,14 @@ class ComponentUpdateManager(QObject):
     apply_confirm_needed = Signal(int, int)  # (活跃任务数, generation)
 
     # 通用信号
+    channel_changed = Signal(str)
+    channel_change_requested = Signal(str)
+
     check_complete = Signal(list)  # 所有组件检查结果列表
 
     def __init__(self) -> None:
         super().__init__()
+        self.channel_change_requested.connect(self.set_update_channel)
         self._manifest: dict | None = None
         self._manifest_worker: _ManifestWorker | None = None
         self._download_worker: _DownloadWorker | None = None
@@ -368,16 +245,27 @@ class ComponentUpdateManager(QObject):
     def manifest(self) -> dict | None:
         return self._manifest
 
+    def set_update_channel(self, channel: str) -> None:
+        if channel not in {"stable", "pre"} or channel == _get_update_channel():
+            return
+        if (
+            (self._manifest_worker and self._manifest_worker.isRunning())
+            or (self._download_worker and self._download_worker.isRunning())
+            or self._update_state != "IDLE"
+        ):
+            return
+        config_manager.set("app_update_channel", channel)
+        self._manifest = None
+        self.channel_changed.emit(channel)
+        self.check_app_update(silent=False)
+
     # ── 清单获取 ──────────────────────────────────────────
 
-    def fetch_manifest(self) -> None:
+    def fetch_manifest(self, check_session=None) -> None:
         """异步获取更新清单。"""
-        channel = _get_update_channel()
-        if channel == "locked":
-            logger.info("[ComponentUpdate] locked 通道，跳过清单获取")
+        if self._manifest_worker and self._manifest_worker.isRunning():
             return
-
-        worker = _ManifestWorker(release_tag="")
+        worker = _ManifestWorker(release_tag="", check_session=check_session)
         worker.finished.connect(self._on_manifest_fetched)
         worker.error.connect(self._on_manifest_error)
         self._manifest_worker = worker
@@ -385,46 +273,45 @@ class ComponentUpdateManager(QObject):
 
     def _on_manifest_fetched(self, manifest: dict) -> None:
         self._manifest = manifest
-        logger.info(f"[ComponentUpdate] 清单获取成功: {manifest.get('app_version', '?')}")
+        log_text(
+            logger, "info", "[ComponentUpdate] 清单获取成功: {0}", manifest.get("app_version", "?")
+        )
         self.manifest_fetched.emit(manifest)
 
     def _on_manifest_error(self, msg: str) -> None:
-        logger.warning(f"[ComponentUpdate] 清单获取失败: {msg}")
+        log_text(logger, "warning", "[ComponentUpdate] 清单获取失败: {0}", msg)
         self.manifest_error.emit(msg)
+        if getattr(self, "_manifest_app_check_conn", False):
+            self._manifest_app_check_conn = False
+            try:
+                self.manifest_fetched.disconnect(self._on_manifest_for_app_check)
+            except RuntimeError:
+                pass
+            self.app_check_error.emit(msg)
 
     # ── 统一检查 ──────────────────────────────────────────
 
     def check_all(self) -> None:
         """检查所有组件更新（app-core + bin/ 工具）。"""
-        channel = _get_update_channel()
-
-        if channel == "locked":
-            # locked 通道（beta/pre）不检查更新
-            return
-
         # 先获取清单
         self.fetch_manifest()
 
-    def check_app_update(self, silent: bool = False) -> None:
+    def check_app_update(self, silent: bool = False, check_session=None) -> None:
         """仅检查 app-core 更新。
 
         ``silent=True`` 表示自动（启动/定时）检查：UI 侧读 :attr:`is_silent_check`
         决定不弹「已是最新」「检查失败」这类提示，只有真有更新才进消息中心。
         """
-        self._app_check_silent = silent
-        channel = _get_update_channel()
-
-        if channel == "locked":
-            self.app_check_error.emit("locked")
+        if (
+            self._download_worker and self._download_worker.isRunning()
+        ) or self._update_state != "IDLE":
             return
-
-        if self._manifest:
-            self._compare_app_version()
-        else:
-            # 需要先获取清单，使用一次性连接
+        self._app_check_silent = silent
+        self.app_check_started.emit()
+        if not getattr(self, "_manifest_app_check_conn", False):
             self._manifest_app_check_conn = True
             self.manifest_fetched.connect(self._on_manifest_for_app_check)
-            self.fetch_manifest()
+        self.fetch_manifest(check_session=check_session)
 
     def _on_manifest_for_app_check(self, _manifest: dict) -> None:
         """清单获取完成后比对 app 版本（一次性回调）。"""
@@ -432,40 +319,41 @@ class ComponentUpdateManager(QObject):
             self.manifest_fetched.disconnect(self._on_manifest_for_app_check)
         except RuntimeError:
             pass
+        self._manifest_app_check_conn = False
         self._compare_app_version()
 
     def _compare_app_version(self) -> None:
-        """比对 app-core 版本（仅 stable 通道）。"""
+        """按所选通道比对 app-core 完整版本。"""
         if not self._manifest:
-            self.app_check_error.emit("清单未获取")
+            self.app_check_error.emit(tr_text("清单未获取"))
             return
 
         try:
             from fluentytdl import __version__
         except ImportError:
-            self.app_check_error.emit("无法获取当前版本")
+            self.app_check_error.emit(tr_text("无法获取当前版本"))
             return
 
         manifest_version = str(self._manifest.get("app_version", "")).strip()
         manifest_tag = self._manifest.get("release_tag", "") or f"v{manifest_version}"
 
-        # Stable clients must reject prerelease payloads even if a mirror/cache serves one.
-        if self._manifest.get("_is_prerelease") or not re.fullmatch(
-            r"v?\d+\.\d+\.\d+", manifest_version
-        ):
+        from ..utils.app_version import public_version, version_key
+
+        channel = _get_update_channel()
+        is_pre = bool(self._manifest.get("_is_prerelease")) or "-rc." in manifest_version
+        if not public_version(manifest_version, channel) or (channel == "stable" and is_pre):
             self.app_no_update.emit()
             return
-
-        current = _parse_version(__version__)
-        latest = _parse_version(manifest_version)
-
+        try:
+            current, latest = version_key(__version__), version_key(manifest_version)
+        except ValueError as error:
+            self.app_check_error.emit(str(error))
+            return
         if latest <= current:
             self.app_no_update.emit()
             return
-
-        # 检查跳过版本（仅 stable）
-        skipped = str(config_manager.get("skipped_stable_version") or "")
-        if skipped and _parse_version(skipped) >= latest:
+        skipped = str(config_manager.get(f"skipped_{channel}_version") or "")
+        if skipped and skipped == manifest_version and self._app_check_silent:
             self.app_no_update.emit()
             return
 
@@ -480,7 +368,8 @@ class ComponentUpdateManager(QObject):
                 "url": app_core.get("url", ""),
                 "sha256": app_core.get("sha256", ""),
                 "size": app_core.get("size", 0),
-                "is_prerelease": False,
+                "is_prerelease": is_pre,
+                "channel": channel,
                 "silent": self._app_check_silent,
             }
         )
@@ -490,7 +379,7 @@ class ComponentUpdateManager(QObject):
     def download_app_update(self, url: str, sha256: str = "") -> None:
         """下载 app-core 更新归档。"""
         if not url:
-            self.download_error.emit("下载 URL 为空")
+            self.download_error.emit(tr_text("下载 URL 为空"))
             return
 
         worker = _DownloadWorker(url, sha256)
@@ -544,22 +433,27 @@ class ComponentUpdateManager(QObject):
         # download_finished 有两个转发者，同一个归档会到两次。归档路径来自
         # _DownloadWorker 每次新建的临时目录，路径相同即同一次下载。
         if archive_path in self._requested_archives:
-            logger.debug(f"[ComponentUpdate] 忽略重复的更新请求: {archive_path}")
+            log_text(logger, "debug", "[ComponentUpdate] 忽略重复的更新请求: {0}", archive_path)
             return
         self._requested_archives.add(archive_path)
 
         # 已经决定退出了，任何来源都不允许再把流程重新拉起来
         if self._update_state in ("QUITTING", "LAUNCHED"):
-            logger.warning(f"[ComponentUpdate] 状态 {self._update_state}，忽略新的更新请求")
+            log_text(
+                logger,
+                "warning",
+                "[ComponentUpdate] 状态 {0}，忽略新的更新请求",
+                self._update_state,
+            )
             return
 
         if not archive_path or not Path(archive_path).exists():
-            self._fail_pending(f"更新归档不存在: {archive_path}")
+            self._fail_pending(tr_text("更新归档不存在: {0}", archive_path))
             return
 
         updater_path = self._resolve_updater_path()
         if updater_path is None:
-            self._fail_pending(f"updater.exe 不存在: {frozen_app_dir() / 'updater.exe'}")
+            self._fail_pending(tr_text("updater.exe 不存在: {0}", frozen_app_dir() / "updater.exe"))
             return
 
         self._pending_generation += 1
@@ -580,11 +474,17 @@ class ComponentUpdateManager(QObject):
             if download_manager.has_active_tasks():
                 active = download_manager.running_count() + download_manager.pending_count()
         except Exception as e:
-            logger.warning(f"[ComponentUpdate] 无法查询活跃任务，按无任务处理: {e}")
+            log_text(logger, "warning", "[ComponentUpdate] 无法查询活跃任务，按无任务处理: {0}", e)
 
         if active > 0:
             self._update_state = "AWAITING_CONFIRM"
-            logger.info(f"[ComponentUpdate] 有 {active} 个活跃任务，等待用户确认 (gen={gen})")
+            log_text(
+                logger,
+                "info",
+                "[ComponentUpdate] 有 {0} 个活跃任务，等待用户确认 (gen={1})",
+                active,
+                gen,
+            )
             self.apply_confirm_needed.emit(active, gen)
             return
 
@@ -593,11 +493,15 @@ class ComponentUpdateManager(QObject):
     def confirm_pending_update(self, gen: int) -> None:
         """用户确认中断活跃任务并继续更新。"""
         if self._update_state != "AWAITING_CONFIRM":
-            logger.warning(f"[ComponentUpdate] 状态 {self._update_state}，忽略确认")
+            log_text(logger, "warning", "[ComponentUpdate] 状态 {0}，忽略确认", self._update_state)
             return
         if gen != self._pending_generation:
-            logger.info(
-                f"[ComponentUpdate] 忽略过期 generation 的确认: {gen} != {self._pending_generation}"
+            log_text(
+                logger,
+                "info",
+                "[ComponentUpdate] 忽略过期 generation 的确认: {0} != {1}",
+                gen,
+                self._pending_generation,
             )
             return
         self._approve(gen)
@@ -605,17 +509,21 @@ class ComponentUpdateManager(QObject):
     def cancel_pending_update(self, gen: int) -> None:
         """用户取消更新，回到 IDLE。"""
         if self._update_state != "AWAITING_CONFIRM":
-            logger.warning(f"[ComponentUpdate] 状态 {self._update_state}，忽略取消")
+            log_text(logger, "warning", "[ComponentUpdate] 状态 {0}，忽略取消", self._update_state)
             return
         if gen != self._pending_generation:
-            logger.info(
-                f"[ComponentUpdate] 忽略过期 generation 的取消: {gen} != {self._pending_generation}"
+            log_text(
+                logger,
+                "info",
+                "[ComponentUpdate] 忽略过期 generation 的取消: {0} != {1}",
+                gen,
+                self._pending_generation,
             )
             return
         # 状态机已经拦得住 launch_pending_updater()，清空 pending 是双保险
         self._pending_update = None
         self._update_state = "IDLE"
-        logger.info(f"[ComponentUpdate] 用户取消了更新 (gen={gen})")
+        log_text(logger, "info", "[ComponentUpdate] 用户取消了更新 (gen={0})", gen)
 
     def _fail_pending(self, msg: str) -> None:
         """终止性校验失败：回到 IDLE 并把消息交给 UI。"""
@@ -627,7 +535,7 @@ class ComponentUpdateManager(QObject):
     def _approve(self, gen: int) -> None:
         """批准更新并请求退出。"""
         self._update_state = "APPROVED"
-        logger.info(f"[ComponentUpdate] 更新已批准 (gen={gen})，请求优雅退出")
+        log_text(logger, "info", "[ComponentUpdate] 更新已批准 (gen={0})，请求优雅退出", gen)
         # 先切 QUITTING 再 emit：这次 emit 本身就是 APPROVED→QUITTING 这条边，
         # 任何在 emit 期间重入的观察者都必须已经看到 QUITTING。
         self._update_state = "QUITTING"
@@ -643,12 +551,14 @@ class ComponentUpdateManager(QObject):
             # 绝大多数退出都走这条路（普通关窗口），不留日志噪音
             return
         if self._update_state != "QUITTING":
-            logger.warning(f"[ComponentUpdate] 状态 {self._update_state}，不启动 updater")
+            log_text(
+                logger, "warning", "[ComponentUpdate] 状态 {0}，不启动 updater", self._update_state
+            )
             return
 
         pending = self._pending_update
         if not pending:
-            logger.error("[ComponentUpdate] 状态为 QUITTING 但没有 pending 更新")
+            log_text(logger, "error", "[ComponentUpdate] 状态为 QUITTING 但没有 pending 更新")
             return
 
         app_dir = frozen_app_dir()
@@ -687,11 +597,17 @@ class ComponentUpdateManager(QObject):
                 cmd += ["--origin-user-sid", origin_sid]
             else:
                 # updater 会退回"只看完整性级别"的旧行为（可能在 OTS 提权下漂移）
-                logger.warning("[ComponentUpdate] 取不到当前用户 SID，不传 --origin-user-sid")
+                log_text(
+                    logger,
+                    "warning",
+                    "[ComponentUpdate] 取不到当前用户 SID，不传 --origin-user-sid",
+                )
         else:
-            logger.info(
-                f"[ComponentUpdate] updater.exe 版本 {updater_version} 过旧，"
-                "不传 --data-dir/--origin-user-sid（updater 将退化为 survival 监护模式）"
+            log_text(
+                logger,
+                "info",
+                "[ComponentUpdate] updater.exe 版本 {0} 过旧，不传 --data-dir/--origin-user-sid（updater 将退化为 survival 监护模式）",
+                updater_version,
             )
 
         creationflags = 0
@@ -711,16 +627,29 @@ class ComponentUpdateManager(QObject):
             # 保持 list 形态。（`updater.py` 里给 cmd.exe 拼命令行时必须用单个
             # 字符串，因为 list2cmdline 的 \" 转义 cmd.exe 不认；这里是直接
             # CreateProcess 一个 exe，list 形态才是正确的引号处理方式。）
-            subprocess.Popen(cmd, creationflags=creationflags)
+            # Environment transport is compatible with older updater argument parsers.
+            from PySide6.QtCore import QLocale
+
+            from ..utils.language import normalize_language
+
+            updater_env = os.environ.copy()
+            updater_env["FLUENTYTDL_UI_LANGUAGE"] = normalize_language(
+                config_manager.get("app_language", "auto"), QLocale.system().name()
+            )
+            subprocess.Popen(cmd, creationflags=creationflags, env=updater_env)
         except Exception as e:
             # 此刻事件循环已经结束，没有 UI 可以告知，只能留日志
-            logger.error(f"[ComponentUpdate] 启动 updater.exe 失败: {e}")
+            log_text(logger, "error", "[ComponentUpdate] 启动 updater.exe 失败: {0}", e)
             return
 
         self._update_state = "LAUNCHED"
-        logger.info(
-            f"[ComponentUpdate] updater.exe 已启动: pid={pid}, "
-            f"archive={archive_path}, dest={app_dir}"
+        log_text(
+            logger,
+            "info",
+            "[ComponentUpdate] updater.exe 已启动: pid={0}, archive={1}, dest={2}",
+            pid,
+            archive_path,
+            app_dir,
         )
 
     # ── 版本通道工具 ──────────────────────────────────────
@@ -737,8 +666,8 @@ class ComponentUpdateManager(QObject):
 
     @staticmethod
     def is_locked() -> bool:
-        """是否为锁定版本（beta/pre），不支持自动更新。"""
-        return _get_update_channel() == "locked"
+        """兼容旧调用：所有通道均允许更新。"""
+        return False
 
     def get_manifest_component(self, key: str) -> dict | None:
         """从缓存清单中获取指定组件信息。"""

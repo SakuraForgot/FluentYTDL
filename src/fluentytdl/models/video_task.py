@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from ..utils.message_catalog import standalone_text
 from .yt_dto import YtFormatDTO, YtMediaDTO
 
 
@@ -42,7 +43,7 @@ class VideoMetadata:
     """轻量基础元数据，仅用于首屏列表渲染。"""
 
     id: str | None = None
-    title: str = "解析中..."
+    title: str = field(default_factory=lambda: standalone_text("解析中..."))
     uploader: str = ""
     duration_str: str = "--:--"
     duration_sec: int | None = None
@@ -264,7 +265,7 @@ class VideoTask:
         if not dto:
             return task
 
-        task.title = dto.title or "未知标题"
+        task.title = dto.title or standalone_text("未知标题")
         task.id = dto.id
         task.uploader = dto.uploader or ""
 

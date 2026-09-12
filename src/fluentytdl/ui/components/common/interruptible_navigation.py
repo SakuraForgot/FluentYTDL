@@ -4,6 +4,8 @@ from PySide6.QtCore import QPropertyAnimation, QRect, QSize
 from qfluentwidgets import NavigationInterface
 from qfluentwidgets.components.navigation.navigation_panel import NavigationPanel
 
+from fluentytdl.utils.localized_log import log_text
+
 from ....utils.logger import logger
 
 #: 上游 ``NavigationPanel`` 的图标模式宽度，写死在库里（``__initWidget`` 与 ``collapse``）
@@ -95,8 +97,11 @@ def install_interruptible_navigation(interface: NavigationInterface) -> bool:
 
     if type(panel) is not NavigationPanel:
         # 上游换了实现（例如 Pro 版自带子类），此时贸然替换会丢掉对方的行为
-        logger.warning(
-            f"[Navigation] 侧边栏 panel 类型为 {type(panel).__name__}，跳过可打断动画安装"
+        log_text(
+            logger,
+            "warning",
+            "[Navigation] 侧边栏 panel 类型为 {0}，跳过可打断动画安装",
+            type(panel).__name__,
         )
         return False
 

@@ -24,6 +24,9 @@ import time
 from pathlib import Path
 from typing import Any
 
+from fluentytdl.utils.localized_log import log_text
+from fluentytdl.utils.message_catalog import english, standalone_text
+
 from ...observability.sanitize import sanitize_exception
 from ...utils.logger import logger
 from ..webview2_runtime import WEBVIEW2_DOWNLOAD_URL, is_webview2_runtime_available
@@ -123,7 +126,7 @@ def _webview_subprocess(
             cookie_queue.close()
             cookie_queue.join_thread()
         except Exception as e:
-            _log(f"⚠️ queue 发送失败: {e}")
+            _log(english("⚠️ queue 发送失败: {0}", e))
 
     def _schedule_destroy(win_ref) -> None:
         """延迟 1s 销毁窗口，让管道数据先抵达父进程。"""
@@ -138,7 +141,7 @@ def _webview_subprocess(
 
         threading.Thread(target=_do, daemon=True).start()
 
-    _log(f"=== 子进程启动 === PID={os.getpid()}")
+    _log(english("=== 子进程启动 === PID={0}", os.getpid()))
     _log(f"login_url={login_url}, cache_dir={cache_dir}, timeout={timeout}")
     _log(f"start_hidden={start_hidden}, reveal_after={reveal_after_seconds}")
 
@@ -153,15 +156,15 @@ def _webview_subprocess(
             scheme = "socks5" if proxy_mode == "socks5" else "http"
             proxy_full = f"{scheme}://{proxy_url}"
             os.environ["WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS"] = f"--proxy-server={proxy_full}"
-            _log(f"已注入自定义代理: {proxy_full}")
+            _log(english("已注入自定义代理: {0}", proxy_full))
         elif proxy_mode == "system":
             os.environ.pop("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", None)
-            _log("使用系统代理")
+            _log(english("使用系统代理"))
         else:
             os.environ["WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS"] = "--no-proxy-server"
-            _log("强制直连 (禁用代理)")
+            _log(english("强制直连 (禁用代理)"))
     except Exception as e:
-        _log(f"代理配置注入失败: {e}")
+        _log(english("代理配置注入失败: {0}", e))
 
     # Load the bridge separately so a CLR failure is not labelled WebView2 missing.
     import sys
@@ -174,7 +177,7 @@ def _webview_subprocess(
 
             from ..pythonnet_diagnostics import runtime_evidence
 
-            error_msg = f"Python.NET 加载失败: {sanitize_exception(exc)}"
+            error_msg = standalone_text("Python.NET 加载失败: {0}", sanitize_exception(exc))
             _log(error_msg)
             code = "pythonnet_load_failed"
             try:
@@ -183,11 +186,12 @@ def _webview_subprocess(
                 files = evidence.get("files", {})
                 if any(info.get("exists") is False for info in files.values()):
                     code = "runtime_dll_missing"
-                    error_msg += "\n运行库文件缺失，请重新完整解压或使用安装包覆盖安装。"
+                    error_msg += standalone_text(
+                        "\n运行库文件缺失，请重新完整解压或使用安装包覆盖安装。"
+                    )
                 elif any(info.get("zone_identifier") for info in files.values()):
-                    error_msg += (
-                        "\n运行库带有下载来源标记，可能被系统阻止加载。"
-                        "请确认压缩包来自官方且校验正确，在文件属性中解除锁定后重新解压。"
+                    error_msg += standalone_text(
+                        "\n运行库带有下载来源标记，可能被系统阻止加载。请确认压缩包来自官方且校验正确，在文件属性中解除锁定后重新解压。"
                     )
             except Exception:
                 pass  # Diagnostics must never prevent delivery of the original error.
@@ -203,22 +207,25 @@ def _webview_subprocess(
         webview.settings["OPEN_EXTERNAL_LINKS_IN_BROWSER"] = False
 
         _log(
-            f"import webview 成功: {webview.__version__ if hasattr(webview, '__version__') else '?'}"
+            english(
+                "import webview 成功: {0}",
+                webview.__version__ if hasattr(webview, "__version__") else "?",
+            )
         )
     except Exception as exc:
         import traceback
 
         tb = traceback.format_exc()
-        error_msg = f"pywebview 加载失败: {exc}\n{tb}"
+        error_msg = standalone_text("pywebview 加载失败: {0}\n{1}", exc, tb)
         _log(error_msg)
         _send_and_close({"error": error_msg, "code": "pywebview_load_failed", "stage": "import"})
         return
 
     # ── 创建窗口 ──
     window_kwargs = {
-        "title": "FluentYTDL - YouTube 安全登录"
+        "title": standalone_text("FluentYTDL - YouTube 安全登录")
         if platform == "youtube"
-        else "FluentYTDL - X (Twitter) 安全登录",
+        else standalone_text("FluentYTDL - X (Twitter) 安全登录"),
         "url": login_url,
         "width": 900,
         "height": 700,
@@ -235,16 +242,16 @@ def _webview_subprocess(
     try:
         try:
             window = webview.create_window(**window_kwargs)
-            _log("create_window 成功")
+            _log(english("create_window 成功"))
         except TypeError:
             window_kwargs.pop("hidden", None)
             window = webview.create_window(**window_kwargs)
-            _log("create_window 成功 (fallback, 无 hidden)")
+            _log(english("create_window 成功 (fallback, 无 hidden)"))
     except Exception as exc:
         import traceback
 
         tb = traceback.format_exc()
-        error_msg = f"创建登录窗口失败: {exc}\n{tb}"
+        error_msg = standalone_text("创建登录窗口失败: {0}\n{1}", exc, tb)
         _log(error_msg)
         _send_and_close(
             {"error": error_msg, "code": "window_create_failed", "stage": "create_window"}
@@ -254,7 +261,7 @@ def _webview_subprocess(
     # ── 后台轮询线程 ──
     def _background_poll(win):
         try:
-            _log("🚀 _background_poll 线程已启动")
+            _log(english("🚀 _background_poll 线程已启动"))
             time.sleep(3)
 
             start_time = time.time()
@@ -267,61 +274,79 @@ def _webview_subprocess(
 
                 if not revealed and elapsed >= reveal_after_seconds:
                     _log(
-                        f"[{elapsed}s] 超过 {reveal_after_seconds}s 未检测到有效登录态，主动显示窗口让用户登录..."
+                        english(
+                            "[{0}s] 超过 {1}s 未检测到有效登录态，主动显示窗口让用户登录...",
+                            elapsed,
+                            reveal_after_seconds,
+                        )
                     )
                     try:
                         win.show()
                     except Exception as e:
-                        _log(f"显示窗口失败: {e}")
+                        _log(english("显示窗口失败: {0}", e))
                     revealed = True
 
                 if platform == "twitter":
                     if "x.com" not in current_url and "twitter.com" not in current_url:
-                        _log(f"[{elapsed}s] 等待跳回 X... (当前: {current_url[:80]})")
+                        _log(english("[{0}s] 等待跳回 X... (当前: {1})", elapsed, current_url[:80]))
                         continue
 
                     try:
                         x_cookies = win.get_cookies() or []
                     except Exception as e:
-                        _log(f"⚠️ get_cookies 失败: {e}")
+                        _log(english("⚠️ get_cookies 失败: {0}", e))
                         continue
 
                     x_names = _get_cookie_names(x_cookies)
                     _log(
-                        f"[{elapsed}s] X 域 {len(x_cookies)} 个 Cookie, names={list(x_names)[:10]}"
+                        english(
+                            "[{0}s] X 域 {1} 个 Cookie, names={2}",
+                            elapsed,
+                            len(x_cookies),
+                            list(x_names)[:10],
+                        )
                     )
 
                     if not LOGIN_INDICATOR_X <= x_names:
-                        _log(f"[{elapsed}s] 尚未检测到完整的登录 Cookie")
+                        _log(english("[{0}s] 尚未检测到完整的登录 Cookie", elapsed))
                         continue
 
-                    _log("🎯 检测到 auth_token! 用户已完成登录。")
+                    _log(english("🎯 检测到 auth_token! 用户已完成登录。"))
                     all_raw = list(x_cookies)
                 else:
                     if "youtube.com" not in current_url:
-                        _log(f"[{elapsed}s] 等待跳回 YouTube... (当前: {current_url[:80]})")
+                        _log(
+                            english(
+                                "[{0}s] 等待跳回 YouTube... (当前: {1})", elapsed, current_url[:80]
+                            )
+                        )
                         continue
 
                     # 步骤 2: YouTube 域 Cookie
                     try:
                         yt_cookies = win.get_cookies() or []
                     except Exception as e:
-                        _log(f"⚠️ get_cookies 失败: {e}")
+                        _log(english("⚠️ get_cookies 失败: {0}", e))
                         continue
 
                     yt_names = _get_cookie_names(yt_cookies)
                     _log(
-                        f"[{elapsed}s] YouTube 域 {len(yt_cookies)} 个 Cookie, names={list(yt_names)[:10]}"
+                        english(
+                            "[{0}s] YouTube 域 {1} 个 Cookie, names={2}",
+                            elapsed,
+                            len(yt_cookies),
+                            list(yt_names)[:10],
+                        )
                     )
 
                     if not LOGIN_INDICATOR_YT & yt_names:
-                        _log(f"[{elapsed}s] 尚未检测到 LOGIN_INFO")
+                        _log(english("[{0}s] 尚未检测到 LOGIN_INFO", elapsed))
                         continue
 
-                    _log("🎯 检测到 LOGIN_INFO! 用户已完成登录。")
+                    _log(english("🎯 检测到 LOGIN_INFO! 用户已完成登录。"))
 
                     # 步骤 3: Google 域 Cookie
-                    _log("📡 导航到 accounts.google.com ...")
+                    _log(english("📡 导航到 accounts.google.com ..."))
                     google_cookies = []
                     try:
                         win.load_url(GOOGLE_ACCOUNT_URL)
@@ -329,51 +354,57 @@ def _webview_subprocess(
                         google_cookies = win.get_cookies() or []
                         google_names = _get_cookie_names(google_cookies)
                         _log(
-                            f"Google 域 {len(google_cookies)} 个 Cookie, names={list(google_names)[:10]}"
+                            english(
+                                "Google 域 {0} 个 Cookie, names={1}",
+                                len(google_cookies),
+                                list(google_names)[:10],
+                            )
                         )
                     except Exception as e:
-                        _log(f"⚠️ 获取 Google Cookie 失败: {e}")
+                        _log(english("⚠️ 获取 Google Cookie 失败: {0}", e))
 
                     # 步骤 4: 合并+格式化+回传
                     all_raw = list(yt_cookies) + list(google_cookies)
                     all_names = _get_cookie_names(all_raw)
                     has_core = LOGIN_INDICATOR_GOOGLE & all_names
-                    _log(f"合并后共 {len(all_raw)} 个, core匹配={has_core}")
+                    _log(english("合并后共 {0} 个, core匹配={1}", len(all_raw), has_core))
 
                 formatted = _format_cookies(all_raw)
-                _log(f"格式化后 {len(formatted)} 个 Cookie")
+                _log(english("格式化后 {0} 个 Cookie", len(formatted)))
 
                 if formatted:
                     _send_and_close({"cookies": formatted})
-                    _log(f"✅ 已回传 {len(formatted)} 个 Cookie 到父进程")
+                    _log(english("✅ 已回传 {0} 个 Cookie 到父进程", len(formatted)))
                 else:
-                    _send_and_close({"error": "Cookie 格式化失败：提取到空列表"})
-                    _log("❌ 格式化后为空")
+                    _send_and_close({"error": standalone_text("Cookie 格式化失败：提取到空列表")})
+                    _log(english("❌ 格式化后为空"))
 
                 _schedule_destroy(win)
                 return
 
             # 超时
-            _log(f"⏳ 提取超时 ({timeout}s)")
-            _send_and_close({"error": f"登录超时 ({timeout}s)，未检测到有效的登录 Cookie"})
+            _log(english("⏳ 提取超时 ({0}s)", timeout))
+            _send_and_close(
+                {"error": standalone_text("登录超时 ({0}s)，未检测到有效的登录 Cookie", timeout)}
+            )
             _schedule_destroy(win)
 
         except Exception as exc:
             import traceback
 
             tb = traceback.format_exc()
-            _log(f"💥 _background_poll 未捕获异常: {exc}\n{tb}")
+            _log(english("💥 _background_poll 未捕获异常: {0}\n{1}", exc, tb))
             try:
-                _send_and_close({"error": f"子进程内部异常: {exc}\n{tb}"})
+                _send_and_close({"error": standalone_text("子进程内部异常: {0}\n{1}", exc, tb)})
             except Exception:
                 pass
             _schedule_destroy(win)
 
     # ── 窗口关闭事件 ──
     def _on_closed():
-        _log("🚪 用户关闭了登录窗口")
+        _log(english("🚪 用户关闭了登录窗口"))
         try:
-            cookie_queue.put_nowait({"error": "用户关闭了登录窗口"})
+            cookie_queue.put_nowait({"error": standalone_text("用户关闭了登录窗口")})
             cookie_queue.close()
             cookie_queue.join_thread()
         except Exception:
@@ -381,7 +412,7 @@ def _webview_subprocess(
 
     window.events.closed += _on_closed
 
-    _log("调用 webview.start() ...")
+    _log(english("调用 webview.start() ..."))
     try:
         webview.start(
             func=_background_poll,
@@ -395,13 +426,13 @@ def _webview_subprocess(
         import traceback
 
         tb = traceback.format_exc()
-        error_msg = f"启动登录窗口失败: {exc}\n{tb}"
+        error_msg = standalone_text("启动登录窗口失败: {0}\n{1}", exc, tb)
         _log(error_msg)
         _send_and_close(
             {"error": error_msg, "code": "window_start_failed", "stage": "start_window"}
         )
         return
-    _log("webview.start() 已返回（子进程即将退出）")
+    _log(english("webview.start() 已返回（子进程即将退出）"))
 
 
 def _format_cookies(raw_cookies: list) -> list[dict[str, Any]]:
@@ -489,11 +520,14 @@ class WebView2CookieProvider:
         available, _version = is_webview2_runtime_available()
         if not available:
             msg = (
-                "未检测到 Microsoft Edge WebView2 运行时，无法使用登录模式。\n"
-                "请前往以下地址安装后重试，或在设置中改用「浏览器提取」/「手动导入」：\n"
+                standalone_text(
+                    "未检测到 Microsoft Edge WebView2 运行时，无法使用登录模式。\n请前往以下地址安装后重试，或在设置中改用「浏览器提取」/「手动导入」：\n"
+                )
                 + WEBVIEW2_DOWNLOAD_URL
             )
-            logger.warning("[WebView2] 预检失败：缺少 WebView2 运行时，已跳过子进程启动")
+            log_text(
+                logger, "warning", "[WebView2] 预检失败：缺少 WebView2 运行时，已跳过子进程启动"
+            )
             self._set_error_status(msg, "webview2_unavailable", "preflight")
             return None
 
@@ -506,10 +540,15 @@ class WebView2CookieProvider:
 
         session_label = session_tag or "default"
 
-        logger.info(
-            f"[WebView2] 启动安全登录窗口: {login_url} (session={session_label}, hidden_first={start_hidden})"
+        log_text(
+            logger,
+            "info",
+            "[WebView2] 启动安全登录窗口: {0} (session={1}, hidden_first={2})",
+            login_url,
+            session_label,
+            start_hidden,
         )
-        logger.info(f"[WebView2] WebView2 缓存目录: {cache_dir}")
+        log_text(logger, "info", "[WebView2] WebView2 缓存目录: {0}", cache_dir)
 
         cookie_queue: multiprocessing.Queue = multiprocessing.Queue()
 
@@ -529,8 +568,12 @@ class WebView2CookieProvider:
 
         try:
             process.start()
-            logger.info(
-                f"[WebView2] 子进程已启动 (PID: {process.pid}, session={session_label})，等待用户登录..."
+            log_text(
+                logger,
+                "info",
+                "[WebView2] 子进程已启动 (PID: {0}, session={1})，等待用户登录...",
+                process.pid,
+                session_label,
             )
 
             # **边等队列边查子进程存活。** 旧实现是一句
@@ -544,35 +587,46 @@ class WebView2CookieProvider:
             result = self._wait_for_result(cookie_queue, process, timeout + 30)
 
             if result is None:
-                logger.warning("[WebView2] 未收到子进程响应 (超时)")
-                self._set_error_status("登录超时，未收到 Cookie 数据", "login_timeout", "wait")
+                log_text(logger, "warning", "[WebView2] 未收到子进程响应 (超时)")
+                self._set_error_status(
+                    standalone_text("登录超时，未收到 Cookie 数据"), "login_timeout", "wait"
+                )
                 return None
 
             if "error" in result:
                 error_msg = result["error"]
                 code = result.get("code", "login_failed")
                 stage = result.get("stage", "login")
-                logger.warning(f"[WebView2] code={code} stage={stage} 子进程报告错误: {error_msg}")
+                log_text(
+                    logger,
+                    "warning",
+                    "[WebView2] code={0} stage={1} 子进程报告错误: {2}",
+                    code,
+                    stage,
+                    error_msg,
+                )
                 self._set_error_status(error_msg, code, stage)
                 return None
 
             cookies = result.get("cookies", [])
             if not cookies:
-                logger.warning("[WebView2] 子进程返回空 Cookie 列表")
-                self._set_error_status("未提取到有效的 Cookie", "empty_cookies", "cookies")
+                log_text(logger, "warning", "[WebView2] 子进程返回空 Cookie 列表")
+                self._set_error_status(
+                    standalone_text("未提取到有效的 Cookie"), "empty_cookies", "cookies"
+                )
                 return None
 
-            logger.info(f"[WebView2] 成功提取 {len(cookies)} 个 Cookie")
+            log_text(logger, "info", "[WebView2] 成功提取 {0} 个 Cookie", len(cookies))
             return cookies
 
         except Exception as e:
-            logger.exception(f"[WebView2] 提取过程异常: {e}")
-            self._set_error_status(f"提取异常: {e}")
+            log_text(logger, "exception", "[WebView2] 提取过程异常: {0}", e)
+            self._set_error_status(standalone_text("提取异常: {0}", e))
             return None
 
         finally:
             if process.is_alive():
-                logger.info("[WebView2] 强制终止残留子进程")
+                log_text(logger, "info", "[WebView2] 强制终止残留子进程")
                 process.terminate()
                 process.join(timeout=5)
                 if process.is_alive():
@@ -606,16 +660,18 @@ class WebView2CookieProvider:
                         return cookie_queue.get(timeout=0.5)
                     except Exception:
                         pass
-                    logger.warning("[WebView2] 子进程意外退出且未回传任何结果")
+                    log_text(logger, "warning", "[WebView2] 子进程意外退出且未回传任何结果")
                     return {
-                        "error": "登录窗口意外退出且未回传结果，请查看登录子进程日志。",
+                        "error": standalone_text(
+                            "登录窗口意外退出且未回传结果，请查看登录子进程日志。"
+                        ),
                         "code": "subprocess_exited",
                         "stage": "wait",
                     }
             except Exception as e:
-                logger.warning(f"[WebView2] 读取子进程队列异常: {e}")
+                log_text(logger, "warning", "[WebView2] 读取子进程队列异常: {0}", e)
                 return {
-                    "error": f"登录结果读取失败: {sanitize_exception(e)}",
+                    "error": standalone_text("登录结果读取失败: {0}", sanitize_exception(e)),
                     "code": "queue_read_failed",
                     "stage": "wait",
                 }

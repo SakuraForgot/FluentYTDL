@@ -15,6 +15,11 @@ from collections.abc import Mapping
 from datetime import datetime
 from typing import Any
 
+from PySide6.QtCore import QT_TRANSLATE_NOOP
+
+from fluentytdl.utils.message_catalog import english
+from fluentytdl.utils.ui_text import tr_text
+
 
 def format_duration(seconds: Any) -> str:
     try:
@@ -53,19 +58,19 @@ def format_time_ago(ts: Any) -> str:
     diff = time.time() - t
     if diff < 0:
         # 机器时钟回拨过，别显示「-3 分钟前」
-        return "刚刚"
+        return tr_text("刚刚")
     if diff < 60:
-        return "刚刚"
+        return tr_text("刚刚")
     if diff < 3600:
-        return f"{int(diff // 60)} 分钟前"
+        return tr_text("{0} 分钟前", int(diff // 60))
     if diff < 86400:
-        return f"{int(diff // 3600)} 小时前"
+        return tr_text("{0} 小时前", int(diff // 3600))
 
     days = int(diff // 86400)
     if days == 1:
-        return "昨天"
+        return tr_text("昨天")
     if days < 30:
-        return f"{days} 天前"
+        return tr_text("{0} 天前", days)
     return datetime.fromtimestamp(t).strftime("%Y-%m-%d")
 
 
@@ -97,6 +102,77 @@ def format_size(value: Any, zero: str = "-") -> str:
 # 记录走一遍（分页每次 100 行），re 的内部缓存靠不住（有大小上限且会被其他模式挤掉）。
 _HEIGHT_LIMIT_RE = re.compile(r"height<=(\d+)")
 
+# Old tasks persist the translated preset title, sometimes with an icon/container.
+# Match complete built-in labels only; arbitrary format notes must remain untouched.
+_SAVED_PRESET_LABELS = (
+    QT_TRANSLATE_NOOP("RuntimeText", "最佳画质"),
+    QT_TRANSLATE_NOOP("RuntimeText", "最佳画质 (原盘)"),
+    QT_TRANSLATE_NOOP("RuntimeText", "1080p 高清"),
+    QT_TRANSLATE_NOOP("RuntimeText", "720p 标清"),
+    QT_TRANSLATE_NOOP("RuntimeText", "最佳画质 (无音频)"),
+    QT_TRANSLATE_NOOP("RuntimeText", "1080p视频 (无音频)"),
+    QT_TRANSLATE_NOOP("RuntimeText", "最佳质量(无声)"),
+    QT_TRANSLATE_NOOP("RuntimeText", "1080p(无声)"),
+    QT_TRANSLATE_NOOP("RuntimeText", "最佳音质"),
+    QT_TRANSLATE_NOOP("RuntimeText", "高品质音频"),
+    QT_TRANSLATE_NOOP("RuntimeText", "标准音频"),
+    QT_TRANSLATE_NOOP("RuntimeText", "纯音频"),
+    QT_TRANSLATE_NOOP("RuntimeText", "自定义音频"),
+    QT_TRANSLATE_NOOP("RuntimeText", "全局格式"),
+    QT_TRANSLATE_NOOP("RuntimeText", "高品质 (320kbps)"),
+    QT_TRANSLATE_NOOP("RuntimeText", "标准品质 (192kbps)"),
+    QT_TRANSLATE_NOOP("RuntimeText", "纯音频 (MP3 - 320k)"),
+    QT_TRANSLATE_NOOP("RuntimeText", "720p 高清"),
+    QT_TRANSLATE_NOOP("RuntimeText", "最佳画质（原始编码）"),
+    QT_TRANSLATE_NOOP("RuntimeText", "最佳画质（仅视频）"),
+    QT_TRANSLATE_NOOP("RuntimeText", "1080p（仅视频）"),
+    QT_TRANSLATE_NOOP("RuntimeText", "音频码率 320 kbps"),
+    QT_TRANSLATE_NOOP("RuntimeText", "音频码率 192 kbps"),
+)
+# Historical English labels are data aliases, not current UI wording.
+_LEGACY_PRESET_ENGLISH = {
+    "Best Quality (Original)": QT_TRANSLATE_NOOP("RuntimeText", "最佳画质 (原盘)"),
+    "Best Quality (Raw)": QT_TRANSLATE_NOOP("RuntimeText", "最佳画质 (原盘)"),
+    "720p SD": QT_TRANSLATE_NOOP("RuntimeText", "720p 标清"),
+    "Best Quality (Silent)": QT_TRANSLATE_NOOP("RuntimeText", "最佳质量(无声)"),
+    "1080p (Silent)": QT_TRANSLATE_NOOP("RuntimeText", "1080p(无声)"),
+    "1080p Video (No Audio)": QT_TRANSLATE_NOOP("RuntimeText", "1080p视频 (无音频)"),
+    "High Quality (320kbps)": QT_TRANSLATE_NOOP("RuntimeText", "高品质 (320kbps)"),
+    "Standard Quality (192kbps)": QT_TRANSLATE_NOOP("RuntimeText", "标准品质 (192kbps)"),
+    "Pure Audio": QT_TRANSLATE_NOOP("RuntimeText", "纯音频"),
+    "Pure Audio (MP3 - 320k)": QT_TRANSLATE_NOOP("RuntimeText", "纯音频 (MP3 - 320k)"),
+}
+_GLOBAL_NOTE_PREFIX = QT_TRANSLATE_NOOP("RuntimeText", "[全局] ")
+_NOTE_CONTAINER_RE = re.compile(r"(\s+\(?(?:MP4|MKV|WEBM|M4A|MP3|FLAC|OPUS|WAV|OGG)\)?)$", re.I)
+
+
+def _localize_saved_format_note(note: str) -> str:
+    original = note
+    global_note = False
+    for prefix in (_GLOBAL_NOTE_PREFIX, english(_GLOBAL_NOTE_PREFIX)):
+        if note.startswith(prefix):
+            note = note[len(prefix) :]
+            global_note = True
+            break
+    icon = re.match(r"^[🎬🎯📺🎵🎧🔊\ufe0f\s]+", note)
+    prefix = icon.group() if icon else ""
+    note = note[len(prefix) :]
+    container = _NOTE_CONTAINER_RE.search(note)
+    suffix = container.group() if container else ""
+    label = note[: len(note) - len(suffix)] if suffix else note
+    if label == "Best Video Quality":
+        label = "Best Quality"
+    label = _LEGACY_PRESET_ENGLISH.get(label, label)
+
+    def key(value: str) -> str:
+        return re.sub(r"\s+", "", value).casefold()
+
+    for source in _SAVED_PRESET_LABELS:
+        if key(label) in {key(source), key(english(source))}:
+            result = prefix + tr_text(source) + suffix
+            return tr_text(_GLOBAL_NOTE_PREFIX) + result if global_note else result
+    return original
+
 
 def derive_format_note(ydl_opts: Mapping[str, Any] | None, output_path: str = "") -> str:
     """从任务的 `ydl_opts` + 输出路径推导「1080p MP4」这类画质标签。
@@ -114,7 +190,7 @@ def derive_format_note(ydl_opts: Mapping[str, Any] | None, output_path: str = ""
     扩展名总是追加（已经出现在标签里就不重复），因为 `1080p` 不说明是 MP4 还是 MKV。
     """
     opts: Mapping[str, Any] = ydl_opts or {}
-    note = str(opts.get("__fluentytdl_format_note") or "")
+    note = _localize_saved_format_note(str(opts.get("__fluentytdl_format_note") or ""))
 
     if not note:
         fmt = str(opts.get("format") or "")

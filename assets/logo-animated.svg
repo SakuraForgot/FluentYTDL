@@ -1,0 +1,327 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <title>FluentYTDL · 流光玻璃</title>
+  <desc>Based on the approved icon. A soft diagonal highlight crosses the glass every 4.8 seconds, followed by a faint blue-violet reflection.</desc>
+  <path id="solid-glass-body" d="M101 51 Q127 32 153 51 L211 95 Q232 111 224 137 L223 150 Q222 169 204 182 L154 223 Q129 242 104 225 L51 184 Q34 172 33 154 L32 127 Q30 109 47 96 Z" fill="#e6eef7" />
+  <defs>
+    <linearGradient id="side" x1="37" y1="151" x2="217" y2="207" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#eef4ff" stop-opacity="1" />
+      <stop offset=".13" stop-color="#a0b4d0" stop-opacity="1" />
+      <stop offset=".25" stop-color="#deebfa" stop-opacity="1" />
+      <stop offset=".45" stop-color="#f6f9ff" stop-opacity="1" />
+      <stop offset=".63" stop-color="#e5e7f4" stop-opacity="1" />
+      <stop offset=".81" stop-color="#adbdd5" stop-opacity="1" />
+      <stop offset="1" stop-color="#eef4ff" stop-opacity="1" />
+    </linearGradient>
+    <linearGradient id="rim" x1="72" y1="61" x2="172" y2="204" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#e2edf7" />
+      <stop offset=".16" stop-color="#fafcff" />
+      <stop offset=".29" stop-color="#d4e4f2" />
+      <stop offset=".43" stop-color="#edf5fc" />
+      <stop offset=".61" stop-color="#ffffff" />
+      <stop offset=".83" stop-color="#f1f7fc" />
+      <stop offset="1" stop-color="#dfebf6" />
+    </linearGradient>
+    <linearGradient id="face" x1="81" y1="69" x2="174" y2="184" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#a9c9e1" stop-opacity="0.0792" />
+      <stop offset=".2" stop-color="#d5eafa" stop-opacity="0.0385" />
+      <stop offset=".44" stop-color="#e8f6ff" stop-opacity="0.0231" />
+      <stop offset=".67" stop-color="#b5d5ed" stop-opacity="0.0319" />
+      <stop offset=".85" stop-color="#95b9dc" stop-opacity="0.0545" />
+      <stop offset="1" stop-color="#d9edfa" stop-opacity="0.0737" />
+    </linearGradient>
+    <radialGradient id="shadow">
+      <stop stop-color="#384d85" stop-opacity=".22" />
+      <stop offset=".6" stop-color="#6578a0" stop-opacity=".1" />
+      <stop offset="1" stop-color="#7886a2" stop-opacity="0" />
+    </radialGradient>
+    <radialGradient id="blueBounce">
+      <stop stop-color="#47acf2" stop-opacity=".33" />
+      <stop offset=".34" stop-color="#7ccbf7" stop-opacity=".19" />
+      <stop offset="1" stop-color="#91d6ff" stop-opacity="0" />
+    </radialGradient>
+    <radialGradient id="violetBounce">
+      <stop stop-color="#9c74df" stop-opacity=".33" />
+      <stop offset=".4" stop-color="#b698eb" stop-opacity=".18" />
+      <stop offset="1" stop-color="#cbb4f7" stop-opacity="0" />
+    </radialGradient>
+    <radialGradient id="softWhite">
+      <stop stop-color="#ffffff" stop-opacity=".67" />
+      <stop offset=".35" stop-color="#ffffff" stop-opacity=".38" />
+      <stop offset=".7" stop-color="#ffffff" stop-opacity=".1" />
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0" />
+    </radialGradient>
+    <radialGradient id="softShade">
+      <stop stop-color="#899ab5" stop-opacity=".31" />
+      <stop offset=".35" stop-color="#9baac1" stop-opacity=".19" />
+      <stop offset="1" stop-color="#bdc8da" stop-opacity="0" />
+    </radialGradient>
+    <linearGradient id="rolledEdge" x1="72" y1="59" x2="165" y2="192" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#ffffff" stop-opacity=".3" />
+      <stop offset=".22" stop-color="#ffffff" stop-opacity=".75" />
+      <stop offset=".45" stop-color="#ffffff" stop-opacity=".25" />
+      <stop offset=".75" stop-color="#ffffff" stop-opacity=".68" />
+      <stop offset="1" stop-color="#ffffff" stop-opacity=".25" />
+    </linearGradient>
+    <linearGradient id="refractionBlue" x1="57" y1="162" x2="82" y2="188" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#74a7d7" stop-opacity="0" />
+      <stop offset=".35" stop-color="#409edc" stop-opacity=".48" />
+      <stop offset=".56" stop-color="#8fd4f9" stop-opacity=".65" />
+      <stop offset="1" stop-color="#d5edff" stop-opacity="0" />
+    </linearGradient>
+    <linearGradient id="refractionViolet" x1="169" y1="201" x2="179" y2="175" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#b2a0df" stop-opacity="0" />
+      <stop offset=".35" stop-color="#9c8ed5" stop-opacity=".5" />
+      <stop offset=".6" stop-color="#c4b6ee" stop-opacity=".65" />
+      <stop offset="1" stop-color="#e9e2fa" stop-opacity="0" />
+    </linearGradient>
+    <clipPath id="tileClip">
+      <use href="#tile" />
+    </clipPath>
+    <clipPath id="shellClip">
+      <path d="M33 123 Q34 140 50 153 L105 195 Q130 213 155 193 L211 150 Q222 140 223 125 L222 149 Q221 169 204 182 L154 223 Q129 242 104 225 L51 184 Q35 172 34 154 Z" />
+    </clipPath>
+    <path id="innerRim" d="M105 61 Q127 44 150 61 L204 103 Q221 115 210 135 Q207 141 199 147 L151 186 Q129 203 108 187 L55 147 Q42 137 43 125 Q41 114 56 104 Z" />
+    <path id="tile" d="M101 51 Q127 32 153 51 L211 95 Q232 111 219 138 Q216 145 207 153 L154 196 Q129 216 103 197 L48 155 Q33 144 33 126 Q30 109 47 96 Z" />
+    <path id="playShape" fill-rule="evenodd" d="M105 74 C98 70 93 73 93 81 L93 128 C93 136 98 139 105 135 L139 116 C149 111 151 105 141 99 Z M113 93 C109 91 107 92 107 97 L107 114 C107 119 109 121 114 118 L128 110 C132 108 132 105 128 103 Z" />
+    <path id="arrowShape" d="M132 94 L149 102 C158 107 160 112 160 122 L160 132 C160 135 161 136 164 136 L168 136 C172 136 173 139 170 142 L156 155 C153 158 151 158 148 155 L135 142 C132 139 133 136 137 136 L142 136 C145 136 145 135 145 132 L145 124 C145 118 143 116 138 113 L134 111 C141 107 142 103 137 98 Z" />
+    <clipPath id="playClip">
+      <use href="#playShape" clip-rule="evenodd" />
+    </clipPath>
+    <clipPath id="arrowClip">
+      <use href="#arrowShape" />
+    </clipPath>
+    <radialGradient id="ribbonGlint">
+      <stop stop-color="#e1f5ff" stop-opacity=".56" />
+      <stop offset=".4" stop-color="#c9ecff" stop-opacity=".2" />
+      <stop offset="1" stop-color="#c9ecff" stop-opacity="0" />
+    </radialGradient>
+    <linearGradient id="vividBlue" x1="96" y1="78" x2="138" y2="133" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#53d3ff" />
+      <stop offset=".3" stop-color="#22b8fa" />
+      <stop offset=".7" stop-color="#138ce8" />
+      <stop offset="1" stop-color="#5164e9" />
+    </linearGradient>
+    <linearGradient id="vividViolet" x1="135" y1="98" x2="169" y2="157" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#6986f8" />
+      <stop offset=".35" stop-color="#9c7bf5" />
+      <stop offset=".67" stop-color="#b989fa" />
+      <stop offset="1" stop-color="#9254e1" />
+    </linearGradient>
+    <path id="glassRim" d="M101 51 Q127 32 153 51 L211 95 Q232 111 219 138 Q216 145 207 153 L154 196 Q129 216 103 197 L48 155 Q33 144 33 126 Q30 109 47 96 Z M105 61 Q127 44 150 61 L204 103 Q221 115 210 135 Q207 141 199 147 L151 186 Q129 203 108 187 L55 147 Q42 137 43 125 Q41 114 56 104 Z" fill-rule="evenodd" />
+    <linearGradient id="clearReflection" gradientUnits="userSpaceOnUse" x1="62" y1="66" x2="186" y2="185">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.0" />
+      <stop offset="0.25" stop-color="#ffffff" stop-opacity="0.0" />
+      <stop offset="0.32" stop-color="#ffffff" stop-opacity="0.042" />
+      <stop offset="0.37" stop-color="#ffffff" stop-opacity="0.239" />
+      <stop offset="0.405" stop-color="#ffffff" stop-opacity="0.062" />
+      <stop offset="0.44" stop-color="#ffffff" stop-opacity="0.0" />
+      <stop offset="0.75" stop-color="#cfefff" stop-opacity="0.0" />
+      <stop offset="0.8" stop-color="#e8faff" stop-opacity="0.094" />
+      <stop offset="0.83" stop-color="#ffffff" stop-opacity="0.0" />
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0.0" />
+    </linearGradient>
+    <linearGradient id="blueThickness" gradientUnits="userSpaceOnUse" x1="91" y1="89" x2="143" y2="144">
+      <stop offset="0" stop-color="#29a6e3" stop-opacity="1" />
+      <stop offset="0.33" stop-color="#158ed2" stop-opacity="1" />
+      <stop offset="0.66" stop-color="#2561cb" stop-opacity="1" />
+      <stop offset="1" stop-color="#6b66da" stop-opacity="1" />
+    </linearGradient>
+    <linearGradient id="violetThickness" gradientUnits="userSpaceOnUse" x1="136" y1="103" x2="166" y2="162">
+      <stop offset="0" stop-color="#626cdf" stop-opacity="1" />
+      <stop offset="0.4" stop-color="#8254d1" stop-opacity="1" />
+      <stop offset="0.7" stop-color="#673dc1" stop-opacity="1" />
+      <stop offset="1" stop-color="#a26be8" stop-opacity="1" />
+    </linearGradient>
+    <linearGradient id="markPolish" gradientUnits="userSpaceOnUse" x1="91" y1="77" x2="171" y2="156">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.06" />
+      <stop offset="0.27" stop-color="#ffffff" stop-opacity="0.02" />
+      <stop offset="0.36" stop-color="#ffffff" stop-opacity="0.4" />
+      <stop offset="0.43" stop-color="#ffffff" stop-opacity="0.07" />
+      <stop offset="0.66" stop-color="#ffffff" stop-opacity="0" />
+      <stop offset="0.77" stop-color="#e6d8ff" stop-opacity="0.24" />
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0.02" />
+    </linearGradient>
+    <linearGradient id="frostedBottom" gradientUnits="userSpaceOnUse" x1="69" y1="68" x2="177" y2="201">
+      <stop offset="0" stop-color="#c6d0df" />
+      <stop offset=".23" stop-color="#e0e6ee" />
+      <stop offset=".5" stop-color="#edf1f6" />
+      <stop offset=".77" stop-color="#dce3ee" />
+      <stop offset="1" stop-color="#c9d5e4" />
+    </linearGradient>
+    <linearGradient id="glassBlueFace" gradientUnits="userSpaceOnUse" x1="92" y1="84" x2="143" y2="126">
+      <stop offset="0" stop-color="#26b4f2" stop-opacity="1" />
+      <stop offset="0.18" stop-color="#92e8ff" stop-opacity="1" />
+      <stop offset="0.37" stop-color="#3ecefa" stop-opacity="1" />
+      <stop offset="0.68" stop-color="#159fe9" stop-opacity="1" />
+      <stop offset="0.85" stop-color="#438fee" stop-opacity="1" />
+      <stop offset="1" stop-color="#9dbbf9" stop-opacity="1" />
+    </linearGradient>
+    <linearGradient id="glassVioletFace" gradientUnits="userSpaceOnUse" x1="140" y1="105" x2="165" y2="150">
+      <stop offset="0" stop-color="#8ca5fa" stop-opacity="1" />
+      <stop offset="0.22" stop-color="#d1c9ff" stop-opacity="1" />
+      <stop offset="0.44" stop-color="#b19af9" stop-opacity="1" />
+      <stop offset="0.65" stop-color="#9c78ed" stop-opacity="1" />
+      <stop offset="0.85" stop-color="#c7adff" stop-opacity="1" />
+      <stop offset="1" stop-color="#af8def" stop-opacity="1" />
+    </linearGradient>
+    <linearGradient id="glassBlueEdge" gradientUnits="userSpaceOnUse" x1="93" y1="90" x2="139" y2="139">
+      <stop offset="0" stop-color="#a0e4f9" stop-opacity="0.85" />
+      <stop offset="0.38" stop-color="#55c1ed" stop-opacity="0.95" />
+      <stop offset="0.7" stop-color="#4d9dde" stop-opacity="0.96" />
+      <stop offset="1" stop-color="#a4bdef" stop-opacity="0.9" />
+    </linearGradient>
+    <linearGradient id="glassVioletEdge" gradientUnits="userSpaceOnUse" x1="140" y1="109" x2="158" y2="160">
+      <stop offset="0" stop-color="#b6b9f5" stop-opacity="0.9" />
+      <stop offset="0.4" stop-color="#bdabf1" stop-opacity="0.95" />
+      <stop offset="0.7" stop-color="#aa8fe3" stop-opacity="0.95" />
+      <stop offset="1" stop-color="#cfbafa" stop-opacity="0.9" />
+    </linearGradient>
+    <linearGradient id="glassMarkReflection" gradientUnits="userSpaceOnUse" x1="94" y1="77" x2="159" y2="160">
+      <stop offset="0" stop-color="#f6fdff" stop-opacity="0" />
+      <stop offset="0.27" stop-color="#f6fdff" stop-opacity="0" />
+      <stop offset="0.34" stop-color="#f6fdff" stop-opacity="0.03" />
+      <stop offset="0.39" stop-color="#f6fdff" stop-opacity="0.38" />
+      <stop offset="0.425" stop-color="#f6fdff" stop-opacity="0.13" />
+      <stop offset="0.46" stop-color="#f6fdff" stop-opacity="0" />
+      <stop offset="0.71" stop-color="#f6fdff" stop-opacity="0" />
+      <stop offset="0.77" stop-color="#f6fdff" stop-opacity="0.19" />
+      <stop offset="0.81" stop-color="#f6fdff" stop-opacity="0" />
+      <stop offset="1" stop-color="#f6fdff" stop-opacity="0" />
+    </linearGradient>
+    <linearGradient id="subsurfaceDepth" gradientUnits="userSpaceOnUse" x1="59" y1="92" x2="194" y2="163">
+      <stop offset="0" stop-color="#d7e8f4" />
+      <stop offset="0.12" stop-color="#9bbbd6" />
+      <stop offset="0.25" stop-color="#bbd9ee" />
+      <stop offset="0.38" stop-color="#e6f3fa" />
+      <stop offset="0.53" stop-color="#f3f6fc" />
+      <stop offset="0.66" stop-color="#deddf3" />
+      <stop offset="0.79" stop-color="#a9acd4" />
+      <stop offset="0.89" stop-color="#c2d6e9" />
+      <stop offset="1" stop-color="#e7f2fb" />
+    </linearGradient>
+    <linearGradient id="translucentFrost" gradientUnits="userSpaceOnUse" x1="77" y1="69" x2="164" y2="185">
+      <stop offset="0" stop-color="#edf4fa" stop-opacity="0.011138" />
+      <stop offset="0.2" stop-color="#e2edf6" stop-opacity="0.00486" />
+      <stop offset="0.42" stop-color="#f4f8fc" stop-opacity="0.003848" />
+      <stop offset="0.6" stop-color="#e5edf8" stop-opacity="0.005468" />
+      <stop offset="0.8" stop-color="#eaf0f9" stop-opacity="0.007695" />
+      <stop offset="1" stop-color="#f1f5fb" stop-opacity="0.012353" />
+    </linearGradient>
+    <linearGradient id="softTransmission" gradientUnits="userSpaceOnUse" x1="71" y1="88" x2="183" y2="174">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.0" />
+      <stop offset="0.22" stop-color="#ffffff" stop-opacity="0.02625" />
+      <stop offset="0.43" stop-color="#f7fcff" stop-opacity="0.14175" />
+      <stop offset="0.57" stop-color="#ffffff" stop-opacity="0.05775" />
+      <stop offset="0.8" stop-color="#ffffff" stop-opacity="0.0" />
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0.0" />
+    </linearGradient>
+    <linearGradient id="internalRefraction" gradientUnits="userSpaceOnUse" x1="60" y1="94" x2="192" y2="170">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0" />
+      <stop offset="0.14" stop-color="#d7f0ff" stop-opacity="0" />
+      <stop offset="0.24" stop-color="#c8e8fb" stop-opacity="0.25" />
+      <stop offset="0.31" stop-color="#f9fdff" stop-opacity="0.65" />
+      <stop offset="0.36" stop-color="#ffffff" stop-opacity="0.15" />
+      <stop offset="0.43" stop-color="#ffffff" stop-opacity="0" />
+      <stop offset="0.67" stop-color="#e3ddff" stop-opacity="0" />
+      <stop offset="0.77" stop-color="#d9d2fc" stop-opacity="0.38" />
+      <stop offset="0.86" stop-color="#f3f8ff" stop-opacity="0.35" />
+      <stop offset="0.93" stop-color="#ffffff" stop-opacity="0" />
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0" />
+    </linearGradient>
+    <linearGradient id="flow-white" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#bceeff" stop-opacity="0" />
+      <stop offset="0.22" stop-color="#d9f8ff" stop-opacity="0.025" />
+      <stop offset="0.43" stop-color="#ffffff" stop-opacity="0.22" />
+      <stop offset="0.52" stop-color="#ffffff" stop-opacity="0.62" />
+      <stop offset="0.59" stop-color="#ffffff" stop-opacity="0.27" />
+      <stop offset="0.76" stop-color="#d1f3ff" stop-opacity="0.035" />
+      <stop offset="1" stop-color="#d1f3ff" stop-opacity="0" />
+    </linearGradient>
+    <linearGradient id="flow-colour" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#72d7ff" stop-opacity="0" />
+      <stop offset="0.32" stop-color="#8be4ff" stop-opacity="0.08" />
+      <stop offset="0.52" stop-color="#d6b5ff" stop-opacity="0.16" />
+      <stop offset="0.7" stop-color="#b5a3ff" stop-opacity="0.05" />
+      <stop offset="1" stop-color="#baacff" stop-opacity="0" />
+    </linearGradient>
+    <clipPath id="flow-body-clip">
+      <path d="M101 51 Q127 32 153 51 L211 95 Q232 111 224 137 L223 150 Q222 169 204 182 L154 223 Q129 242 104 225 L51 184 Q34 172 33 154 L32 127 Q30 109 47 96 Z" />
+    </clipPath>
+  </defs>
+  <ellipse cx="128" cy="224" rx="78" ry="19" fill="url(#shadow)" />
+  <path d="M33 123 Q34 140 50 153 L105 195 Q130 213 155 193 L211 150 Q222 140 223 125 L222 149 Q221 169 204 182 L154 223 Q129 242 104 225 L51 184 Q35 172 34 154 Z" fill="url(#side)" />
+  <g clip-path="url(#shellClip)">
+    <ellipse cx="85" cy="201" rx="19" ry="41" transform="rotate(-47 85 201)" fill="url(#softWhite)" />
+    <ellipse cx="192" cy="182" rx="14" ry="39" transform="rotate(49 192 182)" fill="url(#softWhite)" />
+    <ellipse cx="135" cy="225" rx="38" ry="12" fill="url(#softWhite)" />
+    <path d="M51 155 Q62 163 76 170 L88 192 Q72 188 59 177 Q53 169 51 155 Z" fill="url(#refractionBlue)" />
+    <path d="M151 209 Q165 190 198 171 L187 191 Q172 204 151 214 Z" fill="url(#refractionViolet)" />
+    <ellipse cx="69" cy="174" rx="22" ry="14" fill="url(#blueBounce)" />
+    <ellipse cx="178" cy="194" rx="28" ry="13" fill="url(#violetBounce)" />
+    <path d="M39 162 Q44 174 56 183 L106 222 Q129 237 151 221 L202 181" fill="none" stroke="#ffffff" stroke-opacity=".22" stroke-width="5" />
+    <path d="M40 164 Q44 175 57 184 L107 223 Q129 237 151 222 L201 183" fill="none" stroke="#f8fbff" stroke-opacity=".48" stroke-width="1.2" />
+  </g>
+  <g id="frosted-bottom">
+    <use href="#tile" fill="url(#subsurfaceDepth)" />
+    <ellipse cx="79" cy="132" rx="28" ry="27" fill="url(#blueBounce)" opacity=".45" />
+    <ellipse cx="168" cy="149" rx="29" ry="27" fill="url(#violetBounce)" opacity=".42" />
+    <ellipse cx="113" cy="157" rx="43" ry="24" fill="url(#softWhite)" opacity=".04" />
+    <ellipse cx="143" cy="88" rx="31" ry="17" fill="url(#softWhite)" opacity=".04" />
+    <use href="#tile" fill="url(#translucentFrost)" />
+    <use href="#innerRim" fill="url(#softTransmission)" />
+    <use href="#innerRim" fill="url(#internalRefraction)" />
+  </g>
+  <use href="#glassRim" fill="url(#rim)" opacity=".52" />
+  <g clip-path="url(#tileClip)">
+    <path d="M39 139 Q44 148 55 156 L106 195 Q129 212 153 193 L209 149" fill="none" stroke="url(#rolledEdge)" stroke-width="2.4" opacity=".48" />
+    <path d="M35 125 Q33 110 49 98 L103 55 Q121 42 136 47" fill="none" stroke="#ffffff" stroke-width="1.2" opacity=".54" stroke-linecap="round" />
+    <path d="M42 116 Q45 108 56 99 L105 60 Q127 43 150 60 L204 102" fill="none" stroke="#ffffff" stroke-width="3" opacity=".18" stroke-linecap="round" />
+  </g>
+  <g id="top-plane" transform="matrix(.65 .47 -.65 .47 128 49)">
+    <g id="top-mark" transform="translate(80 82) scale(1.38) translate(-133 -115)">
+      <use href="#playShape" transform="translate(3 3)" fill="#7389ad" opacity="0.04" />
+      <use href="#playShape" transform="translate(2.4 2.4)" fill="#7389ad" opacity="0.06" />
+      <use href="#playShape" transform="translate(1.9 1.9)" fill="url(#glassBlueEdge)" />
+      <use href="#playShape" transform="translate(1.4 1.4)" fill="url(#glassBlueEdge)" />
+      <use href="#playShape" transform="translate(0.9 0.9)" fill="url(#glassBlueEdge)" />
+      <use href="#playShape" transform="translate(0.4 0.4)" fill="url(#glassBlueEdge)" />
+      <use href="#playShape" fill="url(#glassBlueFace)" />
+      <use href="#playShape" fill="url(#glassMarkReflection)" />
+      <use href="#arrowShape" transform="translate(3 3)" fill="#7389ad" opacity="0.04" />
+      <use href="#arrowShape" transform="translate(2.4 2.4)" fill="#7389ad" opacity="0.06" />
+      <use href="#arrowShape" transform="translate(1.9 1.9)" fill="url(#glassVioletEdge)" />
+      <use href="#arrowShape" transform="translate(1.4 1.4)" fill="url(#glassVioletEdge)" />
+      <use href="#arrowShape" transform="translate(0.9 0.9)" fill="url(#glassVioletEdge)" />
+      <use href="#arrowShape" transform="translate(0.4 0.4)" fill="url(#glassVioletEdge)" />
+      <use href="#arrowShape" fill="url(#glassVioletFace)" />
+      <use href="#arrowShape" fill="url(#glassMarkReflection)" />
+      <path d="M97 109 L97 82 Q97 77 103 79 L117 86" fill="none" stroke="#e3faff" stroke-width="1.3" stroke-opacity=".28" stroke-linecap="round" stroke-linejoin="round" />
+      <path d="M97 109 L97 82 Q97 77 103 79 L117 86" fill="none" stroke="#e3faff" stroke-width="0.55" stroke-opacity=".4" stroke-linecap="round" stroke-linejoin="round" />
+      <path d="M109 113 L109 98 Q109 95 113 97 L123 103" fill="none" stroke="#e2f8ff" stroke-width="1.3" stroke-opacity=".28" stroke-linecap="round" stroke-linejoin="round" />
+      <path d="M109 113 L109 98 Q109 95 113 97 L123 103" fill="none" stroke="#e2f8ff" stroke-width="0.55" stroke-opacity=".4" stroke-linecap="round" stroke-linejoin="round" />
+      <path d="M149 109 Q156 114 156 124 L156 129" fill="none" stroke="#f0e7ff" stroke-width="1.3" stroke-opacity=".28" stroke-linecap="round" stroke-linejoin="round" />
+      <path d="M149 109 Q156 114 156 124 L156 129" fill="none" stroke="#f0e7ff" stroke-width="0.55" stroke-opacity=".4" stroke-linecap="round" stroke-linejoin="round" />
+      <path d="M141 141 L150 150 Q153 153 157 149" fill="none" stroke="#eee0ff" stroke-width="1.3" stroke-opacity=".28" stroke-linecap="round" stroke-linejoin="round" />
+      <path d="M141 141 L150 150 Q153 153 157 149" fill="none" stroke="#eee0ff" stroke-width="0.55" stroke-opacity=".4" stroke-linecap="round" stroke-linejoin="round" />
+    </g>
+  </g>
+  <g id="transparent-glass-top">
+    <use href="#innerRim" fill="url(#face)" />
+    <use href="#innerRim" fill="url(#clearReflection)" />
+    <path d="M44 111 Q47 105 58 97 L106 59 Q126 45 145 58" fill="none" stroke="#ffffff" stroke-opacity=".6" stroke-width="1" stroke-linecap="round" />
+    <path d="M51 151 L109 194 Q130 208 151 191 L204 149" fill="none" stroke="#f6fbff" stroke-opacity=".5" stroke-width="1.1" stroke-linecap="round" />
+  </g>
+  <style>@media (prefers-reduced-motion: reduce) { .flow-motion { display: none; } }</style>
+  <g class="flow-motion" clip-path="url(#flow-body-clip)">
+    <g id="flow-white-motion" transform="translate(-210 0)">
+      <animateTransform attributeName="transform" type="translate" values="-210 0;-210 0;410 0;410 0" keyTimes="0;0.10;0.66;1" dur="4.8s" repeatCount="indefinite" calcMode="spline" keySplines="0 0 1 1;0.42 0 0.58 1;0 0 1 1" />
+      <path d="M0 -40 H66 L256 296 H190 Z" fill="url(#flow-white)" />
+    </g>
+  </g>
+  <g class="flow-motion" clip-path="url(#flow-body-clip)">
+    <g id="flow-colour-motion" transform="translate(-260 0)">
+      <animateTransform attributeName="transform" type="translate" values="-260 0;-260 0;360 0;360 0" keyTimes="0;0.14;0.76;1" dur="4.8s" repeatCount="indefinite" calcMode="spline" keySplines="0 0 1 1;0.42 0 0.58 1;0 0 1 1" />
+      <path d="M0 -40 H85 L275 296 H190 Z" fill="url(#flow-colour)" />
+    </g>
+  </g>
+</svg>

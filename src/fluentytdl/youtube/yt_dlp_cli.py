@@ -10,6 +10,8 @@ from pathlib import Path
 from threading import Event, Lock
 from typing import Any
 
+from fluentytdl.utils.localized_log import log_text
+from fluentytdl.utils.message_catalog import english
 from fluentytdl.utils.paths import (
     config_path,
     find_bundled_executable,
@@ -18,6 +20,7 @@ from fluentytdl.utils.paths import (
     is_frozen,
     locate_runtime_tool,
 )
+from fluentytdl.utils.ui_text import tr_text
 
 from ..core.config_manager import config_manager
 from ..models.errors import YtDlpExecutionError
@@ -82,10 +85,12 @@ def log_pot_in_argv(cmd: list[str], *, stage: str, task_id: str = "") -> None:
         base = ""
         if "base_url=" in hit:
             base = hit.split("base_url=", 1)[1].split(";", 1)[0].strip()
-        logger.info(
+        log_text(
+            logger,
+            "info",
             "[POT][{}] argv 已含 youtubepot-bgutilhttp base_url={}{}",
             stage,
-            base or "(未解析出)",
+            base or tr_text("(未解析出)"),
             tail,
         )
         return
@@ -95,9 +100,9 @@ def log_pot_in_argv(cmd: list[str], *, stage: str, task_id: str = "") -> None:
     except Exception:
         enabled = False
     if enabled:
-        logger.warning("[POT][{}] argv 未含 POT 参数 (enabled=True){}", stage, tail)
+        log_text(logger, "warning", "[POT][{}] argv 未含 POT 参数 (enabled=True){}", stage, tail)
     else:
-        logger.debug("[POT][{}] argv 未含 POT 参数 (enabled=False){}", stage, tail)
+        log_text(logger, "debug", "[POT][{}] argv 未含 POT 参数 (enabled=False){}", stage, tail)
 
 
 def _safe_working_dir() -> str:
@@ -301,17 +306,17 @@ def _sync_pot_plugins_locked(logger: Any) -> bool:
     try:
         exe = resolve_yt_dlp_exe()
         if exe is None:
-            logger.debug("POT Plugin Sync: yt-dlp.exe 未找到，跳过同步")
+            log_text(logger, "debug", "POT Plugin Sync: yt-dlp.exe 未找到，跳过同步")
             return False
 
         source_dir = _get_pot_plugin_source_dir()
         if source_dir is None:
-            logger.debug("POT Plugin Sync: 插件源目录不存在，跳过同步")
+            log_text(logger, "debug", "POT Plugin Sync: 插件源目录不存在，跳过同步")
             return False
 
         source_files = list(source_dir.glob(_PLUGIN_FILE_GLOB))
         if not source_files:
-            logger.debug("POT Plugin Sync: 未找到插件源文件，跳过同步")
+            log_text(logger, "debug", "POT Plugin Sync: 未找到插件源文件，跳过同步")
             return False
 
         # 目标: <exe-dir>/yt-dlp-plugins/<pkg>/yt_dlp_plugins/extractor/
@@ -340,7 +345,7 @@ def _sync_pot_plugins_locked(logger: Any) -> bool:
                     break
 
         if not needs_sync:
-            logger.debug("POT Plugin Sync: 插件已是最新，无需同步")
+            log_text(logger, "debug", "POT Plugin Sync: 插件已是最新，无需同步")
             _pot_sync_cache = (fingerprint, True)
             return True
 
@@ -348,9 +353,11 @@ def _sync_pot_plugins_locked(logger: Any) -> bool:
         try:
             target_dir.mkdir(parents=True, exist_ok=True)
         except PermissionError:
-            logger.warning(
-                f"POT Plugin Sync: 无法创建插件目录 {target_dir}（权限不足）。"
-                "如果安装在 Program Files 下，请以管理员身份运行一次，或手动复制插件文件。"
+            log_text(
+                logger,
+                "warning",
+                "POT Plugin Sync: 无法创建插件目录 {0}（权限不足）。如果安装在 Program Files 下，请以管理员身份运行一次，或手动复制插件文件。",
+                target_dir,
             )
             return False
 
@@ -361,20 +368,28 @@ def _sync_pot_plugins_locked(logger: Any) -> bool:
                 shutil.copy2(src_file, dst_file)
                 synced += 1
             except PermissionError:
-                logger.warning(
-                    f"POT Plugin Sync: 复制 {src_file.name} 失败（权限不足）。"
-                    "请以管理员身份运行一次应用以完成插件部署。"
+                log_text(
+                    logger,
+                    "warning",
+                    "POT Plugin Sync: 复制 {0} 失败（权限不足）。请以管理员身份运行一次应用以完成插件部署。",
+                    src_file.name,
                 )
             except Exception as e:
-                logger.warning(f"POT Plugin Sync: 复制 {src_file.name} 失败: {e}")
+                log_text(logger, "warning", "POT Plugin Sync: 复制 {0} 失败: {1}", src_file.name, e)
 
         if synced > 0:
-            logger.info(f"POT Plugin Sync: 已同步 {synced} 个插件文件到 {target_dir.parent.parent}")
+            log_text(
+                logger,
+                "info",
+                "POT Plugin Sync: 已同步 {0} 个插件文件到 {1}",
+                synced,
+                target_dir.parent.parent,
+            )
             _pot_sync_cache = (fingerprint, True)
         return synced > 0
 
     except Exception as e:
-        logger.debug(f"POT Plugin Sync: 同步异常: {e}")
+        log_text(logger, "debug", "POT Plugin Sync: 同步异常: {0}", e)
         return False
 
 
@@ -794,7 +809,7 @@ def ydl_opts_to_cli_args(ydl_opts: dict[str, Any]) -> list[str]:
         # {"youtube": {"player_client": ["android,ios"], "player_skip": ["js,configs,hls"]}}
         from loguru import logger
 
-        logger.debug("[CLI] extractor_args 键: {}", sorted(extractor_args.keys()))
+        log_text(logger, "debug", "[CLI] extractor_args 键: {}", sorted(extractor_args.keys()))
         for ie_key, ie_args in extractor_args.items():
             if not ie_key:
                 continue
@@ -823,7 +838,12 @@ def ydl_opts_to_cli_args(ydl_opts: dict[str, Any]) -> list[str]:
                 # 原样写进日志 —— 而文件 sink 是 DEBUG 级，那是真的落盘了。
                 # `log_pot_in_argv` 的注释早就写明"只记 base_url，绝不记 Token"，
                 # 这条路却整个绕过了它。四条内容本来就互相重复，留一条脱敏的信息量不减。
-                logger.debug("[CLI] 添加参数: --extractor-args {}", mask_secrets(extractor_arg))
+                log_text(
+                    logger,
+                    "debug",
+                    "[CLI] 添加参数: --extractor-args {}",
+                    mask_secrets(extractor_arg),
+                )
                 args += ["--extractor-args", extractor_arg]
 
     outtmpl = ydl_opts.get("outtmpl")
@@ -1064,9 +1084,10 @@ def _maybe_mark_sabr_only(output: str) -> None:
         auth_service.mark_youtube_sabr_only()
         from loguru import logger
 
-        logger.warning(
-            "[SABR] 检测到账号级 SABR-only 灰度（高清直链被丢弃），已标记账号；"
-            "后续解析/下载将追加 web_safari 客户端以拿回高清格式。"
+        log_text(
+            logger,
+            "warning",
+            "[SABR] 检测到账号级 SABR-only 灰度（高清直链被丢弃），已标记账号；后续解析/下载将追加 web_safari 客户端以拿回高清格式。",
         )
     except Exception:
         return
@@ -1081,7 +1102,7 @@ def run_dump_single_json(
 ) -> dict[str, Any]:
     exe = resolve_yt_dlp_exe()
     if exe is None:
-        raise FileNotFoundError("未找到 yt-dlp.exe（既没有内置也不在 PATH 中）")
+        raise FileNotFoundError(english("未找到 yt-dlp.exe（既没有内置也不在 PATH 中）"))
 
     from ..auth.cookie_runfile import cookie_runfile
 
@@ -1218,7 +1239,9 @@ def run_dump_single_json(
         try:
             data = json.loads(s)
             if isinstance(data, dict):
-                logger.info(
+                log_text(
+                    logger,
+                    "info",
                     "[Timing][run_dump_single_json] env={:.0f}ms 子进程={:.0f}ms JSON={:.0f}ms 输出={}行",
                     _env_ms,
                     _proc_ms,
@@ -1230,7 +1253,7 @@ def run_dump_single_json(
             continue
 
     stderr_snippet = _extract_error_lines(out)
-    raise YtDlpExecutionError(1, f"yt-dlp 未输出可解析的 JSON\n{stderr_snippet}")
+    raise YtDlpExecutionError(1, english("yt-dlp 未输出可解析的 JSON\n{0}", stderr_snippet))
 
 
 def run_version() -> str:

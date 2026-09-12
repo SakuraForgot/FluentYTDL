@@ -465,7 +465,9 @@ def test_event_received_forwards_the_flat_dict(qt_app, installed_handler):
     assert payload["kind"] == "diagnosis" and payload["stage"] == "download"
     # `_time` / `_level` 是转发时补的展示字段，不是事件字段本身
     assert payload["_level"] == "ERROR"
-    assert len(payload["_time"].split(":")) == 3
+    from datetime import datetime
+
+    assert datetime.fromisoformat(payload["_time"]).tzinfo is not None
 
     assert any("marker_plain" in msg for *_, msg in texts)
     assert not any("marker_plain" in str(e) for e in events)
@@ -603,6 +605,8 @@ def test_window_loads_both_zipped_and_plain_history(host, tmp_path, monkeypatch)
     was_installed = log_signal_handler.is_installed
     d = LogViewerWindow(host)
     try:
+        d.sessionCombo.setCurrentIndex(1)
+        assert _pump(QApplication.instance(), lambda: "今天第一条" in d.logView.toPlainText())
         text = d.logView.toPlainText()
         assert "昨晚那次失败" in text
         assert "今天第一条" in text
@@ -690,11 +694,12 @@ def test_window_export_passes_the_selected_identity(window, monkeypatch, tmp_pat
 
     seen: dict = {}
     fake_zip = tmp_path / "fluentytdl-bug-task42.zip"
-    fake_zip.write_bytes(b"PK")
+    with zipfile.ZipFile(fake_zip, "w") as archive:
+        archive.writestr("manifest.json", json.dumps({"partial": False}))
 
     from fluentytdl.observability import bundle as bundle_mod
 
-    def _fake_export(task_id, dest=None, *, flow_id=None):
+    def _fake_export(task_id, dest=None, *, flow_id=None, progress=None):
         seen.update(task_id=task_id, flow_id=flow_id)
         return fake_zip
 
@@ -704,6 +709,7 @@ def test_window_export_passes_the_selected_identity(window, monkeypatch, tmp_pat
     )
 
     window._export_bundle()
+    assert _pump(QApplication.instance(), lambda: seen.get("ok"))
     assert seen == {"task_id": "42", "flow_id": "k72f", "ok": True}
 
 

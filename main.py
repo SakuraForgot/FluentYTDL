@@ -7,6 +7,7 @@ from pathlib import Path
 # Frozen build verification exits before importing services or touching real accounts.
 if len(sys.argv) == 3 and sys.argv[1] == "--build-self-test":
     from fluentytdl.utils.build_selftest import run_selftest
+
     raise SystemExit(run_selftest(Path(sys.argv[2])))
 
 # === 优先检测特殊模式（必须在导入任何GUI库之前） ===
@@ -192,7 +193,7 @@ def _cleanup_update_residuals() -> None:
                     from loguru import logger
 
                     logger.warning(
-                        f"[Startup] updater.exe 替换失败，已保留 updater.exe.new 待下次重试: {e}"
+                        f"[Startup] Failed to replace updater.exe; updater.exe.new retained for retry: {e}"
                     )
                 except Exception:
                     # 此刻 loguru 的落点还没配置（logger 依赖 paths，而 paths 依赖
@@ -249,14 +250,18 @@ def _show_migration_infobars(window, failures: list[str], conflicts: list[str]) 
     try:
         from qfluentwidgets import InfoBar, InfoBarPosition
 
+        from fluentytdl.utils.ui_text import tr_text
+
         if conflicts:
             detail = "\n".join(conflicts[:3])
             if len(conflicts) > 3:
-                detail += f"\n……另有 {len(conflicts) - 3} 项，详见日志"
+                detail += tr_text("\n……另有 {0} 项，详见日志", len(conflicts) - 3)
             InfoBar.warning(
-                title="检测到两处旧数据",
-                content="已保留较新的一份，另一份存放在数据目录的 legacy_conflict_* 子目录中：\n"
-                + detail,
+                title=tr_text("检测到两处旧数据"),
+                content=tr_text(
+                    "已保留较新的一份，另一份存放在数据目录的 legacy_conflict_* 子目录中：\n{0}",
+                    detail,
+                ),
                 orient=Qt.Orientation.Vertical,
                 isClosable=True,
                 position=InfoBarPosition.TOP_RIGHT,
@@ -266,9 +271,11 @@ def _show_migration_infobars(window, failures: list[str], conflicts: list[str]) 
 
         if failures:
             InfoBar.warning(
-                title="部分数据未能迁移",
-                content=f"有 {len(failures)} 项迁移失败（通常是文件被占用），"
-                "下次启动会自动重试。旧数据仍在原位置，未被删除。",
+                title=tr_text("部分数据未能迁移"),
+                content=tr_text(
+                    "有 {0} 项迁移失败（通常是文件被占用），下次启动会自动重试。旧数据仍在原位置，未被删除。",
+                    len(failures),
+                ),
                 orient=Qt.Orientation.Vertical,
                 isClosable=True,
                 position=InfoBarPosition.TOP_RIGHT,
@@ -285,6 +292,13 @@ def main() -> None:
     src_dir = root_dir / "src"
     if str(src_dir) not in sys.path:
         sys.path.insert(0, str(src_dir))
+
+    restart_parent = _extract_and_remove_arg("--restart-parent-pid")
+    if restart_parent:
+        from fluentytdl.utils.app_restart import wait_for_parent_exit
+
+        if not restart_parent.isdecimal() or not wait_for_parent_exit(int(restart_parent)):
+            sys.exit(1)
 
     IS_UPDATE_WORKER = "--update-worker" in sys.argv
     if IS_UPDATE_WORKER:
@@ -463,7 +477,9 @@ def main() -> None:
                 try:
                     from loguru import logger
 
-                    logger.debug(f"Cookie Sentinel 启动失败（预期行为）: {e}")
+                    from fluentytdl.utils.localized_log import log_text
+
+                    log_text(logger, "debug", "Cookie Sentinel 启动失败（预期行为）: {0}", e)
                 except Exception:
                     pass
 
@@ -474,9 +490,7 @@ def main() -> None:
         )
         cookie_thread.start()
 
-    # 启动控制：主窗口立即出现，POT 预热挪到后台常驻线程（复用 cookie sentinel 范式）。
-    # 旧实现用 PotSplashBox + 12s QTimer 兜底阻塞主窗口；POT 对解析速度没有正向贡献，
-    # 它买的是"不被机器人检测拦"，因此没有任何理由让用户为它等待。
+    # 主窗口立即出现并后台预热；首次解析在任务线程等待 POT 就绪。
     if config_manager.get("pot_provider_enabled", False):
         try:
             from fluentytdl.youtube.pot_manager import pot_manager
@@ -485,7 +499,9 @@ def main() -> None:
         except Exception as e:
             from loguru import logger
 
-            logger.warning(f"POT 后台预热启动失败: {e}")
+            from fluentytdl.utils.localized_log import log_text
+
+            log_text(logger, "warning", "POT 后台预热启动失败: {0}", e)
 
     launch_main_window()
 
@@ -512,8 +528,13 @@ def main() -> None:
     except Exception as e:
         from loguru import logger
 
-        logger.error(f"启动 updater 失败: {e}")
+        from fluentytdl.utils.localized_log import log_text
 
+        log_text(logger, "error", "启动 updater 失败: {0}", e)
+
+    from fluentytdl.utils.app_restart import launch_pending_restart
+
+    launch_pending_restart(app)
     sys.exit(exit_code)
 
 

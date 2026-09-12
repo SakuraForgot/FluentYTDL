@@ -170,7 +170,7 @@ def publish() -> None:
         )
         changelog = json.loads(manifest_path.read_text(encoding="utf-8")).get("changelog", "")
         channel_notice = (
-            "这是 rc 预发布，供测试使用，不替代稳定版 Latest。当前 rc 客户端不支持应用内自动更新，请从 Releases 手动下载后续版本。\n\n"
+            "这是 rc 预发布，供测试使用，不替代稳定版 Latest。客户端默认 stable 通道；在设置中确认风险并切换到 pre 后，可在应用内更新后续 rc 或正式版。切回 stable 不会降级。\n\n"
             if policy["channel"] == "rc"
             else ""
         )

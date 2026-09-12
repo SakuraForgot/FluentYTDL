@@ -1,6 +1,6 @@
 from PySide6.QtCore import QObject, Signal
 from PySide6.QtNetwork import QLocalServer, QLocalSocket
-from qfluentwidgets import MessageBox
+from qfluentwidgets import Dialog
 
 
 class SingleInstanceChecker(QObject):
@@ -62,33 +62,44 @@ class SingleInstanceChecker(QObject):
         self.new_instance_detected.emit()
 
     def _show_already_running_message(self):
-        """显示程序已在运行的提示弹窗"""
-        from PySide6.QtCore import Qt
-        from PySide6.QtWidgets import QApplication, QWidget
+        """Standalone Fluent dialog: no transparent host or modal mask rectangle."""
+        import json
 
-        # 创建一个透明无边框的占位窗口作为 MessageBox 的 parent
-        # 因为 qfluentwidgets 的 MessageBox 继承自 MaskDialogBase，需要获取 parent 的尺寸
-        dummy = QWidget()
-        dummy.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Tool)
-        dummy.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        dummy.resize(500, 300)
+        from PySide6.QtCore import QLocale, QTranslator
+        from PySide6.QtGui import QFont
+        from PySide6.QtWidgets import QApplication
+        from qfluentwidgets import Theme, setTheme
 
-        # 将 dummy 居中显示在主屏幕上
+        from .icons import load_app_icon
+        from .language import normalize_language
+        from .paths import config_path, resource_path
+
+        # Read only: the duplicate must not initialize ConfigManager or migrate data.
+        try:
+            settings = json.loads(config_path().read_text(encoding="utf-8"))
+            if not isinstance(settings, dict):
+                settings = {}
+        except (OSError, ValueError):
+            settings = {}
+        modes = {"Light": Theme.LIGHT, "Dark": Theme.DARK}
+        setTheme(modes.get(settings.get("theme_mode"), Theme.AUTO))
         app = QApplication.instance()
-        if app:
-            screen_geometry = app.primaryScreen().geometry()
-            dummy.move(
-                screen_geometry.width() // 2 - dummy.width() // 2,
-                screen_geometry.height() // 2 - dummy.height() // 2,
-            )
-
-        dummy.show()
-
-        w = MessageBox(self.tr("提示"), self.tr("FluentYTDL 已经在运行中。"), dummy)
-        w.yesButton.setText(self.tr("确定"))
-        w.cancelButton.hide()
-        w.exec()
-
-        # 弹窗结束后清理
-        dummy.close()
-        dummy.deleteLater()
+        app.setFont(QFont("Microsoft YaHei UI", 9))
+        app.setWindowIcon(load_app_icon())
+        locale = normalize_language(settings.get("app_language", "auto"), QLocale.system().name())
+        translator = QTranslator()
+        translator.load(str(resource_path("assets", "locales", f"fluentytdl_{locale}.qm")))
+        app.installTranslator(translator)
+        try:
+            dialog = Dialog(self.tr("提示"), self.tr("FluentYTDL 已经在运行中。"))
+            dialog.setWindowTitle(self.tr("提示"))
+            dialog.yesButton.setText(self.tr("确定"))
+            dialog.cancelButton.hide()
+            dialog.adjustSize()
+            screen = app.primaryScreen()
+            if screen:
+                dialog.move(screen.availableGeometry().center() - dialog.rect().center())
+            dialog.exec()
+            dialog.deleteLater()
+        finally:
+            app.removeTranslator(translator)

@@ -234,7 +234,7 @@ The startup refresh is **silent**. `get_startup_health()` returns per-platform `
 
 - pytest >= 7.0
 - Test files in `tests/` directory
-- **No conftest.py yet** — each test does its own `sys.path` setup
+- Root `conftest.py` isolates application data and logs in a temporary directory before collection and defaults Qt to offscreen; individual tests may still set up `sys.path`.
 - Some tests need a `QApplication` — they run headless as long as `QT_QPA_PLATFORM=offscreen` and `FLUENTYTDL_DATA_DIR_OVERRIDE` are set **before** importing fluentytdl (copy the header of `tests/test_subtitle_selector_ux.py`). Do not hardcode "N GUI tests" here; that number goes stale on every added test
 - CI enforces lint, formatting, version/lock consistency, translation synchronization and tests; Pyright alone remains advisory.
 - When adding tests: prefer plain pytest functions over unittest.TestCase

@@ -60,8 +60,8 @@ class VRParsePage(QWidget):
         infoLayout.addWidget(infoTitle)
 
         infoText = CaptionLabel(
-            self.tr("VR180/360 视频在普通模式下只能获取平的单视角画面，且最高仅 1440p。\n")
-            + self.tr("VR 模式使用 android_vr 客户端，可获取完整 VR 投影和最高 8K 分辨率。\n")
+            self.tr("普通模式可能无法获取 VR 视频的完整投影或全部格式。\n")
+            + self.tr("VR 模式使用专用客户端获取 VR 格式，实际分辨率取决于源视频和访问条件。\n")
             + self.tr("解析后会自动识别投影类型（Equi / Mesh / EAC）和立体模式（3D / 2D）。\n")
             + self.tr("注意：VR 模式不支持 Cookies，部分年龄限制视频可能无法下载。"),
             self.infoCard,

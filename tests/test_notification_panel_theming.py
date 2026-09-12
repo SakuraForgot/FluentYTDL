@@ -303,22 +303,19 @@ def test_a_burst_of_pushes_reloads_once(qt_app):
 # ── 两个容器 ────────────────────────────────────────────────
 
 
-def test_flyout_keeps_its_original_look(qt_app):
-    """浮窗外观保持原样：宽 360，高度按条数贴合。"""
+def test_flyout_fits_content_with_a_screen_height_limit(qt_app):
     view = NotificationFlyoutView()
     try:
-        assert view.width() == 360
-        assert view.height() == 120  # 空态
-
+        assert view.width() <= view.screen().availableGeometry().width()
+        empty_height = view.height()
         for _ in range(3):
             notification_center.push(_notif())
         QApplication.processEvents()
-        assert view.height() == 80 + 3 * 80
-
+        assert view.height() > empty_height
         for _ in range(20):
             notification_center.push(_notif())
         QApplication.processEvents()
-        assert view.height() == 450  # 封顶，再多就该滚动了
+        assert view.height() <= min(560, view.screen().availableGeometry().height())
     finally:
         view.deleteLater()
 
@@ -410,3 +407,35 @@ def test_font_weights_come_from_getfont(qt_app):
         assert font.pointSize() == -1  # 没有走磅值那条路
     finally:
         card.deleteLater()
+
+
+def test_english_long_notifications_fit_narrow_window(qt_app):
+    from PySide6.QtCore import QTranslator
+
+    translator = QTranslator()
+    assert translator.load(str(Path(__file__).parents[1] / "assets/locales/fluentytdl_en_US.qm"))
+    qt_app.installTranslator(translator)
+    notification_center.push(
+        Notification(
+            type="info",
+            title="A long notification title with a component version and several words",
+            message="A long message with instructions and a URL " + "x" * 180,
+        )
+    )
+    window = NotificationWindow()
+    window.resize(380, 420)
+    window.show()
+    try:
+        for _ in range(3):
+            qt_app.processEvents()
+        button = window.clearAllBtn
+        assert button.width() >= button.sizeHint().width()
+        card = _cards(window.listWidget)[0]
+        assert card.width() <= window.listWidget.scrollArea.viewport().width()
+        for label in (card.titleLabel, card.msgLabel):
+            assert label.height() >= label.heightForWidth(label.width())
+            assert label.geometry().right() < card.width()
+        assert window.titleLabel.geometry().bottom() < button.geometry().top()
+    finally:
+        window.close()
+        qt_app.removeTranslator(translator)

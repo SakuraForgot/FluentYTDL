@@ -79,7 +79,21 @@ _KIND_ICONS: dict[str, FluentIcon] = {
 
 #: 标识键 + sink 元数据：它们已经体现在树的层级和「时间」列里，详情列不再重复。
 _SKIP_IN_DETAIL = frozenset(
-    {"kind", "stage", "session", "flow", "task", "run", "attempt", "_ts", "_time", "_level"}
+    {
+        "kind",
+        "stage",
+        "session",
+        "flow",
+        "task",
+        "run",
+        "attempt",
+        "_ts",
+        "_time",
+        "_level",
+        "_event_id",
+        "_origin",
+        "_process",
+    }
 )
 
 #: 事件字段 dict 存在这个 role 上（含回填历史），导 bug 包和重新过滤都从这里取。
@@ -274,6 +288,7 @@ class EventTimelineView(TreeWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self._event_ids = {}
         self.setColumnCount(4)
         self.setHeaderLabels([self.tr("时间线"), self.tr("级别"), self.tr("时间"), self.tr("详情")])
         self.setBorderVisible(True)
@@ -394,6 +409,37 @@ class EventTimelineView(TreeWidget):
             pass
 
     def _add_event(self, event: dict) -> None:
+        identity = event.get("_event_id")
+        if identity:
+            if identity in self._event_ids:
+                return
+            self._event_ids[identity] = None
+            while len(self._event_ids) > self.MAX_EVENTS * 2:
+                self._event_ids.pop(next(iter(self._event_ids)))
+        if event.get("kind") == "signal" and event.get("severity_hint") == "warning":
+            keys = ("session", "flow", "task", "run", "attempt", "stage", "code", "component")
+            for leaf in reversed(self._leaves):
+                previous = leaf.data(0, _ROLE_EVENT) or {}
+                if previous.get("kind") == "signal" and all(
+                    previous.get(k) == event.get(k) for k in keys
+                ):
+                    old_count = previous.get("repeat_count", previous.get("count", 1))
+                    new_count = event.get("count", 1)
+                    if "attempt_warnings" in (
+                        previous.get("aggregation"),
+                        event.get("aggregation"),
+                    ):
+                        previous["repeat_count"] = max(old_count, new_count)
+                        previous["aggregation"] = "attempt_warnings"
+                    else:
+                        previous["repeat_count"] = old_count + new_count
+                    previous.setdefault("first_seen", previous.get("_time"))
+                    previous["last_seen"] = event.get("_time")
+                    previous["last_raw_line"] = event.get("raw_line")
+                    leaf.setData(0, _ROLE_EVENT, previous)
+                    leaf.setText(3, self._detail(previous))
+                    leaf.setToolTip(3, self._tooltip(previous))
+                    return
         parent: QTreeWidgetItem | None = None
         key: tuple[str, ...] = ()
         depth = -1
@@ -452,7 +498,9 @@ class EventTimelineView(TreeWidget):
         # 标识随分组一起存：导 bug 包时用户点的往往是 `task 42` 这个分组节点本身，
         # 而不是它底下某条事件。
         item.setData(
-            0, _ROLE_EVENT, {"flow": event.get("flow"), "task": event.get("task"), "_group": True}
+            0,
+            _ROLE_EVENT,
+            {k: event.get(k) for k in ("flow", "task", "run", "session")} | {"_group": True},
         )
         item.setData(0, _ROLE_PATH, key)
         self._tint_group(item)
@@ -497,7 +545,10 @@ class EventTimelineView(TreeWidget):
         stage = str(event.get("stage") or NO_ID)
 
         path: list[tuple[str, str]] = [
-            (f"flow:{flow}", f"flow {flow}" if flow != NO_ID else self.tr("（无 flow）"))
+            (
+                f"flow:{event.get('session', NO_ID)}/{flow}",
+                f"flow {flow}" if flow != NO_ID else self.tr("（无 flow）"),
+            )
         ]
         if task != NO_ID:
             path.append((f"task:{task}", f"task {task}"))
@@ -681,6 +732,7 @@ class EventTimelineView(TreeWidget):
     def clear_all(self) -> None:
         self.clear()
         self._groups.clear()
+        self._event_ids.clear()
         self._leaves.clear()
         # 清屏后第 0 列回到下限：`_fit_col0` 只增不减，不收一下的话「清屏」之后那一列
         # 还留着上一批深层事件撑出来的宽度，空树上就是一片空白。
@@ -707,6 +759,50 @@ class EventTimelineView(TreeWidget):
                 return task, str(event.get("flow") or "")
             item = item.parent()
         return None
+
+    def selected_scope(self) -> dict | None:
+        item = self.currentItem()
+        if item is None:
+            return None
+        event = item.data(0, _ROLE_EVENT) or {}
+        path = item.data(0, _ROLE_PATH) or ()
+        task, flow = event.get("task"), event.get("flow")
+        if not task or task == NO_ID:
+            task = None
+        if not flow or flow == NO_ID:
+            flow = None
+        if not task and not flow:
+            return None
+        selection = {"task_id": task, "flow_id": flow}
+        if not event.get("_group") or any(str(k).startswith("run:") for k in path):
+            if event.get("run") not in (None, "", NO_ID):
+                selection["run_id"] = event["run"]
+                selection["session_id"] = event.get("session")
+        return selection
+
+    def selection_summary(self) -> str:
+        scope = self.selected_scope()
+        if not scope:
+            return ""
+        events = [leaf.data(0, _ROLE_EVENT) or {} for leaf in self._leaves]
+        events = [
+            e
+            for e in events
+            if (not scope.get("task_id") or str(e.get("task")) == str(scope["task_id"]))
+            and (not scope.get("flow_id") or e.get("flow") == scope["flow_id"])
+            and (not scope.get("run_id") or e.get("run") == scope["run_id"])
+        ]
+        outcomes = [e for e in events if e.get("kind") == "outcome"]
+        diagnoses = [e.get("code", "unknown") for e in events if e.get("kind") == "diagnosis"]
+        times = [float(e["_ts"]) for e in events if e.get("_ts")]
+        elapsed = round(max(times) - min(times), 2) if times else "?"
+        return self.tr("已加载范围：终态 {} · 耗时 {}s · 重试 {} · 诊断 {} · 缺失 {}").format(
+            outcomes[-1].get("outcome") if outcomes else "?",
+            elapsed,
+            sum(e.get("kind") == "retry" for e in events),
+            ", ".join(diagnoses) or "—",
+            outcomes[-1].get("missing", []) if outcomes else "?",
+        )
 
     def load_recent(self, max_files: int = 3, max_lines: int = 600) -> int:
         """回填 trace 目录里最近的 JSONL 事件，返回条数。

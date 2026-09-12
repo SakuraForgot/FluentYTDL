@@ -6,6 +6,7 @@ import subprocess
 import sys
 import zipfile
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -32,6 +33,19 @@ READY_TIMEOUT = _updater_mod.READY_TIMEOUT
 SURVIVAL_GRACE = _updater_mod.SURVIVAL_GRACE
 HELPER_CREATIONFLAGS = _updater_mod.HELPER_CREATIONFLAGS
 _spawn_updater_swap_helper = _updater_mod._spawn_updater_swap_helper
+
+
+def test_elevation_preserves_language_without_environment(monkeypatch):
+    captured = []
+    monkeypatch.setenv("FLUENTYTDL_UI_LANGUAGE", "zh_CN")
+    monkeypatch.setattr(sys, "argv", ["updater.exe", "--pid", "123"])
+    shell = SimpleNamespace(ShellExecuteW=lambda *args: captured.append(args) or 33)
+    monkeypatch.setattr(
+        _updater_mod.ctypes, "windll", SimpleNamespace(shell32=shell), raising=False
+    )
+    assert _updater_mod._elevate_self()
+    assert "--language zh_CN" in captured[0][3]
+    assert "--elevated" in captured[0][3]
 
 
 class TestHelperCreationFlags:
@@ -103,7 +117,7 @@ class TestExtractArchive:
         """A .txt file should raise ValueError."""
         txt_path = tmp_path / "file.txt"
         txt_path.write_text("not an archive")
-        with pytest.raises(ValueError, match="不支持的归档格式"):
+        with pytest.raises(ValueError, match="Unsupported archive format"):
             extract_archive(txt_path, tmp_path / "out")
 
     def test_7z_extraction_with_py7zr(self, tmp_path):

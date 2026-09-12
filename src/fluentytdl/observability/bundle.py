@@ -1,108 +1,69 @@
-"""一键导出 bug 包。
-
-**必须走 `identity` 事件反查 flow**，不能只按 task 收文件。任务的解析段发生在
-`create_worker()` 之前，那时还没有 `db_id`，事件记的是 `flow=k72f task=-` ——
-只按 task 收，bug 包就会缺掉"用户到底解析了什么、选了什么"这一整段，而那正是
-字幕/音轨类问题的现场。
-"""
+"""Task/flow scoped, bounded and explicitly partial diagnostic exports."""
 
 from __future__ import annotations
 
+import hashlib
+import io
 import json
+import os
 import platform
+import re
 import sys
+import time
+import uuid
 import zipfile
+from datetime import datetime
 from pathlib import Path
-from typing import Any
 
-from loguru import logger
+from ..utils.log_privacy import POLICY_VERSION, redact_text, redact_value
+from ..utils.log_runtime import SESSION_ID, get_log_root, health_snapshot, record_failure
+from .sinks import flush_sinks, get_trace_dir
 
-from ..utils.paths import user_data_dir
-from .events import SESSION_ID
-from .sinks import get_trace_dir
-
-#: app 主日志最多带走多少字节（取尾部）。整份 7 天日志可能上百 MB。
 _MAX_APP_LOG_BYTES = 2 * 1024 * 1024
+_MAX_BUNDLE_BYTES = 30 * 1024 * 1024
+_CRITICAL_KINDS = {"diagnosis", "outcome", "identity", "expect", "actual", "config"}
 
 
-def resolve_flow_for_task(task_id: str | int) -> str:
-    """扫 trace 目录里的 `identity` 事件，找出该 task 属于哪个 flow。
+def _valid_id(value):
+    text = str(value or "")
+    if text and text != "-" and not re.fullmatch(r"[A-Za-z0-9_-]+", text):
+        raise ValueError("Invalid diagnostic identity")
+    return text if text != "-" else ""
 
-    找不到返回空串 —— 那通常意味着该任务是旧版本创建的（没有 flow 标识），
-    此时只能退回按 task 收文件。
-    """
+
+def _events(path):
+    with path.open(encoding="utf-8", errors="replace") as stream:
+        for line in stream:
+            try:
+                event = json.loads(line)
+                if isinstance(event, dict):
+                    yield event
+            except ValueError:
+                continue
+
+
+def resolve_flows_for_task(task_id):
     target = str(task_id)
-    trace_dir = get_trace_dir()
-    try:
-        candidates = sorted(
-            trace_dir.glob("flow-*.jsonl"), key=lambda p: p.stat().st_mtime, reverse=True
-        )
-    except Exception:
-        return ""
-    for path in candidates:
+    found = set()
+    for path in get_trace_dir().glob("*.jsonl"):
         try:
-            with open(path, encoding="utf-8", errors="replace") as f:
-                for line in f:
-                    if '"identity"' not in line:
-                        continue
-                    try:
-                        event = json.loads(line)
-                    except Exception:
-                        continue
-                    if event.get("kind") == "identity" and str(event.get("task")) == target:
-                        flow = str(event.get("flow") or "")
-                        if flow and flow != "-":
-                            return flow
-        except Exception:
-            continue
-    return ""
+            for event in _events(path):
+                if str(event.get("task")) == target and event.get("flow") not in (None, "", "-"):
+                    found.add(_valid_id(event["flow"]))
+        except OSError as exc:
+            record_failure("bundle_scan", exc)
+    return found
 
 
-def _collect_files(task_id: str | int, flow_id: str) -> list[tuple[Path, str]]:
-    """返回 [(源路径, zip 内相对路径)]。"""
-    task = str(task_id)
-    trace_dir = get_trace_dir()
-    picked: list[tuple[Path, str]] = []
-
-    def add(path: Path, arcname: str) -> None:
-        if path.exists() and path.is_file():
-            picked.append((path, arcname))
-
-    if flow_id:
-        add(trace_dir / f"flow-{flow_id}.jsonl", f"traces/flow-{flow_id}.jsonl")
-        # 体积旋转产生的历史分片
-        for extra in sorted(trace_dir.glob(f"flow-{flow_id}.*.jsonl")):
-            add(extra, f"traces/{extra.name}")
-    # 独立 task jsonl（无 flow 时的退回路由）
-    add(trace_dir / f"task-{task}.jsonl", f"traces/task-{task}.jsonl")
-
-    # raw yt-dlp 输出：flow 子目录优先，另外兜一遍 no-flow
-    for sub in filter(None, [flow_id, "no-flow"]):
-        sub_dir = trace_dir / sub
-        if not sub_dir.is_dir():
-            continue
-        for raw in sorted(sub_dir.glob(f"task-{task}-run-*.ytdlp.log")):
-            add(raw, f"raw/{sub}/{raw.name}")
-
-    # app 主日志（人读的那份时间线）与同步 ERROR 日志
-    log_dir = user_data_dir() / "logs"
-    try:
-        app_logs = sorted(log_dir.glob("app_*.log"), key=lambda p: p.stat().st_mtime, reverse=True)
-    except Exception:
-        app_logs = []
-    if app_logs:
-        add(app_logs[0], f"logs/{app_logs[0].name}")
-    add(log_dir / "errors_sync.log", "logs/errors_sync.log")
-    return picked
+def resolve_flow_for_task(task_id):
+    return next(iter(sorted(resolve_flows_for_task(task_id))), "")
 
 
-def _meta(task_id: str | int, flow_id: str) -> dict[str, Any]:
-    try:
-        from .. import __version__ as app_version
-    except Exception:
-        app_version = "unknown"
+def _meta(task_id, flow_id):
+    from .. import __version__
+
     return {
-        "app_version": app_version,
+        "app_version": __version__,
         "session": SESSION_ID,
         "task": str(task_id),
         "flow": flow_id or None,
@@ -111,69 +72,259 @@ def _meta(task_id: str | int, flow_id: str) -> dict[str, Any]:
     }
 
 
-def _write_tail(zf: zipfile.ZipFile, src: Path, arcname: str, limit: int) -> None:
-    """大文件只带尾部，避免 bug 包动辄上百 MB。"""
-    size = src.stat().st_size
-    with open(src, "rb") as f:
-        if size > limit:
-            f.seek(size - limit)
-            # 丢掉可能被切断的半行
-            f.readline()
-        data = f.read()
-    zf.writestr(arcname, data)
+def _text_lines(path):
+    if path.suffix == ".zip":
+        with zipfile.ZipFile(path) as archive:
+            for info in archive.infolist():
+                if not info.is_dir():
+                    with archive.open(info) as raw:
+                        yield from io.TextIOWrapper(raw, encoding="utf-8", errors="replace")
+    else:
+        with path.open(encoding="utf-8", errors="replace") as stream:
+            yield from stream
 
 
 def export_bug_bundle(
-    task_id: str | int,
-    dest: str | Path | None = None,
-    *,
-    flow_id: str | None = None,
-) -> Path | None:
-    """把一个任务的完整现场打成 zip，返回路径；失败返回 None。
-
-    Args:
-        task_id: `task_db` 自增主键（= `worker.db_id`）。
-        dest: 目标 zip 路径或目录。缺省写到 `logs/bundles/`。
-        flow_id: 已知 flow 时直接给，省掉一次全目录扫描。
-    """
+    task_id=None, dest=None, *, flow_id=None, run_id=None, session_id=None, progress=None
+):
+    """Export selected evidence. manifest.json distinguishes missing/truncated files."""
+    temporary = None
     try:
-        resolved_flow = flow_id if flow_id is not None else resolve_flow_for_task(task_id)
-        files = _collect_files(task_id, resolved_flow)
+        task, flow = _valid_id(task_id), _valid_id(flow_id)
+        run, selected_session = _valid_id(run_id), _valid_id(session_id)
+        if not task and not flow:
+            raise ValueError("Select a task or flow")
+        flush_sinks()
+        cutoff = time.time()
+        flows = resolve_flows_for_task(task) if task and not run else set()
+        if flow:
+            flows.add(flow)
+        root, trace_dir = get_log_root(), get_trace_dir()
+        manifest = {
+            "schema_version": 1,
+            "selection": {
+                "task": task,
+                "flows": sorted(flows),
+                "run": run,
+                "session": selected_session,
+            },
+            "cutoff": cutoff,
+            "privacy_version": POLICY_VERSION,
+            "files": [],
+            "missing": [],
+            "source_runtime": [],
+            "export_runtime": _meta(task, flow),
+            "health": health_snapshot(),
+        }
+        label = "task" + task if task else "flow" + flow
+        output = Path(dest) if dest else root / "bundles"
+        if output.suffix.lower() != ".zip":
+            output = output / f"fluentytdl-bug-{label}.zip"
+        output.parent.mkdir(parents=True, exist_ok=True)
+        temporary = output.with_name(output.name + "." + uuid.uuid4().hex + ".tmp")
+        remaining = max(0, _MAX_BUNDLE_BYTES - 128 * 1024)
+        sessions, dates, runs = set(), set(), set()
+        windows = {}
 
-        if dest is None:
-            out_dir = user_data_dir() / "logs" / "bundles"
-            out_dir.mkdir(parents=True, exist_ok=True)
-            out_path = out_dir / f"fluentytdl-bug-task{task_id}.zip"
-        else:
-            dest = Path(dest)
-            if dest.is_dir() or dest.suffix.lower() != ".zip":
-                dest.mkdir(parents=True, exist_ok=True)
-                out_path = dest / f"fluentytdl-bug-task{task_id}.zip"
-            else:
-                dest.parent.mkdir(parents=True, exist_ok=True)
-                out_path = dest
+        def belongs(event):
+            if selected_session and event.get("session") != selected_session:
+                return False
+            if run and event.get("run") not in (None, "", "-", run):
+                return False
+            return not task or str(event.get("task") or "-") in (task, "-")
 
-        with zipfile.ZipFile(out_path, "w", zipfile.ZIP_DEFLATED) as zf:
-            zf.writestr(
-                "meta.json",
-                json.dumps(_meta(task_id, resolved_flow), ensure_ascii=False, indent=2),
-            )
-            for src, arcname in files:
+        def missing(name, reason):
+            manifest["missing"].append({"file": name, "reason": redact_text(reason, 300)})
+
+        with zipfile.ZipFile(temporary, "w", zipfile.ZIP_DEFLATED) as zf:
+
+            def write(name, data, *, source_size=None, truncated=False):
+                nonlocal remaining
+                if len(data) > remaining:
+                    missing(name, "bundle_budget_exceeded")
+                    return
+                zf.writestr(name, data)
+                remaining -= len(data)
+                manifest["files"].append(
+                    {
+                        "file": name,
+                        "size": len(data),
+                        "source_size": source_size,
+                        "sha256": hashlib.sha256(data).hexdigest(),
+                        "truncated": truncated,
+                    }
+                )
+
+                if progress:
+                    try:
+                        progress({"file": name, "files": len(manifest["files"])})
+                    except Exception:
+                        pass
+
+            candidates = set()
+            for item in flows:
+                matches = list(trace_dir.glob(f"flow-{item}*.jsonl"))
+                matches = [
+                    p
+                    for p in matches
+                    if p.name == f"flow-{item}.jsonl" or p.name.startswith(f"flow-{item}.")
+                ]
+                candidates.update(matches)
+                if not matches:
+                    missing(f"flow-{item}.jsonl", "not_found")
+            if task:
+                candidates.update(trace_dir.glob(f"task-{task}.jsonl"))
+                candidates.update(trace_dir.glob(f"task-{task}.*.jsonl"))
+            if not candidates:
+                missing("trace", "no_matching_trace")
+            for path in sorted(candidates):
                 try:
-                    if arcname.startswith("logs/") and src.stat().st_size > _MAX_APP_LOG_BYTES:
-                        _write_tail(zf, src, arcname, _MAX_APP_LOG_BYTES)
-                    else:
-                        zf.write(src, arcname)
-                except Exception:
+                    critical, ordinary = [], []
+                    used = 0
+                    truncated = False
+                    for event in _events(path):
+                        if not belongs(event) or float(event.get("_ts") or 0) > cutoff:
+                            continue
+                        session = event.get("session")
+                        if session and session != "-":
+                            sessions.add(_valid_id(session))
+                        if event.get("run") not in (None, "", "-"):
+                            runs.add(str(event["run"]))
+                        if event.get("_ts"):
+                            stamp = float(event["_ts"])
+                            day = datetime.fromtimestamp(stamp).strftime("%Y-%m-%d")
+                            dates.add(day)
+                            low, high = windows.get(day, (stamp, stamp))
+                            windows[day] = (min(low, stamp), max(high, stamp))
+                        data = (json.dumps(redact_value(event), ensure_ascii=False) + "\n").encode(
+                            "utf-8"
+                        )
+                        allowance = min(remaining, 10 * 1024 * 1024)
+                        if event.get("kind") not in _CRITICAL_KINDS:
+                            allowance = max(0, allowance - 1024 * 1024)
+                        if used + len(data) > allowance:
+                            truncated = True
+                            continue
+                        (critical if event.get("kind") in _CRITICAL_KINDS else ordinary).append(
+                            (float(event.get("_ts") or 0), data)
+                        )
+                        used += len(data)
+                    write(
+                        "traces/" + path.name,
+                        b"".join(row[1] for row in sorted(critical + ordinary, key=lambda x: x[0])),
+                        source_size=path.stat().st_size,
+                        truncated=truncated,
+                    )
+                except Exception as exc:
+                    missing(path.name, exc)
+            for session in sorted(sessions):
+                paths = list(trace_dir.glob(f"session-{session}.jsonl")) + list(
+                    trace_dir.glob(f"session-{session}.*.jsonl")
+                )
+                if not paths:
+                    missing(f"session-{session}.jsonl", "source_runtime_unavailable")
+                for path in paths:
+                    try:
+                        data = bytearray()
+                        truncated = False
+                        for event in _events(path):
+                            if float(event.get("_ts") or 0) > cutoff:
+                                continue
+                            if event.get("kind") == "config" and event.get("scope") in (
+                                None,
+                                "runtime",
+                                "snapshot",
+                                "toolchain",
+                            ):
+                                if len(manifest["source_runtime"]) < 64:
+                                    manifest["source_runtime"].append(redact_value(event))
+                                else:
+                                    truncated = True
+                            row = (
+                                json.dumps(redact_value(event), ensure_ascii=False) + "\n"
+                            ).encode("utf-8")
+                            if len(data) + len(row) > min(remaining, _MAX_APP_LOG_BYTES):
+                                truncated = True
+                                break
+                            data.extend(row)
+                        write(
+                            "traces/" + path.name,
+                            bytes(data),
+                            source_size=path.stat().st_size,
+                            truncated=truncated,
+                        )
+                    except Exception as exc:
+                        missing(path.name, exc)
+            for sub in sorted(flows | {"no-flow"}):
+                folder = trace_dir / sub
+                if not folder.is_dir():
                     continue
-        logger.info(
-            "[Bundle] 已导出 task={} flow={} 文件数={} → {}",
-            task_id,
-            resolved_flow or "-",
-            len(files),
-            out_path.name,
-        )
-        return out_path
-    except Exception:
-        logger.exception("[Bundle] 导出 bug 包失败 task={}", task_id)
+                for path in folder.glob(f"task-{task or '*'}-run-*.ytdlp.log"):
+                    if run and f"-run-{run}." not in path.name:
+                        continue
+                    try:
+                        with path.open("rb") as f:
+                            data = f.read(min(remaining, _MAX_APP_LOG_BYTES) + 1)
+                        truncated = len(data) > min(remaining, _MAX_APP_LOG_BYTES)
+                        data = redact_text(
+                            data[: min(remaining, _MAX_APP_LOG_BYTES)].decode("utf-8", "replace")
+                        ).encode("utf-8")
+                        write(
+                            "raw/" + sub + "/" + path.name,
+                            data,
+                            source_size=path.stat().st_size,
+                            truncated=truncated,
+                        )
+                    except Exception as exc:
+                        missing(path.name, exc)
+            for day in sorted(dates):
+                paths = list(root.glob(f"app_{day}*.log")) + list(root.glob(f"app_{day}*.log.zip"))
+                paths += list(root.glob("errors_sync*.log")) + list(
+                    root.glob("errors_sync*.log.zip")
+                )
+                if not paths:
+                    missing("app_" + day, "not_found")
+                for path in paths:
+                    try:
+                        data = bytearray()
+                        truncated = False
+                        include = False
+                        low, high = windows[day]
+                        for line in _text_lines(path):
+                            match = re.match(r"^(\d{4}-\d\d-\d\d [\d:.]+) \|", line)
+                            if match:
+                                stamp = datetime.fromisoformat(match[1]).timestamp()
+                                include = low - 5 <= stamp <= min(high + 5, cutoff)
+                            if not include:
+                                continue
+                            row = redact_text(line).encode("utf-8")
+                            if len(data) + len(row) > min(remaining, _MAX_APP_LOG_BYTES):
+                                truncated = True
+                                break
+                            data.extend(row)
+                        write(
+                            "logs/" + day + "/" + path.name.removesuffix(".zip"),
+                            bytes(data),
+                            source_size=path.stat().st_size,
+                            truncated=truncated,
+                        )
+                    except Exception as exc:
+                        missing(path.name, exc)
+            if not manifest["source_runtime"]:
+                missing("source_runtime", "snapshot_unavailable")
+            manifest["partial"] = bool(
+                manifest["missing"] or any(f["truncated"] for f in manifest["files"])
+            )
+            zf.writestr("meta.json", json.dumps(manifest["export_runtime"], ensure_ascii=False))
+            zf.writestr("manifest.json", json.dumps(manifest, ensure_ascii=False, indent=2))
+        os.replace(temporary, output)
+        return output
+    except Exception as exc:
+        record_failure("bundle_export", exc)
         return None
+    finally:
+        if temporary and temporary.exists():
+            try:
+                temporary.unlink(missing_ok=True)
+            except OSError as exc:
+                record_failure("bundle_cleanup", exc)

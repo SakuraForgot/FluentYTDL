@@ -1,9 +1,32 @@
+import json
 import os
 import shutil
 import subprocess
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 PREFIX = "fluentytdl"
+
+
+def write_runtime_catalog(locales_dir: Path) -> None:
+    root = ET.parse(locales_dir / "fluentytdl_en_US.ts").getroot()
+    entries = {}
+    for context in root.findall("context"):
+        if context.findtext("name") != "RuntimeText":
+            continue
+        for message in context.findall("message"):
+            translation = message.find("translation")
+            if translation is not None and translation.get("type") not in {"vanished", "obsolete"}:
+                source = message.findtext("source", "")
+                text = message.findtext("translation", "")
+                if not text.strip() or translation.get("type") == "unfinished":
+                    raise SystemExit(f"Unreviewed runtime translation: {source}")
+                entries[source] = text
+    (locales_dir / "runtime_en.json").write_text(
+        json.dumps(entries, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+        newline="\n",
+    )
 
 
 def _locale_of(ts_file: Path) -> str:
@@ -19,9 +42,8 @@ def _write_language_aliases(locales_dir: Path) -> None:
     ``fluentytdl_en_US.qm``，所以 auto 模式下的 en_GB/en_AU/en_CA 用户拿不到任何翻译器，
     界面 100% 回退成中文源串（ISSUE #88）。补一份 ``fluentytdl_en.qm`` 让 ``en`` 这一级命中。
 
-    只在某语言**唯一**一个 .ts 时才做别名：``zh`` 同时有 zh_CN/zh_TW，
-    bare ``zh`` 指向哪个都是错的，直接跳过 —— 反正源语言就是中文，拿不到翻译器时
-    回退到源串本身就是正确结果。
+    应用只支持 en_US 和 zh_CN，因此分别生成 en / zh 地区别名。
+    仍保留唯一变体检查，防止将来新增变体时静默指向错误目录。
     """
     by_language: dict[str, list[str]] = {}
     for ts_file in sorted(locales_dir.glob("*.ts")):
@@ -70,6 +92,7 @@ def main():
         subprocess.run(cmd, check=True)
 
     _write_language_aliases(locales_dir)
+    write_runtime_catalog(locales_dir)
 
     print("i18n release completed.")
 

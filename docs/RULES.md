@@ -222,7 +222,7 @@ retry  transition  outcome  config  argv  identity
 
 - pytest >= 7.0
 - 测试文件在 `tests/` 目录
-- **尚无 conftest.py** — 每个测试自行设置 `sys.path`
+- 根目录 `conftest.py` 在收集测试前将应用数据和日志隔离到临时目录，并默认使用 Qt offscreen；部分测试仍自行设置 `sys.path`。
 - 部分测试需要 `QApplication` —— 在**导入 fluentytdl 之前**设好 `QT_QPA_PLATFORM=offscreen` 与 `FLUENTYTDL_DATA_DIR_OVERRIDE` 即可无头运行（照抄 `tests/test_subtitle_selector_ux.py` 的文件头）。别写死"有几个 GUI 测试"，这个数字每加一个测试就过期
 - CI 对 lint、格式、版本与锁文件、翻译同步及测试实行硬门禁；仅 Pyright 保持提示性质。
 - 添加新测试时：优先使用普通 pytest 函数而非 unittest.TestCase
