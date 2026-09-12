@@ -1,6 +1,19 @@
 # 打包改造实施与验收记录
 
-本记录对应 `build_release.md`，版本保持 3.7.1。未打 tag、未公开发布、未改写现有 Release。
+本记录对应 `build_release.md`。最初本地改造验收使用 3.7.1；随后按维护者确认准备 3.7.2-rc.1，并完成下述远端非公开演练。未打 tag、未公开发布、未改写现有 Release。
+
+## 3.7.2-rc.1 远端演练（2026-09-12）
+
+- 分支 `release/3.7.2-rc.1`，受测提交 `c4a1a40c82d9ac5ccfc78ee9637904f58fb67465`。[Actions 34670333849](https://github.com/SakuraForgot/FluentYTDL/actions/runs/34670333849) 整体成功，`targets=all`、`publish=false`。
+- 1744 项测试通过，1 项既有未实现的字幕交付 Step 6 测试跳过。真实 yt-dlp 测试均已执行；Pyright 仍为 advisory，270 errors、10 warnings，不视为类型检查通过。
+- 完整构建报告为 `target=all`、`component_policy=latest`、`dirty=false`；冻结主程序的 Qt、翻译、Python.NET/pywebview 自检通过。Full/app-core 均使用 LZMA2，并通过 py7zr 文件哈希核对及冻结 updater 在空 PATH、中文路径中的真实解压。
+- GitHub 临时 Windows runner 中，当前用户/所有用户 × 英文/简体中文四组真实新装、覆盖安装及卸载全部通过；样本账号、Cookie、配置、数据库被清理，下载成品和未知文件保留。没有在开发机执行安装/卸载；不代表多真实账号、交互 DPI 或登录验收已完成。
+- 五项产物下载至 `build/rc-ci-artifacts/34670333849/`，再次核对完整文件集合、构建报告中的大小与 SHA256、SHA256SUMS 及更新清单中的 app-core 信息，全部通过。核对记录：`build/rc-ci-artifacts/34670333849-verification.json`；远端报告及日志：`build/rc-ci-reports/34670333849/`。
+- 本次组件：yt-dlp 2026.08.19、FFmpeg N-126504-g1b8a2b690b-20260911、Deno 2.9.6、POT Provider 0.8.1、AtomicParsley 20240608.083822.0、7-Zip 26.03，均由本次构建从既定上游渠道解析取得。正式发布仍须重新解析最新组件。
+- 演练修复了两处实际 CI 问题：setup-python 缺少 Windows Python 3.12.12 二进制，改由固定 uv 安装指定解释器；测试缺少工具导致真实 yt-dlp 用例跳过，改为显式准备最新组件并对必需工具缺失硬失败。
+- rc 保持客户端手动下载；工作流已覆盖 rc Draft/Pre-release 标记及 `latest=false`，包括恢复 Draft 时纠正标记和公开后验证标记。该次未执行真实 Draft/公开下载步骤，线上 Latest 仍为 v3.7.1，不能宣称公开发布链路已实测。
+
+下文的 3.7.1 本地证据保留为历史记录，不作为本次 rc 的产物集合。
 
 ## 已落地
 
@@ -48,7 +61,6 @@
 
 | 项目 | 已准备的入口或条件 |
 | --- | --- |
-| 临时 Windows runner 上四种语言/范围组合的新装、覆盖安装、卸载 | release.yml 调用 scripts/test_installer.py；要求 GitHub-hosted 隔离 runner，拒绝开发机 |
 | 中英文 100%、150%、200% DPI 布局 | 实机逐页截图及人工记录 |
 | 原使用者跨账号 UAC、多个真实用户、离线用户配置文件与重定向目录 | 隔离 Windows 账号环境；无法确认归属或清理失败必须失败并留下残留报告 |
 | 真实 WebView2 登录 | 有 WebView2 runtime 的交互环境；保留已有诊断修复 |
