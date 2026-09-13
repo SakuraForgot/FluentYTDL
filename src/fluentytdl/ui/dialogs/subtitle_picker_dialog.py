@@ -119,7 +119,7 @@ class SubtitlePickerDialog(MessageBoxBase):
             if container == "webm":
                 # WebM → 自动切换嵌入为外挂 + 显示警告
                 self._compat_label.setText(
-                    self.tr("⚠ WebM 容器本身不支持软嵌入字幕，必须使用外置字幕文件。")
+                    self.tr("⚠ 本应用不在 WebM 中嵌入字幕。请选择独立字幕文件，或改用 MKV。")
                 )
                 self._compat_label.setStyleSheet("color: #E2C08D;")
                 self._compat_label.show()

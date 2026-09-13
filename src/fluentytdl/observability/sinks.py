@@ -28,9 +28,9 @@ from __future__ import annotations
 import json
 import os
 import re
-import sys
 import threading
 import time
+import uuid
 from collections import OrderedDict
 from collections.abc import Iterable
 from pathlib import Path
@@ -38,7 +38,15 @@ from typing import Any
 
 from loguru import logger
 
-from ..utils.paths import user_data_dir
+from ..utils.log_privacy import redact_text, redact_value
+from ..utils.log_runtime import (
+    SafeFileSink,
+    get_log_root,
+    mark_active,
+    record_failure,
+    start_maintenance,
+    sweep_logs,
+)
 from .events import emit_event
 
 # ── 目录 ────────────────────────────────────────────────────
@@ -53,12 +61,8 @@ def get_trace_dir() -> Path:
         return _TRACE_DIR
     with _TRACE_DIR_LOCK:
         if _TRACE_DIR is None:
-            d = user_data_dir() / "logs" / "traces"
-            try:
-                d.mkdir(parents=True, exist_ok=True)
-            except Exception:
-                d = Path(os.environ.get("TEMP", "/tmp")) / "FluentYTDL_traces"
-                d.mkdir(parents=True, exist_ok=True)
+            d = get_log_root() / "traces"
+            d.mkdir(parents=True, exist_ok=True)
             _TRACE_DIR = d
     return _TRACE_DIR
 
@@ -66,7 +70,7 @@ def get_trace_dir() -> Path:
 # ── JSONL sink ───────────────────────────────────────────────
 
 _MAX_OPEN_FILES = 8
-_MAX_JSONL_BYTES = 512 * 1024 * 1024  # 512 MB
+_MAX_JSONL_BYTES = 10 * 1024 * 1024  # 512 MB
 
 #: {path: (file_object, size_bytes)}，按最近访问排序（OrderedDict 模拟 LRU）。
 _open_files: OrderedDict[Path, tuple[Any, int]] = OrderedDict()
@@ -79,14 +83,16 @@ def _lru_get(path: Path) -> Any:
         _open_files.move_to_end(path)
         return _open_files[path][0]
     while len(_open_files) >= _MAX_OPEN_FILES:
-        _, evicted = _open_files.popitem(last=False)
+        evicted_path, evicted = _open_files.popitem(last=False)
+        mark_active(evicted_path, False)
         try:
             evicted[0].close()
         except Exception:
             pass
     size = path.stat().st_size if path.exists() else 0
-    fh = open(path, "a", encoding="utf-8", errors="replace")  # noqa: SIM115 - 长期持有
+    fh = open(path, "a", encoding="utf-8", errors="replace", newline="\n")  # noqa: SIM115 - 长期持有
     _open_files[path] = (fh, size)
+    mark_active(path, True)
     return fh
 
 
@@ -101,7 +107,10 @@ def _jsonl_path(record: dict) -> Path | None:
     elif task and task != "-":
         name = f"task-{task}.jsonl"
     else:
-        return None
+        session = fytdl.get("session") or extra.get("session") or "unknown"
+        name = f"session-{session}.jsonl"
+    if Path(name).name != name or "/" in name or "\\" in name:
+        raise ValueError("Invalid trace identity")
     return get_trace_dir() / name
 
 
@@ -117,7 +126,10 @@ def jsonl_sink(message: Any) -> None:
         path = _jsonl_path(record)
         if path is None:
             return
-        payload = dict(record["extra"]["fytdl"])
+        payload = redact_value(dict(record["extra"]["fytdl"]))
+        payload["_event_id"] = record["extra"].get("record_id", uuid.uuid4().hex)
+        payload["_origin"] = record["extra"].get("origin", "app")
+        payload["_process"] = record["extra"].get("process", os.getpid())
         payload["_ts"] = record["time"].timestamp()
         # `_level` 与 `_ts` 同性质：loguru 记录的元数据，不是事件字段（封闭集合见
         # `events.py`），所以带下划线前缀。缺了它，JSONL 读回来的历史事件分不出
@@ -126,28 +138,25 @@ def jsonl_sink(message: Any) -> None:
         payload["_level"] = record["level"].name
         line = json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + "\n"
         encoded = line.encode("utf-8")
+        if len(encoded) > _MAX_JSONL_BYTES:
+            record_failure("oversize_trace")
+            return
         with _open_files_lock:
             fh = _lru_get(path)
             old_size = _open_files[path][1]
-            if old_size >= _MAX_JSONL_BYTES:
-                # 旋转：关旧、重命名（加时间戳后缀），开新
-                try:
-                    fh.close()
-                except Exception:
-                    pass
-                try:
-                    rotated = path.with_suffix(f".{int(time.time())}.jsonl")
-                    path.rename(rotated)
-                except Exception:
-                    pass
+            if old_size and old_size + len(encoded) > _MAX_JSONL_BYTES:
+                fh.close()
+                mark_active(path, False)
                 _open_files.pop(path, None)
+                rotated = path.with_suffix(f".{time.time_ns()}.{uuid.uuid4().hex[:8]}.jsonl")
+                path.rename(rotated)
                 fh = _lru_get(path)
+                old_size = _open_files[path][1]
             fh.write(line)
             fh.flush()
-            new_size = old_size + len(encoded)
-            _open_files[path] = (fh, new_size)
-    except Exception:
-        pass
+            _open_files[path] = (fh, old_size + len(encoded))
+    except Exception as exc:
+        record_failure("trace_write", exc)
 
 
 # ── raw dump ─────────────────────────────────────────────────
@@ -200,7 +209,7 @@ def write_raw_dump(
         dest = dest_dir / f"task-{task_part}-run-{run_part}.ytdlp.log"
         with open(dest, "w", encoding="utf-8", errors="replace") as f:
             for line in lines:
-                f.write(line if line.endswith("\n") else line + "\n")
+                f.write(redact_text(line) if line.endswith("\n") else redact_text(line) + "\n")
         return dest
     except Exception:
         return None
@@ -299,82 +308,55 @@ def sweep_trace_dir() -> None:
 
     由启动流程在后台调用，任何异常都静默。
     """
-    try:
-        trace_dir = get_trace_dir()
-        cutoff = time.time() - _RETENTION_DAYS * 86400
-        files: list[tuple[float, Path]] = []
-        for p in trace_dir.rglob("*"):
-            if p.is_file():
-                try:
-                    files.append((p.stat().st_mtime, p))
-                except Exception:
-                    pass
-        files.sort(key=lambda t: t[0])  # 最旧在前
-        total = sum(p.stat().st_size for _, p in files if p.exists())
-        for mtime, p in files:
-            if not p.exists():
-                continue
-            too_old = mtime < cutoff
-            too_big = total > _MAX_TRACE_BYTES
-            if too_old or too_big:
-                try:
-                    size = p.stat().st_size
-                    p.unlink()
-                    total -= size
-                    # 删完空目录
-                    try:
-                        p.parent.rmdir()
-                    except Exception:
-                        pass
-                except Exception:
-                    pass
-    except Exception:
-        pass
+    sweep_logs(get_log_root())
 
 
 # ── loguru 接线 ──────────────────────────────────────────────
 
 _sinks_installed = False
 _sinks_lock = threading.Lock()
+_sink_ids: dict[str, int] = {}
 
 
 def install_sinks(log_dir: str | Path | None = None) -> None:
-    """把 JSONL sink 和同步 ERROR sink 接进 loguru。
-
-    设计为幂等：重复调用安全。由 `utils/logger.py` 的下游（或 `startup_info`）
-    在日志目录确定后调用一次，不能由 `paths.py` 触发（循环依赖）。
-    """
+    """Retry only failed channels. Never install a successful channel twice."""
     global _sinks_installed
     with _sinks_lock:
-        if _sinks_installed:
-            return
-        _sinks_installed = True
-    try:
-        # JSONL：只收带 fytdl extra 的记录，enqueue=True 做写入串行化。
-        logger.add(
-            jsonl_sink,
-            level="DEBUG",
-            filter=lambda record: "fytdl" in record.get("extra", {}),
-            enqueue=True,
-            format="{message}",  # 内容由 jsonl_sink 自己构造，format 无关紧要
-        )
-        # 同步 ERROR sink：崩溃前最后一条错误一定落盘。
-        if log_dir is None:
-            log_dir = user_data_dir() / "logs"
-        sync_path = Path(log_dir) / "errors_sync.log"
-        logger.add(
-            str(sync_path),
-            level="ERROR",
-            enqueue=False,  # 同步写，进程强杀时不会丢
-            rotation="10 MB",
-            retention="7 days",
-            compression="zip",
-            encoding="utf-8",
-        )
-    except Exception as exc:
-        try:
-            stream = getattr(sys, "__stderr__", None) or sys.stderr
-            if stream is not None:
-                stream.write(f"[Observability] install_sinks failed: {exc}\n")
-        except Exception:
-            pass
+        if "trace" not in _sink_ids:
+            try:
+                _sink_ids["trace"] = logger.add(
+                    jsonl_sink,
+                    level="DEBUG",
+                    filter=lambda record: "fytdl" in record.get("extra", {}),
+                    enqueue=True,
+                    format="{message}",
+                    diagnose=False,
+                )
+            except Exception as exc:
+                record_failure("trace_install", exc)
+        if "error" not in _sink_ids:
+            try:
+                _sink_ids["error"] = logger.add(
+                    SafeFileSink(
+                        Path(log_dir) if log_dir else get_log_root(),
+                        "errors_sync",
+                        daily=False,
+                        max_bytes=10 * 1024 * 1024,
+                    ),
+                    level="ERROR",
+                    enqueue=False,
+                    diagnose=False,
+                    backtrace=True,
+                )
+            except Exception as exc:
+                record_failure("error_install", exc)
+        _sinks_installed = len(_sink_ids) == 2
+    start_maintenance()
+
+
+def flush_sinks() -> None:
+    """Call from a background worker, never from a sink callback."""
+    logger.complete()
+    with _open_files_lock:
+        for fh, _ in _open_files.values():
+            fh.flush()

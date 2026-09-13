@@ -1,0 +1,13 @@
+[
+  {"file": "src/fluentytdl/auth/auth_service.py", "source": "默认账号", "reason": "Legacy persisted account-name matching; existing user-editable names are preserved."},
+  {"file": "src/fluentytdl/core/config_manager.py", "source": "自动推断", "reason": "Persisted configuration sentinel; translated only when displayed."},
+  {"file": "src/fluentytdl/ui/settings_page.py", "source": "自动推断", "reason": "Compatibility mapping between persisted sentinel and translated combo-box label."},
+  {"file": "src/fluentytdl/ui/settings_page.py", "source": "自定义", "reason": "Legacy tool-source identifier mapped to a translated display label."},
+  {"file": "src/fluentytdl/ui/settings_page.py", "source": "内置", "reason": "Legacy tool-source identifier mapped to a translated display label."},
+  {"file": "src/fluentytdl/ui/settings_page.py", "source": "简体中文 (zh_CN)", "reason": "Native language name in the language picker, intentionally recognizable in both languages."},
+  {"file": "src/fluentytdl/ui/components/common/cookie_refresh_worker.py", "source": "【提取解密失败】", "reason": "Compatibility recognition of legacy Chinese error input; not emitted as display text."},
+  {"file": "src/fluentytdl/ui/components/common/cookie_refresh_worker.py", "source": "未找到", "reason": "Compatibility recognition of legacy Chinese error input alongside English not found."},
+  {"file": "src/fluentytdl/utils/quick_opts.py", "source": "自动推断", "reason": "Persisted configuration sentinel used to build engine options."},
+  {"file": "src/fluentytdl/youtube/youtube_service.py", "source": "vr体验", "reason": "Content-detection keyword matched against external video titles."},
+  {"file": "src/fluentytdl/youtube/youtube_service.py", "source": "vr视频", "reason": "Content-detection keyword matched against external video titles."}
+]

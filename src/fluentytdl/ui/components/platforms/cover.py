@@ -160,7 +160,7 @@ class CoverSelectorWidget(QFrame):
 
         self.tipLabel = CaptionLabel(
             self.tr(
-                "提示：YouTube 封面的分辨率为画布标称值，并非实际图片像素。⚠️ 标记的版本可能不存在。"
+                "提示：封面尺寸可能来自元数据，实际像素尺寸以下载的图片为准。⚠️ 标记的版本尚未确认可用。"
             ),
             self,
         )

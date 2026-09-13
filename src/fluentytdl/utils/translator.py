@@ -36,7 +36,13 @@ def translate_error(error: BaseException) -> dict:
 
     raw = _strip_ansi(raw_original)
 
-    diag = diagnose(exit_code, raw, phase=phase)
+    from ..diagnostics.engine import diagnose_exception
+
+    diag = (
+        diagnose_exception(error, phase=phase)
+        if isinstance(error, OSError)
+        else diagnose(exit_code, raw, phase=phase)
+    )
     friendly_content = diag.user_message
 
     # 规则未命中且兜底也没抽出 HTTP 码 / extractor 名时，才算真正"无法识别"。
@@ -71,6 +77,12 @@ def translate_error(error: BaseException) -> dict:
         "technical_detail": diag.technical_detail,
         "recovery_hint": diag.recovery_hint,
         "phase": diag.phase,
+        "exit_code": diag.exit_code,
+        "rules_version": diag.rules_version,
+        "unmatched_tail": diag.raw_tail[-2000:] if diag.code == FALLBACK_CODE else "",
+        "exception_type": type(error).__name__,
+        "errno": getattr(error, "errno", None),
+        "winerror": getattr(error, "winerror", None),
     }
 
     if not is_unrecognized:

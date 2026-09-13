@@ -10,6 +10,8 @@ import time
 from collections.abc import Callable
 from typing import Any
 
+from fluentytdl.utils.ui_text import tr_text
+
 
 class _StreamPhase:
     """单次下载任务中的多流阶段追踪器"""
@@ -98,7 +100,7 @@ class CleanLogger:
         self.trace = trace
         self._current_state = "queued"
         self._current_percent = 0.0
-        self._current_msg = "等待下载..."
+        self._current_msg = tr_text("等待下载...")
         self._stream_phase = _StreamPhase()
         self._phase_just_switched = False
         self._duration = duration
@@ -173,7 +175,9 @@ class CleanLogger:
             # `[info]` 提前 return 上的（"📡 正在获取流媒体元数据"）。
             # 而它恰恰是"字幕开着却一个文件都没有"最直接的一句解释。
             # 同样沿用当前状态：字幕是 best-effort，任务照旧成功。
-            self._emit(self._current_state, self._current_percent, "⚠️ 请求的语言没有可用字幕")
+            self._emit(
+                self._current_state, self._current_percent, tr_text("⚠️ 请求的语言没有可用字幕")
+            )
             return
 
         if "Retrying" in msg or "retrying" in msg:
@@ -182,9 +186,9 @@ class CleanLogger:
             m = re.search(r"\((\d+/\d+)\)", msg)
             retry_count = m.group(1) if m else ""
             if "fragment" in msg.lower():
-                processed_msg = f"🔄 切片下载超时，正在重试... {retry_count}"
+                processed_msg = tr_text("🔄 切片下载超时，正在重试... {0}", retry_count)
             else:
-                processed_msg = f"🔄 网络请求失败，正在重试... {retry_count}"
+                processed_msg = tr_text("🔄 网络请求失败，正在重试... {0}", retry_count)
 
             if self.playlist_tracker:
                 final_msg = f"[{self.playlist_tracker.current_item}/{self.playlist_tracker.total_items}] {self.playlist_tracker.current_title} — {processed_msg}"
@@ -195,10 +199,10 @@ class CleanLogger:
 
         # 拦截前置准备动作 (Parsing Phase)
         if "] Extracting URL" in msg:
-            self._emit("parsing", 0, "🔍 正在解析目标地址...")
+            self._emit("parsing", 0, tr_text("🔍 正在解析目标地址..."))
             return
         elif msg.startswith("[hlsnative]"):
-            self._emit("parsing", 0, "🧩 正在组装 m3u8 碎片地图...")
+            self._emit("parsing", 0, tr_text("🧩 正在组装 m3u8 碎片地图..."))
             return
 
         # 播放列表进度拦截
@@ -237,26 +241,26 @@ class CleanLogger:
         processed_msg = ""
         # 英文日志到中文的翻译
         if "Merging formats into" in msg or "[Merger]" in msg:
-            processed_msg = "📦 正在无损合并音视频 (FFmpeg)..."
+            processed_msg = tr_text("📦 正在无损合并音视频 (FFmpeg)...")
         elif "[ExtractAudio]" in msg:
-            processed_msg = "🎵 正在提取独立音频流..."
+            processed_msg = tr_text("🎵 正在提取独立音频流...")
         elif "Writing video subtitles to" in msg:
-            processed_msg = "📝 正在下载字幕..."
+            processed_msg = tr_text("📝 正在下载字幕...")
         # 人类日志行的前缀也是短名（实测：`[Merger]` / `[ExtractAudio]` / `[Metadata]` /
         # `[ThumbnailsConvertor]` / `[MoveFiles]`），所以 `[FFmpegSubtitlesConvertor]`
         # 这个写法从来没匹配过 —— 判短名，长名留作版本兜底。
         elif "[SubtitlesConvertor]" in msg or "[FFmpegSubtitlesConvertor]" in msg:
-            processed_msg = "📝 正在转换字幕格式..."
+            processed_msg = tr_text("📝 正在转换字幕格式...")
         elif "Embedding subtitles in" in msg:
-            processed_msg = "📝 正在内嵌字幕轨道..."
+            processed_msg = tr_text("📝 正在内嵌字幕轨道...")
         elif "Writing metadata to" in msg or "[MetadataParser]" in msg:
-            processed_msg = "🏷️ 正在写入视频元数据 (标题/作者)..."
+            processed_msg = tr_text("🏷️ 正在写入视频元数据 (标题/作者)...")
         elif "ThumbnailsConvertor" in msg:
-            processed_msg = "🖼️ 正在转换视频封面图..."
+            processed_msg = tr_text("🖼️ 正在转换视频封面图...")
         elif "EmbedThumbnail" in msg:
-            processed_msg = "🖼️ 正在嵌入视频封面图..."
+            processed_msg = tr_text("🖼️ 正在嵌入视频封面图...")
         elif "Writing video thumbnail" in msg:
-            processed_msg = "🖼️ 正在下载视频封面图..."
+            processed_msg = tr_text("🖼️ 正在下载视频封面图...")
 
         if processed_msg:
             # 单 Worker 播放列表模式：替换 msg 但保持整体进度格式
@@ -264,7 +268,13 @@ class CleanLogger:
                 if "Merging formats into" in msg or "[Merger]" in msg:
                     # 合并开始，可以认为当前条目下载已经 100%（不过 yt-dlp 通常会有 separate log）
                     pass
-                msg = f"[{self.playlist_tracker.current_item}/{self.playlist_tracker.total_items}] {self.playlist_tracker.current_title} — 后处理: {processed_msg.replace('...', '')}"
+                msg = tr_text(
+                    "[{0}/{1}] {2} — 后处理: {3}",
+                    self.playlist_tracker.current_item,
+                    self.playlist_tracker.total_items,
+                    self.playlist_tracker.current_title,
+                    processed_msg.replace("...", ""),
+                )
                 self._emit("processing", self.playlist_tracker.overall_percent, msg)
             else:
                 self._emit("processing", self._current_percent, processed_msg)
@@ -274,7 +284,7 @@ class CleanLogger:
             # 那行翻译一直是死代码。现在只在真的还没开始下载时才当作"取元数据"：
             # 下载中途的 `[info] Downloading 1 format(s)` 若也走这条，状态会从
             # downloading 倒退回 parsing。
-            self._emit("parsing", 0, "📡 正在获取流媒体元数据...")
+            self._emit("parsing", 0, tr_text("📡 正在获取流媒体元数据..."))
 
     def handle_progress(self, progress_data: dict[str, Any]) -> None:
         """处理 yt-dlp 的原生 progress 回调 (来自 dict)"""
@@ -298,13 +308,19 @@ class CleanLogger:
             total = (
                 self._format_bytes(self._section_estimated_bytes)
                 if self._section_estimated_bytes
-                else "估算中"
+                else tr_text("估算中")
             )
-            speed = self._format_bytes(rate) + "/s" if rate else "计算中"
+            speed = self._format_bytes(rate) + "/s" if rate else tr_text("计算中")
             self._emit(
                 "downloading",
                 pct,
-                f"✂️ 裁切下载 · {layout} | 已写入 {self._format_bytes(output_bytes)}/{total} | ⬇️ {speed}",
+                tr_text(
+                    "✂️ 裁切下载 · {0} | 已写入 {1}/{2} | ⬇️ {3}",
+                    layout,
+                    self._format_bytes(output_bytes),
+                    total,
+                    speed,
+                ),
             )
             return
 
@@ -339,7 +355,7 @@ class CleanLogger:
             pct = self._stream_phase.map_progress(phase, raw_pct)
             pct = round(pct, 1)
             if is_precise_cut:
-                msg = f"✂️ 正在精确裁切与重编码 {raw_pct:.1f}% | 速度: {speed}"
+                msg = tr_text("✂️ 正在精确裁切与重编码 {0:.1f}% | 速度: {1}", raw_pct, speed)
                 self._emit("processing", pct, msg)
             else:
                 output_bytes = int(progress_data.get("output_bytes") or 0)
@@ -348,13 +364,18 @@ class CleanLogger:
                 total = (
                     self._format_bytes(self._section_estimated_bytes)
                     if self._section_estimated_bytes
-                    else "估算中"
+                    else tr_text("估算中")
                 )
                 layout = self._section_layout_label()
-                rate = self._format_bytes(output_rate) + "/s" if output_rate else "计算中"
-                msg = (
-                    f"✂️ 裁切下载 · {layout} {raw_pct:.1f}% | "
-                    f"已写入 {written}/{total} | ⬇️ {rate} | 媒体速度 {speed}"
+                rate = self._format_bytes(output_rate) + "/s" if output_rate else tr_text("计算中")
+                msg = tr_text(
+                    "✂️ 裁切下载 · {0} {1:.1f}% | 已写入 {2}/{3} | ⬇️ {4} | 媒体速度 {5}",
+                    layout,
+                    raw_pct,
+                    written,
+                    total,
+                    rate,
+                    speed,
                 )
                 self._emit("downloading", pct, msg)
             return
@@ -366,27 +387,27 @@ class CleanLogger:
 
             if pp_status == "started":
                 if pp_name == "ModifyChapters" and self._section_cut_mode == "precise":
-                    msg = "✂️ 片段下载完成，正在准备精确裁切…"
+                    msg = tr_text("✂️ 片段下载完成，正在准备精确裁切…")
                 elif pp_name == "Merger":
-                    msg = "📦 正在无损合并音视频 (FFmpeg)..."
+                    msg = tr_text("📦 正在无损合并音视频 (FFmpeg)...")
                 elif pp_name == "EmbedSubtitle":
-                    msg = "📝 正在内嵌字幕轨道..."
+                    msg = tr_text("📝 正在内嵌字幕轨道...")
                 # `FFmpegMetadataPP` 报的是 `Metadata`（剥掉 `FFmpeg` 前缀和 `PP` 后缀，
                 # 实测见 `output_parser.EMBED_EVIDENCE_BY_PP` 上方）—— 长键从未命中，
                 # 于是元数据一直掉进下面那条泛用分支。`MetadataParser` 是另一个后处理器，
                 # 它本来就是短名。
                 elif pp_name in ("Metadata", "MetadataParser", "FFmpegMetadata"):
-                    msg = "🏷️ 正在写入视频元数据 (标题/作者)..."
+                    msg = tr_text("🏷️ 正在写入视频元数据 (标题/作者)...")
                 elif pp_name == "ThumbnailsConvertor":
-                    msg = "🖼️ 正在转换视频封面图..."
+                    msg = tr_text("🖼️ 正在转换视频封面图...")
                 elif pp_name == "EmbedThumbnail":
-                    msg = "🖼️ 正在嵌入视频封面图..."
+                    msg = tr_text("🖼️ 正在嵌入视频封面图...")
                 elif pp_name == "MoveFiles":
-                    msg = "🚚 正在移动文件..."
+                    msg = tr_text("🚚 正在移动文件...")
                 elif pp_name == "SponsorBlock":
-                    msg = "⏭️ 正在标记/跳过赞助片段..."
+                    msg = tr_text("⏭️ 正在标记/跳过赞助片段...")
                 else:
-                    msg = f"⚙️ 正在执行后期处理 ({pp_name})..."
+                    msg = tr_text("⚙️ 正在执行后期处理 ({0})...", pp_name)
                 self._emit("processing", self._current_percent, msg)
             return
 
@@ -412,7 +433,7 @@ class CleanLogger:
         if status == "downloading":
             # 💡 流类型识别：优先按文件名后缀判断字幕/封面，
             # 因为字幕下载时 info_dict 的 vcodec/acodec 仍是主视频的值，不可靠。
-            stream_type = "📦 数据流"
+            stream_key = "data"
             info = progress_data.get("info_dict", {})
             vcodec = info.get("vcodec", "") if info else ""
             acodec = info.get("acodec", "") if info else ""
@@ -421,20 +442,28 @@ class CleanLogger:
             if filename:
                 lower_name = filename.lower()
                 if lower_name.endswith((".vtt", ".srt", ".ass", ".ssa", ".sub", ".lrc")):
-                    stream_type = "📝 字幕"
+                    stream_key = "subtitle"
                 elif lower_name.endswith((".jpg", ".jpeg", ".png", ".webp")):
-                    stream_type = "🖼️ 封面"
+                    stream_key = "cover"
                 elif lower_name.endswith((".m4a", ".mp3", ".aac", ".ogg", ".wav", ".opus")):
-                    stream_type = "🎵 音频流"
+                    stream_key = "audio"
                 elif lower_name.endswith((".mp4", ".webm", ".mkv", ".flv", ".mov")):
-                    stream_type = "🎬 视频流"
+                    stream_key = "video"
 
             # 2. 文件名无法判断时，回退到 codec 判断
-            if stream_type == "📦 数据流":
+            if stream_key == "data":
                 if vcodec and vcodec.lower() != "none":
-                    stream_type = "🎬 视频流"
+                    stream_key = "video"
                 elif acodec and acodec.lower() != "none":
-                    stream_type = "🎵 音频流"
+                    stream_key = "audio"
+
+            stream_type = {
+                "data": tr_text("📦 数据流"),
+                "subtitle": tr_text("📝 字幕"),
+                "cover": tr_text("🖼️ 封面"),
+                "audio": tr_text("🎵 音频流"),
+                "video": tr_text("🎬 视频流"),
+            }[stream_key]
 
             # ── 多流阶段感知 ──
             if info:
@@ -450,8 +479,16 @@ class CleanLogger:
             total_str = self._format_bytes(tot_bytes) if tot_bytes > 0 else "?"
             eta_str = self._format_time(eta)
 
-            prefix = "✂️ 正在下载裁切片段 | " if self._section_cut_mode else ""
-            detail_text = f"{prefix}{stream_type} | ⬇️ {speed_str} | {downloaded_str}/{total_str} | 剩余: {eta_str}"
+            prefix = tr_text("✂️ 正在下载裁切片段 | ") if self._section_cut_mode else ""
+            detail_text = tr_text(
+                "{0}{1} | ⬇️ {2} | {3}/{4} | 剩余: {5}",
+                prefix,
+                stream_type,
+                speed_str,
+                downloaded_str,
+                total_str,
+                eta_str,
+            )
 
             # 如果是播放列表模式，劫持最终输出
             if self.playlist_tracker:
@@ -471,11 +508,11 @@ class CleanLogger:
         elif status == "finished":
             # [download] 标明 finish，但后续可能有 [ffmpeg] 处理
             if self._section_cut_mode == "precise":
-                self._emit("processing", 95.0, "✂️ 片段下载完成，正在准备精确裁切…")
+                self._emit("processing", 95.0, tr_text("✂️ 片段下载完成，正在准备精确裁切…"))
             elif self._section_cut_mode:
-                self._emit("processing", 95.0, "✂️ 正在整理裁切文件…")
+                self._emit("processing", 95.0, tr_text("✂️ 正在整理裁切文件…"))
             else:
-                self._emit("processing", 99.0, "下载流完毕，等待后续合并与处理...")
+                self._emit("processing", 99.0, tr_text("下载流完毕，等待后续合并与处理..."))
 
     def _format_bytes(self, bytes_val: float) -> str:
         if not bytes_val:
@@ -500,12 +537,12 @@ class CleanLogger:
 
     def _section_layout_label(self) -> str:
         labels = {
-            "muxed": "整合流（视频 + 音频）",
-            "video_audio": "视频 + 音频分流",
-            "video": "视频流",
-            "audio": "音频流",
+            "muxed": tr_text("整合流（视频 + 音频）"),
+            "video_audio": tr_text("视频 + 音频分流"),
+            "video": tr_text("视频流"),
+            "audio": tr_text("音频流"),
         }
-        return labels.get(self._section_stream_layout, "媒体流")
+        return labels.get(self._section_stream_layout, tr_text("媒体流"))
 
     def _format_time(self, seconds: int) -> str:
         if not seconds:

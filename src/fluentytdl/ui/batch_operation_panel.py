@@ -18,6 +18,8 @@ from qfluentwidgets import (
     isDarkTheme,
 )
 
+from fluentytdl.utils.ui_text import tr_text
+
 
 class BatchOperationPanel(QFrame):
     batch_start_requested = Signal()  # 开始选中任务
@@ -149,7 +151,7 @@ class BatchOperationPanel(QFrame):
         # 改为通过 qss 加强边框和背景来弥补视觉效果
 
     def update_count(self, selected_count: int, total_count: int):
-        self.count_label.setText(f"已选择 {selected_count} / {total_count} 项")
+        self.count_label.setText(tr_text("已选择 {0} / {1} 项", selected_count, total_count))
 
     # === 滑入 / 滑出 ===
 

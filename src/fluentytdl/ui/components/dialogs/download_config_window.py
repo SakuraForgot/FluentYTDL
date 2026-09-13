@@ -54,6 +54,8 @@ from fluentytdl.ui.components.platforms.cover import CoverSelectorWidget
 from fluentytdl.ui.components.platforms.subtitle import SubtitleSelectorWidget
 from fluentytdl.ui.components.platforms.vr import VR_PRESETS, VRFormatSelectorWidget
 from fluentytdl.ui.components.platforms.youtube import VideoFormatSelectorWidget
+from fluentytdl.utils.localized_log import log_text
+from fluentytdl.utils.ui_text import tr_text
 
 from ....core.section_download import build_section_opts, section_filename_suffix
 from ....download.extract_manager import AsyncExtractManager
@@ -68,8 +70,10 @@ from ....utils.filesystem import sanitize_filename
 from ....utils.image_loader import get_image_loader
 from ....utils.logger import logger
 from ....utils.paths import resource_path
+from ....utils.url_router import UrlRouter
 from ....utils.validators import UrlValidator
-from ....youtube.youtube_service import YoutubeServiceOptions
+from ....utils.youtube_request import COOKIE_MODE
+from ....youtube.youtube_service import YoutubeServiceOptions, freeze_youtube_options
 from ...delegates.playlist_delegate import PlaylistItemDelegate
 from ...dialogs.playlist_subtitle_dialog import PlaylistSubtitleConfigDialog
 from ...dialogs.subtitle_picker_dialog import SubtitlePickerDialog, SubtitlePickerResult
@@ -683,8 +687,8 @@ class DownloadConfigWindow(FramelessWindow):
         update_lay.setContentsMargins(0, 4, 0, 0)
         update_lay.setSpacing(10)
         update_hint = create_hint_label(
-            self.tr("当前解析失败可能受限于平台最新的反爬风控机制（如 poToken 等）。\n")
-            + self.tr("建议立即检测并更新 yt-dlp 核心解析组件。"),
+            self.tr("平台的访问验证要求可能导致解析失败。\n")
+            + self.tr("请检查 yt-dlp 是否有更新，然后重试。"),
             update_panel,
         )
         update_lay.addWidget(update_hint)
@@ -738,7 +742,7 @@ class DownloadConfigWindow(FramelessWindow):
             self.tr("无法正常访问 YouTube，可能的原因：\n")
             + self.tr("• 未配置或未启动代理软件\n")
             + self.tr("• 代理节点被 YouTube 封锁 / 限流\n")
-            + self.tr("• DNS 被污染或 SSL 证书被干扰"),
+            + self.tr("• DNS 解析失败或 HTTPS 证书校验失败"),
             self.networkDiagWidget,
         )
         net_layout.addWidget(self._netDiagLabel)
@@ -761,7 +765,7 @@ class DownloadConfigWindow(FramelessWindow):
 
         self._error_label: CaptionLabel | None = None
         self.video_formats: list[dict[str, Any]] = []
-        self._current_options: YoutubeServiceOptions | None = None
+        self._current_options: YoutubeServiceOptions | None = freeze_youtube_options()
 
         self._is_closing = False
         self.worker: InfoExtractWorker | VRInfoExtractWorker | None = None
@@ -886,7 +890,7 @@ class DownloadConfigWindow(FramelessWindow):
             # 更新按钮文本以反映选择状态
             n = len(result.selected_tracks)
             if n > 0:
-                self.subtitle_pick_btn.setText(f"已选 {n} 种字幕 ✓")
+                self.subtitle_pick_btn.setText(tr_text("已选 {0} 种字幕 ✓", n))
             else:
                 self.subtitle_pick_btn.setText(self.tr("选择字幕…"))
 
@@ -899,7 +903,7 @@ class DownloadConfigWindow(FramelessWindow):
             if not langs:
                 self.playlist_subtitle_pick_btn.setText(self.tr("未选择语言"))
             else:
-                self.playlist_subtitle_pick_btn.setText(f"已选 {len(langs)} 种语言 ✓")
+                self.playlist_subtitle_pick_btn.setText(tr_text("已选 {0} 种语言 ✓", len(langs)))
 
     def _build_single_option_switches(self, platform: str = "youtube") -> QWidget:
         from ....core.config_manager import config_manager
@@ -1102,7 +1106,7 @@ class DownloadConfigWindow(FramelessWindow):
             self.downloadRequested.emit(tasks)
             self.close()
         except Exception as e:
-            logger.exception("_on_download_clicked 异常")
+            log_text(logger, "exception", "_on_download_clicked 异常")
             from ..common.custom_info_bar import InfoBar
 
             InfoBar.error(
@@ -1310,7 +1314,7 @@ class DownloadConfigWindow(FramelessWindow):
         try:
             from ....youtube.youtube_service import youtube_service
 
-            youtube_service.invalidate_parse_cache("用户在结果页要求重新解析")
+            youtube_service.invalidate_parse_cache(tr_text("用户在结果页要求重新解析"))
         except Exception:
             pass
 
@@ -1365,7 +1369,7 @@ class DownloadConfigWindow(FramelessWindow):
             show_ring=True,
         )
         self._show_parse_preview()
-        self._current_options = None
+        self._current_options = freeze_youtube_options()
 
         self._is_channel = UrlValidator.is_channel_url(self.url)
 
@@ -1382,7 +1386,7 @@ class DownloadConfigWindow(FramelessWindow):
             self.worker = w
             w.start()
         elif self._vr_mode:
-            w = VRInfoExtractWorker(self.url, flow=self.trace)
+            w = VRInfoExtractWorker(self.url, self._current_options, flow=self.trace)
             w.finished.connect(self.on_parse_success)
             w.error.connect(self.on_parse_error)
             self.worker = w
@@ -1570,6 +1574,9 @@ class DownloadConfigWindow(FramelessWindow):
                     return
         # ===================
 
+        self._current_options = freeze_youtube_options(
+            self._current_options, enabled=info_dict.get(COOKIE_MODE)
+        )
         self.video_info = info_dict
         parsed_is_playlist = str(info_dict.get("_type") or "").lower() == "playlist" or bool(
             info_dict.get("entries")
@@ -1620,7 +1627,9 @@ class DownloadConfigWindow(FramelessWindow):
         mode = "VR" if self._vr_mode else ("Channel" if self._is_channel else "Video")
         if self._is_playlist:
             mode = "Playlist"
-        logger.info(
+        log_text(
+            logger,
+            "info",
             "[DialogRender] 首屏可见耗时 {:.2f}s mode={} url={}",
             time.perf_counter() - start,
             mode,
@@ -1672,7 +1681,7 @@ class DownloadConfigWindow(FramelessWindow):
             if not info.get("cookie_valid"):
                 msg = info.get("cookie_valid_msg", self.tr("Cookie 无效"))
                 self._cookieWarningLabel.setText(
-                    f"⚠️ {msg}，解析可能失败。建议前往设置页刷新 Cookie。"
+                    tr_text("⚠️ {0}，解析可能失败。建议前往设置页刷新 Cookie。", msg)
                 )
                 self._cookieWarningLabel.show()
             elif info.get("commit_warning"):
@@ -1688,7 +1697,7 @@ class DownloadConfigWindow(FramelessWindow):
                 if earliest is not None and earliest > 0:
                     mins = int(earliest / 60)
                     self._cookieWarningLabel.setText(
-                        f"⏳ Cookie 将在 {mins} 分钟后过期，建议提前刷新。"
+                        tr_text("⏳ Cookie 将在 {0} 分钟后过期，建议提前刷新。", mins)
                     )
                 else:
                     self._cookieWarningLabel.setText(
@@ -1770,9 +1779,20 @@ class DownloadConfigWindow(FramelessWindow):
         err_layout.setContentsMargins(16, 16, 16, 16)
         err_layout.setSpacing(12)
 
+        anonymous_auth_error = (
+            self._current_options is not None
+            and self._current_options.auth.use_youtube_cookies is False
+            and UrlRouter.detect_platform(self.url) == "youtube"
+            and (category == "auth" or fix_action in ("extract_cookie", "relogin"))
+        )
+        if anonymous_auth_error:
+            content += self.tr(
+                "\n本次解析未使用 YouTube Cookies。若内容需要登录，请在设置中开启“使用 YouTube Cookies”后重新解析。"
+            )
+
         text = f"{title}\n\n{content}"
         if suggestion and not raw_error:
-            text += f"\n\n建议操作：\n{suggestion}"
+            text += tr_text("\n\n建议操作：\n{0}", suggestion)
 
         msg_label = BodyLabel(text, self._error_container)
         msg_label.setWordWrap(True)
@@ -1814,7 +1834,9 @@ class DownloadConfigWindow(FramelessWindow):
         # === 决定显示哪个面板 ===
         # 优先看规则表给出的 fix_action —— 那是规则作者对"该怎么修"的明确指示；
         # 没有 fix_action 时才退回按 category 粗分。
-        if fix_action in ("update_component", "refresh_pot", "install_js_runtime"):
+        if anonymous_auth_error:
+            self._switch_to_state(WindowState.ERROR_GENERIC)
+        elif fix_action in ("update_component", "refresh_pot", "install_js_runtime"):
             self._switch_to_state(WindowState.ERROR_COOKIE)
             self._authSegment.setCurrentItem("update")
             self.networkDiagWidget.hide()
@@ -1937,20 +1959,20 @@ class DownloadConfigWindow(FramelessWindow):
         self.retryWidget.hide()
 
         # 不传 cookies_from_browser，由 auth_service 的 cookie file 提供
-        self._current_options = None
+        self._current_options = freeze_youtube_options(self._current_options)
 
         # 用户显式重试意味着"上一次结果不可接受"，必须绕过 TTL 缓存重新走一遍子进程。
         try:
             from ....youtube.youtube_service import youtube_service
 
-            youtube_service.invalidate_parse_cache("用户手动重试解析")
+            youtube_service.invalidate_parse_cache(tr_text("用户手动重试解析"))
         except Exception:
             pass
 
         self._switch_to_state(WindowState.LOADING, self.tr("正在重试解析..."), show_ring=True)
 
         if self._vr_mode:
-            w = VRInfoExtractWorker(self.url, flow=self.trace)
+            w = VRInfoExtractWorker(self.url, self._current_options, flow=self.trace)
         else:
             w = InfoExtractWorker(self.url, self._current_options, flow=self.trace)
 
@@ -2069,7 +2091,7 @@ class DownloadConfigWindow(FramelessWindow):
         browser_name = self._extractCombo.currentText()
 
         self._extractRetryBtn.setEnabled(False)
-        self._extractRetryBtn.setText(f"正在从 {browser_name} 提取...")
+        self._extractRetryBtn.setText(tr_text("正在从 {0} 提取...", browser_name))
 
         auth_service.set_source(source, auto_refresh=True)
 
@@ -2087,7 +2109,7 @@ class DownloadConfigWindow(FramelessWindow):
                 from ..common.custom_info_bar import InfoBar
 
                 InfoBar.error(
-                    f"{browser_name} 提取失败",
+                    tr_text("{0} 提取失败", browser_name),
                     msg,
                     duration=8000,
                     parent=self,
@@ -2159,7 +2181,9 @@ class DownloadConfigWindow(FramelessWindow):
         # 信号里是稳定 code（要进日志），翻译只能在这一层做
         from ..settings.component_error_text import translate as translate_component_error
 
-        self._updateStatusLabel.setText(f"❌ 更新异常: {translate_component_error(code)}")
+        self._updateStatusLabel.setText(
+            tr_text("❌ 更新异常: {0}", translate_component_error(code))
+        )
 
         from ....core.config_manager import config_manager
 
@@ -2196,7 +2220,7 @@ class DownloadConfigWindow(FramelessWindow):
         title = str(info.get("title") or "Unknown Title")
         uploader = str(info.get("uploader") or info.get("uploader_id") or "Unknown Uploader")
         duration = _format_duration(info.get("duration"))
-        view_count = f"{int(info.get('view_count') or 0):,} 次观看"
+        view_count = tr_text("{0:,} 次观看", int(info.get("view_count") or 0))
         upload_date = _format_upload_date(info.get("upload_date"))
 
         title_lbl = SubtitleLabel(title, top_card)
@@ -2210,7 +2234,9 @@ class DownloadConfigWindow(FramelessWindow):
 
         if self.video_info_dto and 0 < self.video_info_dto.max_video_height <= 720:
             warn_lbl = CaptionLabel(
-                f"⚠️ 警告: 该视频受限，最高仅支持 {self.video_info_dto.max_video_height}p 提取",
+                tr_text(
+                    "⚠️ 警告: 该视频受限，最高仅支持 {0}p 提取", self.video_info_dto.max_video_height
+                ),
                 top_card,
             )
             warn_lbl.setStyleSheet(
@@ -2404,7 +2430,7 @@ class DownloadConfigWindow(FramelessWindow):
         self.progressRing.setFixedSize(16, 16)
         self.progressRing.hide()
 
-        self.progressLabel = CaptionLabel(self.tr("详情补全：0/0"), self.contentWidget)
+        self.progressLabel = CaptionLabel(self.tr("已加载详情：0/0"), self.contentWidget)
         header_row.addStretch(1)
         header_row.addWidget(self.progressRing)
         header_row.addWidget(self.progressLabel)
@@ -2799,7 +2825,7 @@ class DownloadConfigWindow(FramelessWindow):
         sort_name = self.tr("最旧在前") if self._channel_reverse else self.tr("最新在前")
         self._switch_to_state(
             WindowState.LOADING,
-            f"正在加载频道{tab_name}（{sort_name}）...",
+            tr_text("正在加载频道{0}（{1}）...", tab_name, sort_name),
             show_ring=True,
         )
 
@@ -2940,7 +2966,7 @@ class DownloadConfigWindow(FramelessWindow):
             if mode == 2:
                 aw.set_loading(False)
                 aw.qualityButton.setText(self.tr("音频(自动)"))
-                aw.infoLabel.setText(self.tr("待解析大小"))
+                aw.infoLabel.setText(self.tr("大小待获取"))
                 return
             aw.set_loading(True, self.tr("待加载"))
             aw.infoLabel.setText("")
@@ -2980,15 +3006,15 @@ class DownloadConfigWindow(FramelessWindow):
                 pid = getattr(override, "preset_id", None)
                 preset_map = {
                     "best_mp4": self.tr("最佳画质"),
-                    "best_raw": self.tr("最佳画质(原盘)"),
+                    "best_raw": self.tr("最佳画质（原始编码）"),
                     "2160p": "2160p",
                     "1440p": "1440p",
                     "1080p": "1080p",
                     "720p": "720p",
                     "480p": "480p",
                     "360p": "360p",
-                    "best_video": self.tr("最佳质量(无声)"),
-                    "1080p_video": self.tr("1080p(无声)"),
+                    "best_video": self.tr("最佳画质（仅视频）"),
+                    "1080p_video": self.tr("1080p（仅视频）"),
                     "audio_best": self.tr("最佳音质"),
                     "audio_high": self.tr("高品质音频"),
                     "audio_std": self.tr("标准音频"),
@@ -3005,7 +3031,7 @@ class DownloadConfigWindow(FramelessWindow):
                         if override.audio_format_override
                         else self.tr("自动格式")
                     )
-                aw.infoLabel.setText(f"全局: {c_info}")
+                aw.infoLabel.setText(tr_text("全局: {0}", c_info))
                 return
 
             if override.download_type == "audio_only":
@@ -3124,7 +3150,8 @@ class DownloadConfigWindow(FramelessWindow):
                     if bool(data.get("audio_manual_override"))
                     else (data.get("audio_best_text") or self.tr("音频-"))
                 )
-                aw.qualityButton.setText(f"{chosen or self.tr('视频已选')} + {audio_brief}")
+                video_brief = chosen or self.tr("视频已选")
+                aw.qualityButton.setText(f"{video_brief} + {audio_brief}")
                 chosen_fmt = None
                 override_id = str(data.get("override_format_id") or "")
                 for f in data.get("video_formats") or []:
@@ -3663,7 +3690,7 @@ class DownloadConfigWindow(FramelessWindow):
         if hasattr(self, "progressLabel"):
             total = len(self._playlist_rows)
             done = self._scheduler.done_count() if self._scheduler is not None else 0
-            self.progressLabel.setText(self.tr("详情补全：{}/{}").format(done, total))
+            self.progressLabel.setText(self.tr("已加载详情：{}/{}").format(done, total))
             try:
                 if hasattr(self, "progressRing"):
                     self.progressRing.setVisible(done < total)
@@ -3999,7 +4026,7 @@ class DownloadConfigWindow(FramelessWindow):
                     ydl_opts.update(self.selector_widget.get_opts())
                     langs, _, _ = self.selector_widget.get_selected_language_codes()
                     if langs:
-                        title_prefix = f"[字幕 ({', '.join(langs)})]"
+                        title_prefix = tr_text("[字幕 ({0})]", ", ".join(langs))
 
                 ydl_opts["skip_download"] = True
                 ydl_opts["writethumbnail"] = False
@@ -4010,6 +4037,8 @@ class DownloadConfigWindow(FramelessWindow):
                 ydl_opts["sponsorblock_mark"] = None
                 ydl_opts["postprocessors"] = []
 
+                if UrlRouter.detect_platform(self.url) == "youtube":
+                    ydl_opts[COOKIE_MODE] = self._current_options.auth.use_youtube_cookies
                 tasks.append((f"{title_prefix} {title}", url, ydl_opts, thumb))
                 return tasks
 
@@ -4031,7 +4060,9 @@ class DownloadConfigWindow(FramelessWindow):
                     ydl_opts["sponsorblock_mark"] = None
                     ydl_opts["postprocessors"] = []
 
-                tasks.append((f"[封面] {title}", url, ydl_opts, thumb))
+                if UrlRouter.detect_platform(self.url) == "youtube":
+                    ydl_opts[COOKIE_MODE] = self._current_options.auth.use_youtube_cookies
+                tasks.append((tr_text("[封面] {0}", title), url, ydl_opts, thumb))
                 return tasks
 
             # Delegate to the format selector component
@@ -4218,6 +4249,8 @@ class DownloadConfigWindow(FramelessWindow):
 
             self._apply_download_dir_to_opts(ydl_opts)
 
+            if UrlRouter.detect_platform(self.url) == "youtube":
+                ydl_opts[COOKIE_MODE] = self._current_options.auth.use_youtube_cookies
             tasks.append((title, url, ydl_opts, thumb))
             return tasks
 
@@ -4249,6 +4282,8 @@ class DownloadConfigWindow(FramelessWindow):
                     ydl_opts["__fluentytdl_format_note"] = self.tr("最佳画质")
 
                 self._apply_download_dir_to_opts(ydl_opts)
+                if UrlRouter.detect_platform(self.url) == "youtube":
+                    ydl_opts[COOKIE_MODE] = self._current_options.auth.use_youtube_cookies
                 tasks.append((title, url, ydl_opts, thumb))
             return tasks
 
@@ -4370,7 +4405,9 @@ class DownloadConfigWindow(FramelessWindow):
                                 row_opts["convertsubtitles"] = pl_sub_override.output_format
 
                 self._apply_download_dir_to_opts(row_opts)
-                tasks.append((f"[字幕] {title}", url, row_opts, thumb))
+                if UrlRouter.detect_platform(self.url) == "youtube":
+                    row_opts[COOKIE_MODE] = self._current_options.auth.use_youtube_cookies
+                tasks.append((tr_text("[字幕] {0}", title), url, row_opts, thumb))
                 continue
 
             elif self._mode == "cover":
@@ -4402,7 +4439,9 @@ class DownloadConfigWindow(FramelessWindow):
                     row_opts["outtmpl"] = f"{safe_title}.%(ext)s"
 
                 self._apply_download_dir_to_opts(row_opts)
-                tasks.append((f"[封面] {title}", url, row_opts, thumb))
+                if UrlRouter.detect_platform(self.url) == "youtube":
+                    row_opts[COOKIE_MODE] = self._current_options.auth.use_youtube_cookies
+                tasks.append((tr_text("[封面] {0}", title), url, row_opts, thumb))
                 continue
 
             # VR 模式注入
@@ -4454,21 +4493,21 @@ class DownloadConfigWindow(FramelessWindow):
                 pid = getattr(self._playlist_format_override, "preset_id", None)
                 preset_map = {
                     "best_mp4": self.tr("最佳画质"),
-                    "best_raw": self.tr("最佳画质(原盘)"),
+                    "best_raw": self.tr("最佳画质（原始编码）"),
                     "2160p": "2160p",
                     "1440p": "1440p",
                     "1080p": "1080p",
                     "720p": "720p",
                     "480p": "480p",
                     "360p": "360p",
-                    "best_video": self.tr("最佳质量(无声)"),
-                    "1080p_video": self.tr("1080p(无声)"),
+                    "best_video": self.tr("最佳画质（仅视频）"),
+                    "1080p_video": self.tr("1080p（仅视频）"),
                     "audio_best": self.tr("最佳音质"),
                     "audio_high": self.tr("高品质音频"),
                     "audio_std": self.tr("标准音频"),
                 }
                 preset_name = preset_map.get(pid, pid) if pid else self.tr("全局格式")
-                row_opts["__fluentytdl_format_note"] = f"[全局] {preset_name}"
+                row_opts["__fluentytdl_format_note"] = tr_text("[全局] {0}", preset_name)
 
             else:
                 # Standard Playlist Logic
@@ -4672,6 +4711,8 @@ class DownloadConfigWindow(FramelessWindow):
                         self._preflight_warnings = []
                     self._preflight_warnings.append((title, verdict))
 
+            if UrlRouter.detect_platform(self.url) == "youtube":
+                row_opts[COOKIE_MODE] = self._current_options.auth.use_youtube_cookies
             tasks.append((title, url, row_opts, thumb))
 
         return tasks

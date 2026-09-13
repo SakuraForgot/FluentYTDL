@@ -64,7 +64,7 @@ class AudioPickerDialog(MessageBoxBase):
         self._checkboxes: list[CheckBox] = []
 
         # 顶部标题
-        self.titleLabel = SubtitleLabel(self.tr("精选音轨"), self)
+        self.titleLabel = SubtitleLabel(self.tr("选择音轨"), self)
         self.viewLayout.addWidget(self.titleLabel)
 
         # 筛选区
@@ -355,14 +355,16 @@ class AudioPickerDialog(MessageBoxBase):
         else:
             if count > 1 and not container:
                 self._compat_label.setText(
-                    self.tr("💡 由于您选择了多个音轨，输出容器将自动设为 MKV 以保证兼容性。")
+                    self.tr(
+                        "💡 已选择多个音轨，应用将自动使用 MKV 容器。请确认播放器支持所选音频编码。"
+                    )
                 )
                 self._compat_label.setStyleSheet("color: #8D9BE2;")
                 self._compat_label.show()
             elif count > 1 and container == "mp4":
                 self._compat_label.setText(
                     self.tr(
-                        "⚠ 警告: MP4 容器对多音轨支持不佳，可能会在部分播放器中无法切换音频或出现异常。\n如果您继续使用 MP4，建议仅供测试使用。"
+                        "MP4 的多音轨切换取决于播放器支持。若目标播放器无法切换音轨，可改用 MKV。"
                     )
                 )
                 self._compat_label.setStyleSheet("color: #E2C08D;")

@@ -33,7 +33,11 @@ jobs:
         run: |
           uv run --locked --no-sync python scripts/i18n_update.py
           if ($LASTEXITCODE -ne 0) { throw 'Translation extraction failed' }
-          git diff --exit-code -- assets/locales
+          uv run --locked --no-sync python scripts/i18n_audit.py
+          if ($LASTEXITCODE -ne 0) { throw 'Unreviewed application text' }
+          uv run --locked --no-sync python scripts/i18n_release.py
+          if ($LASTEXITCODE -ne 0) { throw 'Translation compilation failed' }
+          git diff --exit-code -- assets/locales src/fluentytdl/utils/ui_text.py
           if ($LASTEXITCODE -ne 0) { throw 'Translation catalogs differ' }
       - name: Ruff
         run: |

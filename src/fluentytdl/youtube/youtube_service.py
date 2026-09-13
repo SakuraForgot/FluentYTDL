@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import asyncio
 import copy
+import functools
 import hashlib
 import http.cookiejar
+import inspect
 import json
 import os
 import re
@@ -19,11 +21,19 @@ from urllib.parse import parse_qs, urlparse
 
 import requests
 
+from fluentytdl.utils.localized_log import log_text
 from fluentytdl.utils.logger import get_logger
-from fluentytdl.utils.paths import find_bundled_executable, is_frozen, locate_runtime_tool
+from fluentytdl.utils.paths import find_bundled_executable, is_frozen
+from fluentytdl.utils.ui_text import tr_text
 
 from ..core.config_manager import config_manager
-from .yt_dlp_cli import YtDlpCancelled, run_dump_single_json, run_version
+from ..utils.youtube_request import (
+    COOKIE_MODE,
+    SABR_SCOPE,
+    request_scope,
+    stamp_result,
+)
+from .yt_dlp_cli import YtDlpCancelled, resolve_yt_dlp_exe, run_dump_single_json, run_version
 
 LogCallback = Callable[[str, str], None]
 
@@ -87,6 +97,7 @@ class YtDlpAuthOptions:
     """
 
     cookies_file: str | None = None
+    use_youtube_cookies: bool | None = None
 
 
 @dataclass(slots=True)
@@ -113,6 +124,53 @@ class YoutubeServiceOptions:
     auth: YtDlpAuthOptions = field(default_factory=YtDlpAuthOptions)
     anti_blocking: AntiBlockingOptions = field(default_factory=AntiBlockingOptions)
     network: NetworkOptions = field(default_factory=NetworkOptions)
+
+
+def freeze_youtube_options(options=None, *, enabled=None):
+    result = copy.deepcopy(options) if options is not None else YoutubeServiceOptions()
+    if enabled is not None:
+        result.auth.use_youtube_cookies = bool(enabled)
+    elif result.auth.use_youtube_cookies is None:
+        current = request_scope.get()
+        result.auth.use_youtube_cookies = (
+            current[COOKIE_MODE]
+            if current
+            else bool(config_manager.get("youtube_cookies_enabled", True))
+        )
+    return result
+
+
+def _snapshot_request(method):
+    signature = inspect.signature(method)
+
+    @functools.wraps(method)
+    def wrapped(self, *args, **kwargs):
+        bound = signature.bind(self, *args, **kwargs)
+        base = bound.arguments.get("base_ydl_opts") or {}
+        options = freeze_youtube_options(
+            bound.arguments.get("options"), enabled=base.get(COOKIE_MODE)
+        )
+        bound.arguments["options"] = options
+        outer = request_scope.get()
+        context = {
+            COOKIE_MODE: options.auth.use_youtube_cookies,
+            "generation": outer["generation"] if outer else self._cookie_generation,
+        }
+        token = request_scope.set(context)
+        try:
+            result = method(*bound.args, **bound.kwargs)
+            from ..utils.url_router import UrlRouter
+
+            if (
+                isinstance(result, dict)
+                and UrlRouter.detect_platform(bound.arguments.get("url", "")) == "youtube"
+            ):
+                stamp_result(result, context[COOKIE_MODE])
+            return result
+        finally:
+            request_scope.reset(token)
+
+    return wrapped
 
 
 class YoutubeService:
@@ -166,6 +224,18 @@ class YoutubeService:
         # 不落盘：签名 URL 有时效，持久化只会带来假命中。
         self._parse_cache: OrderedDict[str, tuple[float, dict[str, Any]]] = OrderedDict()
         self._parse_cache_lock = threading.Lock()
+        self._cookie_generation = 0
+        from PySide6.QtCore import Qt
+
+        config_manager.configChanged.connect(
+            self._on_cookie_mode_config_changed, Qt.ConnectionType.DirectConnection
+        )
+
+    def _on_cookie_mode_config_changed(self, key, value):
+        if key == "youtube_cookies_enabled":
+            with self._parse_cache_lock:
+                self._cookie_generation += 1
+                self._parse_cache.clear()
 
     def set_log_callback(self, callback: LogCallback | None) -> None:
         """UI layer can subscribe to logs later (Stage 2+)."""
@@ -179,7 +249,16 @@ class YoutubeService:
             except Exception:
                 # Never let UI callback break core logic
                 pass
-        getattr(self._logger, level.lower(), self._logger.info)(message)
+        if hasattr(message, "message_source"):
+            log_text(
+                self._logger,
+                level.lower(),
+                message.message_source,
+                *message.message_args,
+                **message.message_kwargs,
+            )
+        else:
+            getattr(self._logger, level.lower(), self._logger.info)(message)
 
     @staticmethod
     def _is_page_reload_error(message: str) -> bool:
@@ -205,16 +284,18 @@ class YoutubeService:
 
             self._emit_log(
                 "warning",
-                "检测到 'The page needs to be reloaded'，正在自动刷新 WebView2 Cookie 并重试一次...",
+                tr_text(
+                    "检测到 'The page needs to be reloaded'，正在自动刷新 WebView2 Cookie 并重试一次..."
+                ),
             )
             ok, msg = cookie_sentinel.force_refresh_with_uac(platform=platform)
             if ok:
-                self._emit_log("info", "自动刷新 WebView2 Cookie 成功，准备重试解析")
+                self._emit_log("info", tr_text("自动刷新 WebView2 Cookie 成功，准备重试解析"))
                 return True
-            self._emit_log("warning", f"自动刷新 WebView2 Cookie 失败: {msg}")
+            self._emit_log("warning", tr_text("自动刷新 WebView2 Cookie 失败: {0}", msg))
             return False
         except Exception as e:
-            self._emit_log("warning", f"自动刷新 WebView2 Cookie 异常: {e}")
+            self._emit_log("warning", tr_text("自动刷新 WebView2 Cookie 异常: {0}", e))
             return False
 
     def build_ydl_options(
@@ -222,7 +303,7 @@ class YoutubeService:
     ) -> dict[str, Any]:
         """Construct yt-dlp options with anti-blocking and auth."""
 
-        options = options or YoutubeServiceOptions()
+        options = freeze_youtube_options(options)
 
         # 平台检测
         from ..utils.url_router import UrlRouter
@@ -239,6 +320,7 @@ class YoutubeService:
                 pass
 
         auth = options.auth
+        cookie_allowed = _platform != "youtube" or bool(auth.use_youtube_cookies)
         net = options.network
 
         # 应用全局网络重试设置
@@ -333,27 +415,36 @@ class YoutubeService:
         # 1. 检查 auth options 中是否直接指定了 cookie 文件（向后兼容）
         direct_cookiefile = (auth.cookies_file or "").strip() or None
 
-        if direct_cookiefile and os.path.exists(direct_cookiefile):
+        if not cookie_allowed:
+            self._emit_log("info", tr_text("YouTube Cookies 已关闭，本次请求不携带 Cookie。"))
+        elif direct_cookiefile and os.path.exists(direct_cookiefile):
             # 直接指定的 cookie 文件优先
             if self._is_probably_json_cookie_file(direct_cookiefile):
                 self._emit_log(
                     "error",
-                    "Cookies 文件疑似为 JSON 格式，yt-dlp 只支持 Netscape HTTP Cookie File 格式；已忽略该文件。",
+                    tr_text(
+                        "Cookies 文件疑似为 JSON 格式，yt-dlp 只支持 Netscape HTTP Cookie File 格式；已忽略该文件。"
+                    ),
                 )
             else:
                 yt_cookie_count = self._count_youtube_related_cookies(direct_cookiefile)
                 if yt_cookie_count <= 0:
                     self._emit_log(
                         "warning",
-                        "已读取 cookies.txt，但未发现 YouTube/Google 域相关 cookies。"
-                        "请确认是在 youtube.com 登录后导出，且为 Netscape 格式。",
+                        tr_text(
+                            "已读取 cookies.txt，但未发现 YouTube/Google 域相关 cookies。请确认是在 youtube.com 登录后导出，且为 Netscape 格式。"
+                        ),
                     )
                 else:
                     cookiefile = direct_cookiefile
                     has_valid_cookie = True
                     self._emit_log(
                         "info",
-                        f"✅ 已加载 Cookie 文件: {cookiefile} (YouTube/Google cookies: {yt_cookie_count})",
+                        tr_text(
+                            "✅ 已加载 Cookie 文件: {0} (YouTube/Google cookies: {1})",
+                            cookiefile,
+                            yt_cookie_count,
+                        ),
                     )
         else:
             # 2. 通过 Cookie Sentinel 获取统一的 bin/cookies.txt
@@ -381,36 +472,50 @@ class YoutubeService:
                         # 无参属性，它们一律默认 youtube：解析 X 链接时日志会报 YouTube
                         # 真相源的年龄和来源，排查 X 问题的人被直接带偏。
                         age = cookie_sentinel.get_age_minutes(cookie_target)
-                        age_str = f"{int(age)}分钟前" if age is not None else "未知"
+                        age_str = (
+                            tr_text("{0}分钟前", int(age)) if age is not None else tr_text("未知")
+                        )
                         status_emoji = "⚠️" if cookie_sentinel.get_is_stale(cookie_target) else "✅"
                         status_info = cookie_sentinel.get_status_info(cookie_target)
 
                         self._emit_log(
                             "info",
-                            f"{status_emoji} Cookie Sentinel: {status_info['source']} "
-                            f"(更新于 {age_str}, {yt_cookie_count} 个 {cookie_target.title()} Cookie)",
+                            tr_text(
+                                "{0} Cookie Sentinel: {1} (更新于 {2}, {3} 个 {4} Cookie)",
+                                status_emoji,
+                                status_info["source"],
+                                age_str,
+                                yt_cookie_count,
+                                cookie_target.title(),
+                            ),
                         )
 
                         # 闸门刚拒过新 Cookie：当前用的是旧文件，下载失败时这行是唯一线索
                         if status_info.get("commit_warning"):
                             self._emit_log(
                                 "warning",
-                                f"⚠️ {cookie_target} 新 Cookie 未通过校验，仍在使用旧真相源: "
-                                f"{status_info['commit_warning']}",
+                                tr_text(
+                                    "⚠️ {0} 新 Cookie 未通过校验，仍在使用旧真相源: {1}",
+                                    cookie_target,
+                                    status_info["commit_warning"],
+                                ),
                             )
                     else:
                         self._emit_log(
                             "warning",
-                            f"Cookie Sentinel 文件存在但未发现 {cookie_target.title()} 相关 Cookie",
+                            tr_text(
+                                "Cookie Sentinel 文件存在但未发现 {0} 相关 Cookie",
+                                cookie_target.title(),
+                            ),
                         )
                 else:
                     self._emit_log(
                         "info",
-                        "Cookie Sentinel 文件不存在，将使用无 Cookie 模式下载（可能受限）",
+                        tr_text("Cookie Sentinel 文件不存在，将使用无 Cookie 模式下载（可能受限）"),
                     )
 
             except Exception as e:
-                self._emit_log("warning", f"Cookie Sentinel 获取失败: {e}")
+                self._emit_log("warning", tr_text("Cookie Sentinel 获取失败: {0}", e))
 
         # 设置 cookiefile 到 ydl_opts
         if cookiefile:
@@ -421,25 +526,33 @@ class YoutubeService:
             f"[Cookie] Path={cookiefile or 'None'}, Valid={has_valid_cookie}",
         )
 
+        if _platform == "youtube":
+            ydl_opts[COOKIE_MODE] = bool(auth.use_youtube_cookies)
+            from ..auth.auth_service import auth_service
+
+            account = auth_service.get_current_webview2_account("youtube") if cookiefile else None
+            ydl_opts[SABR_SCOPE] = account.account_id if account else ""
+            if request_scope.get() is not None:
+                request_scope.get()[SABR_SCOPE] = ydl_opts[SABR_SCOPE]
+
         # --- Smart client switching ---
-        # yt-dlp default strategy (tv -> web_safari -> android_vr) is the most robust.
+        # Default clients depend on the installed yt-dlp version and authentication.
         # We do not hardcode player_client to allow yt-dlp to adapt to YouTube SABR changes.
         if not has_valid_cookie:
             # 不指定 player_client，让 yt-dlp 使用默认策略
-            # (内部会尝试 tv → web_safari → android_vr，自动选择可用的)
-            self._emit_log("warning", "未检测到有效 Cookies，将使用无 Cookie 默认模式")
+            # 客户端集合由实际使用的 yt-dlp 内核决定。
+            self._emit_log("warning", tr_text("未检测到有效 Cookies，将使用无 Cookie 默认模式"))
         else:
             # 不强制指定 player_client，让 yt-dlp 自行决定最优组合
             # yt-dlp 社区每天跟踪 YouTube 变化，default 是集体智慧的结晶
-            self._emit_log("info", "🚀 Cookies 模式激活：交由 yt-dlp 自动管理最优客户端组合")
+            self._emit_log(
+                "info", tr_text("🚀 Cookies 模式激活：交由 yt-dlp 自动管理最优客户端组合")
+            )
 
         # --- POT Provider 服务集成 ---
         # POT (Proof of Origin Token) Provider 提供动态 PO Token 生成服务
         # 类似 Cookie Sentinel 的策略：检测服务状态，自动注入 extractor_args
-        # 硬约束：解析路径上绝不阻塞等待 POT。Token 由 POT 服务端缓存，等待并不会让
-        # "这一次"解析更快，却会把最坏情况推到 35s（wait_until_ready 15s 超时后
-        # 还会再跑一次 verify_token_generation 20s）。未预热时降级为无 POT 解析
-        # （即当前默认关闭状态下的既有行为），同时触发一次后台预热。
+        # 启用后首次解析也必须等待 POT 就绪；失败时中止，不能静默无 Token 解析。
         pot_injected = False
         _pot_url_tag = _short_url_tag(url)
         _pot_skip_reason = "twitter" if _is_twitter else "disabled"
@@ -447,12 +560,8 @@ class YoutubeService:
             try:
                 from .pot_manager import pot_manager
 
-                if not pot_manager.is_running():
-                    _pot_skip_reason = "not_running"
-                    pot_manager.ensure_warm_async()
-                elif not pot_manager.is_warm:
-                    _pot_skip_reason = "not_warm"
-                    pot_manager.ensure_warm_async()
+                if not pot_manager.wait_until_ready():
+                    raise RuntimeError(tr_text("POT 服务未就绪，请检查服务状态和网络连接后重试。"))
                 else:
                     pot_extractor_args = pot_manager.get_extractor_args()
                     if pot_extractor_args:
@@ -478,33 +587,30 @@ class YoutubeService:
                             _base_url = (pot_args.get("base_url") or [""])[0]
                             self._emit_log(
                                 "info",
-                                f"[POT][Parse] 注入 base_url={_base_url} warm=True "
-                                f"port={pot_manager.active_port} url={_pot_url_tag}",
+                                tr_text(
+                                    "[POT][Parse] 注入 base_url={0} warm=True port={1} url={2}",
+                                    _base_url,
+                                    pot_manager.active_port,
+                                    _pot_url_tag,
+                                ),
                             )
 
-                            # 首次激活时验证 yt-dlp 是否能加载 POT 插件
+                            # 校验成功后才缓存结果，失败后的重试仍会重新检查插件。
                             if not getattr(self, "_pot_plugin_checked", False):
+                                plugin_ok, plugin_msg = pot_manager.verify_plugin_loadable()
+                                if not plugin_ok:
+                                    raise RuntimeError(plugin_msg)
                                 self._pot_plugin_checked = True
-                                try:
-                                    plugin_ok, plugin_msg = pot_manager.verify_plugin_loadable()
-                                    if plugin_ok:
-                                        self._emit_log("info", f"✅ {plugin_msg}")
-                                    else:
-                                        self._emit_log(
-                                            "warning",
-                                            f"⚠️ POT 插件验证失败: {plugin_msg}。"
-                                            "PO Token 服务已运行但可能无法被 yt-dlp 使用。",
-                                        )
-                                except Exception as diag_err:
-                                    self._emit_log("debug", f"POT 插件诊断异常: {diag_err}")
+                                self._emit_log("info", plugin_msg)
+                if not pot_injected:
+                    raise RuntimeError(tr_text("POT 服务未就绪，请检查服务状态和网络连接后重试。"))
             except Exception as e:
-                _pot_skip_reason = "error"
-                self._emit_log("debug", f"POT Provider 检测失败: {e}")
+                raise RuntimeError(tr_text("POT 加载失败，已停止本次请求：{0}", e)) from e
 
         if not pot_injected and _pot_skip_reason:
             self._emit_log(
                 "info" if _pot_skip_reason in ("disabled", "twitter") else "warning",
-                f"[POT][Parse] 跳过注入 reason={_pot_skip_reason} url={_pot_url_tag}",
+                tr_text("[POT][Parse] 跳过注入 reason={0} url={1}", _pot_skip_reason, _pot_url_tag),
             )
             # 这一轮不走 POT，就明确告诉 yt-dlp 别去取 Token。
             # 不加这个的话，bgutil 插件仍随 exe 被加载，拿不到 base_url 会自己
@@ -541,7 +647,9 @@ class YoutubeService:
                 if not has_valid_cookie:
                     self._emit_log(
                         "warning",
-                        "已配置 PO Token，但当前未加载有效 Cookies。mweb.gvs PO Token 通常需要配合 cookies 使用。",
+                        tr_text(
+                            "已配置 PO Token，但当前未加载有效 Cookies。mweb.gvs PO Token 通常需要配合 cookies 使用。"
+                        ),
                     )
 
                 # Prefer adding mweb as a fallback client when token is present.
@@ -551,7 +659,7 @@ class YoutubeService:
                 # Remove aggressive skips that are intended for no-cookie mobile simulation.
                 # With PO Token, we want the most browser-like, complete extraction.
                 youtube_args.pop("player_skip", None)
-                self._emit_log("info", "🔐 已注入手动 PO Token：将优先尝试 mweb 客户端")
+                self._emit_log("info", tr_text("🔐 已注入手动 PO Token：将优先尝试 mweb 客户端"))
 
         # FFmpeg location
         ffmpeg_path = str(config_manager.get("ffmpeg_path") or "").strip()
@@ -561,11 +669,13 @@ class YoutubeService:
                     ydl_opts["ffmpeg_location"] = ffmpeg_path
                 else:
                     self._emit_log(
-                        "warning", f"FFmpeg 自定义路径无效，已忽略并回退自动检测: {ffmpeg_path}"
+                        "warning",
+                        tr_text("FFmpeg 自定义路径无效，已忽略并回退自动检测: {0}", ffmpeg_path),
                     )
             except Exception:
                 self._emit_log(
-                    "warning", f"FFmpeg 自定义路径无效，已忽略并回退自动检测: {ffmpeg_path}"
+                    "warning",
+                    tr_text("FFmpeg 自定义路径无效，已忽略并回退自动检测: {0}", ffmpeg_path),
                 )
         elif is_frozen():
             bundled_ffmpeg = find_bundled_executable(
@@ -577,7 +687,7 @@ class YoutubeService:
             if bundled_ffmpeg is not None:
                 # yt-dlp accepts either the ffmpeg.exe path or its containing folder.
                 ydl_opts["ffmpeg_location"] = str(bundled_ffmpeg)
-                self._emit_log("info", f"已启用内置 FFmpeg: {bundled_ffmpeg}")
+                self._emit_log("info", tr_text("已启用内置 FFmpeg: {0}", bundled_ffmpeg))
 
         # === Phase 2: 核心下载层集成 ===
 
@@ -625,13 +735,19 @@ class YoutubeService:
                     ydl_opts["sponsorblock_mark"] = categories
                     self._emit_log(
                         "info",
-                        f"🚫 SponsorBlock 已启用: 将标记以下类别为章节: {', '.join(categories)}",
+                        tr_text(
+                            "🚫 SponsorBlock 已启用: 将标记以下类别为章节: {0}",
+                            ", ".join(categories),
+                        ),
                     )
                 else:
                     # 默认为 remove
                     ydl_opts["sponsorblock_remove"] = categories
                     self._emit_log(
-                        "info", f"🚫 SponsorBlock 已启用: 将移除以下类别: {', '.join(categories)}"
+                        "info",
+                        tr_text(
+                            "🚫 SponsorBlock 已启用: 将移除以下类别: {0}", ", ".join(categories)
+                        ),
                     )
 
         # === SABR-only 兜底：追加 web_safari 客户端 ===
@@ -654,7 +770,7 @@ class YoutubeService:
         try:
             from ..auth.auth_service import auth_service
 
-            if not auth_service.get_youtube_sabr_only():
+            if not auth_service.get_youtube_sabr_only(ydl_opts.get(SABR_SCOPE)):
                 return
         except Exception:
             return
@@ -679,8 +795,10 @@ class YoutubeService:
 
         self._emit_log(
             "warning",
-            "⚠️ [SABR] 该账号处于 SABR-only 灰度，已追加 web_safari 客户端以拿回高清直链 "
-            f"(player_client={youtube_args['player_client'][0]})。此策略为待观察项。",
+            tr_text(
+                "⚠️ [SABR] 该账号处于 SABR-only 灰度，已追加 web_safari 客户端以拿回高清直链 (player_client={0})。此策略为待观察项。",
+                youtube_args["player_client"][0],
+            ),
         )
 
     @staticmethod
@@ -689,7 +807,7 @@ class YoutubeService:
         try:
             from ..auth.auth_service import auth_service
 
-            return auth_service.get_youtube_sabr_only()
+            return auth_service.get_youtube_sabr_only((request_scope.get() or {}).get(SABR_SCOPE))
         except Exception:
             return False
 
@@ -714,7 +832,9 @@ class YoutubeService:
         try:
             self._emit_log(
                 "info",
-                "🔁 [SABR] 首次检测到账号级 SABR，正在追加 web_safari 客户端重新解析以拿回高清档…",
+                tr_text(
+                    "🔁 [SABR] 本次请求首次检测到 SABR，正在追加 web_safari 客户端重新解析以拿回高清档…"
+                ),
             )
             fresh = self.build_ydl_options(options, url=url)
             fresh.update(tuned_overrides)
@@ -726,7 +846,7 @@ class YoutubeService:
         except YtDlpCancelled:
             raise
         except Exception as exc:
-            self._emit_log("warning", f"[SABR] web_safari 重解析失败，沿用原结果: {exc}")
+            self._emit_log("warning", tr_text("[SABR] web_safari 重解析失败，沿用原结果: {0}", exc))
         return None
 
     def _maybe_configure_youtube_js_runtime(self, ydl_opts: dict[str, Any]) -> None:
@@ -790,11 +910,14 @@ class YoutubeService:
                 if not cfg["path"]:
                     cfg.pop("path", None)
                 ydl_opts["js_runtimes"] = {preferred: cfg}
-                self._emit_log("info", f"已启用 JS runtime: {preferred}")
+                self._emit_log("info", tr_text("已启用 JS runtime: {0}", preferred))
             else:
                 self._emit_log(
                     "warning",
-                    f"未找到 JS runtime: {preferred}。请安装并加入 PATH（推荐 deno），或在设置中填写可执行文件路径。",
+                    tr_text(
+                        "未找到 JS runtime: {0}。请安装并加入 PATH（推荐 deno），或在设置中填写可执行文件路径。",
+                        preferred,
+                    ),
                 )
             return
 
@@ -803,7 +926,7 @@ class YoutubeService:
         deno = bundled_runtime_path("deno")
         if deno:
             ydl_opts["js_runtimes"] = {"deno": {"path": deno}}
-            self._emit_log("info", f"已启用内置 JS runtime: deno ({deno})")
+            self._emit_log("info", tr_text("已启用内置 JS runtime: deno ({0})", deno))
             return
 
         # - If deno exists on PATH, do nothing (yt-dlp default enables deno).
@@ -822,7 +945,10 @@ class YoutubeService:
                         ydl_opts["js_runtimes"] = {"deno": {"path": deno_path}}
                         self._emit_log(
                             "warning",
-                            f"检测到 winget 安装的 deno，但未在 PATH 中；已自动使用: {deno_path}",
+                            tr_text(
+                                "检测到 winget 安装的 deno，但未在 PATH 中；已自动使用: {0}",
+                                deno_path,
+                            ),
                         )
                         return
             except Exception:
@@ -839,13 +965,18 @@ class YoutubeService:
                 ydl_opts["js_runtimes"] = {runtime_id: cfg}
                 self._emit_log(
                     "warning",
-                    f"未检测到 deno，已自动启用 {runtime_id} 作为 JS runtime（建议优先安装 deno）。",
+                    tr_text(
+                        "未检测到 deno，已自动启用 {0} 作为 JS runtime（建议优先安装 deno）。",
+                        runtime_id,
+                    ),
                 )
                 return
 
         self._emit_log(
             "warning",
-            "未检测到任何受支持的 JS runtime（deno/node/bun/quickjs）。YouTube 解析可能缺失大量格式。建议安装 deno 并加入 PATH。",
+            tr_text(
+                "未检测到任何受支持的 JS runtime（deno/node/bun/quickjs）。YouTube 解析可能缺失大量格式。建议安装 deno 并加入 PATH。"
+            ),
         )
 
     @staticmethod
@@ -943,7 +1074,7 @@ class YoutubeService:
         # 检查 VR 关键词
         for kw in self._VR_KEYWORDS:
             if kw in text:
-                self._emit_log("info", f"🥽 检测到 VR 关键词: '{kw}'")
+                self._emit_log("info", tr_text("🥽 检测到 VR 关键词: '{0}'", kw))
                 return True
 
         # 检查格式是否包含 mesh 标记 (VR 投影)
@@ -952,7 +1083,7 @@ class YoutubeService:
             format_note = str(fmt.get("format_note") or "").lower()
             format_id = str(fmt.get("format") or "").lower()
             if "mesh" in format_note or "mesh" in format_id:
-                self._emit_log("info", "🥽 检测到 VR 投影格式 (mesh)")
+                self._emit_log("info", tr_text("🥽 检测到 VR 投影格式 (mesh)"))
                 return True
 
         # 检查分辨率异常: 标题含 8K 但格式列表最高 < 4320p
@@ -965,7 +1096,7 @@ class YoutubeService:
             if max_height > 0 and max_height < 4320:
                 self._emit_log(
                     "warning",
-                    f"⚠️ 标题声称 8K 但最高格式仅 {max_height}p，可能是 VR 视频",
+                    tr_text("⚠️ 标题声称 8K 但最高格式仅 {0}p，可能是 VR 视频", max_height),
                 )
                 return True
 
@@ -1131,19 +1262,25 @@ class YoutubeService:
 
         # 日志
         stereo_label = {
-            "mono": "2D 全景",
-            "stereo_tb": "3D 立体 (上下)",
-            "stereo_sbs": "3D 立体 (左右/Mesh)",
-        }.get(primary_stereo, "未知")
+            "mono": tr_text("2D 全景"),
+            "stereo_tb": tr_text("3D 立体 (上下)"),
+            "stereo_sbs": tr_text("3D 立体 (左右/Mesh)"),
+        }.get(primary_stereo, tr_text("未知"))
         proj_label = {
             "equirectangular": "Equirectangular",
-            "mesh": "Mesh (鱼眼)",
-            "eac": "EAC (立方体)",
-        }.get(primary_proj, "未知")
+            "mesh": tr_text("Mesh (鱼眼)"),
+            "eac": tr_text("EAC (立方体)"),
+        }.get(primary_proj, tr_text("未知"))
         self._emit_log(
             "info",
-            f"🥽 [VR] 投影检测: {stereo_label} / {proj_label}"
-            f" (Equi={has_equi}, Mesh={has_mesh}, EAC={has_eac})",
+            tr_text(
+                "🥽 [VR] 投影检测: {0} / {1} (Equi={2}, Mesh={3}, EAC={4})",
+                stereo_label,
+                proj_label,
+                has_equi,
+                has_mesh,
+                has_eac,
+            ),
         )
 
     def _extract_vr_formats(
@@ -1156,7 +1293,7 @@ class YoutubeService:
         注意: android_vr 不支持 cookies，因此无法用于年龄验证。
         此方法仅用于补充 VR 高分辨率格式。
         """
-        self._emit_log("info", "🔄 使用 android_vr 客户端获取 VR 高分辨率格式...")
+        self._emit_log("info", tr_text("🔄 使用 android_vr 客户端获取 VR 高分辨率格式..."))
 
         # 构建无 cookies 的 android_vr 解析选项
         vr_opts: dict[str, Any] = {
@@ -1193,11 +1330,11 @@ class YoutubeService:
                 formats = info.get("formats") or []
                 self._emit_log(
                     "info",
-                    f"✅ android_vr 客户端获取到 {len(formats)} 个格式",
+                    tr_text("✅ android_vr 客户端获取到 {0} 个格式", len(formats)),
                 )
                 return list(formats)
         except Exception as e:
-            self._emit_log("warning", f"android_vr 解析失败: {e}")
+            self._emit_log("warning", tr_text("android_vr 解析失败: {0}", e))
 
         return []
 
@@ -1249,18 +1386,23 @@ class YoutubeService:
             info["__android_vr_format_ids"] = all_vr_format_ids
             self._emit_log(
                 "info",
-                f"✅ 已合并 {added_count} 个 VR 高分辨率格式 (IDs: {', '.join(vr_only_format_ids)})",
+                tr_text(
+                    "✅ 已合并 {0} 个 VR 高分辨率格式 (IDs: {1})",
+                    added_count,
+                    ", ".join(vr_only_format_ids),
+                ),
             )
 
             # 更新最高分辨率信息
             max_height = self._get_max_resolution(info)
             if max_height >= 4320:
-                self._emit_log("info", f"🎉 最高可用分辨率: {max_height}p (8K)")
+                self._emit_log("info", tr_text("🎉 最高可用分辨率: {0}p (8K)", max_height))
             elif max_height >= 2160:
-                self._emit_log("info", f"📺 最高可用分辨率: {max_height}p (4K)")
+                self._emit_log("info", tr_text("📺 最高可用分辨率: {0}p (4K)", max_height))
 
         return info
 
+    @_snapshot_request
     def extract_info_sync(
         self,
         url: str,
@@ -1296,22 +1438,21 @@ class YoutubeService:
             )
             return cached_info
 
-        try:
-            _ = locate_runtime_tool("yt-dlp.exe", "yt-dlp/yt-dlp.exe", "yt_dlp/yt-dlp.exe")
-        except FileNotFoundError as e:
+        if resolve_yt_dlp_exe() is None:
             raise FileNotFoundError(
-                "未找到 yt-dlp.exe。请在设置页指定路径，或将 yt-dlp.exe 放入 _internal/yt-dlp/，或加入 PATH。"
-            ) from e
+                tr_text("未找到 yt-dlp.exe。请检查自定义内核路径、应用托管目录或系统 PATH。")
+            )
 
         def _do_extract(opts: dict[str, Any]) -> dict[str, Any]:
-            self._emit_log("info", f"[EXE] 开始解析 URL: {url}")
+            self._emit_log("info", tr_text("[EXE] 开始解析 URL: {0}", url))
             info = run_dump_single_json(
                 url, opts, extra_args=["--no-playlist"], cancel_event=cancel_event
             )
             if info is None or info is False:
                 raise RuntimeError(
-                    "解析失败：yt-dlp 未返回有效元数据（可能被要求登录/验证）。"
-                    "请在弹窗中启用浏览器 Cookies 重试。"
+                    tr_text(
+                        "解析失败：yt-dlp 未返回有效元数据（可能被要求登录/验证）。请在弹窗中启用浏览器 Cookies 重试。"
+                    )
                 )
             if not isinstance(info, dict):
                 raise RuntimeError(f"yt-dlp returned unexpected info type: {type(info)!r}")
@@ -1320,7 +1461,7 @@ class YoutubeService:
         _sabr_before = self._youtube_sabr_only_flag()
 
         try:
-            self._emit_log("info", f"开始解析 URL: {url}")
+            self._emit_log("info", tr_text("开始解析 URL: {0}", url))
             info = _do_extract(ydl_opts)
             # SABR 标记本趟刚翻转：重建 opts（含 web_safari）重解析一次拿回高清档。
             retried = self._maybe_reparse_after_sabr_flip(
@@ -1351,22 +1492,30 @@ class YoutubeService:
                 if proxy_mode in {"http", "socks5"} and proxy_url:
                     msg = (
                         msg
-                        + "\n\n提示: 检测到已启用代理，部分代理/出口 IP 会显著增加平台风控概率。"
-                        + "建议在设置中临时关闭代理后重试解析。"
+                        + tr_text(
+                            "\n\n提示: 检测到已启用代理，部分代理/出口 IP 会显著增加平台风控概率。"
+                        )
+                        + tr_text("建议在设置中临时关闭代理后重试解析。")
                     )
 
                 from ..utils.url_router import UrlRouter
 
                 if UrlRouter.detect_platform(url) == "twitter":
-                    msg += "\n\n提示: X 平台需要登录才能下载部分内容。请在设置中登录 X 平台获取 Cookie。"
+                    msg += tr_text(
+                        "\n\n提示: X 平台需要登录才能下载部分内容。请在设置中登录 X 平台获取 Cookie。"
+                    )
                 else:
                     msg = (
                         msg
-                        + "\n\n提示: YouTube 会在浏览器标签页中频繁轮换账号 cookies。官方建议用无痕/隐私窗口登录后导出 youtube.com cookies，并立即关闭无痕窗口，以避免 cookies 被轮换。"
-                        + "\n提示: YouTube 正在逐步强制 PO Token。若仅靠 cookies 仍触发验证，可在设置中填写 PO Token，并让 yt-dlp 走 mweb 客户端（官方推荐路径）。"
+                        + tr_text(
+                            "\n\n提示: YouTube 会在浏览器标签页中频繁轮换账号 cookies。官方建议用无痕/隐私窗口登录后导出 youtube.com cookies，并立即关闭无痕窗口，以避免 cookies 被轮换。"
+                        )
+                        + tr_text(
+                            "\n提示: YouTube 正在逐步强制 PO Token。若仅靠 cookies 仍触发验证，可在设置中填写 PO Token，并让 yt-dlp 走 mweb 客户端（官方推荐路径）。"
+                        )
                     )
 
-            self._emit_log("error", f"解析失败: {msg}")
+            self._emit_log("error", tr_text("解析失败: {0}", msg))
             raise RuntimeError(msg) from exc
 
     # ==================== 解析结果 TTL 缓存（P2 / P2.1 / P2.2） ====================
@@ -1442,6 +1591,10 @@ class YoutubeService:
             "url": url.strip(),
             "mode": mode,
             "cookie": self._cookie_fingerprint(ydl_opts.get("cookiefile")),
+            "cookie_mode": ydl_opts.get(COOKIE_MODE),
+            "cookie_generation": (request_scope.get() or {}).get(
+                "generation", self._cookie_generation
+            ),
             "proxy": ydl_opts.get("proxy") or "",
             # extractor_args 里含 player_client / POT base_url / skip=authcheck，
             # 它们都会改变返回的格式列表，必须进指纹。
@@ -1485,9 +1638,16 @@ class YoutubeService:
         detail = " ".join(f"{m}={n}" for m, n in sorted(buckets.items()))
         self._emit_log(
             "info",
-            f"[ParseCache] 命中 mode={mode}: {_short_url_tag(url)} 缓存年龄 {age:.1f}s "
-            f"本次耗时 {total_ms:.0f}ms (formats={len(info.get('formats') or [])}, "
-            f"entries={len(info.get('entries') or [])}) 桶: {detail}",
+            tr_text(
+                "[ParseCache] 命中 mode={0}: {1} 缓存年龄 {2:.1f}s 本次耗时 {3:.0f}ms (formats={4}, entries={5}) 桶: {6}",
+                mode,
+                _short_url_tag(url),
+                age,
+                total_ms,
+                len(info.get("formats") or []),
+                len(info.get("entries") or []),
+                detail,
+            ),
         )
 
     def _parse_cache_get(self, key: str) -> tuple[dict[str, Any], float] | None:
@@ -1539,20 +1699,26 @@ class YoutubeService:
         if not isinstance(info, dict) or not info:
             return
         if self._pot_state_unstable():
-            self._emit_log("debug", "[ParseCache] 跳过写入: POT 预热中，键不稳定")
+            self._emit_log("debug", tr_text("[ParseCache] 跳过写入: POT 预热中，键不稳定"))
             return
         n_entries = len(info.get("entries") or [])
         if n_entries > self._PARSE_CACHE_MAX_ENTRIES:
             self._emit_log(
                 "debug",
-                f"[ParseCache] 跳过写入: entries={n_entries} 超过上限 "
-                f"{self._PARSE_CACHE_MAX_ENTRIES}，deepcopy 成本高于收益",
+                tr_text(
+                    "[ParseCache] 跳过写入: entries={0} 超过上限 {1}，deepcopy 成本高于收益",
+                    n_entries,
+                    self._PARSE_CACHE_MAX_ENTRIES,
+                ),
             )
             return
         mode = key.split(":", 1)[0]
         limit = self._parse_cache_limit_for(mode)
         snapshot = copy.deepcopy(info)
         with self._parse_cache_lock:
+            context = request_scope.get()
+            if context is not None and context["generation"] != self._cookie_generation:
+                return
             self._parse_cache[key] = (time.monotonic(), snapshot)
             self._parse_cache.move_to_end(key)
             # 只在同 mode 桶内淘汰：OrderedDict 本身就是全局 LRU 顺序，
@@ -1578,10 +1744,12 @@ class YoutubeService:
             self._parse_cache.clear()
         if n:
             self._emit_log(
-                "info", f"[ParseCache] 已清空 {n} 条缓存" + (f" ({reason})" if reason else "")
+                "info",
+                tr_text("[ParseCache] 已清空 {0} 条缓存{1}", n, f" ({reason})" if reason else ""),
             )
         return n
 
+    @_snapshot_request
     def extract_info_for_dialog_sync(
         self,
         url: str,
@@ -1620,7 +1788,7 @@ class YoutubeService:
         if bool(config_manager.get("playlist_skip_authcheck") or False):
             tuned = self._with_youtubetab_skip_authcheck(tuned)
 
-        self._emit_log("info", f"[DialogExtract] 开始解析: {url}")
+        self._emit_log("info", tr_text("[DialogExtract] 开始解析: {0}", url))
 
         # === TTL 缓存查询（仅弹窗路径）===
         cache_key = self._parse_cache_key(url, "dialog", tuned)
@@ -1641,25 +1809,36 @@ class YoutubeService:
                 self._parse_cache_put(cache_key, info)
             self._emit_log(
                 "info",
-                f"[DialogExtract] 解析完成: {url} 耗时 {total_ms / 1000:.2f}s "
-                f"(build_opts={_opts_ms:.0f}ms, 子进程轮次={attempts}, "
-                f"formats={n_fmt}, entries={n_entries})" + (f" {note}" if note else ""),
+                tr_text(
+                    "[DialogExtract] 解析完成: {0} 耗时 {1:.2f}s (build_opts={2:.0f}ms, 子进程轮次={3}, formats={4}, entries={5})",
+                    url,
+                    total_ms / 1000,
+                    _opts_ms,
+                    attempts,
+                    n_fmt,
+                    n_entries,
+                )
+                + (f" {note}" if note else ""),
             )
 
         def _log_fail(exc: BaseException, *, attempts: int) -> None:
             total_ms = (time.perf_counter() - _t_total) * 1000
             self._emit_log(
                 "warning",
-                f"[DialogExtract] 解析失败: {url} 耗时 {total_ms / 1000:.2f}s "
-                f"(build_opts={_opts_ms:.0f}ms, 子进程轮次={attempts}) {type(exc).__name__}",
+                tr_text(
+                    "[DialogExtract] 解析失败: {0} 耗时 {1:.2f}s (build_opts={2:.0f}ms, 子进程轮次={3}) {4}",
+                    url,
+                    total_ms / 1000,
+                    _opts_ms,
+                    attempts,
+                    type(exc).__name__,
+                ),
             )
 
-        try:
-            _ = locate_runtime_tool("yt-dlp.exe", "yt-dlp/yt-dlp.exe", "yt_dlp/yt-dlp.exe")
-        except FileNotFoundError as e:
+        if resolve_yt_dlp_exe() is None:
             raise FileNotFoundError(
-                "未找到 yt-dlp.exe。请在设置页指定路径，或将 yt-dlp.exe 放入 _internal/yt-dlp/，或加入 PATH。"
-            ) from e
+                tr_text("未找到 yt-dlp.exe。请检查自定义内核路径、应用托管目录或系统 PATH。")
+            )
 
         # 记下解析前的 SABR 标记：这一趟可能是 web_creator 高清被 SABR 丢光、只回 360p，
         # 而 run_dump_single_json 会在输出里读到 SABR 标记并给账号打标（首次翻转）。
@@ -1692,7 +1871,7 @@ class YoutubeService:
             )
             if retried is not None:
                 info = retried
-                _log_done(info, attempts=2, note="[SABR 追加 web_safari 重解析]")
+                _log_done(info, attempts=2, note=tr_text("[SABR 追加 web_safari 重解析]"))
                 return info
 
             _log_done(info, attempts=1)
@@ -1702,14 +1881,20 @@ class YoutubeService:
                 raise
             msg = str(exc)
 
-            if self._is_page_reload_error(msg) and self._try_refresh_cookie_for_reload_error(url):
+            if (
+                tuned.get(COOKIE_MODE) is not False
+                and self._is_page_reload_error(msg)
+                and self._try_refresh_cookie_for_reload_error(url)
+            ):
                 info = run_dump_single_json(
                     url,
                     tuned,
                     extra_args=["--flat-playlist", "--lazy-playlist"],
                     cancel_event=cancel_event,
                 )
-                _log_done(cast(dict[str, Any], info), attempts=2, note="[cookie 刷新后重试]")
+                _log_done(
+                    cast(dict[str, Any], info), attempts=2, note=tr_text("[cookie 刷新后重试]")
+                )
                 return cast(dict[str, Any], info)
 
             if self._should_retry_with_youtubetab_skip_authcheck(msg):
@@ -1717,7 +1902,9 @@ class YoutubeService:
                 if retry_opts is not tuned:
                     self._emit_log(
                         "warning",
-                        "检测到播放列表 authcheck 限制提示，按 yt-dlp 官方建议自动启用 youtubetab:skip=authcheck 并重试一次。",
+                        tr_text(
+                            "检测到播放列表 authcheck 限制提示，按 yt-dlp 官方建议自动启用 youtubetab:skip=authcheck 并重试一次。"
+                        ),
                     )
                     info = run_dump_single_json(
                         url,
@@ -1725,12 +1912,16 @@ class YoutubeService:
                         extra_args=["--flat-playlist", "--lazy-playlist"],
                         cancel_event=cancel_event,
                     )
-                    _log_done(cast(dict[str, Any], info), attempts=2, note="[skip=authcheck 重试]")
+                    _log_done(
+                        cast(dict[str, Any], info),
+                        attempts=2,
+                        note=tr_text("[skip=authcheck 重试]"),
+                    )
                     return cast(dict[str, Any], info)
 
             if self._is_auth_blocked_error(msg):
                 self._emit_log(
-                    "warning", "🔄 检测到认证封锁，丢弃 Cookie 使用无登录态客户端重试..."
+                    "warning", tr_text("🔄 检测到认证封锁，丢弃 Cookie 使用无登录态客户端重试...")
                 )
                 fallback_opts = dict(tuned)
                 fallback_opts.pop("cookiefile", None)
@@ -1747,22 +1938,27 @@ class YoutubeService:
                         cancel_event=cancel_event,
                     )
                     if info:
-                        self._emit_log("info", "✅ 无登录态降级解析成功（格式列表可能不完整）")
-                        _log_done(cast(dict[str, Any], info), attempts=2, note="[无登录态降级]")
+                        self._emit_log(
+                            "info", tr_text("✅ 无登录态降级解析成功（格式列表可能不完整）")
+                        )
+                        _log_done(
+                            cast(dict[str, Any], info), attempts=2, note=tr_text("[无登录态降级]")
+                        )
                         return cast(dict[str, Any], info)
                 except Exception as fallback_exc:
-                    self._emit_log("warning", f"降级解析也失败: {fallback_exc}")
+                    self._emit_log("warning", tr_text("降级解析也失败: {0}", fallback_exc))
 
             fallback_info = self._handle_channel_tab_fallback(
                 url, msg, tuned, ["--flat-playlist", "--lazy-playlist"], cancel_event
             )
             if fallback_info:
-                _log_done(fallback_info, attempts=2, note="[频道标签降级]")
+                _log_done(fallback_info, attempts=2, note=tr_text("[频道标签降级]"))
                 return fallback_info
 
             _log_fail(exc, attempts=1)
             raise
 
+    @_snapshot_request
     def extract_vr_info_sync(
         self,
         url: str,
@@ -1776,14 +1972,12 @@ class YoutubeService:
         - 不使用 Cookies（android_vr 不支持）
         - 返回的格式包含完整的 SBS/OU/Mesh 投影信息
         """
-        self._emit_log("info", f"🥽 [VR] 使用 android_vr 客户端解析: {url}")
+        self._emit_log("info", tr_text("🥽 [VR] 使用 android_vr 客户端解析: {0}", url))
 
-        try:
-            _ = locate_runtime_tool("yt-dlp.exe", "yt-dlp/yt-dlp.exe", "yt_dlp/yt-dlp.exe")
-        except FileNotFoundError as e:
+        if resolve_yt_dlp_exe() is None:
             raise FileNotFoundError(
-                "未找到 yt-dlp.exe。请在设置页指定路径，或将 yt-dlp.exe 放入 _internal/yt-dlp/，或加入 PATH。"
-            ) from e
+                tr_text("未找到 yt-dlp.exe。请检查自定义内核路径、应用托管目录或系统 PATH。")
+            )
 
         # 构建 android_vr 专用选项（不使用 cookies）
         vr_opts: dict[str, Any] = {
@@ -1829,7 +2023,7 @@ class YoutubeService:
                 cancel_event=cancel_event,
             )
             if info is None or info is False:
-                raise RuntimeError("VR 解析失败：yt-dlp 未返回有效元数据。")
+                raise RuntimeError(tr_text("VR 解析失败：yt-dlp 未返回有效元数据。"))
             if not isinstance(info, dict):
                 raise RuntimeError(f"VR yt-dlp returned unexpected type: {type(info)!r}")
 
@@ -1837,7 +2031,7 @@ class YoutubeService:
             formats = info.get("formats") or []
             self._emit_log(
                 "info",
-                f"🥽 [VR] android_vr 解析完成: {len(formats)} 个格式",
+                tr_text("🥽 [VR] android_vr 解析完成: {0} 个格式", len(formats)),
             )
 
             # 统一注入 android_vr 可用格式 ID，供下游兼容性过滤使用。
@@ -1861,11 +2055,11 @@ class YoutubeService:
             # 最高分辨率
             max_height = self._get_max_resolution(info)
             if max_height >= 4320:
-                self._emit_log("info", f"🎉 [VR] 最高可用分辨率: {max_height}p (8K)")
+                self._emit_log("info", tr_text("🎉 [VR] 最高可用分辨率: {0}p (8K)", max_height))
             elif max_height >= 2160:
-                self._emit_log("info", f"📺 [VR] 最高可用分辨率: {max_height}p (4K)")
+                self._emit_log("info", tr_text("📺 [VR] 最高可用分辨率: {0}p (4K)", max_height))
             elif max_height > 0:
-                self._emit_log("info", f"📺 [VR] 最高可用分辨率: {max_height}p")
+                self._emit_log("info", tr_text("📺 [VR] 最高可用分辨率: {0}p", max_height))
 
             # VR 投影类型检测（逐格式标注 + 整体概览）
             self._detect_vr_projection(info)
@@ -1879,8 +2073,8 @@ class YoutubeService:
             if isinstance(exc, YtDlpCancelled):
                 raise
             msg = str(exc)
-            self._emit_log("error", f"🥽 [VR] 解析失败: {msg}")
-            raise RuntimeError(f"VR 解析失败: {msg}") from exc
+            self._emit_log("error", tr_text("🥽 [VR] 解析失败: {0}", msg))
+            raise RuntimeError(tr_text("VR 解析失败: {0}", msg)) from exc
 
     async def extract_info(
         self, url: str, options: YoutubeServiceOptions | None = None
@@ -1904,6 +2098,7 @@ class YoutubeService:
             url, options, read_cache=read_cache, cancel_event=cancel_event
         )
 
+    @_snapshot_request
     def extract_playlist_flat(
         self,
         url: str,
@@ -1918,8 +2113,8 @@ class YoutubeService:
         - return entries quickly to reduce request bursts
         """
 
-        options = options or YoutubeServiceOptions()
-        base_opts = self.build_ydl_options(options)
+        options = freeze_youtube_options(options)
+        base_opts = self.build_ydl_options(options, url=url)
         ydl_opts = dict(base_opts)
 
         # Key knobs to reduce requests
@@ -1950,12 +2145,10 @@ class YoutubeService:
             return cached_info
 
         try:
-            try:
-                _ = locate_runtime_tool("yt-dlp.exe", "yt-dlp/yt-dlp.exe", "yt_dlp/yt-dlp.exe")
-            except FileNotFoundError as e:
+            if resolve_yt_dlp_exe() is None:
                 raise FileNotFoundError(
-                    "未找到 yt-dlp.exe。请在设置页指定路径，或将 yt-dlp.exe 放入 _internal/yt-dlp/，或加入 PATH。"
-                ) from e
+                    tr_text("未找到 yt-dlp.exe。请检查自定义内核路径、应用托管目录或系统 PATH。")
+                )
 
             try:
                 info = run_dump_single_json(
@@ -1973,7 +2166,9 @@ class YoutubeService:
                     if retry_opts is not ydl_opts:
                         self._emit_log(
                             "warning",
-                            "检测到播放列表 authcheck 限制提示，按 yt-dlp 官方建议自动启用 youtubetab:skip=authcheck 并重试一次。",
+                            tr_text(
+                                "检测到播放列表 authcheck 限制提示，按 yt-dlp 官方建议自动启用 youtubetab:skip=authcheck 并重试一次。"
+                            ),
                         )
                         info = run_dump_single_json(
                             url,
@@ -1993,7 +2188,7 @@ class YoutubeService:
                         raise
 
             if not isinstance(info, dict):
-                raise RuntimeError("播放列表解析失败：返回结果为空")
+                raise RuntimeError(tr_text("播放列表解析失败：返回结果为空"))
 
             info = cast(dict[str, Any], info)
             self._extend_playlist_entries_from_youtube_continuations(url, info)
@@ -2001,14 +2196,20 @@ class YoutubeService:
             self._parse_cache_put(cache_key, info)
             self._emit_log(
                 "info",
-                f"[PlaylistFlat] 解析完成: {url} 耗时 {total_ms / 1000:.2f}s "
-                f"(entries={len(info.get('entries') or [])})",
+                tr_text(
+                    "[PlaylistFlat] 解析完成: {0} 耗时 {1:.2f}s (entries={2})",
+                    url,
+                    total_ms / 1000,
+                    len(info.get("entries") or []),
+                ),
             )
             return info
         except Exception as exc:
             msg = str(exc)
             total_ms = (time.perf_counter() - _t_total) * 1000
-            self._emit_log("error", f"播放列表解析失败 (耗时 {total_ms / 1000:.2f}s): {msg}")
+            self._emit_log(
+                "error", tr_text("播放列表解析失败 (耗时 {0:.2f}s): {1}", total_ms / 1000, msg)
+            )
             raise
 
     def _extend_playlist_entries_from_youtube_continuations(
@@ -2297,6 +2498,7 @@ class YoutubeService:
 
     # ── 频道解析 ───────────────────────────────────────────────────────────
 
+    @_snapshot_request
     def extract_channel_flat(
         self,
         url: str,
@@ -2325,7 +2527,7 @@ class YoutubeService:
         if base_ydl_opts is not None:
             ydl_opts = dict(base_ydl_opts)
         else:
-            ydl_opts = dict(self.build_ydl_options(options or YoutubeServiceOptions()))
+            ydl_opts = dict(self.build_ydl_options(options or YoutubeServiceOptions(), url=url))
         ydl_opts.update(
             {
                 "skip_download": True,
@@ -2363,12 +2565,10 @@ class YoutubeService:
             return cached_info
 
         try:
-            try:
-                _ = locate_runtime_tool("yt-dlp.exe", "yt-dlp/yt-dlp.exe", "yt_dlp/yt-dlp.exe")
-            except FileNotFoundError as e:
+            if resolve_yt_dlp_exe() is None:
                 raise FileNotFoundError(
-                    "未找到 yt-dlp.exe。请在设置页指定路径，或将 yt-dlp.exe 放入 _internal/yt-dlp/，或加入 PATH。"
-                ) from e
+                    tr_text("未找到 yt-dlp.exe。请检查自定义内核路径、应用托管目录或系统 PATH。")
+                )
 
             try:
                 info = run_dump_single_json(
@@ -2386,7 +2586,9 @@ class YoutubeService:
                     if retry_opts is not ydl_opts:
                         self._emit_log(
                             "warning",
-                            "检测到频道 authcheck 限制，自动启用 youtubetab:skip=authcheck 并重试。",
+                            tr_text(
+                                "检测到频道 authcheck 限制，自动启用 youtubetab:skip=authcheck 并重试。"
+                            ),
                         )
                         info = run_dump_single_json(
                             normalized_url,
@@ -2406,7 +2608,7 @@ class YoutubeService:
                         raise
 
             if not isinstance(info, dict):
-                raise RuntimeError("频道解析失败：返回结果为空")
+                raise RuntimeError(tr_text("频道解析失败：返回结果为空"))
 
             info = cast(dict[str, Any], info)
             # 在 put 之前打标记：缓存里存的应当是成品，命中时不需要调用方补写
@@ -2415,14 +2617,21 @@ class YoutubeService:
             self._parse_cache_put(cache_key, info)
             self._emit_log(
                 "info",
-                f"[ChannelFlat] 解析完成: {normalized_url} 耗时 {total_ms / 1000:.2f}s "
-                f"(tab={tab}, entries={len(info.get('entries') or [])})",
+                tr_text(
+                    "[ChannelFlat] 解析完成: {0} 耗时 {1:.2f}s (tab={2}, entries={3})",
+                    normalized_url,
+                    total_ms / 1000,
+                    tab,
+                    len(info.get("entries") or []),
+                ),
             )
             return info
         except Exception as exc:
             msg = str(exc)
             total_ms = (time.perf_counter() - _t_total) * 1000
-            self._emit_log("error", f"频道解析失败 (耗时 {total_ms / 1000:.2f}s): {msg}")
+            self._emit_log(
+                "error", tr_text("频道解析失败 (耗时 {0:.2f}s): {1}", total_ms / 1000, msg)
+            )
             raise
 
     @staticmethod
@@ -2472,13 +2681,15 @@ class YoutubeService:
                 break
 
             new_url = base_url + fallback_tab
-            self._emit_log("warning", f"频道当前标签页不存在，自动尝试回退解析: {fallback_tab} ...")
+            self._emit_log(
+                "warning", tr_text("频道当前标签页不存在，自动尝试回退解析: {0} ...", fallback_tab)
+            )
             try:
                 info = run_dump_single_json(
                     new_url, opts, extra_args=extra_args, cancel_event=cancel_event
                 )
                 if info:
-                    self._emit_log("info", f"✅ 回退解析成功: {fallback_tab}")
+                    self._emit_log("info", tr_text("✅ 回退解析成功: {0}", fallback_tab))
                     return cast(dict[str, Any], info)
             except Exception as e:
                 if isinstance(e, YtDlpCancelled):

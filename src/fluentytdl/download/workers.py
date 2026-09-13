@@ -11,6 +11,9 @@ from urllib.parse import parse_qs, urlparse
 
 from PySide6.QtCore import QThread, Signal
 
+from fluentytdl.utils.localized_log import log_text
+from fluentytdl.utils.ui_text import tr_text
+
 from ..core.config_manager import config_manager
 from ..diagnostics import SUBTITLE_WARNING_CODES, DiagnosticLineCollector, diagnose
 from ..models.errors import YtDlpExecutionError
@@ -35,7 +38,9 @@ from ..observability import (
 )
 from ..utils.logger import logger
 from ..utils.translator import translate_error
-from ..youtube.youtube_service import YoutubeServiceOptions, youtube_service
+from ..utils.url_router import UrlRouter
+from ..utils.youtube_request import COOKIE_MODE, enforce_cookie_mode
+from ..youtube.youtube_service import YoutubeServiceOptions, freeze_youtube_options, youtube_service
 from ..youtube.yt_dlp_cli import YtDlpCancelled
 from .executor import DownloadExecutor
 from .features import (
@@ -119,6 +124,12 @@ def _emit_failure_diagnosis(
         # 规则没命中时（`code=unknown`），异常原文是唯一的线索。
         # `json_safe` 会把它过一遍 `sanitize_exception()`，路径里的用户名不会漏。
         exception=exc,
+        exception_type=err_dict.get("exception_type"),
+        errno=err_dict.get("errno"),
+        winerror=err_dict.get("winerror"),
+        exit_code=err_dict.get("exit_code"),
+        rules_version=err_dict.get("rules_version"),
+        unmatched_tail=err_dict.get("unmatched_tail"),
         _depth=2,
     )
 
@@ -140,7 +151,7 @@ class InfoExtractWorker(QThread):
     ):
         super().__init__()
         self.url = url
-        self.options = options
+        self.options = freeze_youtube_options(options)
         self.playlist_flat = playlist_flat
         # 封面模式传 False：解析结果里的 thumbnails[].url 会直接变成下载任务的 URL，
         # 命中缓存等于发一条陈旧直链。跳过读，写照常。
@@ -183,7 +194,7 @@ class InfoExtractWorker(QThread):
             # Dialog closed; treat as silent cancellation.
             return
         except Exception as exc:
-            logger.exception("解析失败: {}", self.url)
+            log_text(logger, "exception", "解析失败: {}", self.url)
             err = translate_error(exc)
             _emit_failure_diagnosis(
                 self.trace, err, stage="parse", operation="extract_info_for_dialog", exc=exc
@@ -210,7 +221,7 @@ class ChannelExtractWorker(QThread):
         super().__init__()
         self.base_url = base_url
         self.target_tabs = target_tabs
-        self.options = options
+        self.options = freeze_youtube_options(options)
         self.trace: FlowTrace = flow if flow is not None else new_flow()
         self._cancel_event = threading.Event()
 
@@ -271,7 +282,7 @@ class ChannelExtractWorker(QThread):
                 return tab, None, "unsupported"
             # 真错误。注意：这类失败**不进缓存**（服务层只在成功路径 put），
             # 否则一次瞬时网络错误会让该标签页 5 分钟内重试都看不到。
-            logger.warning(f"频道 {tab} 标签页解析出错: {e}")
+            log_text(logger, "warning", "频道 {0} 标签页解析出错: {1}", tab, e)
             err = translate_error(e)
             _emit_failure_diagnosis(
                 self.trace,
@@ -368,7 +379,9 @@ class ChannelExtractWorker(QThread):
                         # 的意外。`observe_future` 已落了 `signal code=future_exception`
                         # （我观察到了什么），这里补主因判定 —— 这个 except 是这次失败唯一
                         # 的错误边界，不补的话日志里就只有"有个 future 炸了"而没有 code。
-                        logger.warning(f"频道标签页 {submitted_tab} 任务异常: {e}")
+                        log_text(
+                            logger, "warning", "频道标签页 {0} 任务异常: {1}", submitted_tab, e
+                        )
                         _emit_failure_diagnosis(
                             self.trace,
                             translate_error(e),
@@ -407,7 +420,7 @@ class ChannelExtractWorker(QThread):
             self.finished_all.emit(results)
 
         except Exception as exc:
-            logger.exception("频道解析失败: {}", self.base_url)
+            log_text(logger, "exception", "频道解析失败: {}", self.base_url)
             err = translate_error(exc)
             _emit_failure_diagnosis(
                 self.trace, err, stage="parse", operation="extract_channel", exc=exc
@@ -421,8 +434,15 @@ class VRInfoExtractWorker(QThread):
     finished = Signal(dict)
     error = Signal(dict)
 
-    def __init__(self, url: str, *, flow: FlowTrace | None = None):
+    def __init__(
+        self,
+        url: str,
+        options: YoutubeServiceOptions | None = None,
+        *,
+        flow: FlowTrace | None = None,
+    ):
         super().__init__()
+        self.options = freeze_youtube_options(options)
         self.url = url
         self.trace: FlowTrace = flow if flow is not None else new_flow()
         self._cancel_event = threading.Event()
@@ -457,7 +477,7 @@ class VRInfoExtractWorker(QThread):
                 try:
                     # 尝试作为播放列表解析
                     info = youtube_service.extract_playlist_flat(
-                        self.url, cancel_event=self._cancel_event
+                        self.url, self.options, cancel_event=self._cancel_event
                     )
 
                     # 检查是否真的是播放列表
@@ -476,7 +496,7 @@ class VRInfoExtractWorker(QThread):
             if info is None:
                 # 单视频模式：使用 android_vr 客户端
                 info = youtube_service.extract_vr_info_sync(
-                    self.url, cancel_event=self._cancel_event
+                    self.url, self.options, cancel_event=self._cancel_event
                 )
 
             if self._cancel_event.is_set():
@@ -487,7 +507,7 @@ class VRInfoExtractWorker(QThread):
         except YtDlpCancelled:
             return
         except Exception as exc:
-            logger.exception("VR 解析失败: {}", self.url)
+            log_text(logger, "exception", "VR 解析失败: {}", self.url)
             err = translate_error(exc)
             _emit_failure_diagnosis(
                 self.trace, err, stage="parse", operation="extract_vr_info", exc=exc
@@ -514,7 +534,7 @@ class EntryDetailWorker(QThread):
         super().__init__()
         self.row = row
         self.url = url
-        self.options = options
+        self.options = freeze_youtube_options(options)
         self.vr_mode = vr_mode
         # 封面模式传 False，理由同 InfoExtractWorker：逐行封面直链同样会进下载任务。
         # VR 分支不受影响——VR 与封面是两个互斥的入口，不会同时成立。
@@ -606,6 +626,10 @@ class DownloadWorker(QThread):
         super().__init__()
         self.url = url
         self.opts = dict(opts)
+        if UrlRouter.detect_platform(url) == "youtube":
+            self.opts.setdefault(
+                COOKIE_MODE, bool(config_manager.get("youtube_cookies_enabled", True))
+            )
         # 观测标识。`task_id` 还是 "-"：`db_id` 要等 `create_worker()` 入库后才有，
         # 那里会调 `trace.bind_task_id()` 补一条 identity 事件把 flow → task 钉起来。
         self.trace: TaskTrace = (
@@ -746,10 +770,10 @@ class DownloadWorker(QThread):
 
         # 通知 CleanLogger
         pct = getattr(self, "progress_val", 0.0)
-        self._clean_logger.force_update("paused", pct, "⏸️ 下载已暂停")
+        self._clean_logger.force_update("paused", pct, tr_text("⏸️ 下载已暂停"))
 
         self.paused.emit()
-        logger.info("红灯 下载已暂停: {}", self.url)
+        log_text(logger, "info", "红灯 下载已暂停: {}", self.url)
 
     def resume(self) -> None:
         """继续下载：绿灯亮起，Worker 线程将从阻塞点恢复执行。"""
@@ -759,10 +783,10 @@ class DownloadWorker(QThread):
 
         # 通知 CleanLogger
         pct = getattr(self, "progress_val", 0.0)
-        self._clean_logger.force_update("downloading", pct, "▶️ 继续下载...")
+        self._clean_logger.force_update("downloading", pct, tr_text("▶️ 继续下载..."))
 
         self.resumed.emit()
-        logger.info("绿灯 下载已恢复: {}", self.url)
+        log_text(logger, "info", "绿灯 下载已恢复: {}", self.url)
 
     def cancel(self) -> None:
         """取消下载：设置取消标记 + 唤醒可能的暂停阻塞 + 终止子进程。"""
@@ -788,7 +812,7 @@ class DownloadWorker(QThread):
                     proc.terminate()
             except Exception:
                 logger.debug("Failed to terminate process for {}", self.url)
-        logger.info("下载已取消: {}", self.url)
+        log_text(logger, "info", "下载已取消: {}", self.url)
 
     @property
     def is_paused(self) -> bool:
@@ -819,7 +843,7 @@ class DownloadWorker(QThread):
             return staging.finalize_cancel()
         except Exception:
             # 终态处理不许再抛：沙盒留给启动 GC 也比丢掉"任务已取消"这个结论好。
-            logger.exception("取消裁决失败（沙盒留给 GC）: {}", staging.txn_dir)
+            log_text(logger, "exception", "取消裁决失败（沙盒留给 GC）: {}", staging.txn_dir)
             return "no_op"
 
     def _finalize_staging_failure(self, exc: BaseException | None) -> str:
@@ -835,7 +859,7 @@ class DownloadWorker(QThread):
         try:
             return staging.finalize_failure(exc)
         except Exception:
-            logger.exception("失败裁决失败（沙盒留给 GC）: {}", staging.txn_dir)
+            log_text(logger, "exception", "失败裁决失败（沙盒留给 GC）: {}", staging.txn_dir)
             return "failed"
 
     def _register_primary_media(self, opts: dict[str, Any]) -> None:
@@ -860,7 +884,7 @@ class DownloadWorker(QThread):
                 # `primary_media()` 是单数概念。
                 art = staging.add_reported(path, "media", primary=(idx == 0), opts=opts)
             except Exception:
-                logger.exception("主媒体登记失败: {}", path)
+                log_text(logger, "exception", "主媒体登记失败: {}", path)
                 continue
             self.dest_paths.add(art.path)
 
@@ -885,13 +909,17 @@ class DownloadWorker(QThread):
             return info
 
         try:
-            return youtube_service.extract_info_sync(self.url, cancel_event=self._cancel_event)
+            return youtube_service.extract_info_sync(
+                self.url,
+                freeze_youtube_options(enabled=self.opts.get(COOKIE_MODE)),
+                cancel_event=self._cancel_event,
+            )
         except YtDlpCancelled:
             raise
         except Exception as e:
             # 字幕是 best-effort：解析失败绝不能让下载任务本身失败，
             # 也绝不能静默把字幕关掉 —— 交给调用方走正则模式。
-            logger.warning("[Subtitle] 迟解析取 info 失败，将回落正则模式：{}", e)
+            log_text(logger, "warning", "[Subtitle] 迟解析取 info 失败，将回落正则模式：{}", e)
             return None
 
     @staticmethod
@@ -987,20 +1015,28 @@ class DownloadWorker(QThread):
         if not hits:
             return None
 
-        # 只把命中的那几行喂回 `diagnose`：整段输出会让优先级更高的非字幕警告抢走
-        # 主因，而且 `raw_tail` 里混进本地路径 —— 这个载荷是要送到 UI 上的。
-        # rc 传 0：`_is_warning_only_primary` 靠它放行警告级主因（这是唯一的合法用法）。
-        #
-        # **这里的 `diagnose()` 纯粹是 UI 文案生成器，不是观测入口。** 硬规则 2 要守的
-        # 是「`count(kind=diagnosis)` 恒等于真正发生了错误」，所以这个成功路径**绝不**
-        # emit `kind=diagnosis` —— 同一批行的结构化落点是调用方紧挨着的
-        # `emit_success_signals()`（`kind=signal`）。要的只是 `user_title` /
-        # `user_message` 那两个惰性本地化属性，自己重造一遍等于把 catalog 抄第二份。
-        diag = diagnose(0, "\n".join(hits))
+        from ..diagnostics import Diagnosis, get_rule_set
+
+        # Choose a warning to display; successful work never calls diagnose().
+        warning = max(
+            parse_events("\n".join(hits)), key=lambda event: (event.priority, event.line_no)
+        )
+        rule = get_rule_set().by_code(warning.code)
+        diag = Diagnosis(
+            code=warning.code,
+            severity="warning",
+            exit_code=0,
+            category=rule.category if rule else "media",
+            fix_action=rule.fix_action if rule else None,
+            events=parse_events("\n".join(hits)),
+            raw_tail="\n".join(hits),
+        )
         # 日志里只记 code，**不记** `diag.user_message`：那是随界面语言变化的本地化文案，
         # 写进日志就没法搜索了（同一个问题在中文版和英文版日志里长得不一样）。
         # 用户要看的那句话走 `task_warning` 到 UI。
-        logger.warning("[Subtitle] 成功后诊断命中 {} (code={})", sorted(seen), diag.code)
+        log_text(
+            logger, "warning", "[Subtitle] 成功后诊断命中 {} (code={})", sorted(seen), diag.code
+        )
         self.task_warning.emit(diag.to_dict())
         return diag.user_title
 
@@ -1121,8 +1157,8 @@ class DownloadWorker(QThread):
             # 图片直接下载通道：完全无视视频逻辑，发起极简 yt-dlp 请求
             # ======================================================================
             if self.opts.get("__fluentytdl_is_cover_direct", False):
-                logger.info("⚡ 检测到纯图片直接下载，走极简通道")
-                self.status_msg.emit("⚡ 正在直接下载封面图片...")
+                log_text(logger, "info", "⚡ 检测到纯图片直接下载，走极简通道")
+                self.status_msg.emit(tr_text("⚡ 正在直接下载封面图片..."))
                 self._run_cover_direct_download()
                 return
 
@@ -1130,17 +1166,21 @@ class DownloadWorker(QThread):
             # 快速通道：纯字幕/纯封面提取 — 完全绕过 Executor / Strategy / Feature 管线
             # ======================================================================
             if self.opts.get("skip_download", False):
-                logger.info("⚡ 检测到纯提取任务 (skip_download)，走快速原生通道")
-                self.status_msg.emit("⚡ 原生直接提取（字幕/封面）...")
+                log_text(logger, "info", "⚡ 检测到纯提取任务 (skip_download)，走快速原生通道")
+                self.status_msg.emit(tr_text("⚡ 正在获取字幕或封面..."))
                 self._run_lightweight_extract()
                 return
 
             # 合并 YoutubeService 的基础反封锁/网络配置
-            base_opts = youtube_service.build_ydl_options()
+            base_opts = youtube_service.build_ydl_options(
+                freeze_youtube_options(enabled=self.opts.get(COOKIE_MODE)), url=self.url
+            )
             import copy
 
             merged = copy.deepcopy(base_opts)
             merged.update(copy.deepcopy(self.opts))
+            if UrlRouter.detect_platform(self.url) == "youtube":
+                enforce_cookie_mode(merged)
 
             # === 防止单个任务变异为播放列表下载造成无限死循环 ===
             merged["noplaylist"] = True
@@ -1148,7 +1188,7 @@ class DownloadWorker(QThread):
             # 保存原始格式选择（用于错误恢复）
             self._original_format = merged.get("format")
             if self._original_format:
-                logger.info("原始格式选择已保存: {}", self._original_format)
+                log_text(logger, "info", "原始格式选择已保存: {}", self._original_format)
 
             # DEBUG: 记录音频处理相关选项
             logger.debug(
@@ -1269,7 +1309,7 @@ class DownloadWorker(QThread):
                 except Exception:
                     # 登记失败（路径逃逸、封板后迟到的行）不该打断下载：真在 payload 里
                     # 的那些由 `reconcile()` 兜回来，真正的逃逸会在那里再抛一次。
-                    logger.exception("产物登记失败: {}", path)
+                    log_text(logger, "exception", "产物登记失败: {}", path)
                     self.dest_paths.add(path)
                     return
                 # Feature 链（Step 5 之前）仍读 `dest_paths`，喂它**映射后的 payload
@@ -1285,12 +1325,12 @@ class DownloadWorker(QThread):
                     self.staging.manifest.embed_evidence.add(kind)
 
             # === 执行下载 ===
-            logger.info("🚀 启动下载...")
+            log_text(logger, "info", "🚀 启动下载...")
 
             while True:
                 # 让 UI 瞬间响应，不再傻等
-                self._clean_logger.force_update("parsing", 0.0, "🔍 正在拉取元数据...")
-                self.status_msg.emit("🚀 准备启动执行器...")
+                self._clean_logger.force_update("parsing", 0.0, tr_text("🔍 正在拉取元数据..."))
+                self.status_msg.emit(tr_text("🚀 准备启动执行器..."))
 
                 self.executor = DownloadExecutor()
                 attempt_no = self.trace.attempt
@@ -1327,7 +1367,7 @@ class DownloadWorker(QThread):
                     break  # 跳出 while 循环，进入后续处理
 
                 except YtDlpExecutionError as exc:
-                    logger.exception("yt-dlp 执行错误: {}", self.url)
+                    log_text(logger, "exception", "yt-dlp 执行错误: {}", self.url)
                     pct = getattr(self, "progress_val", 0.0)
 
                     # 使用新的诊断引擎生成结构化错误
@@ -1401,13 +1441,17 @@ class DownloadWorker(QThread):
                             budget_used=self._auto_retries,
                             budget_max=diag.retry.max_attempts,
                         )
-                        attempt_note = (
-                            f"第 {self._auto_retries}/{diag.retry.max_attempts} 次自动重试"
+                        attempt_note = tr_text(
+                            "第 {0}/{1} 次自动重试", self._auto_retries, diag.retry.max_attempts
                         )
                         if delay > 0:
-                            self.status_msg.emit(f"{attempt_note}，{int(delay)} 秒后开始…")
+                            self.status_msg.emit(
+                                tr_text("{0}，{1} 秒后开始…", attempt_note, int(delay))
+                            )
                             self._clean_logger.force_update(
-                                "parsing", pct, f"⏳ {attempt_note}（等待 {int(delay)} 秒）"
+                                "parsing",
+                                pct,
+                                tr_text("⏳ {0}（等待 {1} 秒）", attempt_note, int(delay)),
                             )
                             # 用 cancel 事件的 wait 做退避，取消时立即返回而不是等满一轮
                             if self._cancel_event.wait(timeout=delay):
@@ -1435,7 +1479,7 @@ class DownloadWorker(QThread):
 
                     self.error.emit(err_dict)
 
-                    self.status_msg.emit("挂起等待修复...")
+                    self.status_msg.emit(tr_text("挂起等待修复..."))
 
                     # 阻塞等待用户选择：重试或取消
                     self.suspend_event.wait()
@@ -1458,8 +1502,8 @@ class DownloadWorker(QThread):
                             delay_sec=0.0,
                             budget_reset=True,
                         )
-                        self.status_msg.emit("重新尝试下载...")
-                        self._clean_logger.force_update("parsing", pct, "正在重试...")
+                        self.status_msg.emit(tr_text("重新尝试下载..."))
+                        self._clean_logger.force_update("parsing", pct, tr_text("正在重试..."))
                         continue
                     else:
                         raise DownloadCancelled() from None
@@ -1468,7 +1512,7 @@ class DownloadWorker(QThread):
                     raise
 
                 except Exception as exc:
-                    logger.warning(f"下载失败: {exc}")
+                    log_text(logger, "warning", "下载失败: {0}", exc)
                     if self.is_cancelled:
                         raise DownloadCancelled() from None
                     # 直接抛出，让外层 except 做精准诊断
@@ -1489,7 +1533,10 @@ class DownloadWorker(QThread):
                 # 主媒体也在这里推定。`seal_discovery()` 封的是**推断**不是**创造**
                 # —— 之后不许再「发现」新产物，但 Feature 仍可显式 `register_generated`。
                 if self.staging is not None:
-                    self._clean_logger.force_update("completed", 97.0, "🧾 正在核对产物...")
+                    self.trace.enter("verify")
+                    self._clean_logger.force_update(
+                        "processing", 97.0, tr_text("🧾 正在核对产物...")
+                    )
                     self._register_primary_media(merged)
                     try:
                         self.staging.reconcile(merged)
@@ -1499,7 +1546,7 @@ class DownloadWorker(QThread):
                     except Exception:
                         # 对账失败不该在这里变成终态：真正的逃逸/阻断由后面的
                         # `verify()` 拦，那里才是安全门。这里只留证据。
-                        logger.exception("产物对账失败")
+                        log_text(logger, "exception", "产物对账失败")
                         emit_event(
                             "signal",
                             trace=self.trace,
@@ -1515,10 +1562,16 @@ class DownloadWorker(QThread):
                     try:
                         feature.on_post_process(context)
                     except Exception as e:
-                        logger.exception(
-                            "后处理功能 {} 发生异常: {}", feature.__class__.__name__, e
+                        log_text(
+                            logger,
+                            "exception",
+                            "后处理功能 {} 发生异常: {}",
+                            feature.__class__.__name__,
+                            e,
                         )
-                        context.emit_warning(f"后处理异常 ({feature.__class__.__name__}): {str(e)}")
+                        context.emit_warning(
+                            tr_text("后处理异常 ({0}): {1}", feature.__class__.__name__, str(e))
+                        )
 
                 # Strip internal meta options after all features have post-processed.
                 # Must run AFTER on_post_process so that protection gates like
@@ -1538,7 +1591,10 @@ class DownloadWorker(QThread):
                 #   `commit()`    里面才有那**唯一一次** cancel gate，之后就是不可
                 #                 取消临界区（预留占位符本身已经是沙盒外副作用）。
                 if self.staging is not None:
-                    self._clean_logger.force_update("completed", 99.0, "📦 正在整理文件...")
+                    self.trace.enter("finalize")
+                    self._clean_logger.force_update(
+                        "processing", 99.0, tr_text("📦 正在整理文件...")
+                    )
                     staging = self.staging
                     try:
                         staging.verify(merged)
@@ -1551,7 +1607,9 @@ class DownloadWorker(QThread):
                         # 安全门拦下。payload 里此刻究竟有什么已经由 `verify_blocked`
                         # 信号记完了，这里只把结论翻成人话；异常继续往上走 ——
                         # 终态诊断归外层那唯一一处失败边界（硬规则 2）。
-                        context.emit_warning(f"产物校验未通过，已保留沙盒供排查：{blocked}")
+                        context.emit_warning(
+                            tr_text("产物校验未通过，已保留沙盒供排查：{0}", blocked)
+                        )
                         raise
 
                     # ↓↓↓ point of no return：用户手上的文件已经完整，事务成功不可推翻 ↓↓↓
@@ -1605,7 +1663,7 @@ class DownloadWorker(QThread):
                         extra_actual=extra,
                     )
                 except Exception:
-                    logger.exception("提交后观测失败")
+                    log_text(logger, "exception", "提交后观测失败")
                     emit_event(
                         "signal",
                         trace=self.trace,
@@ -1619,7 +1677,7 @@ class DownloadWorker(QThread):
                         # 唯一的物理删除动作，且只在 `phase=committed` 之后。
                         self.staging.cleanup()
                     except Exception:
-                        logger.exception("沙盒清理失败（成品不受影响）")
+                        log_text(logger, "exception", "沙盒清理失败（成品不受影响）")
                         emit_event(
                             "signal",
                             trace=self.trace,
@@ -1628,25 +1686,25 @@ class DownloadWorker(QThread):
                             code="staging_cleanup_deferred",
                         )
 
-                self._clean_logger.force_update("completed", 100.0, "✅ 下载并处理完成！")
+                self._clean_logger.force_update("completed", 100.0, tr_text("✅ 下载并处理完成！"))
                 self._run_outcome = "success"
                 self.completed.emit()
 
         except DownloadCancelled:
-            self._clean_logger.force_update("cancelled", 0.0, "🗑️ 任务已取消并清理残骸")
+            self._clean_logger.force_update("cancelled", 0.0, tr_text("🗑️ 任务已取消并清理残骸"))
             # 取消的**唯一**裁决点。判据是 phase 不是调用点：`committing` 之后取消
             # 只记 `pending_cancel`，`committed` 之后是 no-op —— 绝不出现「UI 说已
             # 取消，用户目录里躺着半组成品」。沙盒外的文件在这里一个都不会被碰
             # （老的 `_sweep_part_files()` 会对 `output_path ∪ dest_paths` 无条件
             # `os.remove`，那是把已交付给用户的成品也删掉的杀伤半径，缺陷 F）。
             self._finalize_staging_cancel()
-            self.status_msg.emit("任务已取消")
+            self.status_msg.emit(tr_text("任务已取消"))
             self._run_outcome = "cancelled"
             self.cancelled.emit()
         except DownloadFailed as failure:
             # 错误已经在内层诊断并 emit 过了，这里只做终态裁决：
             # 不重复上报，也不发 cancelled，避免 UI 把失败显示成"任务已取消"
-            logger.info("任务终态失败（不可重试）: {} — {}", self.url, failure)
+            log_text(logger, "info", "任务终态失败（不可重试）: {} — {}", self.url, failure)
             self._finalize_staging_failure(failure)
             # 内层只 emit 了 `kind=diagnosis`（这次失败判定成了什么），终态裁决仍归本层：
             # diagnosis 和 outcome 是两件事，前者可能一个 run 出现多条（每次尝试一条），
@@ -1654,7 +1712,7 @@ class DownloadWorker(QThread):
             self._run_outcome = "failed"
         except Exception as exc:
             msg = str(exc)
-            logger.exception("下载过程发生未知异常: {}", self.url)
+            log_text(logger, "exception", "下载过程发生未知异常: {}", self.url)
             pct = getattr(self, "progress_val", 0.0)
 
             # 失败的**唯一**裁决点，同时决定「沙盒留还是清」和「上报什么」——
@@ -1673,12 +1731,12 @@ class DownloadWorker(QThread):
                     code="postcommit_escaped",
                     error=msg[:200],
                 )
-                self._clean_logger.force_update("completed", 100.0, "✅ 下载并处理完成！")
+                self._clean_logger.force_update("completed", 100.0, tr_text("✅ 下载并处理完成！"))
                 self._run_outcome = "success"
                 self.completed.emit()
                 return
 
-            self._clean_logger.force_update("error", pct, f"❌ 错误: {msg}")
+            self._clean_logger.force_update("error", pct, tr_text("❌ 错误: {0}", msg))
 
             # 兼容旧逻辑：如果是纯文本 Exception，依然通过 translate_error 进行基本的处理
             # 实际上 translate_error 也可以被废弃，我们现在直接传结构化 dict
@@ -1829,14 +1887,15 @@ class DownloadWorker(QThread):
         if staging is None:
             return
 
-        self._clean_logger.force_update("completed", 97.0, "🧾 正在核对产物...")
+        self.trace.enter("verify")
+        self._clean_logger.force_update("processing", 97.0, tr_text("🧾 正在核对产物..."))
         try:
             staging.reconcile(expect_opts)
             staging.seal_discovery()
         except StagingCancelled:
             raise
         except Exception:
-            logger.exception("产物对账失败")
+            log_text(logger, "exception", "产物对账失败")
             emit_event(
                 "signal",
                 trace=self.trace,
@@ -1856,7 +1915,8 @@ class DownloadWorker(QThread):
                 staging.manifest.group_stem = os.path.splitext(os.path.basename(kept[0].path))[0]
                 staging.manifest.stem_authority = "explicit"
 
-        self._clean_logger.force_update("completed", 99.0, "📦 正在整理文件...")
+        self.trace.enter("finalize")
+        self._clean_logger.force_update("processing", 99.0, tr_text("📦 正在整理文件..."))
         try:
             staging.verify(expect_opts)
             plan = staging.build_plan()
@@ -1866,7 +1926,7 @@ class DownloadWorker(QThread):
             # 第一个 `reserve` 之前），翻译成 `DownloadCancelled` 交给调用方收尾。
             raise DownloadCancelled() from exc
         except VerifyBlocked:
-            logger.exception("产物校验未通过，已保留沙盒供排查")
+            log_text(logger, "exception", "产物校验未通过，已保留沙盒供排查")
             raise
 
         # ↓↓↓ point of no return：用户手上的文件已经完整，事务成功不可推翻 ↓↓↓
@@ -1881,7 +1941,7 @@ class DownloadWorker(QThread):
                 extra_actual=delivery_tokens(staging.published_paths()),
             )
         except Exception:
-            logger.exception("提交后观测失败")
+            log_text(logger, "exception", "提交后观测失败")
             emit_event(
                 "signal",
                 trace=self.trace,
@@ -1893,7 +1953,7 @@ class DownloadWorker(QThread):
         try:
             staging.cleanup()
         except Exception:
-            logger.exception("沙盒清理失败（成品不受影响）")
+            log_text(logger, "exception", "沙盒清理失败（成品不受影响）")
             emit_event(
                 "signal",
                 trace=self.trace,
@@ -1943,7 +2003,9 @@ class DownloadWorker(QThread):
         exe = resolve_yt_dlp_exe()
         if exe is None:
             self._run_outcome = "failed"
-            self.error.emit({"title": "错误", "message": "yt-dlp 可执行文件未找到"})
+            self.error.emit(
+                {"title": tr_text("错误"), "message": tr_text("yt-dlp 可执行文件未找到")}
+            )
             return
 
         # 构建最精简的 CLI 参数
@@ -1975,10 +2037,9 @@ class DownloadWorker(QThread):
         )
 
         # 从 youtube_service 获取基础选项（仅一次）
-        try:
-            base_opts = youtube_service.build_ydl_options()
-        except Exception:
-            base_opts = {}
+        base_opts = youtube_service.build_ydl_options(
+            freeze_youtube_options(enabled=self.opts.get(COOKIE_MODE)), url=self.url
+        )
 
         # Cookie（必须保留，否则可能无法访问受限视频）。
         # yt-dlp 每次运行结束都把 jar 回写进 `--cookies` 文件；绝不把 Sentinel 真相源直接
@@ -1989,6 +2050,9 @@ class DownloadWorker(QThread):
         from ..auth.cookie_runfile import cookie_runfile
 
         _cookie_stack = ExitStack()
+        if UrlRouter.detect_platform(self.url) == "youtube":
+            enforce_cookie_mode(opts)
+            enforce_cookie_mode(base_opts)
         cookiefile = opts.get("cookiefile") or base_opts.get("cookiefile")
         _run_cf = _cookie_stack.enter_context(cookie_runfile(cookiefile))
         if isinstance(_run_cf, str) and _run_cf:
@@ -2093,7 +2157,7 @@ class DownloadWorker(QThread):
         # 也一样有落点。`Destination:` 行没有 `role`（`output_parser` 的文档里写明恒为
         # `None`），放它进 `add_reported` 会被 `landing_path()` 当 `.parts` 侧路径换算，
         # 得到一个拼错的名字 —— 所以**只登记带了 `role` 的行**，其余留给 `reconcile()`。
-        self._clean_logger.force_update("parsing", 0.0, "⚡ 正在初始化提取引擎...")
+        self._clean_logger.force_update("parsing", 0.0, tr_text("⚡ 正在初始化提取引擎..."))
 
         try:
             proc = subprocess.Popen(
@@ -2155,7 +2219,7 @@ class DownloadWorker(QThread):
                             try:
                                 self.staging.add_reported(parsed.path, kind, opts=opts)
                             except Exception:
-                                logger.exception("产物登记失败: {}", parsed.path)
+                                log_text(logger, "exception", "产物登记失败: {}", parsed.path)
                     if parsed.type == "warning":
                         logger.warning("[LightweightExtract] {}", line)
                     elif parsed.type == "error":
@@ -2172,9 +2236,9 @@ class DownloadWorker(QThread):
                         }
                         self._clean_logger.handle_progress(prog_dict)
                     elif parsed.type == "subtitle":
-                        msg = "📝 正在保存字幕..."
+                        msg = tr_text("📝 正在保存字幕...")
                         if parsed.path:
-                            msg = f"📝 正在保存字幕: {os.path.basename(parsed.path)}"
+                            msg = tr_text("📝 正在保存字幕: {0}", os.path.basename(parsed.path))
                         # 注入伪进度以产生视觉推进感
                         self._clean_logger.force_update("downloading", 50.0, msg)
                     elif parsed.type == "status":
@@ -2188,8 +2252,10 @@ class DownloadWorker(QThread):
             self._proc_ref = None
 
             if rc != 0:
-                logger.warning("[LightweightExtract] yt-dlp 退出码 {}", rc)
-                self._clean_logger.force_update("error", 100.0, f"❌ 错误: yt-dlp 退出码 {rc}")
+                log_text(logger, "warning", "[LightweightExtract] yt-dlp 退出码 {}", rc)
+                self._clean_logger.force_update(
+                    "error", 100.0, tr_text("❌ 错误: yt-dlp 退出码 {0}", rc)
+                )
                 # 传 `YtDlpExecutionError` 而不是裸 `RuntimeError`：`translate_error()` 只对
                 # 前者取 `stderr` 去跑规则表，后者只有 "yt-dlp 退出码 1" 这句话可诊断，
                 # 收了一路的诊断行全数丢弃。
@@ -2208,6 +2274,7 @@ class DownloadWorker(QThread):
                 # 是句彻底的空话。任务仍然算成功（字幕是 best-effort），但原因必须露出来。
                 sub_warning = self._scan_subtitle_warnings(diag_lines)
                 if sub_warning:
+                    self.trace.enter("finalize")
                     self._clean_logger.force_update("processing", 99.0, f"⚠️ {sub_warning}")
                 # `_scan_subtitle_warnings` 只把结论推给 UI，一关窗口就没了。同一批行
                 # 再走一遍 `signal`，日志里才留下 `code=...`（硬规则 2：成功路径不做
@@ -2231,7 +2298,7 @@ class DownloadWorker(QThread):
                 # 报告过的路径此刻不再等于最终路径），提交成功后才 `emit_actual(observed,
                 # extra_actual=delivery_tokens(published))` 并清沙盒。
                 self._fastpath_land(expect_opts, component="lightweight_extract")
-                self._clean_logger.force_update("completed", 100.0, "✅ 提取完成")
+                self._clean_logger.force_update("completed", 100.0, tr_text("✅ 提取完成"))
                 self._run_outcome = "success"
                 self.completed.emit()
 
@@ -2241,15 +2308,17 @@ class DownloadWorker(QThread):
             self._run_outcome = "cancelled"
             self.cancelled.emit()
         except Exception as exc:
-            logger.exception("[LightweightExtract] 提取失败: {}", self.url)
-            self._clean_logger.force_update("error", 0.0, f"❌ 错误: {exc}")
+            log_text(logger, "exception", "[LightweightExtract] 提取失败: {}", self.url)
+            self._clean_logger.force_update("error", 0.0, tr_text("❌ 错误: {0}", exc))
             err = translate_error(exc)
             _emit_failure_diagnosis(
                 self.trace, err, stage="download", operation="lightweight_extract", exc=exc
             )
             # 失败裁决单点：`_fastpath_land()` 已 commit、之后才出的异常（清洁失败、
             # 观测失败）返回 True（= already_succeeded），outcome 必须保持 success。
-            if self._fastpath_fail(exc, component="lightweight_extract", done_text="✅ 提取完成"):
+            if self._fastpath_fail(
+                exc, component="lightweight_extract", done_text=tr_text("✅ 提取完成")
+            ):
                 return
             self._run_outcome = "failed"
             self.error.emit(err)
@@ -2267,7 +2336,9 @@ class DownloadWorker(QThread):
         exe = resolve_yt_dlp_exe()
         if exe is None:
             self._run_outcome = "failed"
-            self.error.emit({"title": "错误", "message": "yt-dlp 可执行文件未找到"})
+            self.error.emit(
+                {"title": tr_text("错误"), "message": tr_text("yt-dlp 可执行文件未找到")}
+            )
             return
 
         cmd: list[str] = [str(exe), "--ignore-config", "--no-warnings", "--newline"]
@@ -2326,7 +2397,7 @@ class DownloadWorker(QThread):
             except Exception:
                 pass
 
-        self._clean_logger.force_update("downloading", 0.0, "⚡ 正在下载图片...")
+        self._clean_logger.force_update("downloading", 0.0, tr_text("⚡ 正在下载图片..."))
         # 这条路只解析 "Destination:" 一行来推进度条，失败时原本什么线索都留不下。
         cover_diag = DiagnosticLineCollector()
         # 上岸事务的校验期望：封面直下其实有了 `paths["home"]` 而**没有** `skip_download`，
@@ -2382,11 +2453,11 @@ class DownloadWorker(QThread):
                         try:
                             self.staging.add_reported(dest, "thumbnail", opts=opts)
                         except Exception:
-                            logger.exception("产物登记失败: {}", dest)
+                            log_text(logger, "exception", "产物登记失败: {}", dest)
                     self._clean_logger.force_update(
                         "downloading",
                         50.0,
-                        f"正在保存: {os.path.basename(dest)}",
+                        tr_text("正在保存: {0}", os.path.basename(dest)),
                     )
                 elif line:
                     cover_diag.feed(line)
@@ -2394,7 +2465,9 @@ class DownloadWorker(QThread):
             rc = proc.wait()
             self._proc_ref = None
             if rc != 0:
-                self._clean_logger.force_update("error", 100.0, f"❌ 错误: yt-dlp 退出码 {rc}")
+                self._clean_logger.force_update(
+                    "error", 100.0, tr_text("❌ 错误: yt-dlp 退出码 {0}", rc)
+                )
                 fail = YtDlpExecutionError(exit_code=rc, stderr=cover_diag.as_text())
                 err = translate_error(fail)
                 _emit_failure_diagnosis(
@@ -2419,7 +2492,7 @@ class DownloadWorker(QThread):
                 # 并清沙盒。`verify_opts` 补了 `skip_download`，否则封面直下会被自己的
                 # 安全门按"缺主媒体"拦下。
                 self._fastpath_land(verify_opts, component="cover_direct")
-                self._clean_logger.force_update("completed", 100.0, "✅ 下载完成")
+                self._clean_logger.force_update("completed", 100.0, tr_text("✅ 下载完成"))
                 self._run_outcome = "success"
                 self.completed.emit()
         except DownloadCancelled:
@@ -2428,15 +2501,15 @@ class DownloadWorker(QThread):
             self._run_outcome = "cancelled"
             self.cancelled.emit()
         except Exception as exc:
-            logger.exception("[CoverDirect] 提取失败: {}", self.url)
-            self._clean_logger.force_update("error", 0.0, f"❌ 错误: {exc}")
+            log_text(logger, "exception", "[CoverDirect] 提取失败: {}", self.url)
+            self._clean_logger.force_update("error", 0.0, tr_text("❌ 错误: {0}", exc))
             err = translate_error(exc)
             _emit_failure_diagnosis(
                 self.trace, err, stage="download", operation="cover_direct", exc=exc
             )
             # 失败裁决单点：`_fastpath_land()` 已 commit、之后才出的异常（清洁失败、
             # 观测失败）返回 True（= already_succeeded），outcome 必须保持 success。
-            if self._fastpath_fail(exc, component="cover_direct", done_text="✅ 下载完成"):
+            if self._fastpath_fail(exc, component="cover_direct", done_text=tr_text("✅ 下载完成")):
                 return
             self._run_outcome = "failed"
             self.error.emit(err)

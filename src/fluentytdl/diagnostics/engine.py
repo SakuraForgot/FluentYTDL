@@ -11,6 +11,8 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from fluentytdl.utils.localized_log import log_text
+
 from ..utils.logger import logger
 from .catalog import QT_TRANSLATE_NOOP, localize
 from .models import (
@@ -390,7 +392,9 @@ def diagnose(
     raw_tail = stderr or localize(_EMPTY_OUTPUT)
     clean_msg = strip_ansi(raw_tail)
 
-    diag = Diagnosis(exit_code=exit_code, raw_tail=raw_tail, phase=phase)
+    diag = Diagnosis(
+        exit_code=exit_code, raw_tail=raw_tail, phase=phase, rules_version=rule_set.version
+    )
 
     # 1. JSON 快照层：yt-dlp 结构化错误优先于文本匹配
     if isinstance(parsed_json, dict):
@@ -419,8 +423,12 @@ def diagnose(
             # 就是这条路）。去掉 `--no-warnings` 之后，那一刻顶上来的很可能只是一条
             # 字幕限流警告 —— 把"字幕没下到"报成整个任务的失败主因，比不报更糟。
             # 落到兜底后 `_apply_companion_signals` 照旧跑，伴随信号不丢。
-            logger.debug(
-                "[diagnostics] rc={} 只有警告级线索 {}，不采纳为主因", exit_code, primary.code
+            log_text(
+                logger,
+                "debug",
+                "[diagnostics] rc={} 只有警告级线索 {}，不采纳为主因",
+                exit_code,
+                primary.code,
             )
         else:
             diag.code = primary.code
@@ -440,3 +448,27 @@ def diagnose(
     _build_fallback(diag, clean_msg)
     _apply_companion_signals(diag, rule_set)
     return diag
+
+
+def diagnose_exception(exc: OSError, *, phase: str = "") -> Diagnosis:
+    """Classify typed local failures without guessing from localized OS messages."""
+    import errno
+
+    code = "unknown"
+    if isinstance(exc, FileNotFoundError) or getattr(exc, "winerror", None) in (2, 3):
+        code = "file_missing"
+    elif isinstance(exc, PermissionError) or getattr(exc, "winerror", None) in (5, 32):
+        code = "permission_denied"
+    elif exc.errno == errno.ENOSPC or getattr(exc, "winerror", None) in (39, 112):
+        code = "disk_full"
+    if code == "unknown":
+        return diagnose(1, str(exc), phase=phase)
+    return Diagnosis(
+        code=code,
+        category="filesystem",
+        severity="fatal",
+        fix_action="change_download_dir",
+        raw_tail=str(exc),
+        phase=phase,
+        rules_version=get_rule_set().version,
+    )

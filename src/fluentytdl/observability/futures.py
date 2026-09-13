@@ -19,6 +19,8 @@ from typing import Any
 
 from loguru import logger
 
+from fluentytdl.utils.localized_log import log_text
+
 from .events import emit_event
 
 
@@ -64,7 +66,12 @@ def observe_future(
         )
         try:
             # 堆栈只进文本日志：事件层记结构化字段，不记多行 traceback
-            logger.opt(exception=exc).error("[Futures] 线程池任务异常 label={}", label or "-")
+            log_text(
+                logger.opt(exception=exc),
+                "error",
+                "[Futures] 线程池任务异常 label={}",
+                label or "-",
+            )
         except Exception:
             pass
 

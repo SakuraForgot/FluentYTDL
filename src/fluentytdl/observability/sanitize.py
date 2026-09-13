@@ -20,6 +20,8 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
+from ..utils.log_privacy import redact_text
+
 MASK = "***"
 
 #: 单条字段的长度上限。日志行进 UI 查看器，也进 JSONL；一条 argv 或异常消息
@@ -72,7 +74,7 @@ def sanitize_url(url: str | None) -> str:
     """
     if not url:
         return ""
-    return _truncate(_USERINFO_RE.sub("", str(url)))
+    return redact_text(_USERINFO_RE.sub("", str(url)), MAX_FIELD_CHARS)
 
 
 def sanitize_proxy(url: str | None) -> str:
@@ -104,7 +106,7 @@ def sanitize_exception(exc: BaseException | None) -> str:
         text = f"{type(exc).__name__}: {exc}"
     except Exception:
         text = type(exc).__name__
-    return sanitize_path(_USERINFO_RE.sub("", text))
+    return redact_text(sanitize_path(_USERINFO_RE.sub("", text)), MAX_FIELD_CHARS)
 
 
 # ── argv ────────────────────────────────────────────────────

@@ -163,8 +163,8 @@ class QuickAddPanel(QWidget):
 
         self.strategyCombo = ComboBox()
         self.strategyCombo.addItem(self.tr("自动判断"), userData="auto")
-        self.strategyCombo.addItem(self.tr("单任务整包"), userData="single_worker")
-        self.strategyCombo.addItem(self.tr("强制展开"), userData="expand_all")
+        self.strategyCombo.addItem(self.tr("整个播放列表作为一个任务"), userData="single_worker")
+        self.strategyCombo.addItem(self.tr("每个视频单独创建任务"), userData="expand_all")
         row3.addWidget(BodyLabel(self.tr("播放列表:")), 0)
         row3.addWidget(self.strategyCombo, 1)
 

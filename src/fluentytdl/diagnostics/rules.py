@@ -17,6 +17,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from fluentytdl.utils.localized_log import log_text
+
 from ..utils.logger import logger
 from .models import (
     VALID_CATEGORIES,
@@ -114,19 +116,26 @@ def _parse_pattern(raw: Any, code: str) -> LoadedPattern | None:
     kind = str(raw.get("kind", "substr")).lower()
     value = raw.get("value")
     if not isinstance(value, str) or not value:
-        logger.warning("[diagnostics] 规则 {} 的 pattern 缺少 value，已跳过", code)
+        log_text(logger, "warning", "[diagnostics] 规则 {} 的 pattern 缺少 value，已跳过", code)
         return None
 
     if kind == "regex":
         try:
             compiled = re.compile(value, re.IGNORECASE)
         except re.error as exc:
-            logger.warning("[diagnostics] 规则 {} 的正则无效（{}），已跳过: {}", code, exc, value)
+            log_text(
+                logger,
+                "warning",
+                "[diagnostics] 规则 {} 的正则无效（{}），已跳过: {}",
+                code,
+                exc,
+                value,
+            )
             return None
         return LoadedPattern(kind="regex", needle=value, regex=compiled)
 
     if kind != "substr":
-        logger.warning("[diagnostics] 规则 {} 的 pattern kind 未知: {}", code, kind)
+        log_text(logger, "warning", "[diagnostics] 规则 {} 的 pattern kind 未知: {}", code, kind)
         return None
     return LoadedPattern(kind="substr", needle=value.lower())
 
@@ -136,25 +145,35 @@ def _parse_rule(raw: Any) -> LoadedRule | None:
         return None
     code = raw.get("code")
     if not isinstance(code, str) or not code:
-        logger.warning("[diagnostics] 发现缺少 code 的规则，已跳过")
+        log_text(logger, "warning", "[diagnostics] 发现缺少 code 的规则，已跳过")
         return None
 
     patterns = tuple(
         p for p in (_parse_pattern(x, code) for x in (raw.get("patterns") or [])) if p is not None
     )
     if not patterns:
-        logger.warning("[diagnostics] 规则 {} 没有任何有效 pattern，已跳过", code)
+        log_text(logger, "warning", "[diagnostics] 规则 {} 没有任何有效 pattern，已跳过", code)
         return None
 
     category = str(raw.get("category", "unknown"))
     if category not in VALID_CATEGORIES:
-        logger.warning("[diagnostics] 规则 {} 的 category 非法（{}），归为 unknown", code, category)
+        log_text(
+            logger,
+            "warning",
+            "[diagnostics] 规则 {} 的 category 非法（{}），归为 unknown",
+            code,
+            category,
+        )
         category = "unknown"
 
     severity_raw = str(raw.get("severity", "fatal"))
     if severity_raw not in VALID_SEVERITIES:
-        logger.warning(
-            "[diagnostics] 规则 {} 的 severity 非法（{}），归为 fatal", code, severity_raw
+        log_text(
+            logger,
+            "warning",
+            "[diagnostics] 规则 {} 的 severity 非法（{}），归为 fatal",
+            code,
+            severity_raw,
         )
     severity = as_severity(severity_raw)
 
@@ -192,10 +211,10 @@ def _read_json(path: Path) -> dict | None:
             return None
         data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError) as exc:
-        logger.warning("[diagnostics] 规则文件读取失败，已忽略: {} ({})", path, exc)
+        log_text(logger, "warning", "[diagnostics] 规则文件读取失败，已忽略: {} ({})", path, exc)
         return None
     if not isinstance(data, dict):
-        logger.warning("[diagnostics] 规则文件顶层不是对象，已忽略: {}", path)
+        log_text(logger, "warning", "[diagnostics] 规则文件顶层不是对象，已忽略: {}", path)
         return None
     return data
 
@@ -237,8 +256,11 @@ def load_rule_set(packaged_path: Path | None = None, override_path: Path | None 
     if not rules:
         # 内置规则缺失是部署事故（打包漏了 assets），但不能让下载流程崩掉：
         # 引擎会退化成纯兜底（HTTP 码 + extractor 名提取），仍然可用。
-        logger.warning(
-            "[diagnostics] 未加载到任何内置规则，诊断将退化为兜底模式: {}", packaged_path
+        log_text(
+            logger,
+            "warning",
+            "[diagnostics] 未加载到任何内置规则，诊断将退化为兜底模式: {}",
+            packaged_path,
         )
 
     override = _read_json(override_path)
@@ -247,7 +269,13 @@ def load_rule_set(packaged_path: Path | None = None, override_path: Path | None 
         if extra:
             rules = _merge(rules, extra)
             sources.append(str(override_path))
-            logger.info("[diagnostics] 已应用规则覆盖层，{} 条: {}", len(extra), override_path)
+            log_text(
+                logger,
+                "info",
+                "[diagnostics] 已应用规则覆盖层，{} 条: {}",
+                len(extra),
+                override_path,
+            )
         if isinstance(override.get("fallbackCode"), str):
             fallback_code = override["fallbackCode"]
 

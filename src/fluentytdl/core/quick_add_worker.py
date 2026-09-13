@@ -5,10 +5,14 @@ import typing
 from loguru import logger
 from PySide6.QtCore import QThread, Signal
 
+from fluentytdl.utils.ui_text import tr_text
+
 from ..models.quick_download_params import QuickDownloadParams
 from ..observability import FlowTrace, bind_current_flow, new_flow
 from ..utils.quick_opts import quick_params_to_opts
-from ..youtube.youtube_service import YoutubeService
+from ..utils.url_router import UrlRouter
+from ..utils.youtube_request import COOKIE_MODE
+from ..youtube.youtube_service import YoutubeService, freeze_youtube_options
 
 if typing.TYPE_CHECKING:
     from .controller import AppController
@@ -34,6 +38,7 @@ class QuickAddWorker(QThread):
         flow: FlowTrace | None = None,
     ):
         super().__init__()
+        self.options = freeze_youtube_options()
         self.urls = urls
         self.params = params
         self.max_playlist_items = max_playlist_items
@@ -58,17 +63,22 @@ class QuickAddWorker(QThread):
             base_opts = quick_params_to_opts(self.params)
 
             for i, url in enumerate(self.urls):
-                self.progress.emit(f"正在解析链接 {i + 1}/{len(self.urls)}...")
+                self.progress.emit(tr_text("正在解析链接 {0}/{1}...", i + 1, len(self.urls)))
 
                 try:
                     # We need to peek if it's a playlist and get its size
-                    info = service.extract_info_for_dialog_sync(url)
+                    info = service.extract_info_for_dialog_sync(url, self.options)
                 except Exception as e:
                     logger.warning(f"Failed to extract info for {url}: {e}")
                     if len(self.urls) == 1:
                         raise  # re-raise if it's the only URL to show error to user
                     continue
 
+                base_opts = quick_params_to_opts(self.params)
+                if UrlRouter.detect_platform(url) == "youtube":
+                    base_opts[COOKIE_MODE] = info.get(
+                        COOKIE_MODE, self.options.auth.use_youtube_cookies
+                    )
                 is_playlist = "entries" in info
 
                 if not is_playlist:
@@ -96,7 +106,11 @@ class QuickAddWorker(QThread):
                     if len(entries) > self.max_playlist_items:
                         # 强制拦截并降级为逐条入队
                         self.progress.emit(
-                            f"播放列表过长 ({len(entries)}), 将截断前 {self.max_playlist_items} 个强制逐条入队..."
+                            tr_text(
+                                "播放列表过长 ({0}), 将截断前 {1} 个强制逐条入队...",
+                                len(entries),
+                                self.max_playlist_items,
+                            )
                         )
                         for j, entry in enumerate(entries[: self.max_playlist_items]):
                             e_url = entry.get("url") or entry.get("webpage_url")
@@ -121,7 +135,7 @@ class QuickAddWorker(QThread):
                         # Wait, we already added "playlist_strategy" to quick params.
                         tasks.append(
                             (
-                                f"[播放列表] {playlist_title}",
+                                tr_text("[播放列表] {0}", playlist_title),
                                 url,
                                 opts,
                                 info.get("thumbnails", [{}])[-1].get("url", ""),
@@ -146,7 +160,7 @@ class QuickAddWorker(QThread):
                         )
 
             if not tasks and len(self.urls) > 0:
-                raise RuntimeError("没有任何链接解析成功。")
+                raise RuntimeError(tr_text("没有任何链接解析成功。"))
 
             self.finished_tasks.emit(tasks)
 

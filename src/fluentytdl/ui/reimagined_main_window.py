@@ -18,6 +18,7 @@ from qfluentwidgets import (
     FluentWindow,
     InfoBadge,
     InfoBadgeManager,
+    InfoBarIcon,
     InfoBarPosition,
     MessageBox,
     NavigationItemPosition,
@@ -36,6 +37,8 @@ from fluentytdl.ui.components.common.interruptible_navigation import (
 )
 from fluentytdl.ui.components.common.responsive_command_bar import ResponsiveCommandBar
 from fluentytdl.ui.components.dialogs.download_config_window import DownloadConfigWindow
+from fluentytdl.utils.localized_log import log_text
+from fluentytdl.utils.ui_text import tr_text
 
 from ..core.config_manager import config_manager
 from ..download.download_manager import download_manager
@@ -183,7 +186,7 @@ class MainWindow(FluentWindow):
         if not app_icon.isNull():
             self.setWindowIcon(app_icon)
         else:
-            logger.warning("应用图标资源缺失，标题栏与启动图将没有图标")
+            log_text(logger, "warning", "应用图标资源缺失，标题栏与启动图将没有图标")
 
         self.resize(MIN_WINDOW_WIDTH, 780)
         # 锁定最小宽度，防止两个 bug 导致的自动变宽：
@@ -296,6 +299,10 @@ class MainWindow(FluentWindow):
 
         # 「有更新」统一写进消息中心（小铃铛），不再各处弹 InfoBar
         install_update_notifier()
+        from .announcement_controller import AnnouncementController
+
+        self._announcement_controller = AnnouncementController(self)
+        QApplication.instance().aboutToQuit.connect(self._announcement_controller.service.stop)
         component_update_manager.app_update_available.connect(self._on_app_update_available)
         component_update_manager.apply_requested.connect(self._on_update_apply_requested)
 
@@ -343,7 +350,7 @@ class MainWindow(FluentWindow):
             self.task_page.add_task(worker, title, thumb)
             restored += 1
         if restored > 0:
-            logger.info(f"[MainWindow] 已恢复 {restored} 个未完成任务到 UI")
+            log_text(logger, "info", "[MainWindow] 已恢复 {0} 个未完成任务到 UI", restored)
             # UI 初始化完成后触发一次 pump，启动排队中的任务
             QTimer.singleShot(500, download_manager.pump)
 
@@ -355,7 +362,7 @@ class MainWindow(FluentWindow):
         一起炸出来。现在统一走 `notification/update_notifier.py` 写进消息中心。
         """
         version = info.get("version", "?")
-        logger.info(f"[MainWindow] 检测到软件更新: {version}")
+        log_text(logger, "info", "[MainWindow] 检测到软件更新: {0}", version)
 
     def _on_update_apply_requested(self) -> None:
         """后端已批准更新，执行优雅退出。
@@ -367,7 +374,7 @@ class MainWindow(FluentWindow):
         用 singleShot 把退出挪出信号发射栈：此刻我们还在
         `request_app_core_update()` 的 emit 里，不能在这里同步跑完整个 shutdown。
         """
-        logger.info("[MainWindow] 收到更新申请，开始优雅退出")
+        log_text(logger, "info", "[MainWindow] 收到更新申请，开始优雅退出")
         QTimer.singleShot(0, self.quit_app)
 
     def init_navigation(self):
@@ -559,7 +566,7 @@ class MainWindow(FluentWindow):
         if chosen_icon.isNull():
             # 拿不到有效图标时不创建托盘：显示一个占位色块比没有托盘更糟，
             # 用户只会看到右下角一个「坏掉」的图标。
-            logger.warning("托盘图标资源缺失，已跳过系统托盘初始化")
+            log_text(logger, "warning", "托盘图标资源缺失，已跳过系统托盘初始化")
             self.tray_icon = None
             return
 
@@ -872,7 +879,9 @@ class MainWindow(FluentWindow):
 
         def on_finished(created_workers):
             if hasattr(self, "_quick_add_tooltip") and self._quick_add_tooltip:
-                self._quick_add_tooltip.setContent(f"成功添加 {len(created_workers)} 个任务")
+                self._quick_add_tooltip.setContent(
+                    tr_text("成功添加 {0} 个任务", len(created_workers))
+                )
                 self._quick_add_tooltip.setState(True)
                 self._quick_add_tooltip = None
 
@@ -1104,11 +1113,11 @@ class MainWindow(FluentWindow):
         return paths
 
     def _prompt_delete_cache_files(self, paths: list[str], title: str) -> bool:
-        box = MessageBox(title, f"即将删除 {len(paths)} 个缓存文件，是否继续？", self)
+        box = MessageBox(title, tr_text("即将删除 {0} 个缓存文件，是否继续？", len(paths)), self)
         return bool(box.exec())
 
     def _prompt_delete_source_files(self, paths: list[str], title: str) -> bool:
-        box = MessageBox(title, f"即将删除 {len(paths)} 个源文件，是否继续？", self)
+        box = MessageBox(title, tr_text("即将删除 {0} 个源文件，是否继续？", len(paths)), self)
         return bool(box.exec())
 
     def on_pause_resume_task(self, row: int):
@@ -1712,23 +1721,23 @@ class MainWindow(FluentWindow):
 
         # 只在配置了浏览器来源时刷新
         if auth_service.current_source == AuthSourceType.NONE:
-            logger.info(self.tr("[AdminMode] 未配置Cookie来源，跳过自动刷新"))
+            log_text(logger, "info", "[AdminMode] 未配置Cookie来源，跳过自动刷新")
             return
 
         if auth_service.current_source == AuthSourceType.FILE:
-            logger.info(self.tr("[AdminMode] 手动文件模式，跳过自动刷新"))
+            log_text(logger, "info", "[AdminMode] 手动文件模式，跳过自动刷新")
             return
 
         if auth_service.current_source == AuthSourceType.WEBVIEW2:
-            logger.info(self.tr("[AdminMode] 登录模式(WebView2)，跳过自动刷新（需要用户交互）"))
+            log_text(logger, "info", "[AdminMode] 登录模式(WebView2)，跳过自动刷新（需要用户交互）")
             return
 
         browser_name = auth_service.current_source_display
-        logger.info(f"[AdminMode] 以管理员身份自动刷新Cookie: {browser_name}")
+        log_text(logger, "info", "[AdminMode] 以管理员身份自动刷新Cookie: {0}", browser_name)
 
         InfoBar.info(
             self.tr("管理员模式"),
-            f"正在以管理员权限提取 {browser_name} Cookie...",
+            tr_text("正在以管理员权限提取 {0} Cookie...", browser_name),
             duration=3000,
             parent=self,
         )
@@ -1745,7 +1754,7 @@ class MainWindow(FluentWindow):
             if success:
                 InfoBar.info(
                     self.tr("Cookie提取成功"),
-                    f"已从 {browser_name} 提取 Cookie（管理员权限）",
+                    tr_text("已从 {0} 提取 Cookie（管理员权限）", browser_name),
                     duration=5000,
                     parent=self,
                 )
@@ -1786,7 +1795,7 @@ class MainWindow(FluentWindow):
                 label = PLATFORM_LABELS.get(platform, platform)
 
                 if not info.get("enabled"):
-                    logger.debug(f"[MainWindow] {label} 未启用 Cookie，跳过启动提醒")
+                    log_text(logger, "debug", "[MainWindow] {0} 未启用 Cookie，跳过启动提醒", label)
                     continue
 
                 commit_warning = info.get("commit_warning")
@@ -1794,10 +1803,17 @@ class MainWindow(FluentWindow):
                 if not info.get("exists") or not info.get("valid"):
                     # 闸门的拒绝原因比"Cookie 无效"更具体，优先展示
                     reason = commit_warning or info.get("reason") or self.tr("Cookie 无效")
-                    logger.warning(f"[MainWindow] {label} Cookie 不可用: {reason}")
+                    log_text(
+                        logger, "warning", "[MainWindow] {0} Cookie 不可用: {1}", label, reason
+                    )
                     self._show_cookie_health_tip(platform, label, reason, is_warning=True)
                 elif commit_warning:
-                    logger.warning(f"[MainWindow] {label} 新 Cookie 被拒绝，仍在使用旧文件")
+                    log_text(
+                        logger,
+                        "warning",
+                        "[MainWindow] {0} 新 Cookie 被拒绝，仍在使用旧文件",
+                        label,
+                    )
                     self._show_cookie_health_tip(
                         platform,
                         label,
@@ -1809,10 +1825,10 @@ class MainWindow(FluentWindow):
                         platform, label, self._format_expiry_hint(info), is_warning=False
                     )
                 else:
-                    logger.info(f"[MainWindow] {label} Cookie 有效，启动静默")
+                    log_text(logger, "info", "[MainWindow] {0} Cookie 有效，启动静默", label)
 
         except Exception as e:
-            logger.error(f"[MainWindow] Cookie 状态检查失败: {e}")
+            log_text(logger, "error", "[MainWindow] Cookie 状态检查失败: {0}", e)
 
     def _format_expiry_hint(self, info: dict) -> str:
         """把 expiry_seconds 说成人话。拿不到具体秒数时给个不撒谎的兜底。"""
@@ -1836,9 +1852,9 @@ class MainWindow(FluentWindow):
             if is_warning
             else self.tr("{} Cookie 提醒").format(label)
         )
-        show = InfoBar.warning if is_warning else InfoBar.info
-
-        bar = show(
+        # 先加入按钮再显示，让堆叠管理器按完整高度计算后续卡片的位置。
+        bar = InfoBar(
+            icon=InfoBarIcon.WARNING if is_warning else InfoBarIcon.INFORMATION,
             title=title,
             content=content,
             # 竖排：这些原因文本往往一两句话，横排会被截在第一行
@@ -1857,6 +1873,7 @@ class MainWindow(FluentWindow):
         btn = PushButton(self.tr("去刷新"))
         btn.clicked.connect(go_refresh)
         bar.addWidget(btn)
+        bar.show()
 
     def on_worker_warning(self, warn_data: dict) -> None:
         """任务**成功**了但有该说的话（目前只有字幕三码）：只弹 InfoBar。
@@ -1899,7 +1916,7 @@ class MainWindow(FluentWindow):
         """
         logger.debug("on_worker_error: code={}", err_data.get("code"))
         if getattr(self, "_worker_error_dialog_showing", False):
-            logger.debug("WorkerErrorDialog 已在显示，跳过本次")
+            log_text(logger, "debug", "WorkerErrorDialog 已在显示，跳过本次")
             return
 
         self._worker_error_dialog_showing = True
@@ -1921,7 +1938,7 @@ class MainWindow(FluentWindow):
                 if count > 0:
                     InfoBar.success(
                         self.tr("操作成功"),
-                        self.tr(f"已恢复 {count} 个挂起的任务"),
+                        self.tr("已恢复 {0} 个挂起的任务").format(count),
                         duration=3000,
                         parent=self,
                         position=InfoBarPosition.TOP_RIGHT,
@@ -1962,7 +1979,7 @@ class MainWindow(FluentWindow):
 
             dlg.exec()
         except Exception as e:
-            logger.error(f"[MainWindow] on_worker_error 异常: {e}")
+            log_text(logger, "error", "[MainWindow] on_worker_error 异常: {0}", e)
             logger.exception(e)
         finally:
             self._worker_error_dialog_showing = False

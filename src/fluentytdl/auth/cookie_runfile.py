@@ -25,6 +25,8 @@ import time
 from collections.abc import Iterator
 from contextlib import contextmanager
 
+from fluentytdl.utils.localized_log import log_text
+
 from ..utils.logger import logger
 
 # 临时副本文件名前缀。`sweep_stale_cookie_runfiles()` 靠它做启动兜底清理。
@@ -110,5 +112,5 @@ def sweep_stale_cookie_runfiles(*, min_age_seconds: float = 3600.0) -> int:
         except OSError:
             continue
     if removed:
-        logger.info(f"[cookie_runfile] 启动清理遗留运行副本: {removed} 个")
+        log_text(logger, "info", "[cookie_runfile] 启动清理遗留运行副本: {0} 个", removed)
     return removed

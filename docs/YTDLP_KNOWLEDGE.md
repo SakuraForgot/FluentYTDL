@@ -114,7 +114,7 @@
 
 **症状**：想强制使用 `android` 或 `ios` 客户端以获取更好的格式
 
-**根因**：Android/iOS 模拟可能返回不完整的格式列表；yt-dlp 的默认策略（tv → web_safari → android_vr）经过充分测试
+**根因**：Android/iOS 模拟可能返回不完整的格式列表；yt-dlp 的默认策略（由实际内核版本及请求认证状态决定）经过充分测试
 
 **规则**：绝对不要通过 extractor_args 强制 `player_client`；信任 yt-dlp 默认值
 

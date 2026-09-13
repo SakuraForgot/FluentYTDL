@@ -19,6 +19,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from fluentytdl.utils.ui_text import tr_text
+
 # MP4 和 MKV 都支持字幕嵌入，只有 WebM 不支持 SRT/ASS
 _SUBTITLE_COMPATIBLE_CONTAINERS = {"mp4", "mkv", "mov", "m4v"}
 
@@ -131,16 +133,23 @@ def check_container_codec_compat(
     if container == "mp4":
         if vcodec.startswith("vp") or vcodec.startswith("av01"):
             warnings.append(
-                f"⚠️ {vcodec.upper()} 视频流封装为 MP4 可能需要转码或支持不佳，可能耗时较长。"
+                tr_text(
+                    "⚠️ {0} 视频在 MP4 中的播放兼容性取决于播放器。若无法播放，可尝试 MKV 或其他编码。",
+                    vcodec.upper(),
+                )
             )
         if acodec == "opus":
-            warnings.append("⚠️ Opus 音频流封装为 MP4 通常需要重做编码，将触发 FFmpeg 慢速转码。")
+            warnings.append(
+                tr_text("⚠️ 部分播放器不支持 MP4 中的 Opus 音频。可尝试 MKV，或选择 AAC 音轨。")
+            )
 
     elif container == "webm":
         if vcodec.startswith("avc") or vcodec.startswith("hevc") or vcodec.startswith("h26"):
-            warnings.append(f"❌ {vcodec.upper()} 与 WebM 不兼容，强烈建议使用 MP4 或 MKV。")
+            warnings.append(
+                tr_text("❌ {0} 与 WebM 不兼容，强烈建议使用 MP4 或 MKV。", vcodec.upper())
+            )
         if acodec in ("m4a", "aac"):
-            warnings.append(f"❌ {acodec.upper()} 与 WebM 不兼容。")
+            warnings.append(tr_text("❌ {0} 与 WebM 不兼容。", acodec.upper()))
 
     return warnings
 
@@ -158,10 +167,13 @@ def check_subtitle_container_compat(
     container = container.lower()
 
     if container == "webm":
-        return "WebM 容器不支持嵌入 SRT/ASS 等常用字幕。建议切换至 MKV 或 MP4。"
+        return tr_text("WebM 容器不支持嵌入 SRT/ASS 等常用字幕。建议切换至 MKV 或 MP4。")
 
     if container == "mp4" and subtitle_lang_count > 1:
-        return f"MP4 对多语言软字幕（您已选择 {subtitle_lang_count} 种）支持有限。建议切换至 MKV。"
+        return tr_text(
+            "已选择 {0} 种字幕语言。为便于保留多条字幕，建议使用 MKV；MP4 的播放支持取决于播放器。",
+            subtitle_lang_count,
+        )
 
     return None
 
@@ -200,8 +212,11 @@ def check_audio_multistream_container_compat(container: str, track_count: int) -
     container = container.lower()
 
     if container == "webm":
-        return "⚠ WebM 容器对多音轨支持有限，合并过程可能报错。强烈建议切换至 MKV。"
+        return tr_text("⚠ WebM 容器对多音轨支持有限，合并过程可能报错。强烈建议切换至 MKV。")
     if container == "mp4":
-        return f"⚠ MP4 容器包含多条音轨（已选 {track_count} 种）时，在部分自带播放器中可能无法切换音频或出现异常。\n建议使用 MKV 容器或专业播放器（如 VLC/PotPlayer）。"
+        return tr_text(
+            "⚠ MP4 容器包含多条音轨（已选 {0} 种）时，在部分自带播放器中可能无法切换音频或出现异常。\n建议使用 MKV 容器或专业播放器（如 VLC/PotPlayer）。",
+            track_count,
+        )
 
     return None

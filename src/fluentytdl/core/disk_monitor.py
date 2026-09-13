@@ -9,6 +9,9 @@ from pathlib import Path
 
 from PySide6.QtCore import QObject, QTimer, Signal
 
+from fluentytdl.utils.localized_log import log_text
+from fluentytdl.utils.ui_text import tr_text
+
 from ..utils.logger import logger
 
 
@@ -76,14 +79,14 @@ class DiskMonitor(QObject):
             return int(usage.free / 1024 / 1024)
 
         except Exception as e:
-            logger.error(f"获取磁盘空间失败: {e}")
+            log_text(logger, "error", "获取磁盘空间失败: {0}", e)
             return -1
 
     def get_free_space_display(self) -> str:
         """获取格式化的可用空间显示"""
         mb = self.get_free_space_mb()
         if mb < 0:
-            return "未知"
+            return tr_text("未知")
         elif mb < 1024:
             return f"{mb} MB"
         else:
@@ -99,7 +102,7 @@ class DiskMonitor(QObject):
         # 严重不足
         if free_mb < self.CRITICAL_THRESHOLD:
             if not self._last_critical:
-                logger.error(f"磁盘空间严重不足: {free_mb} MB")
+                log_text(logger, "error", "磁盘空间严重不足: {0} MB", free_mb)
                 self.critical_space.emit(free_mb)
                 self._last_critical = True
                 self._last_warning = True
@@ -107,7 +110,7 @@ class DiskMonitor(QObject):
         # 空间不足
         elif free_mb < self.WARNING_THRESHOLD:
             if not self._last_warning:
-                logger.warning(f"磁盘空间不足: {free_mb} MB")
+                log_text(logger, "warning", "磁盘空间不足: {0} MB", free_mb)
                 self.low_space_warning.emit(free_mb)
                 self._last_warning = True
             self._last_critical = False

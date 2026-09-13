@@ -263,7 +263,7 @@ KNOWN_ELEMENTS = frozenset(
 
 def test_ts_files_exist() -> None:
     """扫不到 .ts 的话，下面的 parametrize 会退化成零用例，假绿。"""
-    assert len(TS_FILES) >= 4, f"assets/locales 下只找到 {len(TS_FILES)} 个 .ts"
+    assert {p.stem for p in TS_FILES} == {"fluentytdl_en_US", "fluentytdl_zh_CN"}
 
 
 @pytest.mark.parametrize("ts_path", TS_FILES, ids=lambda p: p.name)

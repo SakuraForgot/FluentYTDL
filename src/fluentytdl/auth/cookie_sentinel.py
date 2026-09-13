@@ -24,6 +24,9 @@ from pathlib import Path
 
 from PySide6.QtCore import QCoreApplication, QObject, Signal
 
+from fluentytdl.utils.localized_log import log_text
+from fluentytdl.utils.ui_text import tr_text
+
 from ..utils.logger import logger
 from .auth_service import BROWSER_COMBO_ITEMS, AuthSourceType, auth_service
 
@@ -110,22 +113,30 @@ class CookieSentinel(QObject):
 
             try:
                 shutil.move(str(old_cookie_path), str(new_cookie_path))
-                logger.info(
-                    f"[CookieSentinel] 已迁移旧版 Cookie 文件: {old_cookie_path.name} -> {new_cookie_path.name}"
+                log_text(
+                    logger,
+                    "info",
+                    "[CookieSentinel] 已迁移旧版 Cookie 文件: {0} -> {1}",
+                    old_cookie_path.name,
+                    new_cookie_path.name,
                 )
             except Exception as e:
-                logger.warning(f"[CookieSentinel] 迁移旧版 Cookie 文件失败: {e}")
+                log_text(logger, "warning", "[CookieSentinel] 迁移旧版 Cookie 文件失败: {0}", e)
 
         if old_meta_path.exists() and not new_meta_path.exists():
             import shutil
 
             try:
                 shutil.move(str(old_meta_path), str(new_meta_path))
-                logger.info(
-                    f"[CookieSentinel] 已迁移旧版 Cookie 元数据: {old_meta_path.name} -> {new_meta_path.name}"
+                log_text(
+                    logger,
+                    "info",
+                    "[CookieSentinel] 已迁移旧版 Cookie 元数据: {0} -> {1}",
+                    old_meta_path.name,
+                    new_meta_path.name,
                 )
             except Exception as e:
-                logger.warning(f"[CookieSentinel] 迁移旧版 Cookie 元数据失败: {e}")
+                log_text(logger, "warning", "[CookieSentinel] 迁移旧版 Cookie 元数据失败: {0}", e)
 
         # 设置兼容属性（默认指向 youtube）
         self.cookie_path = new_cookie_path
@@ -144,7 +155,7 @@ class CookieSentinel(QObject):
         # 真相源写入闸门的失败原因（按平台），供设置页状态卡标红显示
         self._commit_warnings: dict[str, str] = {}
 
-        logger.info(f"Cookie Sentinel 初始化: {self.cookie_path}")
+        log_text(logger, "info", "Cookie Sentinel 初始化: {0}", self.cookie_path)
 
     # ==================== 元数据管理 ====================
 
@@ -163,7 +174,7 @@ class CookieSentinel(QObject):
 
             return json.loads(meta_path.read_text(encoding="utf-8"))
         except Exception as e:
-            logger.warning(f"[CookieSentinel] 读取元数据失败 ({platform}): {e}")
+            log_text(logger, "warning", "[CookieSentinel] 读取元数据失败 ({0}): {1}", platform, e)
             return None
 
     def _save_meta(self, source: str, cookie_count: int = 0, platform: str = "youtube") -> None:
@@ -182,11 +193,16 @@ class CookieSentinel(QObject):
         try:
             meta_path = self.get_meta_path_for_platform(platform)
             meta_path.write_text(json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8")
-            logger.debug(
-                f"[CookieSentinel] 元数据已保存 ({platform}): {source}, {cookie_count} cookies"
+            log_text(
+                logger,
+                "debug",
+                "[CookieSentinel] 元数据已保存 ({0}): {1}, {2} cookies",
+                platform,
+                source,
+                cookie_count,
             )
         except Exception as e:
-            logger.warning(f"[CookieSentinel] 保存元数据失败 ({platform}): {e}")
+            log_text(logger, "warning", "[CookieSentinel] 保存元数据失败 ({0}): {1}", platform, e)
 
     def _clear_cookie_and_meta(self, platform: str = "youtube") -> None:
         """清除 Cookie 文件和元数据"""
@@ -195,12 +211,12 @@ class CookieSentinel(QObject):
             meta_path = self.get_meta_path_for_platform(platform)
             if cookie_path.exists():
                 cookie_path.unlink()
-                logger.info(f"[CookieSentinel] 已删除旧 Cookie 文件: {cookie_path}")
+                log_text(logger, "info", "[CookieSentinel] 已删除旧 Cookie 文件: {0}", cookie_path)
             if meta_path.exists():
                 meta_path.unlink()
-                logger.info(f"[CookieSentinel] 已删除旧元数据文件: {meta_path}")
+                log_text(logger, "info", "[CookieSentinel] 已删除旧元数据文件: {0}", meta_path)
         except Exception as e:
-            logger.warning(f"[CookieSentinel] 清除文件失败 ({platform}): {e}")
+            log_text(logger, "warning", "[CookieSentinel] 清除文件失败 ({0}): {1}", platform, e)
 
     def get_cookie_source(self, platform: str = "youtube") -> str | None:
         """
@@ -230,7 +246,7 @@ class CookieSentinel(QObject):
         actual_source = self.get_cookie_source(platform)
         if actual_source is None:
             # 旧版本的 Cookie 文件没有元数据
-            logger.debug("[CookieSentinel] Cookie 文件缺少来源元数据")
+            log_text(logger, "debug", "[CookieSentinel] Cookie 文件缺少来源元数据")
             return False, None
 
         # WebView2 多账号场景下，source 可能写成 webview2:<account_id>，此时视为与 dle 一致
@@ -239,8 +255,12 @@ class CookieSentinel(QObject):
             normalized_actual = "webview2"
 
         if normalized_actual != expected_source:
-            logger.debug(
-                f"[CookieSentinel] Cookie 来源不匹配: 现有={actual_source}, 期望={expected_source}"
+            log_text(
+                logger,
+                "debug",
+                "[CookieSentinel] Cookie 来源不匹配: 现有={0}, 期望={1}",
+                actual_source,
+                expected_source,
             )
             return False, actual_source
 
@@ -381,21 +401,25 @@ class CookieSentinel(QObject):
         dest = self.get_cookie_path_for_platform(platform)
 
         if not src_path.exists():
-            return self._reject_commit(platform, f"来源文件不存在: {src_path.name}")
+            return self._reject_commit(platform, tr_text("来源文件不存在: {0}", src_path.name))
 
         try:
             content = src_path.read_text(encoding="utf-8", errors="replace")
         except OSError as e:
-            return self._reject_commit(platform, f"读取来源文件失败: {e}")
+            return self._reject_commit(platform, tr_text("读取来源文件失败: {0}", e))
 
         cookies = auth_service._parse_netscape_cookies(content)
         if not cookies:
-            return self._reject_commit(platform, "未解析出任何 Cookie（可能不是 Netscape 格式）")
+            return self._reject_commit(
+                platform, tr_text("未解析出任何 Cookie（可能不是 Netscape 格式）")
+            )
 
         # 必需 Cookie 齐全才允许覆盖真相源
         validation = auth_service._validate_cookies(cookies, platform)
         if not validation.get("valid"):
-            return self._reject_commit(platform, validation.get("message") or "Cookie 校验未通过")
+            return self._reject_commit(
+                platform, validation.get("message") or tr_text("Cookie 校验未通过")
+            )
 
         # 原子落盘：同卷 os.replace，与 utils/paths.py::_install_item() 同一手法
         if src_path.resolve() != dest.resolve():
@@ -409,28 +433,41 @@ class CookieSentinel(QObject):
                     tmp.unlink(missing_ok=True)
                 except OSError:
                     pass
-                return self._reject_commit(platform, f"写入真相源失败: {e}")
+                return self._reject_commit(platform, tr_text("写入真相源失败: {0}", e))
 
         self._save_meta(source_tag, len(cookies), platform)
         self._commit_warnings.pop(platform, None)
         auth_service._update_status_from_file(str(dest), platform)
         self._last_update = datetime.now()
-        logger.info(
-            f"[CookieSentinel] {platform} 真相源已更新: {dest.name}"
-            f"（{len(cookies)} 个 Cookie，来源 {source_tag}）"
+        log_text(
+            logger,
+            "info",
+            "[CookieSentinel] {0} 真相源已更新: {1}（{2} 个 Cookie，来源 {3}）",
+            platform,
+            dest.name,
+            len(cookies),
+            source_tag,
         )
-        return True, validation.get("message") or "已更新"
+        return True, validation.get("message") or tr_text("已更新")
 
     def _reject_commit(self, platform: str, reason: str) -> tuple[bool, str]:
         """记录一次被闸门拒绝的写入（目的地保持不变），返回 (False, reason)"""
         self._commit_warnings[platform] = reason
         if self.get_cookie_path_for_platform(platform).exists():
-            logger.warning(
-                f"[CookieSentinel] {platform} 新 Cookie 不可用，已保留旧真相源: {reason}"
+            log_text(
+                logger,
+                "warning",
+                "[CookieSentinel] {0} 新 Cookie 不可用，已保留旧真相源: {1}",
+                platform,
+                reason,
             )
         else:
-            logger.warning(
-                f"[CookieSentinel] {platform} 新 Cookie 不可用且无旧文件可回退: {reason}"
+            log_text(
+                logger,
+                "warning",
+                "[CookieSentinel] {0} 新 Cookie 不可用且无旧文件可回退: {1}",
+                platform,
+                reason,
             )
         return False, reason
 
@@ -461,7 +498,7 @@ class CookieSentinel(QObject):
         reason = ""
 
         if not exists:
-            reason = QCoreApplication.translate("CookieSentinel", "尚无 Cookie 文件")
+            reason = tr_text("尚无 Cookie 文件")
         else:
             try:
                 content = cookie_path.read_text(encoding="utf-8", errors="replace")
@@ -497,7 +534,9 @@ class CookieSentinel(QObject):
             if auth_service.current_source == AuthSourceType.WEBVIEW2:
                 return bool(auth_service.list_webview2_accounts(platform))
         except Exception as e:
-            logger.debug(f"[CookieSentinel] 读取 {platform} WebView2 账号失败: {e}")
+            log_text(
+                logger, "debug", "[CookieSentinel] 读取 {0} WebView2 账号失败: {1}", platform, e
+            )
 
         return (
             self.get_cookie_path_for_platform(platform).exists()
@@ -508,17 +547,19 @@ class CookieSentinel(QObject):
         """启动刷新收尾：把健康度交给 UI 层（best-effort，绝不影响启动）"""
         try:
             health = self.get_startup_health()
-            logger.info(
-                "[CookieSentinel] 启动健康度: "
-                + "; ".join(
+            log_text(
+                logger,
+                "info",
+                "[CookieSentinel] 启动健康度: {0}",
+                "; ".join(
                     f"{p}(enabled={h['enabled']} exists={h['exists']} valid={h['valid']}"
                     f" expiring={h['expiring_soon']})"
                     for p, h in health.items()
-                )
+                ),
             )
             self.startupHealthReady.emit(health)
         except Exception as e:
-            logger.warning(f"[CookieSentinel] 发出启动健康度失败: {e}")
+            log_text(logger, "warning", "[CookieSentinel] 发出启动健康度失败: {0}", e)
 
     def silent_refresh_on_startup(self) -> None:
         """
@@ -533,7 +574,7 @@ class CookieSentinel(QObject):
 
         def _refresh_worker():
             try:
-                logger.info("[CookieSentinel] 启动时静默刷新开始...")
+                log_text(logger, "info", "[CookieSentinel] 启动时静默刷新开始...")
 
                 # 重置回退状态
                 self._using_fallback = False
@@ -543,7 +584,7 @@ class CookieSentinel(QObject):
                 current_source = auth_service.current_source
 
                 if current_source == AuthSourceType.NONE:
-                    logger.info("[CookieSentinel] 未启用验证源，跳过静默刷新")
+                    log_text(logger, "info", "[CookieSentinel] 未启用验证源，跳过静默刷新")
                     return
 
                 # WebView2 模式是交互式流程（需用户登录），不能在启动时自动触发
@@ -554,7 +595,12 @@ class CookieSentinel(QObject):
                         )
                         if not (cache_file and Path(cache_file).exists()):
                             # 该平台用户从未登录过，这不是错误
-                            logger.debug(f"[CookieSentinel] {plat} 尚无 WebView2 登录态，跳过同步")
+                            log_text(
+                                logger,
+                                "debug",
+                                "[CookieSentinel] {0} 尚无 WebView2 登录态，跳过同步",
+                                plat,
+                            )
                             continue
 
                         account = auth_service.get_current_webview2_account(platform=plat)
@@ -565,11 +611,19 @@ class CookieSentinel(QObject):
                         )
                         ok, reason = self._commit_to_truth_source(cache_file, plat, source_tag)
                         if ok:
-                            logger.info(f"[CookieSentinel] WebView2 {plat} Cookie 同步完成")
+                            log_text(
+                                logger,
+                                "info",
+                                "[CookieSentinel] WebView2 {0} Cookie 同步完成",
+                                plat,
+                            )
                         else:
-                            logger.info(
-                                f"[CookieSentinel] WebView2 {plat} Cookie 未同步"
-                                f"（沿用旧真相源）: {reason}"
+                            log_text(
+                                logger,
+                                "info",
+                                "[CookieSentinel] WebView2 {0} Cookie 未同步（沿用旧真相源）: {1}",
+                                plat,
+                                reason,
                             )
 
                     return
@@ -583,10 +637,12 @@ class CookieSentinel(QObject):
                 if current_source == AuthSourceType.FILE:
                     # 手动导入文件：逐平台过写入闸门（元数据与状态由闸门写入）
                     if self._copy_from_auth_service():
-                        logger.info("[CookieSentinel] 已同步手动导入的 Cookie 文件")
+                        log_text(logger, "info", "[CookieSentinel] 已同步手动导入的 Cookie 文件")
                     else:
-                        logger.warning(
-                            "[CookieSentinel] 手动导入的 Cookie 文件不可用，沿用旧真相源"
+                        log_text(
+                            logger,
+                            "warning",
+                            "[CookieSentinel] 手动导入的 Cookie 文件不可用，沿用旧真相源",
                         )
                     return
 
@@ -597,34 +653,45 @@ class CookieSentinel(QObject):
                     # 提取成功，元数据已在 _update_from_browser 中保存
                     self._using_fallback = False
                     self._fallback_warning = None
-                    logger.info(
-                        f"[CookieSentinel] 启动时静默刷新成功：{auth_service.current_source_display}"
+                    log_text(
+                        logger,
+                        "info",
+                        "[CookieSentinel] 启动时静默刷新成功：{0}",
+                        auth_service.current_source_display,
                     )
-                    logger.info(
-                        f"[CookieSentinel] 提取了 {auth_service.last_status.cookie_count} 个 Cookie"
+                    log_text(
+                        logger,
+                        "info",
+                        "[CookieSentinel] 提取了 {0} 个 Cookie",
+                        auth_service.last_status.cookie_count,
                     )
                 else:
                     # 提取失败，检查是否有旧 Cookie 可用作回退
                     if self.exists and actual_source:
                         # 有旧 Cookie，标记为回退状态
                         self._using_fallback = True
-                        self._fallback_warning = (
-                            f"配置为 {auth_service.current_source_display}，"
-                            f"但提取失败，当前使用 {self._get_source_display(actual_source)} 的 Cookie"
+                        self._fallback_warning = tr_text(
+                            "配置为 {0}，但提取失败，当前使用 {1} 的 Cookie",
+                            auth_service.current_source_display,
+                            self._get_source_display(actual_source),
                         )
                         logger.warning(f"[CookieSentinel] {self._fallback_warning}")
                         # 验证回退 Cookie 的有效性，供 UI 层 check_cookie_status 使用
                         auth_service._update_status_from_file(str(self.cookie_path), "youtube")
                     else:
-                        logger.warning(
-                            f"[CookieSentinel] 启动时静默刷新失败: "
-                            f"{auth_service.last_status.message}"
+                        log_text(
+                            logger,
+                            "warning",
+                            "[CookieSentinel] 启动时静默刷新失败: {0}",
+                            auth_service.last_status.message,
                         )
-                    logger.info("[CookieSentinel] 用户可在设置页点击'手动刷新'重试")
+                    log_text(logger, "info", "[CookieSentinel] 用户可在设置页点击'手动刷新'重试")
 
             except Exception as e:
                 # 静默失败，不影响启动
-                logger.warning(f"[CookieSentinel] 启动时静默刷新异常（预期行为）: {e}")
+                log_text(
+                    logger, "warning", "[CookieSentinel] 启动时静默刷新异常（预期行为）: {0}", e
+                )
 
             finally:
                 # 无论走哪条分支（含未配置验证源、含异常）都恰好发出一次健康度，
@@ -663,12 +730,12 @@ class CookieSentinel(QObject):
             self._updating.update(targets)
 
         try:
-            logger.info("[CookieSentinel] 用户触发强制刷新（允许 UAC）")
+            log_text(logger, "info", "[CookieSentinel] 用户触发强制刷新（允许 UAC）")
 
             current_source = auth_service.current_source
 
             if current_source == AuthSourceType.NONE:
-                return False, "未配置验证源，请先在设置中选择浏览器或导入 Cookie 文件"
+                return False, tr_text("未配置验证源，请先在设置中选择浏览器或导入 Cookie 文件")
 
             # 获取当前来源状态（只检查，不清理）
             expected_source = current_source.value
@@ -682,14 +749,17 @@ class CookieSentinel(QObject):
                     # 元数据已在写入闸门中保存
                     self._using_fallback = False
                     self._fallback_warning = None
-                    return True, "已更新为手动导入的 Cookie 文件"
+                    return True, tr_text("已更新为手动导入的 Cookie 文件")
                 else:
                     # 失败时保留旧文件
                     if has_fallback and actual_source:
                         self._using_fallback = True
-                        self._fallback_warning = f"导入失败，继续使用 {self._get_source_display(actual_source)} 的 Cookie"
-                        return False, "导入失败（保留旧 Cookie）"
-                    return False, "手动导入的 Cookie 文件不存在或无效"
+                        self._fallback_warning = tr_text(
+                            "导入失败，继续使用 {0} 的 Cookie",
+                            self._get_source_display(actual_source),
+                        )
+                        return False, tr_text("导入失败（保留旧 Cookie）")
+                    return False, tr_text("手动导入的 Cookie 文件不存在或无效")
 
             # 浏览器来源：强制刷新（允许 UAC）
             success = self._update_from_browser(silent=False, force=True, platform=platform)
@@ -698,9 +768,7 @@ class CookieSentinel(QObject):
                 # 提取成功，元数据已在写入闸门中保存
                 self._using_fallback = False
                 self._fallback_warning = None
-                msg = QCoreApplication.translate("CookieSentinel", "✅ Cookie 已更新（{}）").format(
-                    auth_service.current_source_display
-                )
+                msg = tr_text("✅ Cookie 已更新（{}）").format(auth_service.current_source_display)
                 if auth_service.last_status.cookie_count > 0:
                     msg += QCoreApplication.translate(
                         "CookieSentinel", "\n提取了 {} 个 Cookie"
@@ -718,12 +786,12 @@ class CookieSentinel(QObject):
                     ).format(
                         auth_service.current_source_display, self._get_source_display(actual_source)
                     )
-                    return False, f"更新失败: {detail}\n（保留旧 Cookie 可用）"
-                return False, f"更新失败: {detail}"
+                    return False, tr_text("更新失败: {0}\n（保留旧 Cookie 可用）", detail)
+                return False, tr_text("更新失败: {0}", detail)
 
         except Exception as e:
-            logger.exception("[CookieSentinel] 强制刷新异常")
-            return False, f"更新异常: {e}"
+            log_text(logger, "exception", "[CookieSentinel] 强制刷新异常")
+            return False, tr_text("更新异常: {0}", e)
 
         finally:
             with self._update_lock:
@@ -789,7 +857,7 @@ class CookieSentinel(QObject):
         # 实时读取 Cookie 文件，获取真实数量和有效性
         cookie_count = 0
         cookie_valid = False
-        cookie_valid_msg = "未读取"
+        cookie_valid_msg = tr_text("未读取")
 
         if exists:
             try:
@@ -800,7 +868,9 @@ class CookieSentinel(QObject):
                 cookie_valid = auth_service.last_status.valid
                 cookie_valid_msg = auth_service.last_status.message
             except Exception as e:
-                logger.debug(f"[CookieSentinel] 读取Cookie文件失败 ({platform}): {e}")
+                log_text(
+                    logger, "debug", "[CookieSentinel] 读取Cookie文件失败 ({0}): {1}", platform, e
+                )
 
         return {
             "exists": exists,
@@ -834,7 +904,7 @@ class CookieSentinel(QObject):
         更宽 —— 用户的旧真相源还在用，界面上不该突然显示成裸 id。
         """
         if not source_id:
-            return "未知"
+            return tr_text("未知")
 
         # 浏览器名都是专名，直接复用下拉框那份唯一列表，不再手抄第 N 份
         display_names = {source.value: label for source, label in BROWSER_COMBO_ITEMS}
@@ -842,9 +912,9 @@ class CookieSentinel(QObject):
             {
                 # 已停止支持，但老 meta 里仍可能存着，保留展示名
                 "chrome": "Google Chrome",
-                "centbrowser": "百分浏览器 (Cent)",
-                "webview2": QCoreApplication.translate("CookieSentinel", "登录获取 (WebView2)"),
-                "file": QCoreApplication.translate("CookieSentinel", "手动导入"),
+                "centbrowser": tr_text("百分浏览器 (Cent)"),
+                "webview2": tr_text("登录获取 (WebView2)"),
+                "file": tr_text("手动导入"),
             }
         )
 
@@ -855,9 +925,7 @@ class CookieSentinel(QObject):
                 return QCoreApplication.translate(
                     "CookieSentinel", "登录获取 (WebView2 - {})"
                 ).format(account.localized_name)
-            return QCoreApplication.translate("CookieSentinel", "登录获取 (WebView2 - {})").format(
-                account_id[:8]
-            )
+            return tr_text("登录获取 (WebView2 - {})").format(account_id[:8])
 
         return display_names.get(source_id, source_id)
 
@@ -890,8 +958,11 @@ class CookieSentinel(QObject):
                 if not (auth_cookie_file and Path(auth_cookie_file).exists()):
                     self._reject_commit(
                         plat,
-                        f"从 {auth_service.current_source_display} 提取失败: "
-                        f"{auth_service.last_status.message}",
+                        tr_text(
+                            "从 {0} 提取失败: {1}",
+                            auth_service.current_source_display,
+                            auth_service.last_status.message,
+                        ),
                     )
                     continue
 
@@ -905,10 +976,10 @@ class CookieSentinel(QObject):
                 success_any = success_any or ok
             except Exception as e:
                 if silent:
-                    logger.debug(f"[CookieSentinel] {plat} 静默更新失败: {e}")
+                    log_text(logger, "debug", "[CookieSentinel] {0} 静默更新失败: {1}", plat, e)
                 else:
-                    logger.warning(f"[CookieSentinel] {plat} 更新失败: {e}")
-                self._commit_warnings[plat] = f"提取过程异常: {e}"
+                    log_text(logger, "warning", "[CookieSentinel] {0} 更新失败: {1}", plat, e)
+                self._commit_warnings[plat] = tr_text("提取过程异常: {0}", e)
 
         return success_any
 
@@ -927,14 +998,14 @@ class CookieSentinel(QObject):
             try:
                 auth_cookie_file = auth_service.get_cookie_file_for_ytdlp(platform=platform)
                 if not (auth_cookie_file and Path(auth_cookie_file).exists()):
-                    self._reject_commit(platform, "手动导入的 Cookie 文件不存在")
+                    self._reject_commit(platform, tr_text("手动导入的 Cookie 文件不存在"))
                     continue
 
                 ok, _reason = self._commit_to_truth_source(auth_cookie_file, platform, "file")
                 success_any = success_any or ok
             except Exception as e:
-                logger.error(f"[CookieSentinel] 复制 {platform} 失败: {e}")
-                self._commit_warnings[platform] = f"导入过程异常: {e}"
+                log_text(logger, "error", "[CookieSentinel] 复制 {0} 失败: {1}", platform, e)
+                self._commit_warnings[platform] = tr_text("导入过程异常: {0}", e)
 
         return success_any
 

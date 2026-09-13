@@ -8,6 +8,8 @@
 本模块现在只保留子进程异常本身。
 """
 
+from fluentytdl.utils.message_catalog import english
+
 
 class YtDlpExecutionError(Exception):
     """当 yt-dlp 子进程非正常退出时抛出，携带完整的上下文字段以便后续诊断"""
@@ -20,7 +22,7 @@ class YtDlpExecutionError(Exception):
         *,
         phase: str = "",
     ):
-        super().__init__(f"yt-dlp 执行失败 (退出码: {exit_code})")
+        super().__init__(english("yt-dlp 执行失败 (退出码: {0})", exit_code))
         self.exit_code = exit_code
         self.stderr = stderr
         self.parsed_json = parsed_json or {}

@@ -13,6 +13,7 @@ from __future__ import annotations
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import QWidget
 from qfluentwidgets import (
+    ComboBox,
     FluentIcon,
     MessageBox,
     ProgressBar,
@@ -24,6 +25,7 @@ from qfluentwidgets import (
 )
 
 from fluentytdl.ui.components.common.custom_info_bar import InfoBar
+from fluentytdl.utils.ui_text import tr_text
 
 from ....core.component_update_manager import component_update_manager
 
@@ -59,6 +61,16 @@ class AppUpdateSettingCard(SettingCard):
         self._downloading = False
         self._state = self._IDLE
 
+        self.channelCombo = ComboBox(self)
+        self.channelCombo.addItems([self.tr("稳定版 (stable)"), self.tr("预发布 (pre)")])
+        self.channelCombo.setCurrentIndex(
+            1 if component_update_manager.get_update_channel() == "pre" else 0
+        )
+        self.channelCombo.currentIndexChanged.connect(self._on_channel_selected)
+        component_update_manager.channel_changed.connect(self._on_channel_changed)
+        self.hBoxLayout.addWidget(self.channelCombo)
+        self.hBoxLayout.addSpacing(10)
+
         # 进度条
         self.progressBar = ProgressBar(self)
         self.progressBar.setRange(0, 100)
@@ -91,6 +103,7 @@ class AppUpdateSettingCard(SettingCard):
         component_update_manager.app_update_available.connect(self._on_update_available)
         component_update_manager.app_no_update.connect(self._on_no_update)
         component_update_manager.app_check_error.connect(self._on_check_error)
+        component_update_manager.app_check_started.connect(self._on_check_started)
         component_update_manager.download_progress.connect(self._on_download_progress)
         component_update_manager.download_finished.connect(self._on_download_finished)
         component_update_manager.download_error.connect(self._on_download_error)
@@ -102,6 +115,7 @@ class AppUpdateSettingCard(SettingCard):
     def _set_state(self, state: str, text: str) -> None:
         """状态和按钮文案必须一起改。"""
         self._state = state
+        self.channelCombo.setEnabled(state in {self._IDLE, self._UPDATE_AVAILABLE})
         self.actionButton.setText(text)
 
     def _on_action_clicked(self) -> None:
@@ -113,14 +127,15 @@ class AppUpdateSettingCard(SettingCard):
 
     def _start_check(self) -> None:
         """开始检查更新（用户手动点击）。"""
-        # 检查版本锁定（beta/pre）
-        if component_update_manager.is_locked():
-            self._show_locked_dialog()
-            return
-
         self._set_state(self._CHECKING, self.tr("正在检查..."))
         self.actionButton.setEnabled(False)
         component_update_manager.check_app_update(silent=False)
+
+    def _on_check_started(self) -> None:
+        self._set_state(self._CHECKING, self.tr("正在检查..."))
+        self.actionButton.setEnabled(False)
+        self.changelogButton.hide()
+        self._latest_info = None
 
     def _start_download(self) -> None:
         """开始下载更新。"""
@@ -153,8 +168,8 @@ class AppUpdateSettingCard(SettingCard):
         is_pre = info.get("is_prerelease", False)
         prefix = self.tr("预发布 ") if is_pre else ""
 
-        self.setTitle(f"FluentYTDL ({prefix}更新)")
-        self.setContent(f"当前: {self._current_version}  |  最新: {latest_ver}")
+        self.setTitle(tr_text("FluentYTDL ({0}更新)", prefix))
+        self.setContent(tr_text("当前: {0}  |  最新: {1}", self._current_version, latest_ver))
         self._set_state(self._UPDATE_AVAILABLE, self.tr("立即更新"))
         self.changelogButton.setVisible(True)
 
@@ -165,13 +180,16 @@ class AppUpdateSettingCard(SettingCard):
 
         InfoBar.info(
             self.tr("发现新版本"),
-            f"FluentYTDL {latest_ver} 已可用",
+            tr_text("FluentYTDL {0} 已可用", latest_ver),
             duration=10000,
             parent=self.window(),
         )
 
     def _on_no_update(self) -> None:
         """无更新。"""
+        self._latest_info = None
+        self.changelogButton.hide()
+        self.setTitle("FluentYTDL")
         self.actionButton.setEnabled(True)
         self._set_state(self._IDLE, self.tr("检查更新"))
         self.setContent(self.tr("当前版本: {}  |  已是最新").format(self._current_version))
@@ -196,17 +214,13 @@ class AppUpdateSettingCard(SettingCard):
         if component_update_manager.is_silent_check:
             return
 
-        if msg == "locked":
-            self._show_locked_dialog()
-            return
-
         InfoBar.error(self.tr("检查更新失败"), msg, duration=10000, parent=self.window())
 
     def _on_download_progress(self, percent: int) -> None:
         """下载进度。"""
         if self._downloading:
             self.progressBar.setValue(percent)
-            self.actionButton.setText(f"正在下载... {percent}%")
+            self.actionButton.setText(tr_text("正在下载... {0}%", percent))
 
     def _on_download_finished(self, path: str) -> None:
         """下载完成，请求应用更新。
@@ -275,44 +289,57 @@ class AppUpdateSettingCard(SettingCard):
                 "download_url": self._latest_info.get("url", ""),
                 "sha256": self._latest_info.get("sha256", ""),
                 "install_type": "full",
+                "is_prerelease": self._latest_info.get("is_prerelease", False),
+                "channel": self._latest_info.get("channel", "stable"),
             },
             parent=self.window(),
         )
         dialog.exec()
 
-    # ── Locked 弹窗 ──────────────────────────────────────
+    def _on_channel_selected(self, index: int) -> None:
+        channel = "pre" if index == 1 else "stable"
+        if channel == component_update_manager.get_update_channel():
+            return
+        if channel == "pre":
+            box = MessageBox(
+                self.tr("切换到预发布通道"),
+                self.tr(
+                    "预发布版本可能存在功能异常或兼容性问题。切换后可在应用内更新。切回 stable 不会降级，将等待更新的正式版。是否继续？"
+                ),
+                self.window(),
+            )
+            box.yesButton.setText(self.tr("切换到 pre"))
+            box.cancelButton.setText(self.tr("取消"))
+            if not box.exec():
+                self._restore_channel()
+                return
+        component_update_manager.channel_change_requested.emit(channel)
+        self._restore_channel()
 
-    def _show_locked_dialog(self) -> None:
-        """显示锁定版本提示（beta/pre 不支持自动更新）。"""
-        try:
-            from fluentytdl import __version__
-
-            ver = __version__
-        except ImportError:
-            ver = "unknown"
-
-        InfoBar.warning(
-            self.tr("检测到测试版本"),
-            f"当前运行的是 {ver} 测试/预发布版本，不支持自动更新。"
-            + self.tr("如需更新请前往 GitHub Releases 下载正式版。"),
-            duration=10000,
-            parent=self.window(),
+    def _restore_channel(self) -> None:
+        self.channelCombo.blockSignals(True)
+        self.channelCombo.setCurrentIndex(
+            1 if component_update_manager.get_update_channel() == "pre" else 0
         )
+        self.channelCombo.blockSignals(False)
+
+    def _on_channel_changed(self, channel: str) -> None:
+        self._restore_channel()
+        self.reset_state()
 
     # ── 手动触发检查 ──────────────────────────────────────
 
-    def check_for_update(self) -> None:
+    def check_for_update(self, check_session=None) -> None:
         """外部调用：自动检查更新（静默模式，不弹任何提示）。
 
         静默由 `silent=True` 真正落实：无更新 / 检查失败都不弹 InfoBar，发现新版本
         也只更新卡片自身文案，用户可见的提醒交给消息中心（标题栏小铃铛）。
         """
-        if component_update_manager.is_locked():
-            return
-        component_update_manager.check_app_update(silent=True)
+        component_update_manager.check_app_update(silent=True, check_session=check_session)
 
     def reset_state(self) -> None:
         """重置到初始状态。"""
+        self.setTitle("FluentYTDL")
         self._downloading = False
         self._latest_info = None
         self.progressBar.setVisible(False)

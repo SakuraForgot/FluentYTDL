@@ -1,0 +1,3655 @@
+{
+  "source_revisions": [
+    {
+      "before": "下载质量风控",
+      "after": "下载画质检查",
+      "english": "Download Quality Checks"
+    },
+    {
+      "before": "质量偏差拦截策略",
+      "after": "画质未达标时",
+      "english": "When Quality Is Below Target"
+    },
+    {
+      "before": "当实际下载画质无法达到预期目标时的处理方式",
+      "after": "选择实际下载分辨率低于目标时的处理方式",
+      "english": "Choose what happens when the downloaded resolution is below the target."
+    },
+    {
+      "before": "风控熔断阈值",
+      "after": "连续未达标暂停阈值",
+      "english": "Pause After Consecutive Quality Issues"
+    },
+    {
+      "before": "连续出现多少个质量异常任务后，自动暂停排队任务",
+      "after": "连续多少个任务画质未达标时，自动暂停队列",
+      "english": "Pause the queue after this many consecutive tasks fall below the target quality."
+    },
+    {
+      "before": "FFprobe 精准物理核验",
+      "after": "使用 FFprobe 核验分辨率",
+      "english": "Verify Resolution with FFprobe"
+    },
+    {
+      "before": "当系统无法从下载日志中提取实际分辨率时，强制调用 ffprobe 探测已下载视频文件的物理尺寸",
+      "after": "无法从下载日志获取分辨率时，使用 FFprobe 检查视频文件的实际分辨率",
+      "english": "Use FFprobe to read the video file’s resolution when it is unavailable in the download log."
+    },
+    {
+      "before": "自动策略展开阈值",
+      "after": "拆分播放列表的数量阈值",
+      "english": "Playlist Task Split Threshold"
+    },
+    {
+      "before": "当使用“自动判断”策略时，播放列表视频数超过此阈值将强制逐条展开，否则作为一个单任务",
+      "after": "选择“自动判断”时，超过此数量的播放列表会按视频拆分任务，否则作为一个任务下载",
+      "english": "With Auto selected, split playlists above this size into one task per video; otherwise use one task for the playlist."
+    },
+    {
+      "before": "任务入队数安全上限",
+      "after": "单次添加任务上限",
+      "english": "Tasks per Batch"
+    },
+    {
+      "before": "限制单词快速添加能塞入队列的最大任务数量，防止因过多任务导致卡死或触发严重风控",
+      "after": "限制单次快速添加的任务数量，减少界面卡顿和请求过多的风险",
+      "english": "Limit the number of tasks added at once to reduce UI delays and excessive requests."
+    },
+    {
+      "before": "输出偏好记忆",
+      "after": "默认输出格式",
+      "english": "Default Output Formats"
+    },
+    {
+      "before": "单视频容器默认",
+      "after": "单视频容器",
+      "english": "Single-video Container"
+    },
+    {
+      "before": "单视频音频默认",
+      "after": "单视频音频格式",
+      "english": "Single-video Audio Format"
+    },
+    {
+      "before": "播放列表容器默认",
+      "after": "播放列表容器",
+      "english": "Playlist Container"
+    },
+    {
+      "before": "播放列表音频默认",
+      "after": "播放列表音频格式",
+      "english": "Playlist Audio Format"
+    },
+    {
+      "before": "当视频包含多个语言配音时，优先下载哪种语言的轨段 (可多选并排序)",
+      "after": "视频有多语言音轨时，按此顺序选择音轨（可多选并排序）",
+      "english": "For videos with multiple audio languages, select tracks in this order. You can select and reorder languages."
+    },
+    {
+      "before": "手动字幕优先，自动生成字幕垫底",
+      "after": "优先人工字幕，其次自动生成字幕",
+      "english": "Prefer Uploaded, Then Auto-generated"
+    },
+    {
+      "before": "仅手动上传的字幕",
+      "after": "仅人工上传的字幕",
+      "english": "Uploaded Subtitles Only"
+    },
+    {
+      "before": "所有字幕（嵌入/外置/纯字幕下载）的默认转换目标格式",
+      "after": "设置字幕的默认保存格式，适用于嵌入、单独保存和仅下载字幕",
+      "english": "Default format for embedded subtitles, separate subtitle files, and subtitle-only downloads."
+    },
+    {
+      "before": "「仅原音」不看语言：有原音就用，没有则回退到最佳音轨",
+      "after": "此策略不按语言筛选：优先选择标记为原音的音轨，没有原音标记时选择最佳可用音轨",
+      "english": "This option ignores language preferences: use a track marked as original, or the best available track if none is marked."
+    },
+    {
+      "before": "仅原音 (无原音时回退最佳)",
+      "after": "优先原音（无原音时选最佳音轨）",
+      "english": "Original, or Best Available"
+    },
+    {
+      "before": "多音轨视频优先取哪一条：原音是视频作者录制的那一条，配音是后期加的",
+      "after": "选择多音轨视频的自动选择策略；原音与配音以平台提供的标记为准",
+      "english": "Choose how audio tracks are selected. Original and dubbed labels come from the platform."
+    },
+    {
+      "before": "Cookie 合规清洗",
+      "after": "过滤非必要 Cookie",
+      "english": "Filter Unneeded Cookies"
+    },
+    {
+      "before": "开启后仅保留 YouTube 核心 Cookie（关闭可支持其他平台，但可能暴露更多隐私数据）",
+      "after": "按 YouTube 或 X 平台保留所需 Cookie，移除无关 Cookie；关闭后保留提取到的全部 Cookie",
+      "english": "Keep the cookies needed for YouTube or X and remove unrelated cookies. Turn off to retain all extracted cookies."
+    },
+    {
+      "before": "选择 Cookie 获取方式（Cookie 卫士会自动维护生命周期）",
+      "after": "选择从浏览器提取、通过登录获取或手动导入 Cookie",
+      "english": "Choose browser extraction, sign-in, or manual import to obtain cookies."
+    },
+    {
+      "before": "开启后，每隔 24 小时自动检查所有组件更新（默认开启）",
+      "after": "启动时检查应用与组件更新；距上次自动检查不足 24 小时则跳过",
+      "english": "Check for app and component updates at startup, unless an automatic check ran in the last 24 hours."
+    },
+    {
+      "before": "用于加速 yt-dlp 解析（点击检查更新）",
+      "after": "为 yt-dlp 提供 JavaScript 执行环境（点击检查更新）",
+      "english": "Provides the JavaScript runtime used by yt-dlp. Click to check for updates."
+    },
+    {
+      "before": "用于绕过 YouTube 机器人检测（点击检查更新）",
+      "after": "为需要验证令牌的 YouTube 请求提供 PO Token（点击检查更新）",
+      "english": "Provides PO Tokens for YouTube requests that require them. Click to check for updates."
+    },
+    {
+      "before": "可留空清除；保存后用于提升可用性（偏极客/实验性）",
+      "after": "手动提供 YouTube 验证令牌；留空可清除（高级选项）",
+      "english": "Provide a YouTube verification token manually. Leave empty to clear it. Advanced option."
+    },
+    {
+      "before": "会实际铸一次 Token 并跑一次带 -v 的 yt-dlp 探测，可能需要几十秒。",
+      "after": "将检查令牌生成和 yt-dlp 连接情况，可能需要几十秒。",
+      "english": "Checks token generation and the yt-dlp connection. This may take several dozen seconds."
+    },
+    {
+      "before": "正在后台预热，不阻塞当前操作；未就绪时会自动降级为无 POT 解析。",
+      "after": "正在后台准备验证服务，您可以继续操作；服务就绪前暂不使用 PO Token 解析。",
+      "english": "Preparing the verification service in the background. You can continue using the app; parsing will proceed without PO Tokens until it is ready."
+    },
+    {
+      "before": "后台预热，不阻塞启动与解析；未就绪时自动降级为无 POT 解析。默认关闭。",
+      "after": "在后台准备验证服务，就绪前暂不使用 PO Token 解析。默认关闭。",
+      "english": "Prepares the verification service in the background. Parsing proceeds without PO Tokens until ready. Off by default."
+    },
+    {
+      "before": "自动翻译字幕易被限流(429)或拒绝，启用 POT 验证引擎可提高成功率",
+      "after": "自动翻译字幕请求可能被限流（HTTP 429）或拒绝。启用 POT 服务可能有助于完成验证。",
+      "english": "Requests for auto-translated subtitles may be rate-limited (HTTP 429) or rejected. Enabling the POT service may help with verification."
+    },
+    {
+      "before": "⚠️ 当前: {} (高风险! 可能导致 YouTube 封禁 IP 429)",
+      "after": "⚠️ 当前: {}（并发较高，可能触发 HTTP 429 请求限流）",
+      "english": "⚠️ Current: {} (high concurrency may trigger HTTP 429 rate limiting)"
+    },
+    {
+      "before": "⚠️ 当前: {} (高风险! 极易导致 429 请求过多)",
+      "after": "⚠️ 当前: {}（并发较高，可能触发 HTTP 429 请求限流）",
+      "english": "⚠️ Current: {} (high concurrency may trigger HTTP 429 rate limiting)"
+    },
+    {
+      "before": "转码后保留原片",
+      "after": "转码成功后保留原文件",
+      "english": "Keep Original After Conversion"
+    },
+    {
+      "before": "防止转码失败导致源文件丢失",
+      "after": "转换成功后仍保留下载的原始视频文件",
+      "english": "Keep the downloaded original video after conversion succeeds."
+    },
+    {
+      "before": "4K (2160p) - 安全",
+      "after": "4K (2160p)",
+      "english": "4K (2160p)"
+    },
+    {
+      "before": "5K/6K - 警告",
+      "after": "5K/6K（内存占用较高）",
+      "english": "5K/6K (More Memory)"
+    },
+    {
+      "before": "8K (4320p) - 高危",
+      "after": "8K (4320p)（内存占用很高）",
+      "english": "8K (4320p) (High Memory Use)"
+    },
+    {
+      "before": "强制 CPU (慢)",
+      "after": "仅使用 CPU",
+      "english": "CPU Only"
+    },
+    {
+      "before": "强制 GPU (快)",
+      "after": "优先使用 GPU",
+      "english": "Prefer GPU"
+    },
+    {
+      "before": "低 (后台不卡顿)",
+      "after": "低（优先保持系统响应）",
+      "english": "Low (Prioritize Responsiveness)"
+    },
+    {
+      "before": "当前解析失败可能受限于平台最新的反爬风控机制（如 poToken 等）。\n",
+      "after": "平台的访问验证要求可能导致解析失败。\n",
+      "english": "The platform’s access verification requirements may be preventing this link from loading.\n"
+    },
+    {
+      "before": "建议立即检测并更新 yt-dlp 核心解析组件。",
+      "after": "请检查 yt-dlp 是否有更新，然后重试。",
+      "english": "Check for a yt-dlp update, then try again."
+    },
+    {
+      "before": "• DNS 被污染或 SSL 证书被干扰",
+      "after": "• DNS 解析失败或 HTTPS 证书校验失败",
+      "english": "• DNS lookup or HTTPS certificate validation failed"
+    },
+    {
+      "before": "📺 720p 标清",
+      "after": "📺 720p 高清",
+      "english": "📺 720p HD"
+    },
+    {
+      "before": "📺 720p 标清 (MP4)",
+      "after": "📺 720p 高清 (MP4)",
+      "english": "📺 720p HD (MP4)"
+    },
+    {
+      "before": "720p 标清",
+      "after": "720p 高清",
+      "english": "720p HD"
+    },
+    {
+      "before": "🎯 最佳画质 (原盘)",
+      "after": "🎯 最佳画质（原始编码）",
+      "english": "🎯 Best Quality (Source Codecs)"
+    },
+    {
+      "before": "最佳画质(原盘)",
+      "after": "最佳画质（原始编码）",
+      "english": "Best Quality (Source Codecs)"
+    },
+    {
+      "before": "最佳画质 (原盘)",
+      "after": "最佳画质（原始编码）",
+      "english": "Best Quality (Source Codecs)"
+    },
+    {
+      "before": "追求极致画质。通常为 WebM/MKV 格式，适合本地播放。",
+      "after": "选择最佳可用的视频和音频流。保留源视频编码，播放兼容性取决于输出格式和播放器。",
+      "english": "Select the best available video and audio streams. The source video codec is preserved; playback support depends on the output format and player."
+    },
+    {
+      "before": "推荐。自动选择最佳画质并封装为选定容器，兼容性最好。",
+      "after": "自动选择最佳可用画质并保存为选定容器格式。播放兼容性取决于编码和播放器。",
+      "english": "Select the best available quality and save it in the chosen container. Playback support depends on the codecs and player."
+    },
+    {
+      "before": "推荐。自动选择最佳画质并封装为 MP4，兼容性最好。",
+      "after": "优先选择适合 MP4 的视频和音频流；实际画质取决于源视频提供的格式。",
+      "english": "Prefer video and audio streams suitable for MP4. Available quality depends on the source formats."
+    },
+    {
+      "before": "限制最高分辨率为 2K，高清画质。",
+      "after": "最高下载 1440p，实际分辨率取决于可用的视频格式。",
+      "english": "Download up to 1440p, depending on the available video formats."
+    },
+    {
+      "before": "限制最高分辨率为 4K，超高清画质。",
+      "after": "最高下载 2160p（4K），实际分辨率取决于可用的视频格式。",
+      "english": "Download up to 2160p (4K), depending on the available video formats."
+    },
+    {
+      "before": "限制最高分辨率为 1080p，平衡画质与体积。",
+      "after": "最高下载 1080p，兼顾清晰度与文件大小。",
+      "english": "Download up to 1080p to balance clarity and file size."
+    },
+    {
+      "before": "限制最高分辨率为 720p，适合移动设备。",
+      "after": "最高下载 720p，适合较小屏幕或节省流量。",
+      "english": "Download up to 720p for smaller screens or lower data usage."
+    },
+    {
+      "before": "限制最高分辨率为 360p，最小体积。",
+      "after": "最高下载 360p，优先减少文件大小。",
+      "english": "Download up to 360p to reduce file size."
+    },
+    {
+      "before": "仅下载1080p视频轨。",
+      "after": "仅下载视频，最高 1080p，不包含音频。",
+      "english": "Download video only, up to 1080p, without audio."
+    },
+    {
+      "before": "精选音轨",
+      "after": "选择音轨",
+      "english": "Select Audio Tracks"
+    },
+    {
+      "before": "单任务整包",
+      "after": "整个播放列表作为一个任务",
+      "english": "One Task for the Playlist"
+    },
+    {
+      "before": "强制展开",
+      "after": "每个视频单独创建任务",
+      "english": "One Task per Video"
+    },
+    {
+      "before": "待解析大小",
+      "after": "大小待获取",
+      "english": "Size Not Yet Available"
+    },
+    {
+      "before": "详情补全：0/0",
+      "after": "已加载详情：0/0",
+      "english": "Details Loaded: 0/0"
+    },
+    {
+      "before": "详情补全：{}/{}",
+      "after": "已加载详情：{}/{}",
+      "english": "Details loaded: {}/{}"
+    },
+    {
+      "before": "导出选中任务的 bug 包",
+      "after": "导出所选任务的诊断包",
+      "english": "Export Diagnostic Bundle for Selected Task"
+    },
+    {
+      "before": "已导出 bug 包",
+      "after": "诊断包已导出",
+      "english": "Diagnostic Bundle Exported"
+    },
+    {
+      "before": "在时间线里点一下 task 节点或它下面的任意事件",
+      "after": "在时间线中选择任务或该任务下的任意事件",
+      "english": "Select a task or one of its events in the timeline."
+    },
+    {
+      "before": "彻底删除 (同时删除文件)",
+      "after": "移除记录并删除文件",
+      "english": "Remove Record and Delete Files"
+    },
+    {
+      "before": "清掉 {} 条解析结果，下次解析会重新请求。",
+      "after": "已清除 {} 条缓存结果，下次解析将重新获取。",
+      "english": "Cleared {} cached results. Details will be fetched again next time."
+    },
+    {
+      "before": "⚡ 原生直接提取（字幕/封面）...",
+      "after": "⚡ 正在获取字幕或封面...",
+      "english": "⚡ Fetching subtitles or cover image..."
+    },
+    {
+      "before": "⚠ 警告: MP4 容器对多音轨支持不佳，可能会在部分播放器中无法切换音频或出现异常。\n如果您继续使用 MP4，建议仅供测试使用。",
+      "after": "MP4 的多音轨切换取决于播放器支持。若目标播放器无法切换音轨，可改用 MKV。",
+      "english": "Switching between audio tracks in MP4 depends on the player. If your target player cannot switch tracks, try MKV."
+    },
+    {
+      "before": "💡 由于您选择了多个音轨，输出容器将自动设为 MKV 以保证兼容性。",
+      "after": "💡 已选择多个音轨，应用将自动使用 MKV 容器。请确认播放器支持所选音频编码。",
+      "english": "💡 Multiple audio tracks selected. The app will use MKV automatically. Check that your player supports the selected audio codecs."
+    },
+    {
+      "before": "⚠️ {0} 视频流封装为 MP4 可能需要转码或支持不佳，可能耗时较长。",
+      "after": "⚠️ {0} 视频在 MP4 中的播放兼容性取决于播放器。若无法播放，可尝试 MKV 或其他编码。",
+      "english": "⚠️ Playback of {0} video in MP4 depends on the player. If it does not play, try MKV or another codec."
+    },
+    {
+      "before": "⚠️ Opus 音频流封装为 MP4 通常需要重做编码，将触发 FFmpeg 慢速转码。",
+      "after": "⚠️ 部分播放器不支持 MP4 中的 Opus 音频。可尝试 MKV，或选择 AAC 音轨。",
+      "english": "⚠️ Some players do not support Opus audio in MP4. Try MKV or choose an AAC audio track."
+    },
+    {
+      "before": "MP4 对多语言软字幕（您已选择 {0} 种）支持有限。建议切换至 MKV。",
+      "after": "已选择 {0} 种字幕语言。为便于保留多条字幕，建议使用 MKV；MP4 的播放支持取决于播放器。",
+      "english": "{0} subtitle languages selected. MKV is recommended for retaining multiple subtitle tracks; MP4 playback support depends on the player."
+    },
+    {
+      "before": "受沙箱安全限制，X 平台目前无法使用「通过 Google / Apple 登录」。\n请在弹出的界面中使用「手机号/用户名/邮箱 + 密码」直接登录，否则会出现白屏！",
+      "after": "应用内 X 登录暂不支持“通过 Google / Apple 登录”。\n请在登录窗口使用手机号、用户名或邮箱及密码登录。",
+      "english": "In-app X sign-in does not currently support Sign in with Google or Apple.\nUse your phone number, username, or email and password in the sign-in window."
+    },
+    {
+      "before": "「强制 GPU」将自动回落为 CPU 转码，速度会很慢。\n",
+      "after": "“优先使用 GPU”将改用 CPU，转换可能耗时较长。\n",
+      "english": "Prefer GPU will fall back to CPU, which may take longer.\n"
+    },
+    {
+      "before": "开启 8K 转码极易导致内存溢出或系统卡死。请确保您有 32GB+ 内存和高端显卡。",
+      "after": "8K 转换可能消耗大量内存和时间。请根据硬件能力设置上限；内存不足时可降低分辨率。",
+      "english": "8K conversion may use substantial memory and time. Choose a limit suitable for your hardware and lower it if memory is insufficient."
+    },
+    {
+      "before": "硬件性能检测",
+      "after": "硬件加速检测",
+      "english": "Hardware Acceleration Check"
+    },
+    {
+      "before": "仅下载视频轨，最高画质。",
+      "after": "仅下载最佳可用视频流，不包含音频。",
+      "english": "Download the best available video stream without audio."
+    },
+    {
+      "before": "最佳质量(无声)",
+      "after": "最佳画质（仅视频）",
+      "english": "Best Quality (Video Only)"
+    },
+    {
+      "before": "1080p(无声)",
+      "after": "1080p（仅视频）",
+      "english": "1080p (Video Only)"
+    },
+    {
+      "before": "📺 1080p视频 (无音频)",
+      "after": "📺 1080p（仅视频）",
+      "english": "📺 1080p (Video Only)"
+    },
+    {
+      "before": "1080p视频 (无音频)",
+      "after": "1080p（仅视频）",
+      "english": "1080p (Video Only)"
+    },
+    {
+      "before": "🎵 高品质 (320kbps)",
+      "after": "🎵 音频码率 320 kbps",
+      "english": "🎵 Audio Bitrate: 320 kbps"
+    },
+    {
+      "before": "🎵 标准品质 (192kbps)",
+      "after": "🎵 音频码率 192 kbps",
+      "english": "🎵 Audio Bitrate: 192 kbps"
+    },
+    {
+      "before": "高品质 (320kbps)",
+      "after": "音频码率 320 kbps",
+      "english": "Audio Bitrate: 320 kbps"
+    },
+    {
+      "before": "标准品质 (192kbps)",
+      "after": "音频码率 192 kbps",
+      "english": "Audio Bitrate: 192 kbps"
+    },
+    {
+      "before": "请点击「启动安全登录」按钮进行账号认证",
+      "after": "请点击“点击登录”，在弹出的窗口中完成登录",
+      "english": "Click Sign In and complete sign-in in the window that opens."
+    },
+    {
+      "before": "🔑 WebView2 模式 — 尚未登录，请点击「启动安全登录」按钮",
+      "after": "🔑 尚未登录，请点击“点击登录”",
+      "english": "🔑 Not signed in. Click Sign In to continue."
+    },
+    {
+      "before": "质量守卫：连续 {0} 个任务出现质量异常，触发风控防御机制",
+      "after": "画质检查：连续 {0} 个任务未达标，触发队列暂停阈值",
+      "english": "Quality check: {0} consecutive tasks fell below target; the queue pause threshold was reached."
+    },
+    {
+      "before": "连续 {0} 个任务出现质量降级异常，这可能意味着遭遇风控。已安全暂停排队中的 {1} 个任务以保护账号。",
+      "after": "连续 {0} 个任务画质未达标，已暂停排队中的 {1} 个任务。请检查源视频的可用格式、目标分辨率和访问权限后再继续。",
+      "english": "{0} consecutive tasks fell below the target quality. Paused {1} queued tasks. Check the available source formats, target resolution, and access permissions before resuming."
+    },
+    {
+      "before": "风控防御：质量异常过多，排队任务已挂起",
+      "after": "连续画质未达标，排队任务已暂停",
+      "english": "Queued tasks paused after repeated quality issues"
+    },
+    {
+      "before": "风控防御挂起",
+      "after": "画质检查暂停",
+      "english": "Paused by Quality Check"
+    },
+    {
+      "before": "FluentYTDL Pro 全能手册",
+      "after": "FluentYTDL Pro 使用手册",
+      "english": "FluentYTDL Pro User Guide"
+    },
+    {
+      "before": "集操作指导、设置详解与错误查询于一体的完整指南",
+      "after": "下载操作、常用设置与问题排查",
+      "english": "Downloads, settings, and troubleshooting"
+    },
+    {
+      "before": "懒人模式",
+      "after": "剪贴板自动识别",
+      "english": "Clipboard Link Detection"
+    },
+    {
+      "before": "更新渠道与紧急自救",
+      "after": "更新频道与故障排查",
+      "english": "Update Channels and Troubleshooting"
+    },
+    {
+      "before": "并发分片、限速、下载优化",
+      "after": "并发任务、分片与请求限流",
+      "english": "Concurrent downloads, fragments, and rate limits"
+    },
+    {
+      "before": "智能自动选择 vs A+B 专业模式",
+      "after": "自动选择与手动选择音视频流",
+      "english": "Automatic and manual stream selection"
+    },
+    {
+      "before": "FluentYTDL 如何绕过 YouTube 机器人检测",
+      "after": "PO Token 的用途与使用限制",
+      "english": "What PO Tokens Do and Their Limits"
+    },
+    {
+      "before": "任务在崩溃/断电后依然保留",
+      "after": "查看保存的任务状态与恢复限制",
+      "english": "Saved task state and recovery limits"
+    },
+    {
+      "before": "VR180/360 视频在普通模式下只能获取平的单视角画面，且最高仅 1440p。\n",
+      "after": "普通模式可能无法获取 VR 视频的完整投影或全部格式。\n",
+      "english": "Normal mode may not expose the full VR projection or all available formats.\n"
+    },
+    {
+      "before": "VR 模式使用 android_vr 客户端，可获取完整 VR 投影和最高 8K 分辨率。\n",
+      "after": "VR 模式使用专用客户端获取 VR 格式，实际分辨率取决于源视频和访问条件。\n",
+      "english": "VR mode uses a dedicated client to retrieve VR formats. Available resolution depends on the source and access conditions.\n"
+    },
+    {
+      "before": "⚠ WebM 容器本身不支持软嵌入字幕，必须使用外置字幕文件。",
+      "after": "⚠ 本应用不在 WebM 中嵌入字幕。请选择独立字幕文件，或改用 MKV。",
+      "english": "⚠ This app does not embed subtitles in WebM. Save subtitles separately or switch to MKV."
+    },
+    {
+      "before": "提示：YouTube 封面的分辨率为画布标称值，并非实际图片像素。⚠️ 标记的版本可能不存在。",
+      "after": "提示：封面尺寸可能来自元数据，实际像素尺寸以下载的图片为准。⚠️ 标记的版本尚未确认可用。",
+      "english": "Cover dimensions may come from metadata; the downloaded image determines the actual pixel size. Versions marked ⚠️ have not been confirmed available."
+    },
+    {
+      "before": "yt-dlp 未能解出播放地址的 nsig 参数，部分格式会缺失或下载到一半被拒。这几乎总是站点改版导致，更新核心组件即可解决。",
+      "after": "yt-dlp 未能处理播放地址的 nsig 参数，部分格式可能不可用。请检查 yt-dlp 和 JavaScript 运行时的版本与安装状态，然后重试。",
+      "english": "yt-dlp could not process the playback URL’s nsig parameter, so some formats may be unavailable. Check the versions and installation of yt-dlp and the JavaScript runtime, then retry."
+    },
+    {
+      "before": "PO Token 提供程序（bgutil provider）没有响应。缺少 PO Token 时 YouTube 会拒绝大部分格式的下载请求。",
+      "after": "PO Token 提供程序没有响应。需要令牌的请求可能失败，请检查 POT 服务和网络连接。",
+      "english": "The PO Token provider is not responding. Requests requiring a token may fail. Check the POT service and network connection."
+    },
+    {
+      "before": "服务端要求提供 PO Token 才肯下发播放地址。请确认 POT 服务正在运行，并且 Cookie 关联的账号状态正常。",
+      "after": "此请求需要 PO Token。请确认 POT 服务已就绪；若内容需要登录，也请检查 Cookie 和账号权限。",
+      "english": "This request requires a PO Token. Check that the POT service is ready. If sign-in is required, also check cookies and account access."
+    },
+    {
+      "before": "服务提供商认为当前请求来自自动化工具。通常是节点 IP 触发了风控，或者当前 Cookie 已被标记。换一个干净的节点并重新导入 Cookie 往往能恢复。",
+      "after": "平台要求进一步验证此请求。请先检查 yt-dlp 更新和网络连接；若内容需要登录，请重新获取 Cookie。此提示本身不能确定账号或 IP 是否被限制。",
+      "english": "The platform requires additional verification. Check yt-dlp updates and your connection; retrieve fresh cookies if sign-in is required. This message alone does not identify whether an account or IP restriction applies."
+    },
+    {
+      "before": "账号 Cookie 已过期或被服务端轮换。重新提取一份新的 Cookie 即可继续。",
+      "after": "账号 Cookie 可能已过期或失效。请重新获取 Cookie，并确认账号能访问目标内容后重试。",
+      "english": "Your account cookies may have expired or become invalid. Retrieve fresh cookies, confirm the account can access the content, and retry."
+    },
+    {
+      "before": "无法把域名解析成 IP。可能是本机 DNS 被污染或断网，也可能是代理未生效。",
+      "after": "无法解析目标域名。请检查网络连接、DNS 设置及代理是否正常工作。",
+      "english": "The destination hostname could not be resolved. Check your connection, DNS settings, and proxy."
+    },
+    {
+      "before": "自动生成/自动翻译字幕受 PO Token 保护。可在「高级 → POT 验证引擎」中启用（实验性，会常驻一个本地服务）；不启用则只能下载人工字幕。",
+      "after": "此字幕请求需要 PO Token。可在“设置 → 系统 → 高级”启用 POT 服务并重试；其他字幕轨是否可用取决于平台返回的结果。",
+      "english": "This subtitle request requires a PO Token. Enable the POT service in Settings → System → Advanced and retry. Availability of other subtitle tracks depends on the platform response."
+    },
+    {
+      "before": "太棒了，一切顺利！",
+      "after": "当前没有失败的任务",
+      "english": "No failed tasks at the moment"
+    },
+    {
+      "before": "画质都符合预期",
+      "after": "当前没有因画质检查而暂停的任务",
+      "english": "No tasks are currently paused by quality checks"
+    },
+    {
+      "before": "没有中途放弃的下载",
+      "after": "当前没有已取消的任务",
+      "english": "No cancelled tasks at the moment"
+    },
+    {
+      "before": "yt-dlp 找不到可用的 JavaScript 运行时（Deno/Node/Bun/QuickJS）。没有它就无法解出 YouTube 的挑战参数，会缺失大量高画质格式。注意这不是 yt-dlp 版本过旧，更新组件不会解决 —— 需要安装 Deno，或在设置页的「JS Runtime」里指定可执行文件路径。",
+      "after": "yt-dlp 找不到可用的 JavaScript 运行时，部分 YouTube 格式可能无法获取。请在“设置 → 更新”安装 Deno，或在“设置 → 系统 → 高级”指定已安装运行时的路径。",
+      "english": "yt-dlp could not find a usable JavaScript runtime, so some YouTube formats may be unavailable. Install Deno in Settings → Update, or set the path to an installed runtime in Settings → System → Advanced."
+    },
+    {
+      "before": "YouTube 对本次使用的客户端强制了 SABR 流式传输，带下载链接的格式被丢弃，选片器因此挑不到任何格式。这不是画质不存在，换档位没有用。启用 POT 引擎（bgutil）或更新 yt-dlp 后重试。",
+      "after": "YouTube 为当前请求返回了 SABR 流，未提供本次下载所需的直接链接。仅切换画质不能解决缺少直接链接的问题。请按提示检查 POT 服务及 yt-dlp 更新后重试；无法据此确定源视频是否有更高画质。",
+      "english": "YouTube returned SABR streams without the direct links needed for this download. Changing quality alone cannot resolve the missing links. Follow the prompts to check the POT service and yt-dlp updates before retrying. This does not establish whether higher-quality source formats exist."
+    },
+    {
+      "before": "清空已保留的解析结果",
+      "after": "清除视频详情缓存",
+      "english": "Clear Cached Video Details"
+    },
+    {
+      "before": "换过 Cookie 或切换了代理节点后，若解析结果仍是旧的，点这里强制重新解析",
+      "after": "更换 Cookie 或代理后，若视频详情未更新，可清除缓存，下次解析时重新获取。",
+      "english": "If video details are outdated after changing cookies or proxies, clear the cache to fetch them again the next time you load the link."
+    },
+    {
+      "before": "设置下载失败的任务记录自动清理时间 (默认: 3 天)",
+      "after": "超过此时间后自动清理失败任务的记录（默认：3 天）。",
+      "english": "Automatically remove failed task records after this period (default: 3 days)."
+    }
+  ],
+  "catalog_changes": [
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "AudioPickerDialog",
+      "source": "编码:",
+      "before": "Encoding:",
+      "after": "Codec:"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "AudioPickerDialog",
+      "source": "编码",
+      "before": "Encoding",
+      "after": "Codec"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "AudioPickerDialog",
+      "source": "筛选只影响显示；已隐藏的行里仍有勾选，确认时会一并生效。",
+      "before": "Filtering only changes what is displayed. Selected hidden tracks will also be included when you confirm.",
+      "after": "Filters only change the visible rows. Selected tracks hidden by a filter will still be included."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "AudioPickerDialog",
+      "source": "配音",
+      "before": "Dubbing",
+      "after": "Dubbed"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "AudioPickerDialog",
+      "source": "选择音轨",
+      "before": "",
+      "after": "Select Audio Tracks"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "ChannelParsePage",
+      "source": "解析范围:",
+      "before": "Parse Range:",
+      "after": "Content to Load:"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "ChannelParsePage",
+      "source": "开始解析频道",
+      "before": "Start Parse Channel",
+      "after": "Load Channel"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "CookieRepairDialog",
+      "source": "• 或切换到「登录获取」模式，无需手动导出",
+      "before": "• Or switch to 'Login Extraction' mode, no manual export needed",
+      "after": "• Or sign in through the app to retrieve cookies without exporting them manually."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "CoverDownloadPage",
+      "source": "提示：将解析视频并显示封面预览，支持保存最高质量封面。",
+      "before": "Tip: Will parse video and display cover preview, supports saving highest quality cover.",
+      "after": "Load the video to preview and save its best available cover image."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "DownloadConfigWindow",
+      "source": "将打开独立浏览器窗口，请登录 YouTube 账号。\n登录完成后将自动提取 Cookie 并重新解析。",
+      "before": "Will open a standalone browser window, please log into YouTube.\nAfter login, Cookie will be extracted automatically and parsing will retry.",
+      "after": "Sign in to YouTube in the browser window that opens.\nThe app will then retrieve your cookies and retry automatically."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "DownloadConfigWindow",
+      "source": "从本地已登录的浏览器中直接提取 Cookie。\n",
+      "before": "Extract Cookie directly from locally logged-in browser.\n",
+      "after": "Retrieve cookies from a local browser where you are already signed in.\n"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "DownloadConfigWindow",
+      "source": "🔑 登录",
+      "before": "🔑 Login",
+      "after": "🔑 Sign In"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "DownloadConfigWindow",
+      "source": "平台的访问验证要求可能导致解析失败。\n",
+      "before": "",
+      "after": "The platform’s access verification requirements may be preventing this link from loading.\n"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "DownloadConfigWindow",
+      "source": "请检查 yt-dlp 是否有更新，然后重试。",
+      "before": "",
+      "after": "Check for a yt-dlp update, then try again."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "DownloadConfigWindow",
+      "source": "• DNS 解析失败或 HTTPS 证书校验失败",
+      "before": "",
+      "after": "• DNS lookup or HTTPS certificate validation failed"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "DownloadConfigWindow",
+      "source": "选择字幕…",
+      "before": "Select Subtitle...",
+      "after": "Select Subtitles…"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "DownloadConfigWindow",
+      "source": "未选择语言",
+      "before": "No Language Selected",
+      "after": "No Languages Selected"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "DownloadConfigWindow",
+      "source": "下载字幕",
+      "before": "Download Subtitle",
+      "after": "Download Subtitles"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "DownloadConfigWindow",
+      "source": "独立封面",
+      "before": "Standalone Cover",
+      "after": "Save Cover Separately"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "DownloadConfigWindow",
+      "source": "嵌入视频",
+      "before": "Embed into Video",
+      "after": "Embed in Video"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "DownloadConfigWindow",
+      "source": "解析失败",
+      "before": "Parse Failed",
+      "after": "Failed to Load Details"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "DownloadConfigWindow",
+      "source": "VR 模式可能无法正确获取普通视频的格式，且不支持部分功能。\n",
+      "before": "VR Mode may fail to fetch regular video formats correctly, and unsupported some features.\n",
+      "after": "VR mode may not load formats correctly for regular videos, and some features are unavailable.\n"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "DownloadConfigWindow",
+      "source": "建议切换回普通模式。",
+      "before": "Recommend switching back to normal mode.",
+      "after": "Switch to normal mode to continue."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "DownloadConfigWindow",
+      "source": "返回了无法识别的视频信息类型",
+      "before": "Returned unrecognized video info type",
+      "after": "The returned video information could not be read."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "DownloadConfigWindow",
+      "source": "⚠️ Cookie 已过期，建议前往设置页刷新。",
+      "before": "⚠️ Cookie has expired, recommend refreshing in settings page.",
+      "after": "⚠️ Your cookies have expired. Refresh them in Settings."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "DownloadConfigWindow",
+      "source": "Cookie 文件 (*.txt);;所有文件 (*)",
+      "before": "Cookie File (*.txt);;All Files (*)",
+      "after": "Cookie Files (*.txt);;All Files (*)"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "DownloadConfigWindow",
+      "source": "已加载详情：0/0",
+      "before": "",
+      "after": "Details Loaded: 0/0"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "DownloadConfigWindow",
+      "source": "大小待获取",
+      "before": "",
+      "after": "Size Not Yet Available"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "DownloadConfigWindow",
+      "source": "最佳画质（原始编码）",
+      "before": "",
+      "after": "Best Quality (Source Codecs)"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "DownloadConfigWindow",
+      "source": "已加载详情：{}/{}",
+      "before": "",
+      "after": "Details loaded: {}/{}"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "DownloadConfigWindow",
+      "source": "直播回放",
+      "before": "Live Streams",
+      "after": "Past Live Streams"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "DownloadConfigWindow",
+      "source": "最高质量(自动)",
+      "before": "Highest Quality (Auto)",
+      "after": "Best Available (Auto)"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "DownloadConfigWindow",
+      "source": "1440p(严格)",
+      "before": "1440p(Strict)",
+      "after": "1440p (Strict)"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "DownloadConfigWindow",
+      "source": "1080p(严格)",
+      "before": "1080p(Strict)",
+      "after": "1080p (Strict)"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "DownloadConfigWindow",
+      "source": "720p(严格)",
+      "before": "720p(Strict)",
+      "after": "720p (Strict)"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "DownloadConfigWindow",
+      "source": "360p(严格)",
+      "before": "360p(Strict)",
+      "after": "360p (Strict)"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "DownloadConfigWindow",
+      "source": "独立字幕",
+      "before": "Standalone Subtitle",
+      "after": "Separate Subtitles"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "DownloadConfigWindow",
+      "source": "下载（剩余 {} 个解析中...）",
+      "before": "Download ({} remaining parsing...)",
+      "after": "Download (loading {} more...)"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "DownloadConfigWindow",
+      "source": "暂停解析",
+      "before": "Pause Parse",
+      "after": "Pause Loading"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "DownloadConfigWindow",
+      "source": "纯音频",
+      "before": "Pure Audio",
+      "after": "Audio Only"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "LogViewerWindow",
+      "source": "运行日志",
+      "before": "Run Logs",
+      "after": "Application Logs"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "LogViewerWindow",
+      "source": "📋 运行日志",
+      "before": "📋 Run Log",
+      "after": "📋 Application Logs"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "LogViewerWindow",
+      "source": "导出所选任务的诊断包",
+      "before": "",
+      "after": "Export Diagnostic Bundle for Selected Task"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "LogViewerWindow",
+      "source": "0 行",
+      "before": "0 Rows",
+      "after": "0 lines"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "LogViewerWindow",
+      "source": "在时间线中选择任务或该任务下的任意事件",
+      "before": "",
+      "after": "Select a task or one of its events in the timeline."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "LogViewerWindow",
+      "source": "诊断包已导出",
+      "before": "",
+      "after": "Diagnostic Bundle Exported"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "MainWindow",
+      "source": "解析失败",
+      "before": "Parse Failed",
+      "after": "Failed to Load Details"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "PlaylistItemCard",
+      "source": "解析失败",
+      "before": "Parse Failed",
+      "after": "Failed to Load Details"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "PlaylistWorker",
+      "source": "直播回放",
+      "before": "Live Streams",
+      "after": "Past Live Streams"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "QuickAddPanel",
+      "source": "快速解析 (批量)",
+      "before": "Quick Parse (Batch)",
+      "after": "Batch Download"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "QuickAddPanel",
+      "source": "每行输入一个链接，可粘贴多个 YouTube / X 平台 视频链接",
+      "before": "Enter one link per line, you can paste multiple YouTube / X platform video links",
+      "after": "Paste YouTube or X video links, one per line."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "QuickAddPanel",
+      "source": "画质上限:",
+      "before": "Quality Limit:",
+      "after": "Maximum Resolution:"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "QuickAddPanel",
+      "source": "最佳兼容 (自动)",
+      "before": "Best Compatibility (Auto)",
+      "after": "Compatibility (Auto)"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "QuickAddPanel",
+      "source": "自动推断",
+      "before": "Auto Infer",
+      "after": "Automatic"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "QuickAddPanel",
+      "source": "下载字幕",
+      "before": "Download Subtitle",
+      "after": "Download Subtitles"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "QuickAddPanel",
+      "source": "自动判断",
+      "before": "Auto Decide",
+      "after": "Automatic"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "QuickAddPanel",
+      "source": "整个播放列表作为一个任务",
+      "before": "",
+      "after": "One Task for the Playlist"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "QuickAddPanel",
+      "source": "每个视频单独创建任务",
+      "before": "",
+      "after": "One Task per Video"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "QuickAddPanel",
+      "source": "直接下载",
+      "before": "Direct Download",
+      "after": "Start Download"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "RuntimeText",
+      "source": "⚡ 正在获取字幕或封面...",
+      "before": "",
+      "after": "⚡ Fetching subtitles or cover image..."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "RuntimeText",
+      "source": "登录获取 (WebView2)",
+      "before": "Login Fetch (WebView2)",
+      "after": "Sign In (WebView2)"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "RuntimeText",
+      "source": "登录获取 (推荐)",
+      "before": "Login Fetch (Recommended)",
+      "after": "Sign In (Recommended)"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "RuntimeText",
+      "source": "最佳画质 (原盘)",
+      "before": "Best Quality (Original)",
+      "after": "Best Quality (Source Codecs)"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "RuntimeText",
+      "source": "720p 标清",
+      "before": "720p SD",
+      "after": "720p HD"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "RuntimeText",
+      "source": "纯音频",
+      "before": "Pure Audio",
+      "after": "Audio Only"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "RuntimeText",
+      "source": "纯音频 (MP3 - 320k)",
+      "before": "Pure Audio (MP3 - 320k)",
+      "after": "Audio Only (MP3, 320 kbps)"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "RuntimeText",
+      "source": "在后台准备验证服务，就绪前暂不使用 PO Token 解析。默认关闭。",
+      "before": "",
+      "after": "Prepares the verification service in the background. Parsing proceeds without PO Tokens until ready. Off by default."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SelectionDialog",
+      "source": "解析失败",
+      "before": "Parse Failed",
+      "after": "Failed to Load Details"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SelectionDialog",
+      "source": "返回了无法识别的视频信息类型",
+      "before": "Returned unrecognized video info type",
+      "after": "The returned video information could not be read."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SelectionDialog",
+      "source": "下载字幕",
+      "before": "Download Subtitle",
+      "after": "Download Subtitles"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SelectionDialog",
+      "source": "已加载详情：0/0",
+      "before": "",
+      "after": "Details Loaded: 0/0"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SelectionDialog",
+      "source": "最高质量(自动)",
+      "before": "Highest Quality (Auto)",
+      "after": "Best Available (Auto)"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SelectionDialog",
+      "source": "1440p(严格)",
+      "before": "1440p(Strict)",
+      "after": "1440p (Strict)"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SelectionDialog",
+      "source": "1080p(严格)",
+      "before": "1080p(Strict)",
+      "after": "1080p (Strict)"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SelectionDialog",
+      "source": "720p(严格)",
+      "before": "720p(Strict)",
+      "after": "720p (Strict)"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SelectionDialog",
+      "source": "360p(严格)",
+      "before": "360p(Strict)",
+      "after": "360p (Strict)"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SelectionDialog",
+      "source": "纯音频模式 (待解析)",
+      "before": "Pure Audio Mode (Pending Parse)",
+      "after": "Audio Only (Loading Details)"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "分片并发数",
+      "before": "Fragment Concurrency",
+      "after": "Concurrent Fragments"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "设置单个视频的分片下载线程数 (默认: 4)",
+      "before": "Set thread count for individual video fragment download (Default: 4)",
+      "after": "Number of fragments downloaded at once for each video (default: 4)."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "播放列表解析并发",
+      "before": "Playlist Parse Concurrency",
+      "after": "Concurrent Detail Requests"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "控制进入解析页后同时获取视频详情的数量。过高可能触发 YouTube IP 限制 (默认: 2)",
+      "before": "Control the number of simultaneous video details fetched. Too high may trigger YouTube IP limit (Default: 2)",
+      "after": "Number of video details fetched at once. High values may trigger YouTube rate limits (default: 2)."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "解析结果保留时间",
+      "before": "Parse Result Retention",
+      "after": "Video Details Cache Duration"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "不保留",
+      "before": "Don't keep",
+      "after": "Do Not Keep"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "音轨下载",
+      "before": "Audio Track Download",
+      "after": "Audio Tracks"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "首选音轨语言 (多音轨视频)",
+      "before": "Preferred Audio Track Language (Multi-track videos)",
+      "after": "Preferred Audio Languages"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "在单视频解析模式下的默认视频封装容器",
+      "before": "Default video container in single video parse mode",
+      "after": "Default video container for single-video downloads."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "自动推断",
+      "before": "Auto Infer",
+      "after": "Automatic"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "在单视频解析模式下的默认纯音频格式",
+      "before": "Default audio-only format in single video parse mode",
+      "after": "Default format for audio-only downloads of individual videos."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "在播放列表高级格式设置中的默认容器",
+      "before": "Default container in playlist advanced format settings",
+      "after": "Default container for the playlist’s advanced format settings."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "在播放列表高级格式设置中的默认音频格式",
+      "before": "Default audio format in playlist advanced format settings",
+      "after": "Default audio format for the playlist’s advanced format settings."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "阻止并挂起",
+      "before": "Block and Suspend",
+      "after": "Pause Task"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "忽略差异",
+      "before": "Ignore Deviation",
+      "after": "Ignore Quality Differences"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "🔑 登录获取 (推荐)",
+      "before": "🔑 Login Extraction (Recommended)",
+      "after": "🔑 Sign In (Recommended)"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "Nightly (每夜版)",
+      "before": "Nightly (Every Night)",
+      "after": "Nightly"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "Stable (稳定版)",
+      "before": "Stable (Stable Edition)",
+      "after": "Stable"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "Master (主线)",
+      "before": "Master (Mainline)",
+      "after": "Master"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "软件更新与清单下载的网络来源（不影响 bin 工具的版本检查）",
+      "before": "Network source for app updates and manifest downloads (does not affect version checks for bin tools)",
+      "after": "Source for app updates and update manifests. Component version checks use their own sources."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "跳过 YouTube 登录验证检查（authcheck）。可加快大列表解析，但可能导致部分受限视频无法解析（默认关闭）",
+      "before": "Skip YouTube login verification check (authcheck). Speeds up large playlist parsing, but may cause restricted videos to fail parsing (Default closed)",
+      "after": "Skip YouTube’s sign-in check to load large playlists faster. Some restricted videos may fail to load. Off by default."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "独立封面",
+      "before": "Standalone Cover",
+      "after": "Save Cover Separately"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "运行日志",
+      "before": "Run Logs",
+      "after": "Application Logs"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "清理完成",
+      "before": "Clean completed",
+      "after": "Cleanup Complete"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "无需清理",
+      "before": "No need to clean",
+      "after": "Nothing to Clean Up"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "清理失败",
+      "before": "Clean failed",
+      "after": "Cleanup Failed"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "SponsorBlock 已关闭",
+      "before": "SponsorBlock Closed",
+      "after": "SponsorBlock Disabled"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "已切换到登录获取模式",
+      "before": "Switched to login extraction mode",
+      "after": "Switched to Sign-in Mode"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "已就绪（环境（PATH））",
+      "before": "Ready (Environment (PATH))",
+      "after": "Ready (System PATH)"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "环境（PATH）",
+      "before": "Environment (PATH)",
+      "after": "System PATH"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "选择多音轨视频的自动选择策略；原音与配音以平台提供的标记为准",
+      "before": "",
+      "after": "Choose how audio tracks are selected. Original and dubbed labels come from the platform."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "优先原音（无原音时选最佳音轨）",
+      "before": "",
+      "after": "Original, or Best Available"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "视频有多语言音轨时，按此顺序选择音轨（可多选并排序）",
+      "before": "",
+      "after": "For videos with multiple audio languages, select tracks in this order. You can select and reorder languages."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "默认输出格式",
+      "before": "",
+      "after": "Default Output Formats"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "单视频容器",
+      "before": "",
+      "after": "Single-video Container"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "单视频音频格式",
+      "before": "",
+      "after": "Single-video Audio Format"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "播放列表容器",
+      "before": "",
+      "after": "Playlist Container"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "播放列表音频格式",
+      "before": "",
+      "after": "Playlist Audio Format"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "下载画质检查",
+      "before": "",
+      "after": "Download Quality Checks"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "画质未达标时",
+      "before": "",
+      "after": "When Quality Is Below Target"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "选择实际下载分辨率低于目标时的处理方式",
+      "before": "",
+      "after": "Choose what happens when the downloaded resolution is below the target."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "连续未达标暂停阈值",
+      "before": "",
+      "after": "Pause After Consecutive Quality Issues"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "连续多少个任务画质未达标时，自动暂停队列",
+      "before": "",
+      "after": "Pause the queue after this many consecutive tasks fall below the target quality."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "使用 FFprobe 核验分辨率",
+      "before": "",
+      "after": "Verify Resolution with FFprobe"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "无法从下载日志获取分辨率时，使用 FFprobe 检查视频文件的实际分辨率",
+      "before": "",
+      "after": "Use FFprobe to read the video file’s resolution when it is unavailable in the download log."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "拆分播放列表的数量阈值",
+      "before": "",
+      "after": "Playlist Task Split Threshold"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "选择“自动判断”时，超过此数量的播放列表会按视频拆分任务，否则作为一个任务下载",
+      "before": "",
+      "after": "With Auto selected, split playlists above this size into one task per video; otherwise use one task for the playlist."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "单次添加任务上限",
+      "before": "",
+      "after": "Tasks per Batch"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "限制单次快速添加的任务数量，减少界面卡顿和请求过多的风险",
+      "before": "",
+      "after": "Limit the number of tasks added at once to reduce UI delays and excessive requests."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "选择从浏览器提取、通过登录获取或手动导入 Cookie",
+      "before": "",
+      "after": "Choose browser extraction, sign-in, or manual import to obtain cookies."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "过滤非必要 Cookie",
+      "before": "",
+      "after": "Filter Unneeded Cookies"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "按 YouTube 或 X 平台保留所需 Cookie，移除无关 Cookie；关闭后保留提取到的全部 Cookie",
+      "before": "",
+      "after": "Keep the cookies needed for YouTube or X and remove unrelated cookies. Turn off to retain all extracted cookies."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "启动时检查应用与组件更新；距上次自动检查不足 24 小时则跳过",
+      "before": "",
+      "after": "Check for app and component updates at startup, unless an automatic check ran in the last 24 hours."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "为 yt-dlp 提供 JavaScript 执行环境（点击检查更新）",
+      "before": "",
+      "after": "Provides the JavaScript runtime used by yt-dlp. Click to check for updates."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "为需要验证令牌的 YouTube 请求提供 PO Token（点击检查更新）",
+      "before": "",
+      "after": "Provides PO Tokens for YouTube requests that require them. Click to check for updates."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "自动翻译字幕请求可能被限流（HTTP 429）或拒绝。启用 POT 服务可能有助于完成验证。",
+      "before": "",
+      "after": "Requests for auto-translated subtitles may be rate-limited (HTTP 429) or rejected. Enabling the POT service may help with verification."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "手动提供 YouTube 验证令牌；留空可清除（高级选项）",
+      "before": "",
+      "after": "Provide a YouTube verification token manually. Leave empty to clear it. Advanced option."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "仅使用 CPU",
+      "before": "",
+      "after": "CPU Only"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "优先使用 GPU",
+      "before": "",
+      "after": "Prefer GPU"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "4K (2160p)",
+      "before": "",
+      "after": "4K (2160p)"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "5K/6K（内存占用较高）",
+      "before": "",
+      "after": "5K/6K (More Memory)"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "8K (4320p)（内存占用很高）",
+      "before": "",
+      "after": "8K (4320p) (High Memory Use)"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "低（优先保持系统响应）",
+      "before": "",
+      "after": "Low (Prioritize Responsiveness)"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "转码成功后保留原文件",
+      "before": "",
+      "after": "Keep Original After Conversion"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "转换成功后仍保留下载的原始视频文件",
+      "before": "",
+      "after": "Keep the downloaded original video after conversion succeeds."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "正在后台准备验证服务，您可以继续操作；服务就绪前暂不使用 PO Token 解析。",
+      "before": "",
+      "after": "Preparing the verification service in the background. You can continue using the app; parsing will proceed without PO Tokens until it is ready."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "将检查令牌生成和 yt-dlp 连接情况，可能需要几十秒。",
+      "before": "",
+      "after": "Checks token generation and the yt-dlp connection. This may take several dozen seconds."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "移除记录并删除文件",
+      "before": "",
+      "after": "Remove Record and Delete Files"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "仅人工上传的字幕",
+      "before": "",
+      "after": "Uploaded Subtitles Only"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "优先人工字幕，其次自动生成字幕",
+      "before": "",
+      "after": "Prefer Uploaded, Then Auto-generated"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "设置字幕的默认保存格式，适用于嵌入、单独保存和仅下载字幕",
+      "before": "",
+      "after": "Default format for embedded subtitles, separate subtitle files, and subtitle-only downloads."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "⚠️ 当前: {}（并发较高，可能触发 HTTP 429 请求限流）",
+      "before": "",
+      "after": "⚠️ Current: {} (high concurrency may trigger HTTP 429 rate limiting)"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "已清除 {} 条缓存结果，下次解析将重新获取。",
+      "before": "",
+      "after": "Cleared {} cached results. Details will be fetched again next time."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "此策略不按语言筛选：优先选择标记为原音的音轨，没有原音标记时选择最佳可用音轨",
+      "before": "",
+      "after": "This option ignores language preferences: use a track marked as original, or the best available track if none is marked."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SimplePresetWidget",
+      "source": "自动选择最佳可用画质并保存为选定容器格式。播放兼容性取决于编码和播放器。",
+      "before": "",
+      "after": "Select the best available quality and save it in the chosen container. Playback support depends on the codecs and player."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SimplePresetWidget",
+      "source": "📺 720p 高清",
+      "before": "",
+      "after": "📺 720p HD"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SimplePresetWidget",
+      "source": "仅下载视频，最高 1080p，不包含音频。",
+      "before": "",
+      "after": "Download video only, up to 1080p, without audio."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SimplePresetWidget",
+      "source": "下载最高品质的音频流并转码。",
+      "before": "Download highest quality audio stream and transcode.",
+      "after": "Download the best available audio stream and convert it to the selected format."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SimplePresetWidget",
+      "source": "高品质音频压缩。",
+      "before": "High quality audio compression.",
+      "after": "Convert audio using the selected format’s high-quality setting."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SimplePresetWidget",
+      "source": "体积与音质平衡。",
+      "before": "Balance of size and audio quality.",
+      "after": "Balance audio quality and file size."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SimplePresetWidget",
+      "source": "优先选择适合 MP4 的视频和音频流；实际画质取决于源视频提供的格式。",
+      "before": "",
+      "after": "Prefer video and audio streams suitable for MP4. Available quality depends on the source formats."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SimplePresetWidget",
+      "source": "🎯 最佳画质（原始编码）",
+      "before": "",
+      "after": "🎯 Best Quality (Source Codecs)"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SimplePresetWidget",
+      "source": "选择最佳可用的视频和音频流。保留源视频编码，播放兼容性取决于输出格式和播放器。",
+      "before": "",
+      "after": "Select the best available video and audio streams. The source video codec is preserved; playback support depends on the output format and player."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SimplePresetWidget",
+      "source": "最高下载 2160p（4K），实际分辨率取决于可用的视频格式。",
+      "before": "",
+      "after": "Download up to 2160p (4K), depending on the available video formats."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SimplePresetWidget",
+      "source": "最高下载 1440p，实际分辨率取决于可用的视频格式。",
+      "before": "",
+      "after": "Download up to 1440p, depending on the available video formats."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SimplePresetWidget",
+      "source": "最高下载 1080p，兼顾清晰度与文件大小。",
+      "before": "",
+      "after": "Download up to 1080p to balance clarity and file size."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SimplePresetWidget",
+      "source": "📺 720p 高清 (MP4)",
+      "before": "",
+      "after": "📺 720p HD (MP4)"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SimplePresetWidget",
+      "source": "最高下载 720p，适合较小屏幕或节省流量。",
+      "before": "",
+      "after": "Download up to 720p for smaller screens or lower data usage."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SimplePresetWidget",
+      "source": "最高下载 360p，优先减少文件大小。",
+      "before": "",
+      "after": "Download up to 360p to reduce file size."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SimplePresetWidget",
+      "source": "🎵 纯音频 (MP3 - 320k)",
+      "before": "🎵 Pure Audio (MP3 - 320k)",
+      "after": "🎵 Audio Only (MP3, 320 kbps)"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SubtitleDownloadPage",
+      "source": "提示：将解析视频并列出所有可用语言字幕供选择。",
+      "before": "Tip: Will parse video and list all available language subtitles for selection.",
+      "after": "Load the video to see its available subtitle languages."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "_ContainerFormatBar",
+      "source": "自动推断",
+      "before": "Auto Infer",
+      "after": "Automatic"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "AudioPickerDialog",
+      "source": "选择音轨",
+      "before": "",
+      "after": "选择音轨"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "DownloadConfigWindow",
+      "source": "平台的访问验证要求可能导致解析失败。\n",
+      "before": "",
+      "after": "平台的访问验证要求可能导致解析失败。\n"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "DownloadConfigWindow",
+      "source": "请检查 yt-dlp 是否有更新，然后重试。",
+      "before": "",
+      "after": "请检查 yt-dlp 是否有更新，然后重试。"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "DownloadConfigWindow",
+      "source": "• DNS 解析失败或 HTTPS 证书校验失败",
+      "before": "",
+      "after": "• DNS 解析失败或 HTTPS 证书校验失败"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "DownloadConfigWindow",
+      "source": "已加载详情：0/0",
+      "before": "",
+      "after": "已加载详情：0/0"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "DownloadConfigWindow",
+      "source": "大小待获取",
+      "before": "",
+      "after": "大小待获取"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "DownloadConfigWindow",
+      "source": "最佳画质（原始编码）",
+      "before": "",
+      "after": "最佳画质（原始编码）"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "DownloadConfigWindow",
+      "source": "已加载详情：{}/{}",
+      "before": "",
+      "after": "已加载详情：{}/{}"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "LogViewerWindow",
+      "source": "导出所选任务的诊断包",
+      "before": "",
+      "after": "导出所选任务的诊断包"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "LogViewerWindow",
+      "source": "在时间线中选择任务或该任务下的任意事件",
+      "before": "",
+      "after": "在时间线中选择任务或该任务下的任意事件"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "LogViewerWindow",
+      "source": "诊断包已导出",
+      "before": "",
+      "after": "诊断包已导出"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "QuickAddPanel",
+      "source": "整个播放列表作为一个任务",
+      "before": "",
+      "after": "整个播放列表作为一个任务"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "QuickAddPanel",
+      "source": "每个视频单独创建任务",
+      "before": "",
+      "after": "每个视频单独创建任务"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "RuntimeText",
+      "source": "⚡ 正在获取字幕或封面...",
+      "before": "",
+      "after": "⚡ 正在获取字幕或封面..."
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "RuntimeText",
+      "source": "最佳画质 (原盘)",
+      "before": "最佳画质 (原盘)",
+      "after": "最佳画质（原始编码）"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "RuntimeText",
+      "source": "720p 标清",
+      "before": "720p 标清",
+      "after": "720p 高清"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "RuntimeText",
+      "source": "在后台准备验证服务，就绪前暂不使用 PO Token 解析。默认关闭。",
+      "before": "",
+      "after": "在后台准备验证服务，就绪前暂不使用 PO Token 解析。默认关闭。"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "SelectionDialog",
+      "source": "已加载详情：0/0",
+      "before": "",
+      "after": "已加载详情：0/0"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "SettingsPage",
+      "source": "选择多音轨视频的自动选择策略；原音与配音以平台提供的标记为准",
+      "before": "",
+      "after": "选择多音轨视频的自动选择策略；原音与配音以平台提供的标记为准"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "SettingsPage",
+      "source": "优先原音（无原音时选最佳音轨）",
+      "before": "",
+      "after": "优先原音（无原音时选最佳音轨）"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "SettingsPage",
+      "source": "视频有多语言音轨时，按此顺序选择音轨（可多选并排序）",
+      "before": "",
+      "after": "视频有多语言音轨时，按此顺序选择音轨（可多选并排序）"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "SettingsPage",
+      "source": "默认输出格式",
+      "before": "",
+      "after": "默认输出格式"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "SettingsPage",
+      "source": "单视频容器",
+      "before": "",
+      "after": "单视频容器"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "SettingsPage",
+      "source": "单视频音频格式",
+      "before": "",
+      "after": "单视频音频格式"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "SettingsPage",
+      "source": "播放列表容器",
+      "before": "",
+      "after": "播放列表容器"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "SettingsPage",
+      "source": "播放列表音频格式",
+      "before": "",
+      "after": "播放列表音频格式"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "SettingsPage",
+      "source": "下载画质检查",
+      "before": "",
+      "after": "下载画质检查"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "SettingsPage",
+      "source": "画质未达标时",
+      "before": "",
+      "after": "画质未达标时"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "SettingsPage",
+      "source": "选择实际下载分辨率低于目标时的处理方式",
+      "before": "",
+      "after": "选择实际下载分辨率低于目标时的处理方式"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "SettingsPage",
+      "source": "连续未达标暂停阈值",
+      "before": "",
+      "after": "连续未达标暂停阈值"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "SettingsPage",
+      "source": "连续多少个任务画质未达标时，自动暂停队列",
+      "before": "",
+      "after": "连续多少个任务画质未达标时，自动暂停队列"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "SettingsPage",
+      "source": "使用 FFprobe 核验分辨率",
+      "before": "",
+      "after": "使用 FFprobe 核验分辨率"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "SettingsPage",
+      "source": "无法从下载日志获取分辨率时，使用 FFprobe 检查视频文件的实际分辨率",
+      "before": "",
+      "after": "无法从下载日志获取分辨率时，使用 FFprobe 检查视频文件的实际分辨率"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "SettingsPage",
+      "source": "拆分播放列表的数量阈值",
+      "before": "",
+      "after": "拆分播放列表的数量阈值"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "SettingsPage",
+      "source": "选择“自动判断”时，超过此数量的播放列表会按视频拆分任务，否则作为一个任务下载",
+      "before": "",
+      "after": "选择“自动判断”时，超过此数量的播放列表会按视频拆分任务，否则作为一个任务下载"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "SettingsPage",
+      "source": "单次添加任务上限",
+      "before": "",
+      "after": "单次添加任务上限"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "SettingsPage",
+      "source": "限制单次快速添加的任务数量，减少界面卡顿和请求过多的风险",
+      "before": "",
+      "after": "限制单次快速添加的任务数量，减少界面卡顿和请求过多的风险"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "SettingsPage",
+      "source": "选择从浏览器提取、通过登录获取或手动导入 Cookie",
+      "before": "",
+      "after": "选择从浏览器提取、通过登录获取或手动导入 Cookie"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "SettingsPage",
+      "source": "过滤非必要 Cookie",
+      "before": "",
+      "after": "过滤非必要 Cookie"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "SettingsPage",
+      "source": "按 YouTube 或 X 平台保留所需 Cookie，移除无关 Cookie；关闭后保留提取到的全部 Cookie",
+      "before": "",
+      "after": "按 YouTube 或 X 平台保留所需 Cookie，移除无关 Cookie；关闭后保留提取到的全部 Cookie"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "SettingsPage",
+      "source": "启动时检查应用与组件更新；距上次自动检查不足 24 小时则跳过",
+      "before": "",
+      "after": "启动时检查应用与组件更新；距上次自动检查不足 24 小时则跳过"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "SettingsPage",
+      "source": "为 yt-dlp 提供 JavaScript 执行环境（点击检查更新）",
+      "before": "",
+      "after": "为 yt-dlp 提供 JavaScript 执行环境（点击检查更新）"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "SettingsPage",
+      "source": "为需要验证令牌的 YouTube 请求提供 PO Token（点击检查更新）",
+      "before": "",
+      "after": "为需要验证令牌的 YouTube 请求提供 PO Token（点击检查更新）"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "SettingsPage",
+      "source": "自动翻译字幕请求可能被限流（HTTP 429）或拒绝。启用 POT 服务可能有助于完成验证。",
+      "before": "",
+      "after": "自动翻译字幕请求可能被限流（HTTP 429）或拒绝。启用 POT 服务可能有助于完成验证。"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "SettingsPage",
+      "source": "手动提供 YouTube 验证令牌；留空可清除（高级选项）",
+      "before": "",
+      "after": "手动提供 YouTube 验证令牌；留空可清除（高级选项）"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "SettingsPage",
+      "source": "仅使用 CPU",
+      "before": "",
+      "after": "仅使用 CPU"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "SettingsPage",
+      "source": "优先使用 GPU",
+      "before": "",
+      "after": "优先使用 GPU"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "SettingsPage",
+      "source": "4K (2160p)",
+      "before": "",
+      "after": "4K (2160p)"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "SettingsPage",
+      "source": "5K/6K（内存占用较高）",
+      "before": "",
+      "after": "5K/6K（内存占用较高）"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "SettingsPage",
+      "source": "8K (4320p)（内存占用很高）",
+      "before": "",
+      "after": "8K (4320p)（内存占用很高）"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "SettingsPage",
+      "source": "低（优先保持系统响应）",
+      "before": "",
+      "after": "低（优先保持系统响应）"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "SettingsPage",
+      "source": "转码成功后保留原文件",
+      "before": "",
+      "after": "转码成功后保留原文件"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "SettingsPage",
+      "source": "转换成功后仍保留下载的原始视频文件",
+      "before": "",
+      "after": "转换成功后仍保留下载的原始视频文件"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "SettingsPage",
+      "source": "正在后台准备验证服务，您可以继续操作；服务就绪前暂不使用 PO Token 解析。",
+      "before": "",
+      "after": "正在后台准备验证服务，您可以继续操作；服务就绪前暂不使用 PO Token 解析。"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "SettingsPage",
+      "source": "将检查令牌生成和 yt-dlp 连接情况，可能需要几十秒。",
+      "before": "",
+      "after": "将检查令牌生成和 yt-dlp 连接情况，可能需要几十秒。"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "SettingsPage",
+      "source": "移除记录并删除文件",
+      "before": "",
+      "after": "移除记录并删除文件"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "SettingsPage",
+      "source": "仅人工上传的字幕",
+      "before": "",
+      "after": "仅人工上传的字幕"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "SettingsPage",
+      "source": "优先人工字幕，其次自动生成字幕",
+      "before": "",
+      "after": "优先人工字幕，其次自动生成字幕"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "SettingsPage",
+      "source": "设置字幕的默认保存格式，适用于嵌入、单独保存和仅下载字幕",
+      "before": "",
+      "after": "设置字幕的默认保存格式，适用于嵌入、单独保存和仅下载字幕"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "SettingsPage",
+      "source": "⚠️ 当前: {}（并发较高，可能触发 HTTP 429 请求限流）",
+      "before": "",
+      "after": "⚠️ 当前: {}（并发较高，可能触发 HTTP 429 请求限流）"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "SettingsPage",
+      "source": "已清除 {} 条缓存结果，下次解析将重新获取。",
+      "before": "",
+      "after": "已清除 {} 条缓存结果，下次解析将重新获取。"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "SettingsPage",
+      "source": "此策略不按语言筛选：优先选择标记为原音的音轨，没有原音标记时选择最佳可用音轨",
+      "before": "",
+      "after": "此策略不按语言筛选：优先选择标记为原音的音轨，没有原音标记时选择最佳可用音轨"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "SimplePresetWidget",
+      "source": "自动选择最佳可用画质并保存为选定容器格式。播放兼容性取决于编码和播放器。",
+      "before": "",
+      "after": "自动选择最佳可用画质并保存为选定容器格式。播放兼容性取决于编码和播放器。"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "SimplePresetWidget",
+      "source": "📺 720p 高清",
+      "before": "",
+      "after": "📺 720p 高清"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "SimplePresetWidget",
+      "source": "仅下载视频，最高 1080p，不包含音频。",
+      "before": "",
+      "after": "仅下载视频，最高 1080p，不包含音频。"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "SimplePresetWidget",
+      "source": "优先选择适合 MP4 的视频和音频流；实际画质取决于源视频提供的格式。",
+      "before": "",
+      "after": "优先选择适合 MP4 的视频和音频流；实际画质取决于源视频提供的格式。"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "SimplePresetWidget",
+      "source": "🎯 最佳画质（原始编码）",
+      "before": "",
+      "after": "🎯 最佳画质（原始编码）"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "SimplePresetWidget",
+      "source": "选择最佳可用的视频和音频流。保留源视频编码，播放兼容性取决于输出格式和播放器。",
+      "before": "",
+      "after": "选择最佳可用的视频和音频流。保留源视频编码，播放兼容性取决于输出格式和播放器。"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "SimplePresetWidget",
+      "source": "最高下载 2160p（4K），实际分辨率取决于可用的视频格式。",
+      "before": "",
+      "after": "最高下载 2160p（4K），实际分辨率取决于可用的视频格式。"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "SimplePresetWidget",
+      "source": "最高下载 1440p，实际分辨率取决于可用的视频格式。",
+      "before": "",
+      "after": "最高下载 1440p，实际分辨率取决于可用的视频格式。"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "SimplePresetWidget",
+      "source": "最高下载 1080p，兼顾清晰度与文件大小。",
+      "before": "",
+      "after": "最高下载 1080p，兼顾清晰度与文件大小。"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "SimplePresetWidget",
+      "source": "📺 720p 高清 (MP4)",
+      "before": "",
+      "after": "📺 720p 高清 (MP4)"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "SimplePresetWidget",
+      "source": "最高下载 720p，适合较小屏幕或节省流量。",
+      "before": "",
+      "after": "最高下载 720p，适合较小屏幕或节省流量。"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "SimplePresetWidget",
+      "source": "最高下载 360p，优先减少文件大小。",
+      "before": "",
+      "after": "最高下载 360p，优先减少文件大小。"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "AudioPickerDialog",
+      "source": "💡 已选择多个音轨，应用将自动使用 MKV 容器。请确认播放器支持所选音频编码。",
+      "before": "",
+      "after": "💡 Multiple audio tracks selected. The app will use MKV automatically. Check that your player supports the selected audio codecs."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "AudioPickerDialog",
+      "source": "MP4 的多音轨切换取决于播放器支持。若目标播放器无法切换音轨，可改用 MKV。",
+      "before": "",
+      "after": "Switching between audio tracks in MP4 depends on the player. If your target player cannot switch tracks, try MKV."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "DownloadConfigWindow",
+      "source": "最佳画质（仅视频）",
+      "before": "",
+      "after": "Best Quality (Video Only)"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "DownloadConfigWindow",
+      "source": "1080p（仅视频）",
+      "before": "",
+      "after": "1080p (Video Only)"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "RuntimeText",
+      "source": "⚠️ {0} 视频在 MP4 中的播放兼容性取决于播放器。若无法播放，可尝试 MKV 或其他编码。",
+      "before": "",
+      "after": "⚠️ Playback of {0} video in MP4 depends on the player. If it does not play, try MKV or another codec."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "RuntimeText",
+      "source": "⚠️ 部分播放器不支持 MP4 中的 Opus 音频。可尝试 MKV，或选择 AAC 音轨。",
+      "before": "",
+      "after": "⚠️ Some players do not support Opus audio in MP4. Try MKV or choose an AAC audio track."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "RuntimeText",
+      "source": "已选择 {0} 种字幕语言。为便于保留多条字幕，建议使用 MKV；MP4 的播放支持取决于播放器。",
+      "before": "",
+      "after": "{0} subtitle languages selected. MKV is recommended for retaining multiple subtitle tracks; MP4 playback support depends on the player."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "RuntimeText",
+      "source": "1080p视频 (无音频)",
+      "before": "1080p Video (No Audio)",
+      "after": "1080p (Video Only)"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "RuntimeText",
+      "source": "最佳质量(无声)",
+      "before": "Best Quality (Silent)",
+      "after": "Best Quality (Video Only)"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "RuntimeText",
+      "source": "1080p(无声)",
+      "before": "1080p (Silent)",
+      "after": "1080p (Video Only)"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "RuntimeText",
+      "source": "高品质 (320kbps)",
+      "before": "High Quality (320kbps)",
+      "after": "Audio Bitrate: 320 kbps"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "RuntimeText",
+      "source": "标准品质 (192kbps)",
+      "before": "Standard Quality (192kbps)",
+      "after": "Audio Bitrate: 192 kbps"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "账号验证",
+      "before": "Account Verification",
+      "after": "Accounts"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "硬件加速检测",
+      "before": "",
+      "after": "Hardware Acceleration Check"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "应用内 X 登录暂不支持“通过 Google / Apple 登录”。\n请在登录窗口使用手机号、用户名或邮箱及密码登录。",
+      "before": "",
+      "after": "In-app X sign-in does not currently support Sign in with Google or Apple.\nUse your phone number, username, or email and password in the sign-in window."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "“优先使用 GPU”将改用 CPU，转换可能耗时较长。\n",
+      "before": "",
+      "after": "Prefer GPU will fall back to CPU, which may take longer.\n"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "8K 转换可能消耗大量内存和时间。请根据硬件能力设置上限；内存不足时可降低分辨率。",
+      "before": "",
+      "after": "8K conversion may use substantial memory and time. Choose a limit suitable for your hardware and lower it if memory is insufficient."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SimplePresetWidget",
+      "source": "仅下载最佳可用视频流，不包含音频。",
+      "before": "",
+      "after": "Download the best available video stream without audio."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SimplePresetWidget",
+      "source": "📺 1080p（仅视频）",
+      "before": "",
+      "after": "📺 1080p (Video Only)"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SimplePresetWidget",
+      "source": "🎵 音频码率 320 kbps",
+      "before": "",
+      "after": "🎵 Audio Bitrate: 320 kbps"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SimplePresetWidget",
+      "source": "🎵 音频码率 192 kbps",
+      "before": "",
+      "after": "🎵 Audio Bitrate: 192 kbps"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "AudioPickerDialog",
+      "source": "💡 已选择多个音轨，应用将自动使用 MKV 容器。请确认播放器支持所选音频编码。",
+      "before": "",
+      "after": "💡 已选择多个音轨，应用将自动使用 MKV 容器。请确认播放器支持所选音频编码。"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "AudioPickerDialog",
+      "source": "MP4 的多音轨切换取决于播放器支持。若目标播放器无法切换音轨，可改用 MKV。",
+      "before": "",
+      "after": "MP4 的多音轨切换取决于播放器支持。若目标播放器无法切换音轨，可改用 MKV。"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "DownloadConfigWindow",
+      "source": "最佳画质（仅视频）",
+      "before": "",
+      "after": "最佳画质（仅视频）"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "DownloadConfigWindow",
+      "source": "1080p（仅视频）",
+      "before": "",
+      "after": "1080p（仅视频）"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "RuntimeText",
+      "source": "⚠️ {0} 视频在 MP4 中的播放兼容性取决于播放器。若无法播放，可尝试 MKV 或其他编码。",
+      "before": "",
+      "after": "⚠️ {0} 视频在 MP4 中的播放兼容性取决于播放器。若无法播放，可尝试 MKV 或其他编码。"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "RuntimeText",
+      "source": "⚠️ 部分播放器不支持 MP4 中的 Opus 音频。可尝试 MKV，或选择 AAC 音轨。",
+      "before": "",
+      "after": "⚠️ 部分播放器不支持 MP4 中的 Opus 音频。可尝试 MKV，或选择 AAC 音轨。"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "RuntimeText",
+      "source": "已选择 {0} 种字幕语言。为便于保留多条字幕，建议使用 MKV；MP4 的播放支持取决于播放器。",
+      "before": "",
+      "after": "已选择 {0} 种字幕语言。为便于保留多条字幕，建议使用 MKV；MP4 的播放支持取决于播放器。"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "RuntimeText",
+      "source": "1080p视频 (无音频)",
+      "before": "1080p视频 (无音频)",
+      "after": "1080p（仅视频）"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "RuntimeText",
+      "source": "最佳质量(无声)",
+      "before": "最佳质量(无声)",
+      "after": "最佳画质（仅视频）"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "RuntimeText",
+      "source": "1080p(无声)",
+      "before": "1080p(无声)",
+      "after": "1080p（仅视频）"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "RuntimeText",
+      "source": "高品质 (320kbps)",
+      "before": "高品质 (320kbps)",
+      "after": "音频码率 320 kbps"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "RuntimeText",
+      "source": "标准品质 (192kbps)",
+      "before": "标准品质 (192kbps)",
+      "after": "音频码率 192 kbps"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "SettingsPage",
+      "source": "硬件加速检测",
+      "before": "",
+      "after": "硬件加速检测"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "SettingsPage",
+      "source": "应用内 X 登录暂不支持“通过 Google / Apple 登录”。\n请在登录窗口使用手机号、用户名或邮箱及密码登录。",
+      "before": "",
+      "after": "应用内 X 登录暂不支持“通过 Google / Apple 登录”。\n请在登录窗口使用手机号、用户名或邮箱及密码登录。"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "SettingsPage",
+      "source": "“优先使用 GPU”将改用 CPU，转换可能耗时较长。\n",
+      "before": "",
+      "after": "“优先使用 GPU”将改用 CPU，转换可能耗时较长。\n"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "SettingsPage",
+      "source": "8K 转换可能消耗大量内存和时间。请根据硬件能力设置上限；内存不足时可降低分辨率。",
+      "before": "",
+      "after": "8K 转换可能消耗大量内存和时间。请根据硬件能力设置上限；内存不足时可降低分辨率。"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "SimplePresetWidget",
+      "source": "仅下载最佳可用视频流，不包含音频。",
+      "before": "",
+      "after": "仅下载最佳可用视频流，不包含音频。"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "SimplePresetWidget",
+      "source": "📺 1080p（仅视频）",
+      "before": "",
+      "after": "📺 1080p（仅视频）"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "SimplePresetWidget",
+      "source": "🎵 音频码率 320 kbps",
+      "before": "",
+      "after": "🎵 音频码率 320 kbps"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "SimplePresetWidget",
+      "source": "🎵 音频码率 192 kbps",
+      "before": "",
+      "after": "🎵 音频码率 192 kbps"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "RuntimeText",
+      "source": "720p 高清",
+      "before": "",
+      "after": "720p HD"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "RuntimeText",
+      "source": "最佳画质（原始编码）",
+      "before": "Best Quality (Source Codecs)",
+      "after": "Best Quality (Source Codecs)"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "RuntimeText",
+      "source": "最佳画质（仅视频）",
+      "before": "Best Quality (Video Only)",
+      "after": "Best Quality (Video Only)"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "RuntimeText",
+      "source": "1080p（仅视频）",
+      "before": "1080p (Video Only)",
+      "after": "1080p (Video Only)"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "RuntimeText",
+      "source": "音频码率 320 kbps",
+      "before": "",
+      "after": "Audio Bitrate: 320 kbps"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "RuntimeText",
+      "source": "音频码率 192 kbps",
+      "before": "",
+      "after": "Audio Bitrate: 192 kbps"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "RuntimeText",
+      "source": "720p 高清",
+      "before": "",
+      "after": "720p 高清"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "RuntimeText",
+      "source": "最佳画质（原始编码）",
+      "before": "最佳画质（原始编码）",
+      "after": "最佳画质（原始编码）"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "RuntimeText",
+      "source": "最佳画质（仅视频）",
+      "before": "最佳画质（仅视频）",
+      "after": "最佳画质（仅视频）"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "RuntimeText",
+      "source": "1080p（仅视频）",
+      "before": "1080p（仅视频）",
+      "after": "1080p（仅视频）"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "RuntimeText",
+      "source": "音频码率 320 kbps",
+      "before": "",
+      "after": "音频码率 320 kbps"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "RuntimeText",
+      "source": "音频码率 192 kbps",
+      "before": "",
+      "after": "音频码率 192 kbps"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "ManualReaderWidget",
+      "source": "FluentYTDL Pro 使用手册",
+      "before": "",
+      "after": "FluentYTDL Pro User Guide"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "ManualReaderWidget",
+      "source": "下载操作、常用设置与问题排查",
+      "before": "",
+      "after": "Downloads, settings, and troubleshooting"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "ManualReaderWidget",
+      "source": "自动选择与手动选择音视频流",
+      "before": "",
+      "after": "Automatic and manual stream selection"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "ManualReaderWidget",
+      "source": "剪贴板自动识别",
+      "before": "Clipboard Auto Detection",
+      "after": "Clipboard Link Detection"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "ManualReaderWidget",
+      "source": "更新频道与故障排查",
+      "before": "",
+      "after": "Update Channels and Troubleshooting"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "ManualReaderWidget",
+      "source": "并发任务、分片与请求限流",
+      "before": "",
+      "after": "Concurrent downloads, fragments, and rate limits"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "RuntimeText",
+      "source": "画质检查暂停",
+      "before": "",
+      "after": "Paused by Quality Check"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "RuntimeText",
+      "source": "画质检查：连续 {0} 个任务未达标，触发队列暂停阈值",
+      "before": "",
+      "after": "Quality check: {0} consecutive tasks fell below target; the queue pause threshold was reached."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "RuntimeText",
+      "source": "连续 {0} 个任务画质未达标，已暂停排队中的 {1} 个任务。请检查源视频的可用格式、目标分辨率和访问权限后再继续。",
+      "before": "",
+      "after": "{0} consecutive tasks fell below the target quality. Paused {1} queued tasks. Check the available source formats, target resolution, and access permissions before resuming."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "RuntimeText",
+      "source": "连续画质未达标，排队任务已暂停",
+      "before": "",
+      "after": "Queued tasks paused after repeated quality issues"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "剪贴板自动识别",
+      "before": "Clipboard Auto Detection",
+      "after": "Clipboard Link Detection"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "请点击“点击登录”，在弹出的窗口中完成登录",
+      "before": "",
+      "after": "Click Sign In and complete sign-in in the window that opens."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "🔑 尚未登录，请点击“点击登录”",
+      "before": "",
+      "after": "🔑 Not signed in. Click Sign In to continue."
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "ManualReaderWidget",
+      "source": "FluentYTDL Pro 使用手册",
+      "before": "",
+      "after": "FluentYTDL Pro 使用手册"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "ManualReaderWidget",
+      "source": "下载操作、常用设置与问题排查",
+      "before": "",
+      "after": "下载操作、常用设置与问题排查"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "ManualReaderWidget",
+      "source": "自动选择与手动选择音视频流",
+      "before": "",
+      "after": "自动选择与手动选择音视频流"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "ManualReaderWidget",
+      "source": "剪贴板自动识别",
+      "before": "剪贴板自动识别",
+      "after": "剪贴板自动识别"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "ManualReaderWidget",
+      "source": "更新频道与故障排查",
+      "before": "",
+      "after": "更新频道与故障排查"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "ManualReaderWidget",
+      "source": "并发任务、分片与请求限流",
+      "before": "",
+      "after": "并发任务、分片与请求限流"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "RuntimeText",
+      "source": "画质检查暂停",
+      "before": "",
+      "after": "画质检查暂停"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "RuntimeText",
+      "source": "画质检查：连续 {0} 个任务未达标，触发队列暂停阈值",
+      "before": "",
+      "after": "画质检查：连续 {0} 个任务未达标，触发队列暂停阈值"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "RuntimeText",
+      "source": "连续 {0} 个任务画质未达标，已暂停排队中的 {1} 个任务。请检查源视频的可用格式、目标分辨率和访问权限后再继续。",
+      "before": "",
+      "after": "连续 {0} 个任务画质未达标，已暂停排队中的 {1} 个任务。请检查源视频的可用格式、目标分辨率和访问权限后再继续。"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "RuntimeText",
+      "source": "连续画质未达标，排队任务已暂停",
+      "before": "",
+      "after": "连续画质未达标，排队任务已暂停"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "SettingsPage",
+      "source": "请点击“点击登录”，在弹出的窗口中完成登录",
+      "before": "",
+      "after": "请点击“点击登录”，在弹出的窗口中完成登录"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "SettingsPage",
+      "source": "🔑 尚未登录，请点击“点击登录”",
+      "before": "",
+      "after": "🔑 尚未登录，请点击“点击登录”"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "AppUpdateSettingCard",
+      "source": "查看更新日志",
+      "before": "View Update Logs",
+      "after": "View Release Notes"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "AppUpdateSettingCard",
+      "source": "检查更新失败",
+      "before": "Check for Updates Failed",
+      "after": "Update Check Failed"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "AppUpdateSettingCard",
+      "source": "如需更新请前往 GitHub Releases 下载正式版。",
+      "before": "If update needed, go to GitHub Releases to download stable version.",
+      "after": "To switch to a stable release, download it from GitHub Releases."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "ConflictDialog",
+      "source": "字幕改为外挂",
+      "before": "Subtitle changed to external",
+      "after": "Save Subtitles Separately"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "CookieRepairDialog",
+      "source": "稍后处理",
+      "before": "Process Later",
+      "after": "Later"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "CookieSentinel",
+      "source": "登录获取 (WebView2 - {})",
+      "before": "Login Fetch (WebView2 - {})",
+      "after": "Sign In (WebView2 - {})"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "CoverSelectorWidget",
+      "source": "提示：封面尺寸可能来自元数据，实际像素尺寸以下载的图片为准。⚠️ 标记的版本尚未确认可用。",
+      "before": "",
+      "after": "Cover dimensions may come from metadata; the downloaded image determines the actual pixel size. Versions marked ⚠️ have not been confirmed available."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "CoverSelectorWidget",
+      "source": " (真实可用)",
+      "before": " (Actually Available)",
+      "after": " (Verified Available)"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "Diagnostics",
+      "source": "yt-dlp 未能处理播放地址的 nsig 参数，部分格式可能不可用。请检查 yt-dlp 和 JavaScript 运行时的版本与安装状态，然后重试。",
+      "before": "",
+      "after": "yt-dlp could not process the playback URL’s nsig parameter, so some formats may be unavailable. Check the versions and installation of yt-dlp and the JavaScript runtime, then retry."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "Diagnostics",
+      "source": "PO Token 提供程序没有响应。需要令牌的请求可能失败，请检查 POT 服务和网络连接。",
+      "before": "",
+      "after": "The PO Token provider is not responding. Requests requiring a token may fail. Check the POT service and network connection."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "Diagnostics",
+      "source": "此请求需要 PO Token。请确认 POT 服务已就绪；若内容需要登录，也请检查 Cookie 和账号权限。",
+      "before": "",
+      "after": "This request requires a PO Token. Check that the POT service is ready. If sign-in is required, also check cookies and account access."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "Diagnostics",
+      "source": "平台要求进一步验证此请求。请先检查 yt-dlp 更新和网络连接；若内容需要登录，请重新获取 Cookie。此提示本身不能确定账号或 IP 是否被限制。",
+      "before": "",
+      "after": "The platform requires additional verification. Check yt-dlp updates and your connection; retrieve fresh cookies if sign-in is required. This message alone does not identify whether an account or IP restriction applies."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "Diagnostics",
+      "source": "账号 Cookie 可能已过期或失效。请重新获取 Cookie，并确认账号能访问目标内容后重试。",
+      "before": "",
+      "after": "Your account cookies may have expired or become invalid. Retrieve fresh cookies, confirm the account can access the content, and retry."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "Diagnostics",
+      "source": "仅限站内播放",
+      "before": "Embedded playback only",
+      "after": "Playback Restricted to the Original Site"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "Diagnostics",
+      "source": "无法解析目标域名。请检查网络连接、DNS 设置及代理是否正常工作。",
+      "before": "",
+      "after": "The destination hostname could not be resolved. Check your connection, DNS settings, and proxy."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "FixRegistry",
+      "source": "请在设置页中重新提取或验证您的账号 Cookie。",
+      "before": "Please re-extract or verify your account Cookie in settings page.",
+      "after": "Retrieve fresh account cookies or check them in Settings."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "FixRegistry",
+      "source": "无法定位到设置界面。",
+      "before": "Cannot locate to settings interface.",
+      "after": "Could not open Settings."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "FixRegistry",
+      "source": "此字幕请求需要 PO Token。可在“设置 → 系统 → 高级”启用 POT 服务并重试；其他字幕轨是否可用取决于平台返回的结果。",
+      "before": "",
+      "after": "This subtitle request requires a PO Token. Enable the POT service in Settings → System → Advanced and retry. Availability of other subtitle tracks depends on the platform response."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "ManualReaderWidget",
+      "source": "视频、播放列表、频道链接解析",
+      "before": "Video, Playlist, Channel Link Parse",
+      "after": "Load video, playlist, and channel links"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "ManualReaderWidget",
+      "source": "PO Token 的用途与使用限制",
+      "before": "",
+      "after": "What PO Tokens Do and Their Limits"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "ManualReaderWidget",
+      "source": "查看保存的任务状态与恢复限制",
+      "before": "",
+      "after": "Saved task state and recovery limits"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "PlaylistFormatDialog",
+      "source": "选择字幕",
+      "before": "Select Subtitle",
+      "after": "Select Subtitles"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "PlaylistSubtitleConfigDialog",
+      "source": "软嵌入到视频",
+      "before": "Soft Embed into Video",
+      "after": "Embed as Selectable Subtitles"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "PlaylistSubtitleConfigDialog",
+      "source": "外置字幕文件",
+      "before": "External Subtitle File",
+      "after": "Separate Subtitle Files"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "RuntimeText",
+      "source": "登录获取 (WebView2 - {})",
+      "before": "Login Fetch (WebView2 - {})",
+      "after": "Sign In (WebView2 - {})"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SubtitleDownloadPage",
+      "source": "获取字幕",
+      "before": "Get Subtitle",
+      "after": "Get Subtitles"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SubtitlePickerDialog",
+      "source": "选择字幕",
+      "before": "Select Subtitle",
+      "after": "Select Subtitles"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SubtitlePickerDialog",
+      "source": "软嵌入到视频",
+      "before": "Soft Embed into Video",
+      "after": "Embed as Selectable Subtitles"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SubtitlePickerDialog",
+      "source": "外置字幕文件",
+      "before": "External Subtitle File",
+      "after": "Separate Subtitle Files"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SubtitlePickerDialog",
+      "source": "⚠ 本应用不在 WebM 中嵌入字幕。请选择独立字幕文件，或改用 MKV。",
+      "before": "",
+      "after": "⚠ This app does not embed subtitles in WebM. Save subtitles separately or switch to MKV."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SubtitleSelectorWidget",
+      "source": "人工",
+      "before": "Manual",
+      "after": "Uploaded"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SubtitleSelectorWidget",
+      "source": "自动翻译",
+      "before": "Auto-translate",
+      "after": "Auto-translated"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "UnifiedTaskListPage",
+      "source": "质量守卫",
+      "before": "Quality Guard",
+      "after": "Quality Check"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "UnifiedTaskListPage",
+      "source": "当前没有失败的任务",
+      "before": "",
+      "after": "No failed tasks at the moment"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "UnifiedTaskListPage",
+      "source": "当前没有因画质检查而暂停的任务",
+      "before": "",
+      "after": "No tasks are currently paused by quality checks"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "UnifiedTaskListPage",
+      "source": "当前没有已取消的任务",
+      "before": "",
+      "after": "No cancelled tasks at the moment"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "VRFormatTableWidget",
+      "source": "提示：可组装模式仅显示分离流，分别点选“视频”和“音频”即可组装。",
+      "before": "Tip: Assemblable mode only shows separated streams, click 'Video' and 'Audio' respectively to assemble.",
+      "after": "This mode shows separate streams. Select a video stream and an audio stream to combine them."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "VRFormatTableWidget",
+      "source": "音视频（可组装）",
+      "before": "Audio & Video (Can Assemble)",
+      "after": "Video + Audio (Separate Streams)"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "VRFormatTableWidget",
+      "source": "音视频（整合流）",
+      "before": "Audio & Video (Merged Stream)",
+      "after": "Video + Audio (Combined Stream)"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "VRFormatTableWidget",
+      "source": "已选：整合流",
+      "before": "Selected: Merged Stream",
+      "after": "Selected: Combined Stream"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "VRFormatTableWidget",
+      "source": "请选择：整合流",
+      "before": "Please select: Merged Stream",
+      "after": "Select a Combined Stream"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "VRParsePage",
+      "source": "普通模式可能无法获取 VR 视频的完整投影或全部格式。\n",
+      "before": "",
+      "after": "Normal mode may not expose the full VR projection or all available formats.\n"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "VRParsePage",
+      "source": "VR 模式使用专用客户端获取 VR 格式，实际分辨率取决于源视频和访问条件。\n",
+      "before": "",
+      "after": "VR mode uses a dedicated client to retrieve VR formats. Available resolution depends on the source and access conditions.\n"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "VRParsePage",
+      "source": "开始 VR 解析",
+      "before": "Start VR Parse",
+      "after": "Load VR Video"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "VideoFormatSelectorWidget",
+      "source": "音视频（可组装）",
+      "before": "Audio & Video (Can Assemble)",
+      "after": "Video + Audio (Separate Streams)"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "VideoFormatSelectorWidget",
+      "source": "音视频（整合流）",
+      "before": "Audio & Video (Merged Stream)",
+      "after": "Video + Audio (Combined Stream)"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "VideoFormatSelectorWidget",
+      "source": "提示：可组装模式仅显示分离流，分别点选“视频”和“音频”即可组装。",
+      "before": "Tip: Assemblable mode only shows separated streams, click 'Video' and 'Audio' respectively to assemble.",
+      "after": "This mode shows separate streams. Select a video stream and an audio stream to combine them."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "VideoFormatSelectorWidget",
+      "source": "已选：整合流",
+      "before": "Selected: Merged Stream",
+      "after": "Selected: Combined Stream"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "VideoFormatSelectorWidget",
+      "source": "请选择：整合流",
+      "before": "Please select: Merged Stream",
+      "after": "Select a Combined Stream"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "WelcomeGuideWidget",
+      "source": "第 {0} 步 / 共 {1} 步",
+      "before": "Step {0} / Total {1} Steps",
+      "after": "Step {0} of {1}"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "WorkerErrorDialog",
+      "source": "重试所有挂起任务",
+      "before": "Retry All Pending Tasks",
+      "after": "Retry All Paused Tasks"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "WorkerErrorDialog",
+      "source": "稍后处理 (关闭)",
+      "before": "Handle Later (Close)",
+      "after": "Close"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "CoverSelectorWidget",
+      "source": "提示：封面尺寸可能来自元数据，实际像素尺寸以下载的图片为准。⚠️ 标记的版本尚未确认可用。",
+      "before": "",
+      "after": "提示：封面尺寸可能来自元数据，实际像素尺寸以下载的图片为准。⚠️ 标记的版本尚未确认可用。"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "Diagnostics",
+      "source": "yt-dlp 未能处理播放地址的 nsig 参数，部分格式可能不可用。请检查 yt-dlp 和 JavaScript 运行时的版本与安装状态，然后重试。",
+      "before": "",
+      "after": "yt-dlp 未能处理播放地址的 nsig 参数，部分格式可能不可用。请检查 yt-dlp 和 JavaScript 运行时的版本与安装状态，然后重试。"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "Diagnostics",
+      "source": "PO Token 提供程序没有响应。需要令牌的请求可能失败，请检查 POT 服务和网络连接。",
+      "before": "",
+      "after": "PO Token 提供程序没有响应。需要令牌的请求可能失败，请检查 POT 服务和网络连接。"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "Diagnostics",
+      "source": "此请求需要 PO Token。请确认 POT 服务已就绪；若内容需要登录，也请检查 Cookie 和账号权限。",
+      "before": "",
+      "after": "此请求需要 PO Token。请确认 POT 服务已就绪；若内容需要登录，也请检查 Cookie 和账号权限。"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "Diagnostics",
+      "source": "平台要求进一步验证此请求。请先检查 yt-dlp 更新和网络连接；若内容需要登录，请重新获取 Cookie。此提示本身不能确定账号或 IP 是否被限制。",
+      "before": "",
+      "after": "平台要求进一步验证此请求。请先检查 yt-dlp 更新和网络连接；若内容需要登录，请重新获取 Cookie。此提示本身不能确定账号或 IP 是否被限制。"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "Diagnostics",
+      "source": "账号 Cookie 可能已过期或失效。请重新获取 Cookie，并确认账号能访问目标内容后重试。",
+      "before": "",
+      "after": "账号 Cookie 可能已过期或失效。请重新获取 Cookie，并确认账号能访问目标内容后重试。"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "Diagnostics",
+      "source": "无法解析目标域名。请检查网络连接、DNS 设置及代理是否正常工作。",
+      "before": "",
+      "after": "无法解析目标域名。请检查网络连接、DNS 设置及代理是否正常工作。"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "FixRegistry",
+      "source": "此字幕请求需要 PO Token。可在“设置 → 系统 → 高级”启用 POT 服务并重试；其他字幕轨是否可用取决于平台返回的结果。",
+      "before": "",
+      "after": "此字幕请求需要 PO Token。可在“设置 → 系统 → 高级”启用 POT 服务并重试；其他字幕轨是否可用取决于平台返回的结果。"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "ManualReaderWidget",
+      "source": "PO Token 的用途与使用限制",
+      "before": "",
+      "after": "PO Token 的用途与使用限制"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "ManualReaderWidget",
+      "source": "查看保存的任务状态与恢复限制",
+      "before": "",
+      "after": "查看保存的任务状态与恢复限制"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "SubtitlePickerDialog",
+      "source": "⚠ 本应用不在 WebM 中嵌入字幕。请选择独立字幕文件，或改用 MKV。",
+      "before": "",
+      "after": "⚠ 本应用不在 WebM 中嵌入字幕。请选择独立字幕文件，或改用 MKV。"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "UnifiedTaskListPage",
+      "source": "当前没有失败的任务",
+      "before": "",
+      "after": "当前没有失败的任务"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "UnifiedTaskListPage",
+      "source": "当前没有因画质检查而暂停的任务",
+      "before": "",
+      "after": "当前没有因画质检查而暂停的任务"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "UnifiedTaskListPage",
+      "source": "当前没有已取消的任务",
+      "before": "",
+      "after": "当前没有已取消的任务"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "VRParsePage",
+      "source": "普通模式可能无法获取 VR 视频的完整投影或全部格式。\n",
+      "before": "",
+      "after": "普通模式可能无法获取 VR 视频的完整投影或全部格式。\n"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "VRParsePage",
+      "source": "VR 模式使用专用客户端获取 VR 格式，实际分辨率取决于源视频和访问条件。\n",
+      "before": "",
+      "after": "VR 模式使用专用客户端获取 VR 格式，实际分辨率取决于源视频和访问条件。\n"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "Diagnostics",
+      "source": "yt-dlp 找不到可用的 JavaScript 运行时，部分 YouTube 格式可能无法获取。请在“设置 → 更新”安装 Deno，或在“设置 → 系统 → 高级”指定已安装运行时的路径。",
+      "before": "",
+      "after": "yt-dlp could not find a usable JavaScript runtime, so some YouTube formats may be unavailable. Install Deno in Settings → Update, or set the path to an installed runtime in Settings → System → Advanced."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "Diagnostics",
+      "source": "YouTube 为当前请求返回了 SABR 流，未提供本次下载所需的直接链接。请检查 yt-dlp 更新，并按提示检查 POT 服务后重试；无法据此确定源视频是否有更高画质。",
+      "before": "",
+      "after": "YouTube returned SABR streams without the direct links needed for this download. Check yt-dlp updates and, if requested, the POT service before retrying. This does not establish whether higher-quality source formats exist."
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "Diagnostics",
+      "source": "yt-dlp 找不到可用的 JavaScript 运行时，部分 YouTube 格式可能无法获取。请在“设置 → 更新”安装 Deno，或在“设置 → 系统 → 高级”指定已安装运行时的路径。",
+      "before": "",
+      "after": "yt-dlp 找不到可用的 JavaScript 运行时，部分 YouTube 格式可能无法获取。请在“设置 → 更新”安装 Deno，或在“设置 → 系统 → 高级”指定已安装运行时的路径。"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "Diagnostics",
+      "source": "YouTube 为当前请求返回了 SABR 流，未提供本次下载所需的直接链接。请检查 yt-dlp 更新，并按提示检查 POT 服务后重试；无法据此确定源视频是否有更高画质。",
+      "before": "",
+      "after": "YouTube 为当前请求返回了 SABR 流，未提供本次下载所需的直接链接。请检查 yt-dlp 更新，并按提示检查 POT 服务后重试；无法据此确定源视频是否有更高画质。"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "网络重试次数",
+      "before": "Network Retry Count",
+      "after": "Network Retries"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "立即清空",
+      "before": "Clear now",
+      "after": "Clear Now"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "同一链接在此时间内再次解析会直接复用上次结果，不再重新请求（默认: 不保留）",
+      "before": "Parsing the same link again within this window reuses the previous result instead of requesting it again (default: don't retain)",
+      "after": "Reuse cached details when loading the same link within this period (default: do not keep)."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "清除视频详情缓存",
+      "before": "",
+      "after": "Clear Cached Video Details"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "更换 Cookie 或代理后，若视频详情未更新，可清除缓存，下次解析时重新获取。",
+      "before": "",
+      "after": "If video details are outdated after changing cookies or proxies, clear the cache to fetch them again the next time you load the link."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SettingsPage",
+      "source": "超过此时间后自动清理失败任务的记录（默认：3 天）。",
+      "before": "",
+      "after": "Automatically remove failed task records after this period (default: 3 days)."
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "SettingsPage",
+      "source": "清除视频详情缓存",
+      "before": "",
+      "after": "清除视频详情缓存"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "SettingsPage",
+      "source": "更换 Cookie 或代理后，若视频详情未更新，可清除缓存，下次解析时重新获取。",
+      "before": "",
+      "after": "更换 Cookie 或代理后，若视频详情未更新，可清除缓存，下次解析时重新获取。"
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "SettingsPage",
+      "source": "超过此时间后自动清理失败任务的记录（默认：3 天）。",
+      "before": "",
+      "after": "超过此时间后自动清理失败任务的记录（默认：3 天）。"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "DownloadConfigWindow",
+      "source": "⚠️ 尚未获取 Cookie — 解析可能因登录要求而失败。",
+      "before": "⚠️ Cookie not fetched yet — Parse may fail due to login requirements.",
+      "after": "⚠️ No cookies available. Loading video details may fail if sign-in is required."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "RuntimeText",
+      "source": "最佳画质 (无音频)",
+      "before": "Best Video Quality (No Audio)",
+      "after": "Best Quality (Video Only)"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SimplePresetWidget",
+      "source": "🎬 最佳画质",
+      "before": "🎬 Best Video Quality",
+      "after": "🎬 Best Quality"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SimplePresetWidget",
+      "source": "限制最高分辨率为 480p，节省空间。",
+      "before": "Limit max resolution to 480p, save space.",
+      "after": "Download up to 480p to reduce file size."
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SimplePresetWidget",
+      "source": "🎬 最佳画质 (无音频)",
+      "before": "🎬 Best Video Quality (No Audio)",
+      "after": "🎬 Best Quality (Video Only)"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "SimplePresetWidget",
+      "source": "🎬 最佳画质 (MP4)",
+      "before": "🎬 Best Video Quality (MP4)",
+      "after": "🎬 Best Quality (MP4)"
+    },
+    {
+      "locale": "fluentytdl_en_US",
+      "context": "Diagnostics",
+      "source": "YouTube 为当前请求返回了 SABR 流，未提供本次下载所需的直接链接。仅切换画质不能解决缺少直接链接的问题。请按提示检查 POT 服务及 yt-dlp 更新后重试；无法据此确定源视频是否有更高画质。",
+      "before": "",
+      "after": "YouTube returned SABR streams without the direct links needed for this download. Changing quality alone cannot resolve the missing links. Follow the prompts to check the POT service and yt-dlp updates before retrying. This does not establish whether higher-quality source formats exist."
+    },
+    {
+      "locale": "fluentytdl_zh_CN",
+      "context": "Diagnostics",
+      "source": "YouTube 为当前请求返回了 SABR 流，未提供本次下载所需的直接链接。仅切换画质不能解决缺少直接链接的问题。请按提示检查 POT 服务及 yt-dlp 更新后重试；无法据此确定源视频是否有更高画质。",
+      "before": "",
+      "after": "YouTube 为当前请求返回了 SABR 流，未提供本次下载所需的直接链接。仅切换画质不能解决缺少直接链接的问题。请按提示检查 POT 服务及 yt-dlp 更新后重试；无法据此确定源视频是否有更高画质。"
+    }
+  ],
+  "help_sections": [
+    {
+      "section": "_WIZARD_STEP1_HTML",
+      "before": "\n<div style=\"text-align:center; padding:40px 0 20px 0;\">\n  <img src=\"file:///e:/YouTube/FluentYTDL/assets/logo.png\" width=\"112\" height=\"112\" style=\"margin-bottom:16px;\">\n  <h1 style=\"margin:0 0 8px 0; font-size:28px; font-weight:700;\">FluentYTDL Pro</h1>\n  <p style=\"color:#767676; font-size:14px; margin:0 0 32px 0;\">Version __version__</p>\n  <p style=\"font-size:15px; margin:0 0 8px 0; line-height:1.6;\">欢迎使用 FluentYTDL Pro。</p>\n  <p style=\"font-size:13px; color:#767676; margin:0;\">本向导将协助您快速熟悉系统的基础工作流、模块分布与核心特性。</p>\n</div>\n",
+      "after": "<h2>欢迎使用 FluentYTDL Pro</h2><p>版本 __version__</p><p>下载 YouTube 视频、播放列表、频道内容，以及 X 帖子中的视频。</p><p>本向导介绍下载、账号登录和常用设置。</p>",
+      "english": "<h2>Welcome to FluentYTDL Pro</h2><p>Version __version__</p><p>Download YouTube videos, playlists, and channel content, plus videos from X posts.</p><p>This guide covers downloading, sign-in, and common settings.</p>"
+    },
+    {
+      "section": "_WIZARD_STEP2_HTML",
+      "before": "\n<div style=\"text-align:left; padding:0 20px;\">\n  <p style=\"font-size:16px; font-weight:600; margin-bottom:8px;\">👉 快捷工作流（推荐）</p>\n  <p>您可以在 <strong>设置 → 自动化</strong> 中开启「剪贴板自动识别」。</p>\n  <p>开启后，系统在后台监测到支持的媒体链接（包含单视频、播放列表或频道）时，将自动唤醒解析窗口，点击下载即可建立任务。</p>\n\n  <p style=\"font-size:16px; font-weight:600; margin-top:24px; margin-bottom:8px;\">✍️ 标准解析工作流</p>\n  <p>1. 复制媒体链接并在主页搜索栏进行粘贴。<br>\n  2. 按下回车键或点击右侧解析按钮启动引擎。<br>\n  3. 系统将展现可用画质与音轨，按需选择并确认下载。</p>\n\n  <p style=\"margin-top:20px; font-size:13px; color:#3A8FB7;\">✅ 提示：核心解析与合并管线（yt-dlp、FFmpeg）已在系统内预置，无需额外配置环境。</p>\n</div>\n",
+      "after": "<h3>开始下载</h3><ol><li>复制视频链接，在“精确解析”页面粘贴。</li><li>点击解析按钮，等待可用格式加载。</li><li>选择画质、音轨和保存位置，然后点击“下载”。</li></ol><p>在“设置 → 功能 → 自动化”中开启“剪贴板自动识别”后，复制支持的链接即可打开解析窗口。</p><p>如提示缺少组件，请前往“设置 → 更新”检查安装状态。</p>",
+      "english": "<h3>Start a download</h3><ol><li>Copy a video link and paste it on the parsing page.</li><li>Start parsing and wait for the available formats to load.</li><li>Choose quality, audio tracks, and a save location, then click Download.</li></ol><p>Enable clipboard detection in Settings → Features → Automation to open supported links automatically when you copy them.</p><p>If a component is missing, check its installation status in Settings → Update.</p>"
+    },
+    {
+      "section": "_WIZARD_STEP3_HTML",
+      "before": "\n<div style=\"text-align:left; padding:0 20px;\">\n  <p style=\"color:#767676; font-size:13px; margin-bottom:16px;\">当需要下载具备年龄限制、会员专属的视频，或遭遇服务端机器人检测拦截时，系统需要身份凭证支持。</p>\n  \n  <p style=\"font-size:16px; font-weight:600; margin-bottom:12px;\">身份验证接入方案</p>\n  <table style=\"width:100%; margin:0;\">\n    <tr><th style=\"width:25%;self.tr(\">接入方式</th><th style=\")width:15%;\">推荐等级</th><th>说明</th></tr>\n    <tr><td><strong>WebView2 登录</strong></td><td>⭐⭐⭐</td><td>通过隔离的安全沙盒环境授权账号，稳定性最高，为官方推荐首选。</td></tr>\n    <tr><td><strong>本机浏览器提取</strong></td><td>⭐⭐</td><td>通过接口自动提取 Firefox 等浏览器的凭证，部分浏览器因安全策略受限。</td></tr>\n    <tr><td><strong>外部文件导入</strong></td><td>⭐</td><td>通过浏览器扩展导出标准的 Netscape 格式文件，并在系统内导入。</td></tr>\n  </table>\n\n  <p style=\"margin-top:20px; font-size:13px; color:#3A8FB7;\">🛡️ 隐私合规：系统仅保留维持下载会话所需的验证令牌，自动过滤其他追踪性数据。</p>\n</div>\n",
+      "after": "<h3>账号与 Cookie</h3><p>部分视频需要登录。Cookie 让下载工具使用您已登录的会话，但不会授予账号原本没有的访问权限。</p><ul><li><strong>应用内登录：</strong>在独立的 WebView2 窗口登录 YouTube 或 X。</li><li><strong>浏览器提取：</strong>从支持的本地浏览器读取 Cookie，部分浏览器需要管理员权限。</li><li><strong>手动导入：</strong>导入 Netscape 格式的 cookies.txt 文件。</li></ul><p>开启 Cookie 过滤后，仅保留目标平台所需的 Cookie。不要向他人提供 Cookie 文件。</p>",
+      "english": "<h3>Accounts and cookies</h3><p>Some videos require sign-in. Cookies let the downloader use your signed-in session; they do not grant access your account does not already have.</p><ul><li><strong>Sign in through the app:</strong> use a separate WebView2 window for YouTube or X.</li><li><strong>Browser extraction:</strong> retrieve cookies from a supported local browser. Some browsers require administrator privileges.</li><li><strong>Manual import:</strong> import a cookies.txt file in Netscape format.</li></ul><p>With cookie filtering enabled, only cookies needed for the target platform are retained. Do not share cookie files.</p>"
+    },
+    {
+      "section": "_WIZARD_STEP4_HTML",
+      "before": "\n<div style=\"text-align:left; padding:0 10px;\">\n  <p style=\"font-size:16px; font-weight:600; margin-bottom:16px; margin-left:10px;\">系统核心特性</p>\n  <table style=\"width:100%; margin:0;\">\n    <tr>\n      <td style=\"padding:10px; vertical-align:top; width:50%; border:none;\">\n        <div style=\"font-size:14px; font-weight:600; margin-bottom:4px;\">🛡️ 质量风控引擎 (Quality Guard)</div>\n        <div style=\"color:#767676; font-size:12px;\">前置与后置双重质量校验，拦截分辨率异常降级，保障下载质量。</div>\n      </td>\n      <td style=\"padding:10px; vertical-align:top; width:50%; border:none;\">\n        <div style=\"font-size:14px; font-weight:600; margin-bottom:4px;\">🔊 智能音轨打分机制</div>\n        <div style=\"color:#767676; font-size:12px;\">依据语言学分析评分，优先为您匹配高质量原生音轨或真人配音。</div>\n      </td>\n    </tr>\n    <tr>\n      <td style=\"padding:10px; vertical-align:top; width:50%; border:none;\">\n        <div style=\"font-size:14px; font-weight:600; margin-bottom:4px;\">⚡ 频道与列表极速解析</div>\n        <div style=\"color:#767676; font-size:12px;\">构建三层优先调度系统，支持大规模播放列表的视口感知与懒加载。</div>\n      </td>\n      <td style=\"padding:10px; vertical-align:top; width:50%; border:none;\">\n        <div style=\"font-size:14px; font-weight:600; margin-bottom:4px;\">🎵 智能片段跳过 (SponsorBlock)</div>\n        <div style=\"color:#767676; font-size:12px;\">接入众包数据库，在处理管线中自动识别并跳过赞助商与推广片段。</div>\n      </td>\n    </tr>\n    <tr>\n      <td style=\"padding:10px; vertical-align:top; width:50%; border:none;\">\n        <div style=\"font-size:14px; font-weight:600; margin-bottom:4px;\">🥽 VR 空间后处理管道</div>\n        <div style=\"color:#767676; font-size:12px;\">自动对 VR180/360 视频进行投影转换并注入空间元数据。</div>\n      </td>\n      <td style=\"padding:10px; vertical-align:top; width:50%; border:none;\">\n        <div style=\"font-size:14px; font-weight:600; margin-bottom:4px;\">🔄 任务状态持久化</div>\n        <div style=\"color:#767676; font-size:12px;\">底层基于 SQLite 管理任务生命周期，支持崩溃或意外重启后无缝恢复。</div>\n      </td>\n    </tr>\n  </table>\n</div>\n",
+      "after": "<h3>常用功能</h3><ul><li><strong>画质检查：</strong>发现实际分辨率低于目标时，按设置提示或暂停任务。</li><li><strong>音轨选择：</strong>根据语言偏好及平台的原音、配音标记选择音轨。</li><li><strong>批量下载：</strong>按需加载播放列表和频道中的视频详情。</li><li><strong>SponsorBlock：</strong>按社区标注处理选定类别的片段。</li><li><strong>VR 处理：</strong>根据预设和设置保留或转换投影格式。</li><li><strong>任务记录：</strong>重新启动后查看已保存的任务，并恢复可继续的下载。</li></ul>",
+      "english": "<h3>Key features</h3><ul><li><strong>Quality checks:</strong> warn or pause when the actual resolution is below the target.</li><li><strong>Audio selection:</strong> use language preferences and the platform’s original/dubbed labels.</li><li><strong>Batch downloads:</strong> load playlist and channel details as needed.</li><li><strong>SponsorBlock:</strong> process selected segment categories using community annotations.</li><li><strong>VR processing:</strong> preserve or convert projections according to your preset and settings.</li><li><strong>Task history:</strong> view saved tasks after a restart and resume downloads that can continue.</li></ul>"
+    },
+    {
+      "section": "_WIZARD_STEP5_HTML",
+      "before": "\n<div style=\"text-align:left; padding:0 10px;\">\n  <p style=\"font-size:16px; font-weight:600; margin-bottom:16px; margin-left:10px;\">侧边栏功能导航</p>\n  <table style=\"width:100%; margin:0;\">\n    <tr>\n      <td style=\"padding:10px; vertical-align:top; width:50%; border:none;\">\n        <div style=\"font-size:14px; font-weight:600; margin-bottom:4px;\">🏠 主页 / 基础解析</div>\n        <div style=\"color:#767676; font-size:12px;\">核心工作区。粘贴链接即可解析单个视频或整个播放列表，并自由组装画质与音轨。</div>\n      </td>\n      <td style=\"padding:10px; vertical-align:top; width:50%; border:none;\">\n        <div style=\"font-size:14px; font-weight:600; margin-bottom:4px;\">📺 频道下载</div>\n        <div style=\"color:#767676; font-size:12px;\">专为频道级别搬运设计。支持动态懒加载频道内的所有视频，并一键批量建立任务。</div>\n      </td>\n    </tr>\n    <tr>\n      <td style=\"padding:10px; vertical-align:top; width:50%; border:none;\">\n        <div style=\"font-size:14px; font-weight:600; margin-bottom:4px;\">🥽 VR 下载</div>\n        <div style=\"color:#767676; font-size:12px;\">独立的 VR 处理管线。自动提取 VR 全景格式并重投影，适配主流头显。</div>\n      </td>\n      <td style=\"padding:10px; vertical-align:top; width:50%; border:none;\">\n        <div style=\"font-size:14px; font-weight:600; margin-bottom:4px;\">📝 物料提取 (字幕/封面)</div>\n        <div style=\"color:#767676; font-size:12px;\">提供独立的提取页面，无需下载巨大视频本体即可高速获取多语种字幕与高清海报。</div>\n      </td>\n    </tr>\n    <tr>\n      <td style=\"padding:10px; vertical-align:top; width:50%; border:none;\">\n        <div style=\"font-size:14px; font-weight:600; margin-bottom:4px;\">⬇️ 任务列表</div>\n        <div style=\"color:#767676; font-size:12px;\">统一的下载调度中心。支持任务的全局暂停、开始，以及任务队列的批量管理。</div>\n      </td>\n      <td style=\"padding:10px; vertical-align:top; width:50%; border:none;\">\n        <div style=\"font-size:14px; font-weight:600; margin-bottom:4px;\">⚙️ 设置中心</div>\n        <div style=\"color:#767676; font-size:12px;\">提供身份验证 (Cookie) 授权、底层组件维护、并发数调整及其他核心偏好设定。</div>\n      </td>\n    </tr>\n  </table>\n</div>\n",
+      "after": "<h3>页面导航</h3><ul><li><strong>精确解析：</strong>加载视频或播放列表，选择格式后下载。</li><li><strong>频道下载：</strong>加载频道内容，筛选并选择要下载的视频。</li><li><strong>VR 下载：</strong>选择适合 VR 视频的格式和处理选项。</li><li><strong>字幕、封面：</strong>单独获取字幕文件或封面图片。</li><li><strong>任务列表：</strong>查看进度、暂停或恢复任务，以及管理历史记录。</li><li><strong>设置：</strong>管理账号、输出格式、网络连接和组件更新。</li></ul>",
+      "english": "<h3>Find your way around</h3><ul><li><strong>Video parsing:</strong> load a video or playlist and choose formats before downloading.</li><li><strong>Channel downloads:</strong> load channel content, filter it, and select videos.</li><li><strong>VR downloads:</strong> choose formats and processing options for VR videos.</li><li><strong>Subtitles and covers:</strong> save subtitle files or cover images separately.</li><li><strong>Tasks:</strong> view progress, pause or resume tasks, and manage history.</li><li><strong>Settings:</strong> manage accounts, output formats, network connections, and component updates.</li></ul>"
+    },
+    {
+      "section": "_WIZARD_STEP6_HTML",
+      "before": "\n<div style=\"text-align:center; padding:30px 0 10px 0;\">\n  <div style=\"font-size:64px; margin-bottom:16px;\">🚀</div>\n  <h2 style=\"margin:0 0 12px 0; font-size:28px; font-weight:700;\">一切准备就绪</h2>\n  <p style=\"font-size:14px; margin:0 0 36px 0;\">核心服务进程已初始化，您可以开始建立下载任务了。</p>\n  \n  <div style=\"text-align:left; border:1px solid #767676; padding:16px 20px; border-radius:8px; display:inline-block; max-width:85%;\">\n    <p style=\"font-size:16px; font-weight:600; margin:0 0 10px 0;\">⚠️ 核心组件更新预警</p>\n    <p style=\"font-size:13px; margin:0 0 10px 0; line-height:1.6;\">流媒体平台的防护策略更新极为频繁。如果您在未来使用中遭遇<strong>大面积解析错误、HTTP 403 异常或频繁的机器人验证拦截</strong>，这通常是因为上游策略发生了改变。</p>\n    <p style=\"font-size:13px; margin:0; line-height:1.6;\">👉 <strong>排障第一步：</strong>请立即前往 <strong>「设置 → 更新」</strong> 页面，将内部核心组件升级至最新版本，99% 的解析问题都能由此解决。</p>\n  </div>\n</div>\n",
+      "after": "<h2>开始使用</h2><p>粘贴一个支持的视频链接，即可创建下载任务。</p><h3>遇到问题时</h3><p>先查看错误说明，再检查网络连接、账号是否有访问权限，以及“设置 → 更新”中的组件版本。</p><p>更新组件可能解决平台变化引起的问题，但不能解决所有访问限制。仍无法下载时，可导出诊断包帮助排查。</p>",
+      "english": "<h2>Ready to get started</h2><p>Paste a supported video link to create a download task.</p><h3>If something goes wrong</h3><p>Read the error message, then check your connection, account access, and component versions in Settings → Update.</p><p>Component updates may resolve issues caused by platform changes, but cannot remove every access restriction. If the problem persists, export a diagnostic bundle for troubleshooting.</p>"
+    },
+    {
+      "section": "_QUICK_DOWNLOAD_HTML",
+      "before": "\n<h3>基本操作</h3>\n<p>复制任意 YouTube 链接，在主页按 <code>Ctrl+V</code> 或点击粘贴按钮，按回车即可开始解析。</p>\n\n<h3>支持的链接类型</h3>\n<table>\n<tr><th>类型</th><th>示例</th></tr>\n<tr><td>单个视频</td><td><code>youtube.com/watch?v=...</code></td></tr>\n<tr><td>播放列表</td><td><code>youtube.com/playlist?list=...</code></td></tr>\n<tr><td>频道主页</td><td><code>youtube.com/@channel</code></td></tr>\n<tr><td>短视频</td><td><code>youtube.com/shorts/...</code></td></tr>\n</table>\n\n<p style=\"color:#808080; font-size:13px; margin-top:12px;\">💡 <strong>提示：</strong>支持 B 站、Patreon 等数百个网站（底层引擎 yt-dlp 支持），但 FluentYTDL 的 UI 优化专为 YouTube 定制。</p>\n",
+      "after": "<h3>加载链接</h3><p>在“精确解析”页面粘贴链接，按回车或点击解析按钮。格式加载后，选择保存位置并下载。</p><h3>支持范围</h3><ul><li>YouTube：视频、Shorts、播放列表、频道、字幕、封面和 VR 内容。</li><li>X：包含可下载视频的单个帖子。</li></ul><p>频道内容请使用“频道下载”页面。其他 yt-dlp 支持的网站不属于本应用的支持范围。</p>",
+      "english": "<h3>Load a link</h3><p>Paste a link on the parsing page and press Enter or start parsing. Once formats load, choose a save location and download.</p><h3>Supported content</h3><ul><li>YouTube: videos, Shorts, playlists, channels, subtitles, covers, and VR content.</li><li>X: individual posts containing downloadable video.</li></ul><p>Use the channel download page for channel content. Other sites supported by yt-dlp are outside this app’s supported scope.</p>"
+    },
+    {
+      "section": "_FORMAT_QUALITY_HTML",
+      "before": "\n<h3>自动模式（默认）</h3>\n<p>软件默认智能选择最佳画质，优先下载 1080p/4K 高清格式。大多数场景无需手动干预。</p>\n\n<h3>A+B 专业模式</h3>\n<p>解析完成后点击「选择格式」按钮，可自由组合视频流和音频流：</p>\n<ul>\n<li><strong>视频流</strong>：选择画面分辨率（如 4K、1080p）和编码（H.264、VP9、AV1）</li>\n<li><strong>音频流</strong>：选择音质（如 Hi-Res Opus 256kbps、AAC 128kbps）</li>\n</ul>\n<p>例如：4K VP9 视频 + Hi-Res Opus 音频 = 最佳画质+音质的完美文件。</p>\n\n<h3>为什么最高只有 1080p？</h3>\n<ul>\n<li>视频刚发布，4K/8K 编码需数小时，稍后重试</li>\n<li>风控降级：需导入 Cookie + 换干净 IP</li>\n<li>缺少 Deno JS 运行时：前往「设置 → 核心组件」检查安装</li>\n<li>yt-dlp 过期：更新组件</li>\n</ul>\n",
+      "after": "<h3>画质与格式</h3><p>自动模式选择最佳可用格式。分辨率上限不是保证值：实际画质受源视频、访问权限和可用格式影响。</p><p>在专业模式中，可分别选择视频编码、分辨率和音轨。Opus、AAC 是音频编码名称，码率较高不代表源音频一定更好，也不代表无损。</p><h3>缺少高分辨率格式</h3><ul><li>确认源视频是否提供该分辨率；新发布的视频可能仍在处理。</li><li>检查账号是否有访问权限，并按错误提示刷新 Cookie。</li><li>在“设置 → 更新”检查 yt-dlp 和 Deno。</li></ul>",
+      "english": "<h3>Quality and formats</h3><p>Automatic mode selects the best available formats. A resolution limit is not a guarantee: actual quality depends on the source, access permissions, and available formats.</p><p>In advanced mode, select video codecs, resolution, and audio tracks separately. Opus and AAC are audio codecs. A higher bitrate does not necessarily mean better source audio or lossless quality.</p><h3>Missing higher resolutions</h3><ul><li>Check whether the source provides that resolution. Newly uploaded videos may still be processing.</li><li>Check your account’s access and refresh cookies if the error message asks you to.</li><li>Check yt-dlp and Deno in Settings → Update.</li></ul>"
+    },
+    {
+      "section": "_LAZY_MODE_HTML",
+      "before": "\n<h3>开启方式</h3>\n<p>进入 <strong>设置 → 自动化</strong>，开启「剪贴板自动识别」开关。</p>\n\n<h3>使用效果</h3>\n<p>开启后，软件在后台监听剪贴板。只要复制了 YouTube 链接，就会自动弹出下载确认窗口，无需手动粘贴。点击「下载」即开始。</p>\n\n<p style=\"color:#808080; font-size:13px; margin-top:12px;\">💡 <strong>推荐：</strong>这是最高效的使用方式，尤其适合日常频繁下载的用户。</p>\n",
+      "after": "<h3>自动识别剪贴板链接</h3><p>在“设置 → 功能 → 自动化”开启“剪贴板自动识别”，并选择识别后的操作方式。</p><p>复制支持的链接后，应用会打开对应的解析窗口。确认格式和保存位置，再点击下载。</p><p>不希望复制链接时弹出窗口，可关闭此选项。</p>",
+      "english": "<h3>Detect copied links</h3><p>Enable clipboard detection in Settings → Features → Automation and choose what happens when a link is detected.</p><p>Copying a supported link opens the appropriate parsing window. Confirm the formats and save location before downloading.</p><p>Turn this option off if you do not want windows to open when you copy links.</p>"
+    },
+    {
+      "section": "_BATCH_MANAGE_HTML",
+      "before": "\n<h3>批量操作</h3>\n<p>在下载列表中，使用工具栏上的「批量选择」按钮，可一次性暂停、恢复或删除多个任务。</p>\n\n<h3>播放列表全局格式预设</h3>\n<p>解析播放列表后，使用工具栏的「格式设置」按钮统一配置所有视频的分辨率和格式，无需逐个设置。</p>\n\n<h3>并发控制建议</h3>\n<table>\n<tr><th>场景</th><th>建议</th></tr>\n<tr><td>日常下载</td><td>保持默认并发任务数</td></tr>\n<tr><td>大播放列表（500+）</td><td>分批解析，避免触发风控</td></tr>\n<tr><td>网络不稳定</td><td>降低并发分片数</td></tr>\n</table>\n",
+      "after": "<h3>批量任务</h3><p>在任务列表中选择多个任务，再使用工具栏暂停、恢复或移除它们。移除时请确认是否同时删除文件。</p><h3>播放列表格式</h3><p>使用“格式设置”统一指定画质和输出格式。实际可用格式仍取决于每个视频。</p><p>处理大列表时可分批选择，并适当降低详情请求和下载的并发数。</p>",
+      "english": "<h3>Batch tasks</h3><p>Select multiple tasks, then use the toolbar to pause, resume, or remove them. When removing tasks, check whether downloaded files will also be deleted.</p><h3>Playlist formats</h3><p>Use Format Settings to apply quality and output preferences to the playlist. Available formats still depend on each video.</p><p>For large playlists, select videos in batches and consider reducing concurrent detail requests and downloads.</p>"
+    },
+    {
+      "section": "_COOKIE_COMPARE_HTML",
+      "before": "\n<h3>三种获取方式对比</h3>\n<table>\n<tr><th>方式</th><th>推荐度</th><th>说明</th></tr>\n<tr><td><strong>WebView2 登录获取</strong></td><td>强烈推荐</td><td>弹出安全沙盒窗口登录，一键获取，无兼容性问题</td></tr>\n<tr><td><strong>Firefox 自动提取</strong></td><td>推荐</td><td>无需管理员权限，稳定可靠</td></tr>\n<tr><td><strong>手动导入</strong></td><td>兜底方案</td><td>用扩展导出 cookies.txt 后导入，需定期更新</td></tr>\n</table>\n\n<h3>WebView2 登录获取流程</h3>\n<ol>\n<li>在设置页点击「WebView2 登录获取」，弹出独立的 WebView2 沙盒窗口</li>\n<li>在沙盒中正常登录 Google/YouTube 账号</li>\n<li>软件自动检测登录状态，采集 Cookie 并清洗</li>\n<li>Cookie 自动同步到 yt-dlp，完成</li>\n</ol>\n\n<h3>浏览器兼容性</h3>\n<table>\n<tr><th>浏览器</th><th>自动提取</th><th>说明</th></tr>\n<tr><td>Firefox</td><td>稳定可用</td><td>无需管理员权限，推荐首选</td></tr>\n<tr><td>Edge</td><td>需管理员权限</td><td>App-Bound Encryption 限制</td></tr>\n<tr><td>Chrome</td><td>基本不可用</td><td>v127+ 加密机制导致第三方无法解密</td></tr>\n</table>\n\n<p style=\"color:#808080; font-size:13px; margin-top:12px;\">💡 <strong>重要：</strong>Chrome 自动提取极不稳定。如果你使用 Chrome 且频繁失败，请切换到 WebView2 或 Firefox。</p>\n",
+      "after": "<h3>获取登录 Cookie</h3><ul><li><strong>应用内登录：</strong>在“设置 → 账号验证”选择 YouTube 或 X，并在 WebView2 窗口完成登录。</li><li><strong>浏览器提取：</strong>从已登录的 Firefox、Edge 等受支持浏览器提取。部分 Chromium 浏览器需要管理员权限。</li><li><strong>手动导入：</strong>选择 Netscape 格式的 cookies.txt 文件。</li></ul><p>不支持自动提取 Chrome 和百分浏览器的 Cookie。可以改用应用内登录、受支持的浏览器或手动导入。</p><p>Cookie 会过期或失效。出现登录提示时，重新获取 Cookie，并确认账号能在浏览器中访问目标内容。</p>",
+      "english": "<h3>Get sign-in cookies</h3><ul><li><strong>Sign in through the app:</strong> choose YouTube or X in Settings → Accounts and sign in using the WebView2 window.</li><li><strong>Browser extraction:</strong> retrieve cookies from a supported browser such as Firefox or Edge where you are already signed in. Some Chromium browsers require administrator privileges.</li><li><strong>Manual import:</strong> select a cookies.txt file in Netscape format.</li></ul><p>Automatic extraction from Chrome and CentBrowser is not supported. Use in-app sign-in, a supported browser, or manual import instead.</p><p>Cookies can expire or become invalid. If sign-in is requested, retrieve fresh cookies and confirm that your account can access the content in a browser.</p>"
+    },
+    {
+      "section": "_POTOKEN_HTML",
+      "before": "\n<h3>什么是 PO Token？</h3>\n<p><strong>PO Token（Proof of Origin Token）</strong>是 YouTube 用于验证请求来源合法性的数字令牌，向 YouTube 证明self.tr(\"这个请求来自真实客户端\")。</p>\n\n<h3>没有 PO Token 时可能遇到</h3>\n<ul>\n<li>触发 \"Sign in to confirm you're not a bot\" 人机验证</li>\n<li>高画质格式被隐藏（仅返回 720p 或更低）</li>\n<li>直接返回 HTTP 403 拒绝访问</li>\n</ul>\n\n<h3>PO Token 与 Cookie 的关系</h3>\n<table>\n<tr><th></th><th>PO Token</th><th>Cookie</th></tr>\n<tr><td>证明什么</td><td>请求来自合法客户端</td><td>用户身份和登录状态</td></tr>\n<tr><td>解决什么</td><td>机器人检测、基础格式访问</td><td>年龄限制、会员内容、高码率流</td></tr>\n<tr><td>缺失后果</td><td>触发人机验证、画质受限</td><td>无法下载受限内容</td></tr>\n</table>\n\n<p style=\"color:#808080; font-size:13px; margin-top:12px;\">💡 <strong>最佳实践：</strong>两者同时启用是最稳定的配置。PO Token 确保请求不被拦截，Cookie 确保有权限获取完整内容。</p>\n\n<h3>POT Provider 预热</h3>\n<p>应用启动时，POT Provider 需要 5-15 秒初始化 BotGuard 环境。预热期间日志显示「正在初始化」，完成后显示「已激活」。如果一直无法激活，请检查 Deno 是否已安装。</p>\n",
+      "after": "<h3>PO Token 与 Cookie</h3><p>PO Token 用于部分 YouTube 请求的来源验证。Cookie 用于提供账号会话。两者作用不同，不能代替内容访问权限，也不能保证请求一定成功。</p><h3>启用与检测</h3><p>在“设置 → 系统 → 高级”启用 POT 服务。服务在后台准备，就绪前应用暂不使用 PO Token 解析。</p><p>“一键检测”会检查令牌生成和 yt-dlp 连接。失败时请查看检测详情，并检查 Deno、POT Provider 和网络连接。</p>",
+      "english": "<h3>PO Tokens and cookies</h3><p>A PO Token verifies the origin of certain YouTube requests. Cookies provide an account session. They serve different purposes; neither grants content access or guarantees that a request will succeed.</p><h3>Enable and check</h3><p>Enable the POT service in Settings → System → Advanced. It prepares in the background; the app parses without PO Tokens until it is ready.</p><p>Check Now tests token generation and the yt-dlp connection. If it fails, review the details and check Deno, POT Provider, and your network connection.</p>"
+    },
+    {
+      "section": "_NETWORK_PROXY_HTML",
+      "before": "\n<h3>默认行为</h3>\n<p>FluentYTDL 默认「跟随系统代理」。只要系统或代理软件开启了系统代理，软件即可自动使用。</p>\n\n<h3>代理软件配置</h3>\n<table>\n<tr><th>软件</th><th>操作</th></tr>\n<tr><td>V2RayN</td><td>底部切换为「系统代理」，或开启 TUN</td></tr>\n<tr><td>Clash Verge / CFW</td><td>启用「System Proxy」开关，不行就开 TUN</td></tr>\n<tr><td>其他</td><td>确保开启self.tr(\"系统代理\")/self.tr(\"全局模式\")，非仅self.tr(\"规则/PAC 模式\")</td></tr>\n</table>\n\n<h3>手动配置代理</h3>\n<p>如果自动代理不工作，在 <strong>设置 → 网络连接</strong> 中选择「手动配置」，填入代理端口（如 <code>http://127.0.0.1:7890</code>）。</p>\n\n<p style=\"color:#808080; font-size:13px; margin-top:12px;\">💡 <strong>注意：</strong>不推荐长期使用手动代理。代理软件换端口后需手动同步修改，容易遗漏。</p>\n\n<h3>DNS 错误 / 连接重置</h3>\n<ul>\n<li><strong>端口未对齐</strong>：检查设置中的端口号是否与代理软件一致</li>\n<li><strong>节点被封锁</strong>：更换其他国家/地区的节点</li>\n<li><strong>TUN 模式</strong>：开启后软件直接接管系统网络流量，无需配置端口</li>\n</ul>\n",
+      "after": "<h3>连接方式</h3><p>在“设置 → 网络”选择不使用代理、系统代理或手动 HTTP/SOCKS5 代理。</p><p>手动代理的地址和端口必须与代理软件一致，例如 <code>127.0.0.1:7890</code>。</p><p>使用 TUN 模式时，流量由系统路由处理，通常不需要再设置应用内代理。避免重复配置。</p><h3>连接失败</h3><p>确认代理软件正在运行、端口正确，并检查浏览器能否打开同一链接。DNS 或证书错误需要分别检查网络解析和证书设置。</p>",
+      "english": "<h3>Connection mode</h3><p>In Settings → Network, choose no proxy, the system proxy, or a manual HTTP/SOCKS5 proxy.</p><p>A manual proxy address and port must match your proxy software, for example <code>127.0.0.1:7890</code>.</p><p>With TUN mode, system routing handles traffic, so a separate in-app proxy is usually unnecessary. Avoid configuring both paths.</p><h3>Connection failures</h3><p>Check that the proxy is running, the port is correct, and the same link opens in a browser. Check DNS and certificate settings separately if those errors appear.</p>"
+    },
+    {
+      "section": "_LOGIN_ERROR_HTML",
+      "before": "\n<h3>遇到 \"Sign in to confirm you're not a bot\"</h3>\n<p>按优先级依次尝试：</p>\n<ol>\n<li><strong>点击应用弹出的自动修复引导</strong> — 自动诊断根因并一键处理</li>\n<li><strong>更新 yt-dlp</strong> — 前往「设置 → 核心组件」一键更新（最有效）</li>\n<li><strong>刷新 Cookie</strong> — 推荐 WebView2 重新登录，或切换到 Firefox 提取</li>\n<li><strong>更换代理节点</strong> — 当前 IP 可能已被标记</li>\n</ol>\n\n<h3>需要登录/权限不足</h3>\n<p>以下场景需要导入 Cookie：</p>\n<ul>\n<li>年龄限制（18禁）内容</li>\n<li>频道会员专属内容</li>\n<li>受强力风控保护的极高码率流</li>\n<li>私享视频</li>\n</ul>\n\n<p style=\"color:#808080; font-size:13px; margin-top:12px;\">💡 <strong>提示：</strong>绝大多数公开视频不需要登录。日常使用直接复制链接粘贴解析即可。</p>\n\n<h3>修改账号资料后出现验证错误</h3>\n<p>修改用户名/头像触发了 Google 安全风控。解决：浏览器退出 YouTube → 重新登录 → 播放一个视频确认正常 → 重新获取 Cookie。</p>\n",
+      "after": "<h3>需要登录或验证</h3><p>先确认当前账号能在浏览器中访问该视频。私享、年龄限制或会员内容可能要求相应权限。</p><ol><li>在“设置 → 更新”检查 yt-dlp。</li><li>通过应用内登录或浏览器提取刷新 Cookie。</li><li>检查网络连接，并按具体错误提示处理。</li></ol><p>更改账号资料后，如会话失效，请重新登录并获取 Cookie。无法仅凭验证失败判断账号或 IP 被封禁。</p>",
+      "english": "<h3>Sign-in or verification required</h3><p>First confirm that your account can access the video in a browser. Private, age-restricted, or members-only content may require specific permissions.</p><ol><li>Check yt-dlp in Settings → Update.</li><li>Refresh cookies through in-app sign-in or browser extraction.</li><li>Check your connection and follow the specific error message.</li></ol><p>If a session becomes invalid after an account change, sign in again and retrieve fresh cookies. A verification failure alone does not establish that your account or IP is banned.</p>"
+    },
+    {
+      "section": "_SPONSORBLOCK_HTML",
+      "before": "\n<h3>工作原理</h3>\n<p>SponsorBlock 社区维护了一个众包标注数据库，记录了数百万视频中的赞助广告时间段。yt-dlp 下载时自动查询并处理。</p>\n\n<h3>支持的类别</h3>\n<table>\n<tr><th>类别</th><th>说明</th></tr>\n<tr><td>sponsor</td><td>赞助广告</td></tr>\n<tr><td>selfpromo</td><td>频道自我推广</td></tr>\n<tr><td>interaction</td><td>订阅提醒、点赞提醒等</td></tr>\n</table>\n\n<h3>处理方式</h3>\n<ul>\n<li><strong>Remove（移除）</strong>：使用 FFmpeg 自动裁剪掉广告片段</li>\n<li><strong>Mark（标记）</strong>：将广告段标记为章节，播放时可跳过</li>\n</ul>\n\n<p>在 <strong>设置 → 下载选项 → SponsorBlock</strong> 中启用并选择类别和处理方式。</p>\n",
+      "after": "<h3>SponsorBlock 片段处理</h3><p>根据社区标注识别赞助广告、自我推广和互动提醒等片段。标注可能不完整或不准确。</p><p>在“设置 → 功能 → 后处理”启用 SponsorBlock，并选择处理类别。</p><p>片段移除会改变输出视频的内容和时长。下载后请检查结果；没有匹配标注时，不会凭空识别广告。</p>",
+      "english": "<h3>SponsorBlock segments</h3><p>Uses community annotations to identify sponsored segments, self-promotion, and interaction reminders. Annotations may be incomplete or inaccurate.</p><p>Enable SponsorBlock in Settings → Features → Post-processing and choose the categories to process.</p><p>Removing segments changes the output’s content and duration. Check the result after downloading. Segments without matching annotations are not detected automatically.</p>"
+    },
+    {
+      "section": "_VR_VIDEO_HTML",
+      "before": "\n<h3>自动检测机制</h3>\n<p>FluentYTDL 解析视频时自动检测 VR 内容（关键词、格式元数据、分辨率异常），检测到后自动使用 <code>android_vr</code> 客户端获取 VR 专属高分辨率格式（最高 8K）。</p>\n\n<h3>三种投影类型</h3>\n<table>\n<tr><th>投影类型</th><th>说明</th><th>画面特征</th></tr>\n<tr><td>Equirectangular</td><td>最常见的 360 格式</td><td>宽高比 2:1，上下拉伸</td></tr>\n<tr><td>Mesh</td><td>VR180 常用</td><td>圆形鱼眼画面</td></tr>\n<tr><td>EAC</td><td>YouTube 自研高效率格式</td><td>六面展开图</td></tr>\n</table>\n\n<h3>播放说明</h3>\n<p>VR 视频在普通播放器中呈畸变是正常的，需用 VR 头显或全景播放器（Skybox、PotPlayer 全景模式）。</p>\n\n<p style=\"color:#808080; font-size:13px; margin-top:12px;\">💡 <strong>注意：</strong>EAC 格式的 8K 转码极度消耗资源（建议 32GB+ 内存），没有高性能硬件时建议限制在 4K/6K。</p>\n",
+      "after": "<h3>VR 视频</h3><p>在 VR 下载页面选择链接和预设。可用分辨率、投影和立体格式取决于源视频。</p><ul><li><strong>Equirectangular：</strong>等距柱状投影，常用于全景播放。</li><li><strong>Mesh：</strong>带投影映射信息的格式，可见于 VR180 内容。</li><li><strong>EAC：</strong>YouTube 使用的等角立方体投影。</li></ul><p>普通播放器可能显示变形画面，应使用支持对应投影的 VR 播放器。只有预设或设置要求时才转换投影。</p><p>高分辨率转换可能消耗大量内存和时间。根据硬件能力设置分辨率上限。</p>",
+      "english": "<h3>VR videos</h3><p>Choose a link and preset on the VR download page. Available resolution, projection, and stereo formats depend on the source.</p><ul><li><strong>Equirectangular:</strong> a projection commonly used for panoramic playback.</li><li><strong>Mesh:</strong> a format with projection mapping information, found in some VR180 content.</li><li><strong>EAC:</strong> the equi-angular cubemap projection used by YouTube.</li></ul><p>Regular players may show a distorted image. Use a VR player that supports the projection. Conversion runs only when requested by the preset or settings.</p><p>High-resolution conversion may use substantial memory and time. Set a resolution limit suitable for your hardware.</p>"
+    },
+    {
+      "section": "_FORMAT_COMPAT_HTML",
+      "before": "\n<h3>三个核心概念</h3>\n<p>视频文件 = <strong>容器</strong>（MP4/MKV/WebM）+ <strong>视频编码</strong>（H.264/VP9/AV1）+ <strong>音频编码</strong>（AAC/Opus）</p>\n\n<h3>视频编码对比</h3>\n<table>\n<tr><th>编码</th><th>特点</th><th>兼容性</th></tr>\n<tr><td>H.264 (AVC)</td><td>最老牌，兼容性最强</td><td>全平台通吃</td></tr>\n<tr><td>VP9</td><td>YouTube 高画质流主力</td><td>PC/手机可以，部分电视不行</td></tr>\n<tr><td>AV1</td><td>压缩效率最高</td><td>新设备支持，老设备大多不行</td></tr>\n</table>\n\n<h3>容器格式对比</h3>\n<table>\n<tr><th>容器</th><th>支持编码</th><th>字幕</th><th>多音轨</th></tr>\n<tr><td>MP4</td><td>H.264+AAC 完美 / VP9 受限 / Opus 不支持</td><td>单轨</td><td>有限</td></tr>\n<tr><td>MKV</td><td>几乎所有编码</td><td>完整多轨</td><td>完整支持</td></tr>\n<tr><td>WebM</td><td>VP9/AV1+Opus</td><td>不支持 SRT/ASS</td><td>有限</td></tr>\n</table>\n\n<h3>FluentYTDL 智能容器决策</h3>\n<ul>\n<li>多音轨/多语言字幕嵌入 → 自动升级为 MKV</li>\n<li>MP4 + m4a 音频 → MP4（无损 remux）</li>\n<li>其他混合编码 → MKV（万能容器）</li>\n</ul>\n\n<p style=\"color:#808080; font-size:13px; margin-top:12px;\">💡 <strong>什么是 remux？</strong>重封装是把音视频数据从一个容器搬到另一个容器，不重新编码，速度极快且画质零损失。</p>\n",
+      "after": "<h3>容器与编码</h3><p>MP4、MKV 和 WebM 是容器；H.264、VP9、AV1 是视频编码；AAC、Opus 是音频编码。播放器需同时支持所用容器和编码。</p><ul><li><strong>MP4：</strong>常用于 H.264/AAC。其他编码、多音轨和字幕的播放效果取决于播放器支持。</li><li><strong>MKV：</strong>支持多种编码及多音轨、多字幕，适合复杂组合。</li><li><strong>WebM：</strong>常见组合为 VP9/AV1 视频与 Opus 音频，不适合直接嵌入 SRT/ASS 字幕。</li></ul><p>应用会根据音轨、字幕和输出设置选择或调整容器。请留意下载前的提示。</p><h3>重封装与转码</h3><p>重封装不重新编码媒体流；转码会重新编码，通常耗时更长，也可能影响画质或音质。更改容器不等于必须转码。</p>",
+      "english": "<h3>Containers and codecs</h3><p>MP4, MKV, and WebM are containers. H.264, VP9, and AV1 are video codecs; AAC and Opus are audio codecs. Your player must support both the container and the codecs.</p><ul><li><strong>MP4:</strong> commonly used with H.264/AAC. Playback of other codecs, multiple audio tracks, and subtitles depends on the player.</li><li><strong>MKV:</strong> supports many codecs and multiple audio/subtitle tracks, making it suitable for complex combinations.</li><li><strong>WebM:</strong> commonly uses VP9/AV1 video and Opus audio; it is unsuitable for directly embedding SRT/ASS subtitles.</li></ul><p>The app selects or adjusts the container based on tracks, subtitles, and output settings. Review any notices before downloading.</p><h3>Remuxing and transcoding</h3><p>Remuxing changes the container without re-encoding media streams. Transcoding re-encodes them, usually takes longer, and may affect quality. Changing containers does not necessarily require transcoding.</p>"
+    },
+    {
+      "section": "_CRASH_RECOVERY_HTML",
+      "before": "\n<h3>任务持久化</h3>\n<p>FluentYTDL 使用 SQLite 数据库（WAL 模式）存储所有下载任务。任务的每个状态变化（加入队列、开始、进度、完成、错误）都会实时写入数据库。</p>\n\n<h3>崩溃恢复</h3>\n<p>如果在下载过程中关闭程序（甚至意外断电/崩溃），重启后任务列表依然完整保留。</p>\n\n<h3>降级策略</h3>\n<ul>\n<li>重启前处于「运行中」或「解析中」的任务，会自动降级为「暂停」状态，可手动恢复</li>\n<li>纯提取任务（封面/字幕）重启后标记为错误，避免产生「幽灵任务」</li>\n</ul>\n\n<p style=\"color:#808080; font-size:13px; margin-top:12px;\">💡 <strong>提示：</strong>这意味着您可以放心地在下载过程中关闭软件，下次打开时任务不会丢失。</p>\n",
+      "after": "<h3>任务记录与恢复</h3><p>应用会保存任务记录。重新启动后，可在任务列表查看已保存的状态。</p><p>中断的下载通常恢复为暂停状态，可手动继续；字幕或封面提取可能需要重新开始。</p><p>是否能够断点续传取决于临时文件、链接有效期和服务器支持。意外断电可能丢失尚未保存的状态，建议正常退出应用。</p>",
+      "english": "<h3>Task history and recovery</h3><p>The app saves task records. After a restart, the task list shows the last saved state.</p><p>Interrupted downloads usually return as paused tasks that you can resume. Subtitle or cover extraction may need to be restarted.</p><p>Resuming from partial data depends on temporary files, link validity, and server support. A power loss may lose unsaved state, so close the app normally when possible.</p>"
+    },
+    {
+      "section": "_COMPONENTS_HTML",
+      "before": "\n<h3>核心组件一览</h3>\n<table>\n<tr><th>组件</th><th>用途</th></tr>\n<tr><td><strong>yt-dlp</strong></td><td>核心下载引擎，解析链接、获取流媒体数据</td></tr>\n<tr><td><strong>FFmpeg</strong></td><td>合并音视频轨、转码封装、嵌入封面与字幕</td></tr>\n<tr><td><strong>Deno</strong></td><td>JS 运行时，解析 YouTube 加密签名，缺失时丢失大量格式</td></tr>\n<tr><td><strong>POT Provider</strong></td><td>动态生成 PO Token，绕过机器人检测</td></tr>\n<tr><td><strong>AtomicParsley</strong></td><td>向 MP4/M4A 文件嵌入封面和元数据标签</td></tr>\n</table>\n\n<h3>管理方式</h3>\n<p>在 <strong>设置 → 核心组件</strong> 页面可查看安装状态、当前版本，并一键检查更新。所有组件首次启动时自动下载安装，开箱即用。</p>\n",
+      "after": "<h3>应用组件</h3><ul><li><strong>yt-dlp：</strong>读取视频信息并下载媒体。</li><li><strong>FFmpeg：</strong>合并音视频、转换格式和处理字幕。</li><li><strong>Deno：</strong>提供 yt-dlp 使用的 JavaScript 执行环境。</li><li><strong>POT Provider：</strong>为需要来源验证的 YouTube 请求生成令牌。</li><li><strong>AtomicParsley：</strong>处理 MP4/M4A 的封面与标签。</li></ul><p>在“设置 → 更新”查看版本、检查更新或导入本地组件。是否已包含组件取决于所用发行包；缺少组件时按提示安装。</p>",
+      "english": "<h3>App components</h3><ul><li><strong>yt-dlp:</strong> reads video information and downloads media.</li><li><strong>FFmpeg:</strong> merges audio/video, converts formats, and processes subtitles.</li><li><strong>Deno:</strong> provides the JavaScript runtime used by yt-dlp.</li><li><strong>POT Provider:</strong> generates tokens for YouTube requests requiring origin verification.</li><li><strong>AtomicParsley:</strong> handles MP4/M4A artwork and tags.</li></ul><p>View versions, check for updates, or import local components in Settings → Update. Bundled components depend on the release package; install missing components when prompted.</p>"
+    },
+    {
+      "section": "_UPDATE_CHANNELS_HTML",
+      "before": "\n<h3>yt-dlp 更新渠道</h3>\n<table>\n<tr><th>渠道</th><th>更新频率</th><th>稳定性</th><th>适用场景</th></tr>\n<tr><td><strong>stable</strong></td><td>数周一次</td><td>最稳定</td><td>日常使用（默认推荐）</td></tr>\n<tr><td><strong>nightly</strong></td><td>每日构建</td><td>较稳定</td><td>YouTube 改版后 stable 未修复时</td></tr>\n<tr><td><strong>master</strong></td><td>每次代码合并</td><td>可能不稳定</td><td>开发测试</td></tr>\n</table>\n\n<h3>紧急自救指南</h3>\n<p>当 YouTube 突然大规模改版导致所有下载失败时：</p>\n<ol>\n<li>首先尝试更新 <strong>stable</strong> 渠道 — 大部分情况下社区会快速修复</li>\n<li>如果 stable 还没跟上，临时切换到 <strong>nightly</strong> — 包含最新的修复补丁</li>\n<li>修复被合并到 stable 后再切回来</li>\n</ol>\n\n<h3>镜像源配置</h3>\n<p>中国大陆用户在「设置 → 核心组件」中可切换为 ghproxy 镜像加速 GitHub 下载。组件更新也会使用「设置 → 网络连接」中配置的代理。</p>\n",
+      "after": "<h3>yt-dlp 更新频道</h3><ul><li><strong>Stable：</strong>正式发布的版本。</li><li><strong>Nightly：</strong>包含较新修复的开发构建。</li><li><strong>Master：</strong>主线开发构建，适合测试。</li></ul><p>在“设置 → 更新”选择频道并检查更新。遇到平台变化导致的问题，可根据发布说明考虑其他频道；开发构建也可能引入新问题。</p><p>更新源用于检查版本信息；下载来源以更新界面中的说明为准。</p>",
+      "english": "<h3>yt-dlp update channels</h3><ul><li><strong>Stable:</strong> published releases.</li><li><strong>Nightly:</strong> development builds with more recent fixes.</li><li><strong>Master:</strong> mainline development builds for testing.</li></ul><p>Choose a channel and check for updates in Settings → Update. For issues caused by platform changes, consider another channel based on its release notes. Development builds can also introduce issues.</p><p>The update source is used to check version information. See the update screen for download source details.</p>"
+    },
+    {
+      "section": "_PERFORMANCE_HTML",
+      "before": "\n<h3>并发分片数</h3>\n<table>\n<tr><th>设置值</th><th>适用场景</th><th>风险</th></tr>\n<tr><td>1-2</td><td>网络不稳定、代理带宽小</td><td>无</td></tr>\n<tr><td><strong>4（默认）</strong></td><td>大多数场景的最佳平衡</td><td>无</td></tr>\n<tr><td>8-16</td><td>高带宽直连、极速下载</td><td>可能触发 429 限流</td></tr>\n<tr><td>16+</td><td>不推荐</td><td>高概率限流、IP 封锁</td></tr>\n</table>\n\n<p style=\"color:#808080; font-size:13px; margin-top:12px;\">💡 <strong>注意：</strong>分片数并非越大越快。YouTube 会对单 IP 的并发连接数监控，超过阈值会触发限流甚至封锁。默认值 4 是最佳平衡点。</p>\n\n<h3>下载限速</h3>\n<p>在「设置 → 下载选项」中可设置速率上限，适用场景：</p>\n<ul>\n<li>避免下载占满全部带宽</li>\n<li>降低被风控检测的概率</li>\n<li>后台长时间挂机下载</li>\n</ul>\n",
+      "after": "<h3>下载并发</h3><p>同时下载任务数决定并行处理多少个视频；分片并发数决定单个视频同时下载多少个分片。</p><p>更多并发不一定更快。网络不稳定、界面响应变慢或出现 HTTP 429 时，可降低并发数后重试。</p><p>HTTP 429 表示请求受到限流，不能据此认定 IP 永久封禁。限制持续时间取决于服务端，应用无法保证固定的恢复时间。</p>",
+      "english": "<h3>Download concurrency</h3><p>Concurrent downloads control how many videos run at once. Concurrent fragments control how many parts of a single video download at once.</p><p>More concurrency is not always faster. Reduce it if your connection is unstable, the app becomes less responsive, or HTTP 429 errors occur.</p><p>HTTP 429 indicates rate limiting; it does not establish a permanent IP ban. The server determines how long a limit lasts, so the app cannot promise a fixed recovery time.</p>"
+    },
+    {
+      "section": "_ERROR_TABLE_HTML",
+      "before": "\n<h3>错误代码速查表</h3>\n<table>\n<tr><th>关键词</th><th>错误类型</th><th>核心原因</th><th>解决方案</th></tr>\n<tr><td><code>ffmpeg not found</code></td><td>组件缺失</td><td>缺少 FFmpeg 无法合并音视频</td><td>设置 → 核心组件 → 检查更新</td></tr>\n<tr><td><code>HTTP Error 403</code></td><td>访问被拒</td><td>IP 被 YouTube 风控</td><td>更新 Cookie + 更换代理节点</td></tr>\n<tr><td><code>Sign in</code> / <code>private</code></td><td>权限不足</td><td>需要登录或会员权限</td><td>导入有效 Cookie</td></tr>\n<tr><td><code>timed out</code> / <code>10060</code></td><td>网络超时</td><td>无法连接 YouTube 服务器</td><td>检查代理软件系统代理模式</td></tr>\n<tr><td><code>Video unavailable</code></td><td>视频无效</td><td>视频被删或区域限制</td><td>确认链接在浏览器中可访问</td></tr>\n<tr><td><code>postprocessing</code></td><td>后处理失败</td><td>格式合成出错或磁盘满</td><td>切换下载格式 (MKV/MP4)</td></tr>\n</table>\n\n<h3>403 Forbidden 深度解析</h3>\n<p>这是最常见的问题。YouTube 会屏蔽「非浏览器」流量。解决步骤：</p>\n<ol>\n<li><strong>更新 Cookie</strong>（推荐）：使用 WebView2 登录或 Firefox 提取</li>\n<li><strong>更换节点</strong>：「万人骑」公共节点容易被封锁，切换到冷门节点</li>\n<li><strong>更新 yt-dlp</strong>：社区会持续适配 YouTube 的反爬变化</li>\n</ol>\n\n<p style=\"color:#808080; font-size:13px; margin-top:12px;\">💡 <strong>提示：</strong>403 的 IP 封锁通常需要等 12-24 小时解封。更换节点是最快的解决方案。</p>\n",
+      "after": "<h3>常见错误</h3><table><tr><th>错误</th><th>检查方法</th></tr><tr><td>FFmpeg 未找到</td><td>在“设置 → 更新”检查组件是否已安装。</td></tr><tr><td>HTTP 403</td><td>请求被拒绝。检查账号权限、Cookie、链接有效期和网络连接，并检查 yt-dlp 更新。</td></tr><tr><td>需要登录 / private</td><td>确认账号可在浏览器访问内容，再获取 Cookie。</td></tr><tr><td>连接超时</td><td>检查网络、代理地址和端口。</td></tr><tr><td>Video unavailable</td><td>确认视频未被删除，并检查地区和访问限制。</td></tr><tr><td>后处理失败</td><td>查看错误详情，检查磁盘空间、文件权限及格式兼容性。</td></tr></table><p>同一错误码可能有多种原因。不要仅凭 403 认定 IP 被封禁，也不要假定刷新 Cookie 能解决所有失败。</p>",
+      "english": "<h3>Common errors</h3><table><tr><th>Error</th><th>What to check</th></tr><tr><td>FFmpeg not found</td><td>Check component installation in Settings → Update.</td></tr><tr><td>HTTP 403</td><td>The request was rejected. Check account access, cookies, link validity, and your connection, and check for yt-dlp updates.</td></tr><tr><td>Sign-in required / private</td><td>Confirm your account can access the content in a browser, then retrieve cookies.</td></tr><tr><td>Connection timeout</td><td>Check your network and proxy address/port.</td></tr><tr><td>Video unavailable</td><td>Check for deletion, regional restrictions, or access restrictions.</td></tr><tr><td>Post-processing failed</td><td>Read the error details and check disk space, file permissions, and format compatibility.</td></tr></table><p>An error code can have several causes. HTTP 403 alone does not prove an IP ban, and refreshing cookies cannot resolve every failure.</p>"
+    },
+    {
+      "section": "_LOG_REPORT_HTML",
+      "before": "\n<h3>获取运行日志</h3>\n<ol>\n<li>进入 <strong>设置页 → 系统 → 日志管理</strong></li>\n<li>点击右侧文件夹图标打开日志目录</li>\n<li>找到当天 <code>.log</code> 文件（如 <code>app_2026-04-23.log</code>）</li>\n</ol>\n\n<p>也可点击「查看日志」在应用内实时预览，支持级别过滤和关键词搜索。</p>\n\n<h3>一键上报 Bug</h3>\n<p>遇到未知的解析异常或下载中断时，点击报错卡片处弹出的「反馈此错误」图标按钮，会自动预填错误信息提报给开发者。</p>\n\n<p style=\"color:#808080; font-size:13px; margin-top:12px;\">💡 <strong>提示：</strong>附上日志文件能让开发者更快定位问题。在 GitHub Issue 中粘贴日志内容即可。</p>\n",
+      "after": "<h3>查看日志</h3><p>在“设置 → 系统 → 日志管理”打开日志窗口或日志目录。日志窗口支持级别筛选和关键词搜索。</p><h3>反馈问题</h3><p>错误详情中的“反馈此错误”可准备问题描述。您也可以在任务时间线中选择任务，导出诊断包。</p><p>请说明复现步骤、预期结果和实际结果。发送前检查附件，不要附上 Cookie、密码或其他账号凭据。</p>",
+      "english": "<h3>View logs</h3><p>Open the log viewer or log directory in Settings → System → Log Management. The viewer supports level filters and keyword search.</p><h3>Report a problem</h3><p>Use Report this error in the error details to prepare a report. You can also select a task in the timeline and export a diagnostic bundle.</p><p>Describe the steps to reproduce, expected result, and actual result. Review attachments before sharing them; do not include cookies, passwords, or other account credentials.</p>"
+    }
+  ],
+  "review_date": "2026-09-12",
+  "summary": {
+    "source_revisions": 125,
+    "catalog_updates": 410,
+    "help_sections_rewritten": 23
+  },
+  "validation": {
+    "suite": "pytest tests -q",
+    "passed": 1792,
+    "skipped": 2,
+    "active_qt_entries_at_final_check": 2868,
+    "audit_entries_at_final_check": 3293,
+    "parallel_work": "Update transport and component/dependency managers were being edited concurrently. Repository-wide lint results are not reported as passing."
+  }
+}

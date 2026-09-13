@@ -1,6 +1,6 @@
 [project]
 name = "FluentYTDL"
-version = "3.7.2-rc.1"
+version = "3.7.2"
 description = "Windows desktop downloader for YouTube and X, powered by yt-dlp and FFmpeg"
 requires-python = ">=3.12,<3.13"
 dependencies = [
@@ -140,3 +140,6 @@ app_core_exclude = ["bin", "updater.exe", "portable.txt"]
 # 一旦进了公开发布包等于泄漏 YouTube 会话。
 dist_forbidden = ["config.json", "logs", "state", "portable.txt", ".fluent_temp", "update_manifest_cache.json", "error_rules.override.json", ".writetest", ".fluentytdl-data-owner.json", "install-language.txt", ".install-owner.json", "bin/installations", "bin/cookies_youtube.txt", "bin/cookies_twitter.txt", "bin/dle_user"]
 
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -39,6 +39,7 @@ from enum import Enum
 from pathlib import PurePath
 from typing import Any, Literal
 
+from ..utils.log_runtime import SESSION_ID
 from ..utils.logger import logger
 from .sanitize import sanitize_exception, sanitize_path
 
@@ -156,7 +157,6 @@ def new_id(length: int = 6) -> str:
 
 
 #: 软件本次启动的标识。模块首次导入时铸造。
-SESSION_ID = new_id()
 
 
 def worst_outcome(*outcomes: str) -> str:
@@ -358,7 +358,11 @@ def build_event(
 ) -> Event:
     """由 kind + trace 组装 `Event`。单独暴露出来便于测试断言，不产生日志。"""
     if kind not in EVENT_KINDS:
-        hint = "（该 kind 是刻意不设的，见模块 docstring）" if kind in OMITTED_EVENT_KINDS else ""
+        hint = (
+            " (this kind is intentionally omitted; see module docstring)"
+            if kind in OMITTED_EVENT_KINDS
+            else ""
+        )
         _warn_once(f"unknown EventKind: {kind!r}{hint}")
     resolved_stage = stage or getattr(trace, "stage", None) or "startup"
     if resolved_stage not in STAGES:

@@ -18,6 +18,8 @@ from __future__ import annotations
 from queue import Empty, Queue
 from threading import Thread
 
+from fluentytdl.utils.localized_log import log_text
+
 from ..storage.task_db import task_db
 from ..utils.logger import logger
 
@@ -138,7 +140,7 @@ class TaskDBWriter:
                     self._process(item)
         except Exception as e:
             # 事务已整批回滚 —— 退化成逐条写，别让一次异常吞掉整批状态更新
-            logger.warning(f"[TaskDBWriter] 批量写入回滚，改为逐条重试: {e}")
+            log_text(logger, "warning", "[TaskDBWriter] 批量写入回滚，改为逐条重试: {0}", e)
             for item in merged:
                 self._process(item)
 
@@ -181,7 +183,7 @@ class TaskDBWriter:
                 _, db_id, session_id, run_id, flow_id = item
                 task_db.update_task_run_identity(db_id, session_id, run_id, flow_id)
         except Exception as e:
-            logger.warning(f"[TaskDBWriter] 写入异常: {e}")
+            log_text(logger, "warning", "[TaskDBWriter] 写入异常: {0}", e)
 
 
 # 全局单例

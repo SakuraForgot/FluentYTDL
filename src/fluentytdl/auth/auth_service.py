@@ -17,15 +17,21 @@ import json
 import shutil
 import sys
 import tempfile
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+from PySide6.QtCore import QT_TRANSLATE_NOOP, QCoreApplication
+
+from fluentytdl.utils.localized_log import log_text
+from fluentytdl.utils.ui_text import tr_text
+
 from ..core.config_manager import config_manager
 from ..utils.logger import logger
+from ..utils.message_catalog import english
 from .cookie_cleaner import CookieCleaner
 
 # 尝试导入 rookiepy
@@ -36,7 +42,7 @@ try:
 except ImportError:
     rookiepy = None
     HAS_ROOKIEPY = False
-    logger.warning("rookiepy 未安装，浏览器 Cookie 自动提取功能不可用")
+    log_text(logger, "warning", "rookiepy 未安装，浏览器 Cookie 自动提取功能不可用")
 
 
 # ==================== Windows 管理员权限检查 ====================
@@ -187,7 +193,7 @@ class AuthStatus:
     """验证状态"""
 
     valid: bool = False
-    message: str = "未验证"
+    message: str = field(default_factory=lambda: tr_text("未验证"))
     cookie_count: int = 0
     last_updated: str | None = None
     account_hint: str | None = None  # 账户提示 (如 "YouTube Premium")
@@ -241,13 +247,45 @@ class WebView2Account:
     # 账号级实验，命中后该账号后续所有视频都要追加 web_safari 客户端才能拿到高清直链。
     # 旧 accounts.json 无此键 → from_dict 的 known-fields 过滤令其默认 False。
     sabr_only: bool = False
+    # None: legacy record; empty: user-chosen name; otherwise a stable built-in name ID.
+    builtin_name: str | None = None
 
     @property
     def localized_name(self) -> str:
-        from PySide6.QtCore import QCoreApplication
-
-        if self.display_name in ("默认账号", "Default"):
+        platform_name = (
+            "YouTube"
+            if self.platform == "youtube"
+            else "X"
+            if self.platform == "x"
+            else self.platform
+        )
+        kind = self.builtin_name
+        if kind is None:
+            # Exact legacy aliases only: never replace part of a user-defined name.
+            if self.display_name in (
+                QT_TRANSLATE_NOOP("WebView2Account", "默认账号"),
+                "Default",
+                "Default Account",
+            ):
+                kind = "default"
+            elif self.display_name in (
+                QT_TRANSLATE_NOOP("RuntimeText", "{0} 默认账号").format(platform_name),
+                f"{platform_name} Default Account",
+                english("{0} 默认账号", platform_name),
+            ):
+                kind = "platform_default"
+            elif self.display_name in (
+                QT_TRANSLATE_NOOP("RuntimeText", "未命名账号"),
+                "Unnamed Account",
+                english("未命名账号"),
+            ):
+                kind = "unnamed"
+        if kind == "default":
             return QCoreApplication.translate("WebView2Account", "默认账号")
+        if kind == "platform_default":
+            return tr_text("{0} 默认账号", platform_name)
+        if kind == "unnamed":
+            return tr_text("未命名账号")
         return self.display_name
 
     def to_dict(self) -> dict[str, Any]:
@@ -319,25 +357,24 @@ class AuthService:
     @property
     def current_source_display(self) -> str:
         """当前验证源的显示名称"""
-        from PySide6.QtCore import QCoreApplication
 
         names = {
-            AuthSourceType.NONE: QCoreApplication.translate("AuthService", "未启用"),
-            AuthSourceType.EDGE: QCoreApplication.translate("AuthService", "Edge 浏览器"),
-            AuthSourceType.CHROME: QCoreApplication.translate("AuthService", "Chrome 浏览器"),
-            AuthSourceType.CHROMIUM: QCoreApplication.translate("AuthService", "Chromium 浏览器"),
-            AuthSourceType.BRAVE: QCoreApplication.translate("AuthService", "Brave 浏览器"),
-            AuthSourceType.OPERA: QCoreApplication.translate("AuthService", "Opera 浏览器"),
-            AuthSourceType.OPERA_GX: QCoreApplication.translate("AuthService", "Opera GX 浏览器"),
-            AuthSourceType.VIVALDI: QCoreApplication.translate("AuthService", "Vivaldi 浏览器"),
-            AuthSourceType.ARC: QCoreApplication.translate("AuthService", "Arc 浏览器"),
-            AuthSourceType.FIREFOX: QCoreApplication.translate("AuthService", "Firefox 浏览器"),
-            AuthSourceType.LIBREWOLF: QCoreApplication.translate("AuthService", "LibreWolf 浏览器"),
-            AuthSourceType.CENT: QCoreApplication.translate("AuthService", "百分浏览器 (Cent)"),
-            AuthSourceType.WEBVIEW2: QCoreApplication.translate("AuthService", "登录获取 (推荐)"),
-            AuthSourceType.FILE: QCoreApplication.translate("AuthService", "手动导入文件"),
+            AuthSourceType.NONE: tr_text("未启用"),
+            AuthSourceType.EDGE: tr_text("Edge 浏览器"),
+            AuthSourceType.CHROME: tr_text("Chrome 浏览器"),
+            AuthSourceType.CHROMIUM: tr_text("Chromium 浏览器"),
+            AuthSourceType.BRAVE: tr_text("Brave 浏览器"),
+            AuthSourceType.OPERA: tr_text("Opera 浏览器"),
+            AuthSourceType.OPERA_GX: tr_text("Opera GX 浏览器"),
+            AuthSourceType.VIVALDI: tr_text("Vivaldi 浏览器"),
+            AuthSourceType.ARC: tr_text("Arc 浏览器"),
+            AuthSourceType.FIREFOX: tr_text("Firefox 浏览器"),
+            AuthSourceType.LIBREWOLF: tr_text("LibreWolf 浏览器"),
+            AuthSourceType.CENT: tr_text("百分浏览器 (Cent)"),
+            AuthSourceType.WEBVIEW2: tr_text("登录获取 (推荐)"),
+            AuthSourceType.FILE: tr_text("手动导入文件"),
         }
-        return names.get(self._current_source, QCoreApplication.translate("AuthService", "未知"))
+        return names.get(self._current_source, tr_text("未知"))
 
     @property
     def auto_refresh(self) -> bool:
@@ -375,24 +412,32 @@ class AuthService:
     # web_safari 客户端才能拿回直链。标记须落在 build_ydl_options() 之外的共享处，
     # 因为解析与下载各自独立调 build_ydl_options()，必须让两条路读到同一个状态。
 
-    def get_youtube_sabr_only(self) -> bool:
+    def get_youtube_sabr_only(self, account_id: str | None = None) -> bool:
         """当前 YouTube 账号是否处于 SABR-only 灰度。
 
         有当前账号 → 以账号对象上的持久化 `sabr_only` 为准（跨重启、切账号隔离）；
         无当前账号（无登录态）→ 退化到进程内 sticky 标志。
         """
-        account = self.get_current_webview2_account("youtube")
+        account = (
+            self.get_current_webview2_account("youtube")
+            if account_id is None
+            else self._webview2_accounts.get(account_id)
+        )
         if account is not None:
             return bool(account.sabr_only)
         return self._session_sabr_only
 
-    def mark_youtube_sabr_only(self) -> None:
+    def mark_youtube_sabr_only(self, account_id: str | None = None) -> None:
         """把当前 YouTube 账号（或无账号时的会话）标记为 SABR-only。
 
         幂等：已为 True 直接返回，绝不重复写盘。有当前账号时持久化到 accounts.json，
         无账号时只置内存 sticky（重启清零）。
         """
-        account = self.get_current_webview2_account("youtube")
+        account = (
+            self.get_current_webview2_account("youtube")
+            if account_id is None
+            else self._webview2_accounts.get(account_id)
+        )
         if account is not None:
             if account.sabr_only:
                 return
@@ -427,13 +472,13 @@ class AuthService:
         self._auto_refresh = auto_refresh
         self._save_config()
 
-        logger.info(f"验证源已设置: {self.current_source_display}")
+        log_text(logger, "info", "验证源已设置: {0}", self.current_source_display)
 
         # 注意：不再立即清理旧 Cookie 文件
         # 延迟到实际提取成功后再清理，避免提取失败时丢失旧 Cookie
         if old_source != source:
-            logger.info(f"验证源变化: {old_source.value} -> {source.value}")
-            logger.info("将在下次成功提取后更新 Cookie 文件")
+            log_text(logger, "info", "验证源变化: {0} -> {1}", old_source.value, source.value)
+            log_text(logger, "info", "将在下次成功提取后更新 Cookie 文件")
 
     def get_cookie_file_for_ytdlp(
         self,
@@ -481,12 +526,22 @@ class AuthService:
                         )
                         cleaned_count = len(cookies)
                         if original_count != cleaned_count:
-                            logger.info(
-                                f"[{platform}] 导入文件 Cookie 清洗完成: {original_count} -> {cleaned_count} (移除: {original_count - cleaned_count})"
+                            log_text(
+                                logger,
+                                "info",
+                                "[{0}] 导入文件 Cookie 清洗完成: {1} -> {2} (移除: {3})",
+                                platform,
+                                original_count,
+                                cleaned_count,
+                                original_count - cleaned_count,
                             )
                         else:
-                            logger.info(
-                                f"[{platform}] 导入文件 Cookie 清洗完成: 保持 {original_count} 个"
+                            log_text(
+                                logger,
+                                "info",
+                                "[{0}] 导入文件 Cookie 清洗完成: 保持 {1} 个",
+                                platform,
+                                original_count,
                             )
 
                         # 写入特殊的缓存文件
@@ -497,7 +552,7 @@ class AuthService:
                 else:
                     self._last_status = AuthStatus(
                         valid=False,
-                        message="Cookie 文件不存在",
+                        message=tr_text("Cookie 文件不存在"),
                     )
                     return None
 
@@ -523,7 +578,9 @@ class AuthService:
                             except Exception:
                                 profile_has_data = False
 
-                        logger.info(f"开始 WebView2 登录流程（账号: {account_label}）...")
+                        log_text(
+                            logger, "info", "开始 WebView2 登录流程（账号: {0}）...", account_label
+                        )
                         provider = WebView2CookieProvider()
                         cookies = provider.extract_cookies(
                             platform=platform,
@@ -536,7 +593,7 @@ class AuthService:
                         if cookies is None:
                             raise RuntimeError(
                                 provider.get_last_error().get("error")
-                                or "登录失败，未返回 Cookie 数据"
+                                or tr_text("登录失败，未返回 Cookie 数据")
                             )
 
                         # 清洗 Cookie（合规过滤）
@@ -570,15 +627,19 @@ class AuthService:
                             valid=True,
                         )
 
-                        logger.info(
-                            f"WebView2 登录成功，Cookie 已保存: {cache_file} ({len(cookies_dicts)} 个)"
+                        log_text(
+                            logger,
+                            "info",
+                            "WebView2 登录成功，Cookie 已保存: {0} ({1} 个)",
+                            cache_file,
+                            len(cookies_dicts),
                         )
 
                     except Exception as e:
-                        logger.error(f"WebView2 登录流程失败: {e}")
+                        log_text(logger, "error", "WebView2 登录流程失败: {0}", e)
                         self._last_status = AuthStatus(
                             valid=False,
-                            message=f"登录失败: {e}",
+                            message=tr_text("登录失败: {0}", e),
                         )
                         self._mark_current_webview2_account_refreshed(
                             platform=platform,
@@ -593,10 +654,14 @@ class AuthService:
                     self._update_status_from_file(str(cache_file))
                     return str(cache_file)
                 else:
-                    logger.info("WebView2 模式：无缓存 Cookie，请在设置页点击「立即刷新」登录获取")
+                    log_text(
+                        logger,
+                        "info",
+                        "WebView2 模式：无缓存 Cookie，请在设置页点击「立即刷新」登录获取",
+                    )
                     self._last_status = AuthStatus(
                         valid=False,
-                        message="尚未登录获取 Cookie，请在设置页点击「立即刷新」",
+                        message=tr_text("尚未登录获取 Cookie，请在设置页点击「立即刷新」"),
                     )
                     return None
 
@@ -609,10 +674,10 @@ class AuthService:
                 )
 
         except Exception as e:
-            logger.error(f"获取 Cookie 失败: {e}")
+            log_text(logger, "error", "获取 Cookie 失败: {0}", e)
             self._last_status = AuthStatus(
                 valid=False,
-                message=f"获取失败: {e}",
+                message=tr_text("获取失败: {0}", e),
             )
 
         return None
@@ -625,7 +690,7 @@ class AuthService:
             刷新后的状态
         """
         if self._current_source == AuthSourceType.NONE:
-            self._last_status = AuthStatus(valid=False, message="未启用验证")
+            self._last_status = AuthStatus(valid=False, message=tr_text("未启用验证"))
             return self._last_status
 
         try:
@@ -633,7 +698,7 @@ class AuthService:
             if cookie_path:
                 return self._last_status
         except Exception as e:
-            self._last_status = AuthStatus(valid=False, message=f"刷新失败: {e}")
+            self._last_status = AuthStatus(valid=False, message=tr_text("刷新失败: {0}", e))
 
         return self._last_status
 
@@ -653,7 +718,7 @@ class AuthService:
         try:
             path = Path(file_path)
             if not path.exists():
-                return AuthStatus(valid=False, message="文件不存在")
+                return AuthStatus(valid=False, message=tr_text("文件不存在"))
 
             content = path.read_text(encoding="utf-8", errors="replace")
             cookies = self._parse_netscape_cookies(content)
@@ -666,7 +731,7 @@ class AuthService:
             )
 
             if not cookies:
-                return AuthStatus(valid=False, message="文件为空或格式无效")
+                return AuthStatus(valid=False, message=tr_text("文件为空或格式无效"))
 
             validation = self._validate_cookies(cookies, platform)
 
@@ -678,7 +743,7 @@ class AuthService:
             )
 
         except Exception as e:
-            return AuthStatus(valid=False, message=f"验证失败: {e}")
+            return AuthStatus(valid=False, message=tr_text("验证失败: {0}", e))
 
     def import_manual_cookie_file(self, file_path: str, platform: str = "youtube") -> AuthStatus:
         """
@@ -715,15 +780,15 @@ class AuthService:
 
             ok, reason = cookie_sentinel._commit_to_truth_source(cache_file, platform, "file")
             if not ok:
-                return AuthStatus(valid=False, message=f"导入未生效: {reason}")
+                return AuthStatus(valid=False, message=tr_text("导入未生效: {0}", reason))
 
             # 最后自我更新状态
             self._update_status_from_file(str(cache_file), platform)
             return self._last_status
 
         except Exception as e:
-            logger.error(f"导入 Cookie 失败: {e}")
-            return AuthStatus(valid=False, message=f"导入底层异常: {e}")
+            log_text(logger, "error", "导入 Cookie 失败: {0}", e)
+            return AuthStatus(valid=False, message=tr_text("导入底层异常: {0}", e))
 
     # ==================== 内部方法 ====================
 
@@ -741,7 +806,7 @@ class AuthService:
         """
 
         if not HAS_ROOKIEPY:
-            raise RuntimeError("rookiepy 未安装，无法从浏览器提取 Cookie")
+            raise RuntimeError(tr_text("rookiepy 未安装，无法从浏览器提取 Cookie"))
 
         # 缓存文件路径
         cache_file = self.cache_dir / f"cached_{browser}_{platform}.txt"
@@ -751,7 +816,7 @@ class AuthService:
             mtime = datetime.fromtimestamp(cache_file.stat().st_mtime)
             age_minutes = (datetime.now() - mtime).total_seconds() / 60
             if age_minutes < 5:
-                logger.debug(f"使用缓存的 Cookie 文件: {cache_file}")
+                log_text(logger, "debug", "使用缓存的 Cookie 文件: {0}", cache_file)
                 self._update_status_from_file(str(cache_file))
                 return str(cache_file)
 
@@ -763,10 +828,10 @@ class AuthService:
             # 原生支持组直接提取
             extractor = getattr(rookiepy, browser, None)
             if extractor is None:
-                raise RuntimeError(f"rookiepy 不支持 {browser}")
+                raise RuntimeError(tr_text("rookiepy 不支持 {0}", browser))
             cookies = extractor(domains)
 
-            logger.info(f"从 {browser} 提取到 {len(cookies)} 个 Cookie")
+            log_text(logger, "info", "从 {0} 提取到 {1} 个 Cookie", browser, len(cookies))
 
             # 使用 CookieCleaner 进行合规清洗
             cookies = CookieCleaner.clean(
@@ -774,7 +839,7 @@ class AuthService:
             )
 
         except Exception as e:
-            logger.warning(f"直接提取失败: {e}")
+            log_text(logger, "warning", "直接提取失败: {0}", e)
 
             error_str = str(e).lower()
 
@@ -787,17 +852,17 @@ class AuthService:
 
                 # 如果是明确的解密失败，说明即使用管理员也无法绕过当前版本的防护
                 if is_decryption_failed:
-                    logger.info("检测到 Chromium 严格依赖本地执行的 App-Bound 加密拒绝解密")
+                    log_text(
+                        logger, "info", "检测到 Chromium 严格依赖本地执行的 App-Bound 加密拒绝解密"
+                    )
 
                     self._last_status = AuthStatus(
                         valid=False,
                         message=(
-                            f"【提取解密失败】\n\n"
-                            f"受到 {browser_display} 最新的底层加密机制 (App-Bound Encryption) 限制，"
-                            "目前第三方工具无法直接解密提取它的 Cookie。\n\n"
-                            "请执行以下任一替代方案：\n"
-                            "1. 切换到不受此限制的浏览器 (推荐: Firefox 或 LibreWolf)\n"
-                            '2. 使用「手动导入」方式 (前往设置选择"手动导入 cookies.txt"并提供导出的文件)'
+                            tr_text(
+                                '【提取解密失败】\n\n受到 {0} 最新的底层加密机制 (App-Bound Encryption) 限制，目前第三方工具无法直接解密提取它的 Cookie。\n\n请执行以下任一替代方案：\n1. 切换到不受此限制的浏览器 (推荐: Firefox 或 LibreWolf)\n2. 使用「手动导入」方式 (前往设置选择"手动导入 cookies.txt"并提供导出的文件)',
+                                browser_display,
+                            )
                         ),
                     )
                     # 返回 None 意味着失败，不再抛出异常触发管理员提权弹窗
@@ -805,15 +870,18 @@ class AuthService:
 
                 else:
                     # 原本的安全降级，可能只需要管理员权限
-                    logger.info("检测到 Chrome v130+ App-Bound 加密，需要管理员权限")
+                    log_text(logger, "info", "检测到 Chrome v130+ App-Bound 加密，需要管理员权限")
                     self._last_status = AuthStatus(
                         valid=False,
-                        message=f"{browser_display} 需要管理员权限才能提取 Cookie（App-Bound 加密）",
+                        message=tr_text(
+                            "{0} 需要管理员权限才能提取 Cookie（App-Bound 加密）", browser_display
+                        ),
                     )
                     raise PermissionError(
-                        f"{browser_display} v130+ 使用了 App-Bound 加密。\n"
-                        "需要以管理员身份重新启动程序才能提取 Cookie。\n\n"
-                        "建议：使用 Edge 或 Firefox 浏览器可避免此问题。"
+                        tr_text(
+                            "{0} v130+ 使用了 App-Bound 加密。\n需要以管理员身份重新启动程序才能提取 Cookie。\n\n建议：使用 Edge 或 Firefox 浏览器可避免此问题。",
+                            browser_display,
+                        )
                     ) from e
             else:
                 # 非 App-Bound / 解密相关的其他错误，直接抛出
@@ -824,15 +892,13 @@ class AuthService:
             self._last_status = AuthStatus(
                 valid=False,
                 message=(
-                    f"无法从 {browser_display} 提取 Cookie\n\n"
-                    "可能的原因：\n"
-                    f"1. {browser_display} 未安装\n"
-                    f"2. 未在 {browser_display} 中登录 YouTube\n"
-                    f"3. {browser_display} 正在运行（Cookie 数据库被锁定）\n\n"
-                    "建议：\n"
-                    "• 确保已在浏览器中登录 YouTube\n"
-                    "• 完全关闭浏览器后重试\n"
-                    "• 尝试使用其他浏览器（如 Edge）"
+                    tr_text(
+                        "无法从 {0} 提取 Cookie\n\n可能的原因：\n1. {1} 未安装\n2. 未在 {2} 中登录 YouTube\n3. {3} 正在运行（Cookie 数据库被锁定）\n\n建议：\n• 确保已在浏览器中登录 YouTube\n• 完全关闭浏览器后重试\n• 尝试使用其他浏览器（如 Edge）",
+                        browser_display,
+                        browser_display,
+                        browser_display,
+                        browser_display,
+                    )
                 ),
             )
             return None
@@ -874,7 +940,7 @@ class AuthService:
             lines.append(f"{domain}\t{flag}\t{path}\t{secure}\t{expiry}\t{name}\t{value}")
 
         output_path.write_text("\n".join(lines), encoding="utf-8")
-        logger.debug(f"已生成 Cookie 文件: {output_path}")
+        log_text(logger, "debug", "已生成 Cookie 文件: {0}", output_path)
 
     def _parse_netscape_cookies(self, content: str) -> list[dict]:
         """解析 Netscape 格式的 Cookie 文件"""
@@ -920,7 +986,7 @@ class AuthService:
             if missing:
                 return {
                     "valid": False,
-                    "message": f"Cookie 不完整，缺少: {', '.join(missing)}",
+                    "message": tr_text("Cookie 不完整，缺少: {0}", ", ".join(missing)),
                 }
 
             # 提交闸门（见 `YOUTUBE_AUTH_MARKERS`）：上面的 name-only 检查会被「只剩
@@ -940,14 +1006,15 @@ class AuthService:
                 return {
                     "valid": False,
                     "message": (
-                        "缺少 .youtube.com 登录态 Cookie"
-                        "（LOGIN_INFO / SID / SAPISID / __Secure-1PSID 之一）"
+                        tr_text(
+                            "缺少 .youtube.com 登录态 Cookie（LOGIN_INFO / SID / SAPISID / __Secure-1PSID 之一）"
+                        )
                     ),
                 }
 
             return {
                 "valid": True,
-                "message": "已验证 (检测到 YouTube 登录)",
+                "message": tr_text("已验证 (检测到 YouTube 登录)"),
             }
         elif platform == "twitter":
             required = X_REQUIRED_COOKIES
@@ -956,16 +1023,21 @@ class AuthService:
             if missing:
                 return {
                     "valid": False,
-                    "message": f"X 平台 Cookie 不完整，缺少关键字段: {', '.join(missing)}",
+                    "message": tr_text(
+                        "X 平台 Cookie 不完整，缺少关键字段: {0}", ", ".join(missing)
+                    ),
                 }
             return {
                 "valid": True,
-                "message": "已验证 (检测到 X 平台登录)",
+                "message": tr_text("已验证 (检测到 X 平台登录)"),
             }
         else:
             if valid_cookies:
-                return {"valid": True, "message": f"找到 {len(valid_cookies)} 个有效 Cookie"}
-            return {"valid": False, "message": "未找到有效 Cookie"}
+                return {
+                    "valid": True,
+                    "message": tr_text("找到 {0} 个有效 Cookie", len(valid_cookies)),
+                }
+            return {"valid": False, "message": tr_text("未找到有效 Cookie")}
 
     def _detect_account_hint(self, cookies: list[dict]) -> str | None:
         """尝试检测账户信息"""
@@ -991,7 +1063,7 @@ class AuthService:
                 last_updated=datetime.fromtimestamp(Path(file_path).stat().st_mtime).isoformat(),
             )
         except Exception as e:
-            self._last_status = AuthStatus(valid=False, message=f"读取失败: {e}")
+            self._last_status = AuthStatus(valid=False, message=tr_text("读取失败: {0}", e))
 
     # ==================== 配置持久化 ====================
 
@@ -1014,7 +1086,7 @@ class AuthService:
             # 默认使用 WebView2 登录获取
             self._current_source = AuthSourceType.WEBVIEW2
             self._auto_refresh = False
-            logger.info("首次启动，默认使用 WebView2 登录获取验证")
+            log_text(logger, "info", "首次启动，默认使用 WebView2 登录获取验证")
             self._save_config()
             return
 
@@ -1046,16 +1118,16 @@ class AuthService:
                 migrated_from = self._current_source.value
                 self._current_source = AuthSourceType.EDGE
 
-            logger.info(f"已加载验证配置: {self.current_source_display}")
+            log_text(logger, "info", "已加载验证配置: {0}", self.current_source_display)
 
             if migrated_from:
-                logger.info(f"提取源 {migrated_from} 已停止支持，已自动迁移到 Edge")
+                log_text(logger, "info", "提取源 {0} 已停止支持，已自动迁移到 Edge", migrated_from)
                 self._save_config()
 
             # 尝试恢复上次的验证状态
             self._restore_last_status()
         except Exception as e:
-            logger.error(f"加载验证配置失败: {e}")
+            log_text(logger, "error", "加载验证配置失败: {0}", e)
             # 加载失败时使用默认的 DLE
             self._current_source = AuthSourceType.WEBVIEW2
 
@@ -1111,20 +1183,26 @@ class AuthService:
         display_name: str,
         platform: str = "youtube",
         notes: str | None = None,
+        *,
+        builtin_name: str = "",
     ) -> WebView2Account:
         """创建 WebView2 账号"""
-        display_name = display_name.strip() or "未命名账号"
+        display_name = display_name.strip()
+        if not display_name:
+            display_name = "Unnamed Account"
+            builtin_name = "unnamed"
 
         # 检查是否重复命名（全局范围检查，防止跨平台混淆）
         for existing in self._webview2_accounts.values():
             if existing.display_name == display_name:
-                raise ValueError(f"已存在名为 '{display_name}' 的账号，请使用其他名称")
+                raise ValueError(tr_text("已存在名为 '{0}' 的账号，请使用其他名称", display_name))
 
         account_id = uuid4().hex
         profile_dir, cache_file = self._build_webview2_account_paths(account_id, platform)
         account = WebView2Account(
             account_id=account_id,
             display_name=display_name,
+            builtin_name=builtin_name,
             platform=platform,
             profile_dir=str(profile_dir),
             cached_cookie_path=str(cache_file),
@@ -1160,8 +1238,12 @@ class AuthService:
             if new_name != account.display_name:
                 for existing in self._webview2_accounts.values():
                     if existing.display_name == new_name and existing.account_id != account_id:
-                        raise ValueError(f"已存在名为 '{new_name}' 的账号，请使用其他名称")
+                        raise ValueError(
+                            tr_text("已存在名为 '{0}' 的账号，请使用其他名称", new_name)
+                        )
             account.display_name = new_name
+            if display_name.strip():
+                account.builtin_name = ""
         if notes is not None:
             account.notes = notes
         if is_default is True:
@@ -1183,7 +1265,9 @@ class AuthService:
             1 for a in self._webview2_accounts.values() if a.platform == account.platform
         )
         if same_platform_count <= 1:
-            logger.warning(f"至少需要保留一个 {account.platform} WebView2 账号，拒绝删除")
+            log_text(
+                logger, "warning", "至少需要保留一个 {0} WebView2 账号，拒绝删除", account.platform
+            )
             return False
 
         self._webview2_accounts.pop(account_id, None)
@@ -1193,7 +1277,7 @@ class AuthService:
             try:
                 shutil.rmtree(account_root, ignore_errors=True)
             except Exception as e:
-                logger.warning(f"删除 WebView2 账号存储目录失败: {e}")
+                log_text(logger, "warning", "删除 WebView2 账号存储目录失败: {0}", e)
 
         if account_id == self._current_webview2_account_ids.get(account.platform):
             self._current_webview2_account_ids[account.platform] = next(
@@ -1242,7 +1326,9 @@ class AuthService:
 
         src = Path(account.cached_cookie_path)
         if not src.exists():
-            logger.info(f"当前 WebView2 账号 ({platform}) 尚无 Cookie 缓存，跳过同步")
+            log_text(
+                logger, "info", "当前 WebView2 账号 ({0}) 尚无 Cookie 缓存，跳过同步", platform
+            )
             return False
 
         try:
@@ -1253,18 +1339,25 @@ class AuthService:
                 src, platform, f"webview2:{account.account_id}"
             )
             if ok:
-                logger.info(
-                    f"已切换到 WebView2 账号 {account.localized_name}，并同步 Cookie 到 "
-                    f"{cookie_sentinel.get_cookie_path_for_platform(platform)}"
+                log_text(
+                    logger,
+                    "info",
+                    "已切换到 WebView2 账号 {0}，并同步 Cookie 到 {1}",
+                    account.localized_name,
+                    cookie_sentinel.get_cookie_path_for_platform(platform),
                 )
             else:
-                logger.warning(
-                    f"WebView2 账号 {account.localized_name} 的 Cookie 未通过校验，"
-                    f"已保留原有 {platform} 真相源: {reason}"
+                log_text(
+                    logger,
+                    "warning",
+                    "WebView2 账号 {0} 的 Cookie 未通过校验，已保留原有 {1} 真相源: {2}",
+                    account.localized_name,
+                    platform,
+                    reason,
                 )
             return ok
         except Exception as e:
-            logger.warning(f"同步当前 WebView2 账号 Cookie 到统一文件失败: {e}")
+            log_text(logger, "warning", "同步当前 WebView2 账号 Cookie 到统一文件失败: {0}", e)
             return False
 
     def _save_webview2_accounts(self) -> None:
@@ -1313,7 +1406,9 @@ class AuthService:
                         cache_file.parent.mkdir(parents=True, exist_ok=True)
                         shutil.copy2(old_cookie, cache_file)
                 except Exception as e:
-                    logger.warning(f"迁移账号 {acc.account_id} Cookie 文件失败: {e}")
+                    log_text(
+                        logger, "warning", "迁移账号 {0} Cookie 文件失败: {1}", acc.account_id, e
+                    )
 
                 # 路径统一写回新结构
                 acc.profile_dir = str(profile_dir)
@@ -1324,15 +1419,21 @@ class AuthService:
             if path_to_load != self._webview2_accounts_path:
                 self._save_webview2_accounts()
         except Exception as e:
-            logger.error(f"加载 WebView2 账号配置失败: {e}")
+            log_text(logger, "error", "加载 WebView2 账号配置失败: {0}", e)
 
     def _ensure_current_webview2_account_valid(self, platform: str = "youtube") -> None:
         """确保当前激活 WebView2 账号存在"""
         accounts = [a for a in self._webview2_accounts.values() if a.platform == platform]
         # 没有任何账号时创建默认账号
         if not accounts:
-            default_name = f"{'YouTube' if platform == 'youtube' else 'X'} 默认账号"
-            default = self.create_webview2_account(default_name, platform=platform)
+            platform_name = (
+                "YouTube" if platform == "youtube" else "X" if platform == "x" else platform
+            )
+            default = self.create_webview2_account(
+                f"{platform_name} Default Account",
+                platform=platform,
+                builtin_name="platform_default",
+            )
             default.is_default = True
             accounts = [default]
             self._save_webview2_accounts()
@@ -1374,13 +1475,19 @@ class AuthService:
             account.last_extracted_at = datetime.now().isoformat()
             account.valid = True
             self._save_webview2_accounts()
-            logger.info(f"已将旧 WebView2 缓存迁移到账号 {account.localized_name}: {target}")
+            log_text(
+                logger,
+                "info",
+                "已将旧 WebView2 缓存迁移到账号 {0}: {1}",
+                account.localized_name,
+                target,
+            )
 
             # 若当前正在 WebView2 模式，迁移后同步到统一 cookiefile
             if self._current_source == AuthSourceType.WEBVIEW2:
                 self._sync_current_webview2_cookie_to_unified_cookiefile()
         except Exception as e:
-            logger.warning(f"迁移旧 WebView2 缓存失败: {e}")
+            log_text(logger, "warning", "迁移旧 WebView2 缓存失败: {0}", e)
 
     def _migrate_accounts_to_platform_isolated_dirs(self) -> None:
         """将无平台的 `dle_user/<account_id>` 旧目录物理迁移到 `dle_user/<platform>/<account_id>` 下"""
@@ -1398,9 +1505,9 @@ class AuthService:
                     account.profile_dir = str(new_root / "profile")
                     account.cached_cookie_path = str(new_root / "cookies.txt")
                     changed = True
-                    logger.info(f"已将账号目录隔离至新路径: {new_root}")
+                    log_text(logger, "info", "已将账号目录隔离至新路径: {0}", new_root)
                 except Exception as e:
-                    logger.warning(f"迁移账号目录失败 {account.account_id}: {e}")
+                    log_text(logger, "warning", "迁移账号目录失败 {0}: {1}", account.account_id, e)
 
         if changed:
             self._save_webview2_accounts()
@@ -1438,9 +1545,9 @@ class AuthService:
                     mtime = datetime.fromtimestamp(cache_file.stat().st_mtime)
                     age_hours = (datetime.now() - mtime).total_seconds() / 3600
                     if age_hours > 1:
-                        self._last_status.message += " (缓存可能过期)"
+                        self._last_status.message += tr_text(" (缓存可能过期)")
         except Exception as e:
-            logger.debug(f"恢复状态失败: {e}")
+            log_text(logger, "debug", "恢复状态失败: {0}", e)
 
     # ==================== 高级：多账户管理 ====================
 
@@ -1485,7 +1592,7 @@ class AuthService:
                 key = f"{profile.platform}_{profile.name}"
                 self._profiles[key] = profile
         except Exception as e:
-            logger.error(f"加载配置文件失败: {e}")
+            log_text(logger, "error", "加载配置文件失败: {0}", e)
 
     def cleanup_cache(self, max_age_hours: int = 24) -> int:
         """清理过期缓存"""

@@ -88,6 +88,10 @@ def test_draft_protocol(tmp_path, monkeypatch, scenario):
             operations.append("create")
             assert "--draft" in args and "--verify-tag" in args
             assert ("--prerelease" in args) == is_rc
+            if is_rc:
+                notes = Path(args[args.index("--notes-file") + 1]).read_text(encoding="utf-8")
+                assert "pre" in notes and "应用内更新" in notes
+                assert "不支持应用内自动更新" not in notes
             remote["exists"] = True
             if scenario == "missing-draft-asset":
                 remote["files"].pop(core_name)

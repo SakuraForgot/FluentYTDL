@@ -170,6 +170,7 @@ class Diagnosis:
     #: 失败发生在哪个阶段（`parse` / `select` / `download`，取值来自
     #: `observability.STAGES`）。空串表示调用方算不出来（展示层重算诊断的场景）。
     phase: str = ""
+    rules_version: int = 0
 
     # ---- 文案（惰性取自 catalog，语言切换后自动跟随）----
 
@@ -225,6 +226,7 @@ class Diagnosis:
             "override_title": self.override_title,
             "override_message": self.override_message,
             "phase": self.phase,
+            "rules_version": self.rules_version,
             # 展开后的文案，供不想再走 catalog 的消费方直接读取
             "user_title": self.user_title,
             "user_message": self.user_message,
@@ -253,4 +255,5 @@ class Diagnosis:
             override_title=str(data.get("override_title", "")),
             override_message=str(data.get("override_message", "")),
             phase=str(data.get("phase", "")),
+            rules_version=int(data.get("rules_version", 0) or 0),
         )

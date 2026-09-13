@@ -25,6 +25,8 @@ from qfluentwidgets import (
     SwitchButton,
 )
 
+from fluentytdl.utils.ui_text import tr_text
+
 from ....core.section_download import (
     TimeRange,
     build_section_opts,
@@ -127,7 +129,9 @@ class SectionDownloadCard(QFrame):
         if self._duration > 0:
             m = int(self._duration // 60)
             s = int(self._duration % 60)
-            self.hintLabel.setText(f"视频总时长: {m}:{s:02d}。格式: 1:30 或 1m30s 或 90 (秒)")
+            self.hintLabel.setText(
+                tr_text("视频总时长: {0}:{1:02d}。格式: 1:30 或 1m30s 或 90 (秒)", m, s)
+            )
 
         from qfluentwidgets import qconfig
 
@@ -176,9 +180,9 @@ class SectionDownloadCard(QFrame):
                 dur = self._time_range.duration_seconds
                 m = int(dur // 60)
                 s = int(dur % 60)
-                self.statusLabel.setText(f"将下载 {m}:{s:02d} 的片段")
+                self.statusLabel.setText(tr_text("将下载 {0}:{1:02d} 的片段", m, s))
             else:
-                self.statusLabel.setText(f"从 {self._time_range.start_str} 到结束")
+                self.statusLabel.setText(tr_text("从 {0} 到结束", self._time_range.start_str))
 
             return True
 

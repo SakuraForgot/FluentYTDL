@@ -14,6 +14,9 @@ from __future__ import annotations
 
 from PySide6.QtCore import QThread, Signal
 
+from fluentytdl.utils.localized_log import log_text
+from fluentytdl.utils.ui_text import tr_text
+
 
 class CookieRefreshWorker(QThread):
     """Cookie 刷新工作线程（Qt 线程，打包后可靠）"""
@@ -33,7 +36,7 @@ class CookieRefreshWorker(QThread):
         from ....utils.logger import logger
 
         success = False
-        message = "未知错误"
+        message = tr_text("未知错误")
 
         try:
             # 直接刷新（调用前已检查权限，或已是管理员/非 Edge）
@@ -54,18 +57,21 @@ class CookieRefreshWorker(QThread):
                     "未找到" in message or "not found" in message.lower()
                 ):
                     message = (
-                        f"无法从 {browser_name} 提取 Cookie\n\n"
+                        tr_text("无法从 {0} 提取 Cookie\n\n", browser_name)
                         + self.tr("可能的原因：\n")
-                        + f"1. {browser_name} 未安装或未登录相关平台\n"
-                        f"2. {browser_name} Cookie 数据库被锁定（请关闭浏览器）\n\n"
+                        + tr_text(
+                            "1. {0} 未安装或未登录相关平台\n2. {1} Cookie 数据库被锁定（请关闭浏览器）\n\n",
+                            browser_name,
+                            browser_name,
+                        )
                         + self.tr("建议：完全关闭浏览器后重试")
                     )
 
-                logger.warning(f"[CookieRefreshWorker] 提取失败: {message}")
+                log_text(logger, "warning", "[CookieRefreshWorker] 提取失败: {0}", message)
         except Exception as e:
             success = False
-            message = f"刷新异常: {str(e)}"
-            logger.exception("[CookieRefreshWorker] 异常")
+            message = tr_text("刷新异常: {0}", str(e))
+            log_text(logger, "exception", "[CookieRefreshWorker] 异常")
 
         # 发射信号（线程安全，第三个参数保留但不再使用）
         self.finished.emit(success, message, False)

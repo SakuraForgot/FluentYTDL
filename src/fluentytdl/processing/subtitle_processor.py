@@ -38,6 +38,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from fluentytdl.utils.localized_log import log_text
+from fluentytdl.utils.ui_text import tr_text
+
 from ..utils.logger import logger
 from .subtitle_manager import SUBTITLE_FORMATS
 
@@ -109,25 +112,25 @@ class SubtitleProcessor:
                 status_callback(msg)
             except Exception:
                 # UI 侧回调抛异常不该把字幕后处理带走
-                logger.exception("字幕状态回调异常")
+                log_text(logger, "exception", "字幕状态回调异常")
 
-        logger.info("字幕后处理开始 - output_path={}", output_path)
+        log_text(logger, "info", "字幕后处理开始 - output_path={}", output_path)
 
         # 检查是否启用了字幕下载
         if not opts.get("writesubtitles") and not opts.get("writeautomaticsub"):
-            logger.debug("字幕下载未启用，跳过后处理")
+            log_text(logger, "debug", "字幕下载未启用，跳过后处理")
             return SubtitleProcessResult(
                 success=True,
-                message="字幕下载未启用",
+                message=tr_text("字幕下载未启用"),
                 processed_files=[],
                 reason="disabled",
             )
 
         if not output_path or not os.path.exists(output_path):
-            logger.warning("视频文件不存在，无法进行字幕后处理: {}", output_path)
+            log_text(logger, "warning", "视频文件不存在，无法进行字幕后处理: {}", output_path)
             return SubtitleProcessResult(
                 success=False,
-                message="视频文件不存在",
+                message=tr_text("视频文件不存在"),
                 processed_files=[],
                 reason="video_missing",
             )
@@ -142,19 +145,21 @@ class SubtitleProcessor:
             # 清单里没有字幕：yt-dlp 确实没写出任何字幕文件。原因（语言没匹配上 / 限速 /
             # 需要 PO Token）由调用方结合 `__fluentytdl_subtitle_resolution` 解释，
             # 这里只负责如实上报"一个都没有"。
-            logger.warning(
+            log_text(
+                logger,
+                "warning",
                 "未找到字幕文件（清单里没有字幕产物）: video={} candidates={}",
                 Path(output_path).name,
                 len(candidates),
             )
             return SubtitleProcessResult(
                 success=False,
-                message="未找到字幕文件",
+                message=tr_text("未找到字幕文件"),
                 processed_files=[],
                 reason="not_found",
             )
 
-        logger.info("清单里有 {} 个字幕文件，开始校验", len(subtitle_files))
+        log_text(logger, "info", "清单里有 {} 个字幕文件，开始校验", len(subtitle_files))
 
         # 2. 验证字幕文件完整性
         processed_files: list[str] = []
@@ -163,26 +168,26 @@ class SubtitleProcessor:
             is_valid, reason = self._validate_subtitle_file(sub_file)
             if is_valid:
                 processed_files.append(str(sub_file))
-                logger.info("✓ 字幕文件有效: {}", sub_file.name)
+                log_text(logger, "info", "✓ 字幕文件有效: {}", sub_file.name)
             else:
                 invalid_files.append((str(sub_file), reason))
-                logger.warning("✗ 字幕文件无效: {} - {}", sub_file.name, reason)
-                _notify(f"⚠️ 字幕文件异常: {sub_file.name}（{reason}）")
+                log_text(logger, "warning", "✗ 字幕文件无效: {} - {}", sub_file.name, reason)
+                _notify(tr_text("⚠️ 字幕文件异常: {0}（{1}）", sub_file.name, reason))
 
         # 3. 返回处理结果
         if not processed_files:
             return SubtitleProcessResult(
                 success=False,
-                message=f"{len(invalid_files)} 个字幕文件全部校验失败",
+                message=tr_text("{0} 个字幕文件全部校验失败", len(invalid_files)),
                 processed_files=[],
                 reason="all_invalid",
                 invalid_files=invalid_files,
             )
 
-        _notify(f"[字幕处理] ✓ 已就绪 {len(processed_files)} 个字幕文件")
+        _notify(tr_text("[字幕处理] ✓ 已就绪 {0} 个字幕文件", len(processed_files)))
         return SubtitleProcessResult(
             success=True,
-            message=f"成功处理 {len(processed_files)} 个字幕文件",
+            message=tr_text("成功处理 {0} 个字幕文件", len(processed_files)),
             processed_files=processed_files,
             invalid_files=invalid_files,
         )
@@ -217,29 +222,29 @@ class SubtitleProcessor:
             (is_valid, reason)
         """
         if not subtitle_path.exists():
-            return False, "文件不存在"
+            return False, tr_text("文件不存在")
 
         if subtitle_path.stat().st_size == 0:
-            return False, "文件大小为 0"
+            return False, tr_text("文件大小为 0")
 
         try:
             # 尝试读取文件内容（检查编码和基本格式）
             content = subtitle_path.read_text(encoding="utf-8")
 
             if len(content.strip()) == 0:
-                return False, "文件内容为空"
+                return False, tr_text("文件内容为空")
 
             # 基本格式检查 (SRT 格式应该包含时间码)
             if subtitle_path.suffix.lower() == ".srt":
                 if "-->" not in content:
-                    return False, "SRT 格式缺少时间码"
+                    return False, tr_text("SRT 格式缺少时间码")
 
-            return True, "文件有效"
+            return True, tr_text("文件有效")
 
         except UnicodeDecodeError:
-            return False, "编码错误"
+            return False, tr_text("编码错误")
         except Exception as e:
-            return False, f"读取失败: {str(e)}"
+            return False, tr_text("读取失败: {0}", str(e))
 
 
 # 单例实例

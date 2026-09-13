@@ -10,6 +10,8 @@ from pathlib import Path
 from threading import Event, Lock
 from typing import Any
 
+from fluentytdl.utils.localized_log import log_text
+from fluentytdl.utils.message_catalog import english
 from fluentytdl.utils.paths import (
     config_path,
     find_bundled_executable,
@@ -18,10 +20,12 @@ from fluentytdl.utils.paths import (
     is_frozen,
     locate_runtime_tool,
 )
+from fluentytdl.utils.ui_text import tr_text
 
 from ..core.config_manager import config_manager
 from ..models.errors import YtDlpExecutionError
 from ..observability import current_flow, emit_event, emit_success_signals, mask_secrets
+from ..utils.youtube_request import COOKIE_MODE, SABR_SCOPE, enforce_cookie_mode, stamp_result
 
 
 class YtDlpCancelled(Exception):
@@ -82,10 +86,12 @@ def log_pot_in_argv(cmd: list[str], *, stage: str, task_id: str = "") -> None:
         base = ""
         if "base_url=" in hit:
             base = hit.split("base_url=", 1)[1].split(";", 1)[0].strip()
-        logger.info(
+        log_text(
+            logger,
+            "info",
             "[POT][{}] argv 已含 youtubepot-bgutilhttp base_url={}{}",
             stage,
-            base or "(未解析出)",
+            base or tr_text("(未解析出)"),
             tail,
         )
         return
@@ -95,9 +101,9 @@ def log_pot_in_argv(cmd: list[str], *, stage: str, task_id: str = "") -> None:
     except Exception:
         enabled = False
     if enabled:
-        logger.warning("[POT][{}] argv 未含 POT 参数 (enabled=True){}", stage, tail)
+        log_text(logger, "warning", "[POT][{}] argv 未含 POT 参数 (enabled=True){}", stage, tail)
     else:
-        logger.debug("[POT][{}] argv 未含 POT 参数 (enabled=False){}", stage, tail)
+        log_text(logger, "debug", "[POT][{}] argv 未含 POT 参数 (enabled=False){}", stage, tail)
 
 
 def _safe_working_dir() -> str:
@@ -144,72 +150,26 @@ def _win_hide_console_kwargs() -> dict[str, Any]:
     return kwargs
 
 
-# 可执行文件路径探测的记忆化：键是配置里的 yt_dlp_exe_path，
-# 配置一变就自动失效。多路径探测每次解析都要跑，纯属重复劳动。
-_exe_cache_lock = Lock()
-_exe_cache: tuple[str, Path | None] | None = None
+def resolve_yt_dlp_runtime():
+    from ..utils.ytdlp_runtime import resolve_runtime
+
+    return resolve_runtime(str(config_manager.get("yt_dlp_exe_path") or "").strip())
 
 
 def resolve_yt_dlp_exe() -> Path | None:
-    """Resolve yt-dlp executable path.
-
-    Priority:
-    1) config yt_dlp_exe_path (if exists)
-    2) bundled _internal/yt-dlp/yt-dlp.exe (frozen)
-    3) yt-dlp on PATH
-
-    结果按配置项 `yt_dlp_exe_path` 记忆化；解析出的路径若已消失则重新探测。
-    """
-    global _exe_cache
-
-    cfg = str(config_manager.get("yt_dlp_exe_path") or "").strip()
-
-    with _exe_cache_lock:
-        if _exe_cache is not None and _exe_cache[0] == cfg:
-            cached = _exe_cache[1]
-            # 缓存命中但文件被删/被移动时，退回重新探测。
-            if cached is None or cached.exists():
-                return cached
-
-        resolved = _resolve_yt_dlp_exe_uncached(cfg)
-        _exe_cache = (cfg, resolved)
-        return resolved
+    return resolve_yt_dlp_runtime().path
 
 
 def invalidate_yt_dlp_exe_cache() -> None:
-    """清空 exe 路径缓存。
+    from ..utils.ytdlp_runtime import invalidate_version_cache
 
-    常规配置变更无需调用——缓存键就是 `yt_dlp_exe_path`，改配置即自动失效；
-    此函数留给"外部替换了 exe 文件但配置未变"这类场景。
-    """
-    global _exe_cache
-    with _exe_cache_lock:
-        _exe_cache = None
+    invalidate_version_cache()
 
 
 def _resolve_yt_dlp_exe_uncached(cfg: str) -> Path | None:
-    """`resolve_yt_dlp_exe` 的实际探测逻辑。"""
-    if cfg:
-        p = Path(cfg)
-        if p.exists():
-            return p
+    from ..utils.ytdlp_runtime import resolve_runtime
 
-    # Prefer tools placed into exe-adjacent `bin` (or project `bin`) via locate_runtime_tool.
-    try:
-        return locate_runtime_tool("yt-dlp.exe", "yt-dlp/yt-dlp.exe", "yt_dlp/yt-dlp.exe")
-    except FileNotFoundError:
-        # fallback to legacy bundled search when frozen
-        if is_frozen():
-            p = find_bundled_executable(
-                "yt-dlp.exe",
-                "yt-dlp/yt-dlp.exe",
-                "yt_dlp/yt-dlp.exe",
-            )
-            if p is not None:
-                return p
-
-    which = shutil.which("yt-dlp") or shutil.which("yt-dlp.exe")
-    return Path(which) if which else None
+    return resolve_runtime(cfg).path
 
 
 def _prepend_path(env: dict[str, str], *dirs: str) -> None:
@@ -301,17 +261,17 @@ def _sync_pot_plugins_locked(logger: Any) -> bool:
     try:
         exe = resolve_yt_dlp_exe()
         if exe is None:
-            logger.debug("POT Plugin Sync: yt-dlp.exe 未找到，跳过同步")
+            log_text(logger, "debug", "POT Plugin Sync: yt-dlp.exe 未找到，跳过同步")
             return False
 
         source_dir = _get_pot_plugin_source_dir()
         if source_dir is None:
-            logger.debug("POT Plugin Sync: 插件源目录不存在，跳过同步")
+            log_text(logger, "debug", "POT Plugin Sync: 插件源目录不存在，跳过同步")
             return False
 
         source_files = list(source_dir.glob(_PLUGIN_FILE_GLOB))
         if not source_files:
-            logger.debug("POT Plugin Sync: 未找到插件源文件，跳过同步")
+            log_text(logger, "debug", "POT Plugin Sync: 未找到插件源文件，跳过同步")
             return False
 
         # 目标: <exe-dir>/yt-dlp-plugins/<pkg>/yt_dlp_plugins/extractor/
@@ -340,7 +300,7 @@ def _sync_pot_plugins_locked(logger: Any) -> bool:
                     break
 
         if not needs_sync:
-            logger.debug("POT Plugin Sync: 插件已是最新，无需同步")
+            log_text(logger, "debug", "POT Plugin Sync: 插件已是最新，无需同步")
             _pot_sync_cache = (fingerprint, True)
             return True
 
@@ -348,9 +308,11 @@ def _sync_pot_plugins_locked(logger: Any) -> bool:
         try:
             target_dir.mkdir(parents=True, exist_ok=True)
         except PermissionError:
-            logger.warning(
-                f"POT Plugin Sync: 无法创建插件目录 {target_dir}（权限不足）。"
-                "如果安装在 Program Files 下，请以管理员身份运行一次，或手动复制插件文件。"
+            log_text(
+                logger,
+                "warning",
+                "POT Plugin Sync: 无法创建插件目录 {0}（权限不足）。如果安装在 Program Files 下，请以管理员身份运行一次，或手动复制插件文件。",
+                target_dir,
             )
             return False
 
@@ -361,20 +323,28 @@ def _sync_pot_plugins_locked(logger: Any) -> bool:
                 shutil.copy2(src_file, dst_file)
                 synced += 1
             except PermissionError:
-                logger.warning(
-                    f"POT Plugin Sync: 复制 {src_file.name} 失败（权限不足）。"
-                    "请以管理员身份运行一次应用以完成插件部署。"
+                log_text(
+                    logger,
+                    "warning",
+                    "POT Plugin Sync: 复制 {0} 失败（权限不足）。请以管理员身份运行一次应用以完成插件部署。",
+                    src_file.name,
                 )
             except Exception as e:
-                logger.warning(f"POT Plugin Sync: 复制 {src_file.name} 失败: {e}")
+                log_text(logger, "warning", "POT Plugin Sync: 复制 {0} 失败: {1}", src_file.name, e)
 
         if synced > 0:
-            logger.info(f"POT Plugin Sync: 已同步 {synced} 个插件文件到 {target_dir.parent.parent}")
+            log_text(
+                logger,
+                "info",
+                "POT Plugin Sync: 已同步 {0} 个插件文件到 {1}",
+                synced,
+                target_dir.parent.parent,
+            )
             _pot_sync_cache = (fingerprint, True)
         return synced > 0
 
     except Exception as e:
-        logger.debug(f"POT Plugin Sync: 同步异常: {e}")
+        log_text(logger, "debug", "POT Plugin Sync: 同步异常: {0}", e)
         return False
 
 
@@ -718,6 +688,8 @@ def ydl_opts_to_cli_args(ydl_opts: dict[str, Any]) -> list[str]:
 
     This mapping is intentionally minimal and only covers what the app uses.
     """
+    ydl_opts = dict(ydl_opts)
+    enforce_cookie_mode(ydl_opts)
 
     args: list[str] = []
 
@@ -794,7 +766,7 @@ def ydl_opts_to_cli_args(ydl_opts: dict[str, Any]) -> list[str]:
         # {"youtube": {"player_client": ["android,ios"], "player_skip": ["js,configs,hls"]}}
         from loguru import logger
 
-        logger.debug("[CLI] extractor_args 键: {}", sorted(extractor_args.keys()))
+        log_text(logger, "debug", "[CLI] extractor_args 键: {}", sorted(extractor_args.keys()))
         for ie_key, ie_args in extractor_args.items():
             if not ie_key:
                 continue
@@ -823,7 +795,12 @@ def ydl_opts_to_cli_args(ydl_opts: dict[str, Any]) -> list[str]:
                 # 原样写进日志 —— 而文件 sink 是 DEBUG 级，那是真的落盘了。
                 # `log_pot_in_argv` 的注释早就写明"只记 base_url，绝不记 Token"，
                 # 这条路却整个绕过了它。四条内容本来就互相重复，留一条脱敏的信息量不减。
-                logger.debug("[CLI] 添加参数: --extractor-args {}", mask_secrets(extractor_arg))
+                log_text(
+                    logger,
+                    "debug",
+                    "[CLI] 添加参数: --extractor-args {}",
+                    mask_secrets(extractor_arg),
+                )
                 args += ["--extractor-args", extractor_arg]
 
     outtmpl = ydl_opts.get("outtmpl")
@@ -1044,7 +1021,7 @@ _SABR_MARKERS = (
 )
 
 
-def _maybe_mark_sabr_only(output: str) -> None:
+def _maybe_mark_sabr_only(output: str, opts: dict | None = None) -> None:
     """解析输出命中 SABR 标记 → 在当前 YouTube 账号 / 会话上打标。
 
     只打标、不改本次 opts：追加 web_safari 客户端由下一次 build_ydl_options() 消费
@@ -1059,14 +1036,20 @@ def _maybe_mark_sabr_only(output: str) -> None:
             return
         from ..auth.auth_service import auth_service
 
-        if auth_service.get_youtube_sabr_only():
+        scope = (
+            opts.get(SABR_SCOPE, "" if not opts.get("cookiefile") else None)
+            if opts is not None
+            else None
+        )
+        if auth_service.get_youtube_sabr_only(scope):
             return  # 已标记，避免重复日志/写盘
-        auth_service.mark_youtube_sabr_only()
+        auth_service.mark_youtube_sabr_only(scope)
         from loguru import logger
 
-        logger.warning(
-            "[SABR] 检测到账号级 SABR-only 灰度（高清直链被丢弃），已标记账号；"
-            "后续解析/下载将追加 web_safari 客户端以拿回高清格式。"
+        log_text(
+            logger,
+            "warning",
+            "[SABR] 检测到 SABR-only（高清直链被丢弃），已标记本次请求对应的账号或匿名会话；后续解析/下载将追加 web_safari 客户端。",
         )
     except Exception:
         return
@@ -1079,9 +1062,11 @@ def run_dump_single_json(
     *,
     cancel_event: Event | None = None,
 ) -> dict[str, Any]:
+    ydl_opts = dict(ydl_opts)
+    enforce_cookie_mode(ydl_opts)
     exe = resolve_yt_dlp_exe()
     if exe is None:
-        raise FileNotFoundError("未找到 yt-dlp.exe（既没有内置也不在 PATH 中）")
+        raise FileNotFoundError(english("未找到 yt-dlp.exe（既没有内置也不在 PATH 中）"))
 
     from ..auth.cookie_runfile import cookie_runfile
 
@@ -1205,7 +1190,7 @@ def run_dump_single_json(
     # 客户端才能拿回。这里只**打标**（落在账号 / 会话上），下一次 build_ydl_options()
     # 读标记时才追加客户端——因为解析与下载各自独立调 build_ydl_options()，标记是唯一
     # 能同时命中两条路的位置。best-effort：观测绝不拖垮解析（硬规则 5）。
-    _maybe_mark_sabr_only(out)
+    _maybe_mark_sabr_only(out, ydl_opts)
 
     # yt-dlp may print other lines; pick the last parsable JSON line.
     _t_json = time.perf_counter()
@@ -1218,33 +1203,27 @@ def run_dump_single_json(
         try:
             data = json.loads(s)
             if isinstance(data, dict):
-                logger.info(
+                log_text(
+                    logger,
+                    "info",
                     "[Timing][run_dump_single_json] env={:.0f}ms 子进程={:.0f}ms JSON={:.0f}ms 输出={}行",
                     _env_ms,
                     _proc_ms,
                     (time.perf_counter() - _t_json) * 1000,
                     len(out.splitlines()),
                 )
+                if COOKIE_MODE in ydl_opts:
+                    stamp_result(data, ydl_opts[COOKIE_MODE])
                 return data
         except Exception:
             continue
 
     stderr_snippet = _extract_error_lines(out)
-    raise YtDlpExecutionError(1, f"yt-dlp 未输出可解析的 JSON\n{stderr_snippet}")
+    raise YtDlpExecutionError(1, english("yt-dlp 未输出可解析的 JSON\n{0}", stderr_snippet))
 
 
 def run_version() -> str:
-    exe = resolve_yt_dlp_exe()
-    if exe is None:
-        return ""
-    try:
-        out = subprocess.check_output(
-            [str(exe), "--version"],
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            **_win_hide_console_kwargs(),
-        )
-        return (out or "").strip()
-    except Exception:
-        return ""
+    from ..utils.ytdlp_runtime import probe_version
+
+    result = probe_version(resolve_yt_dlp_exe())
+    return result.version if result.status == "ok" else ""

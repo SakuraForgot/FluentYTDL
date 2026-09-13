@@ -6,6 +6,9 @@ from typing import TYPE_CHECKING
 from loguru import logger
 from PySide6.QtCore import QObject, QThread, Signal
 
+from fluentytdl.utils.localized_log import log_text
+from fluentytdl.utils.ui_text import tr_text
+
 if TYPE_CHECKING:
     from ..models.quick_download_params import QuickDownloadParams
 
@@ -57,7 +60,7 @@ class FileDeleteWorker(QThread):
                             deleted = True
                             break
                         else:
-                            raise Exception("文件夹删除残留")
+                            raise Exception(tr_text("文件夹删除残留"))
                     else:
                         deleted = True
                         break
@@ -218,7 +221,9 @@ class AppController(QObject):
         self._quick_workers.append(worker)
         worker.start()
 
-    def delete_files_best_effort(self, paths: list[str], success_title: str = "已删除文件") -> None:
+    def delete_files_best_effort(
+        self, paths: list[str], success_title: str = tr_text("已删除文件")
+    ) -> None:
         """Asynchronously delete files to avoid blocking UI thread."""
         if not paths:
             return
@@ -298,7 +303,7 @@ class AppController(QObject):
         paths_to_delete = list(dict.fromkeys(paths_to_delete))
 
         if paths_to_delete:
-            self.delete_files_best_effort(paths_to_delete, success_title="已删除文件残留")
+            self.delete_files_best_effort(paths_to_delete, success_title=tr_text("已删除文件残留"))
 
     # === 无 worker 的历史行（融合后列表的另一半来源）===
     #
@@ -336,11 +341,13 @@ class AppController(QObject):
             try:
                 task_db.delete_task(db_id)
             except Exception as e:
-                logger.error(f"删除历史行 {db_id} 失败: {e}")
+                log_text(logger, "error", "删除历史行 {0} 失败: {1}", db_id, e)
 
         paths = list(dict.fromkeys(paths))
         if paths:
-            self.delete_files_best_effort(paths, success_title=f"已删除 {len(paths)} 个文件")
+            self.delete_files_best_effort(
+                paths, success_title=tr_text("已删除 {0} 个文件", len(paths))
+            )
 
     def handle_start_snapshot(
         self, db_id: int, url: str, title: str = "", thumbnail: str = ""
@@ -371,7 +378,7 @@ class AppController(QObject):
                 # 用户机器上的历史数据，别假设它一定是合法 JSON
                 opts = {}
         if not opts:
-            logger.warning(f"历史行 {db_id} 没有可用的 ydl_opts，无法直接重下")
+            log_text(logger, "warning", "历史行 {0} 没有可用的 ydl_opts，无法直接重下", db_id)
             return None
 
         worker = download_manager.create_worker(
@@ -448,7 +455,7 @@ class AppController(QObject):
             try:
                 download_manager.remove_worker(worker)
             except Exception as e:
-                logger.warning(f"降档前移除旧 worker 失败（继续）: {e}")
+                log_text(logger, "warning", "降档前移除旧 worker 失败（继续）: {0}", e)
 
         try:
             new_worker = download_manager.create_worker(
@@ -458,7 +465,7 @@ class AppController(QObject):
                 restore_db_id=int(db_id or 0),
             )
         except Exception as e:
-            logger.error(f"降档重建 worker 失败: {e}")
+            log_text(logger, "error", "降档重建 worker 失败: {0}", e)
             return None, "failed", next_height
 
         if db_id:
@@ -610,7 +617,8 @@ class AppController(QObject):
         paths_to_delete = list(dict.fromkeys(paths_to_delete))
         if paths_to_delete:
             self.delete_files_best_effort(
-                paths_to_delete, success_title=f"已清理 {len(paths_to_delete)} 个文件残留"
+                paths_to_delete,
+                success_title=tr_text("已清理 {0} 个文件残留", len(paths_to_delete)),
             )
 
 

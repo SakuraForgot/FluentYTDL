@@ -7,6 +7,9 @@ import ctypes
 import os
 import sys
 
+from fluentytdl.utils.localized_log import log_text
+from fluentytdl.utils.message_catalog import standalone_text
+
 
 def is_admin() -> bool:
     """
@@ -39,19 +42,19 @@ def restart_as_admin(reason: str = "", auto_restart: bool = False) -> bool:
     if sys.platform != "win32":
         from ..utils.logger import logger
 
-        logger.warning("非 Windows 系统不支持自动提权重启")
+        log_text(logger, "warning", "非 Windows 系统不支持自动提权重启")
         return False
 
     if is_admin():
         from ..utils.logger import logger
 
-        logger.info("已经是管理员权限，无需重启")
+        log_text(logger, "info", "已经是管理员权限，无需重启")
         return False
 
     try:
         from ..utils.logger import logger
 
-        logger.info(f"请求以管理员身份重启: {reason}")
+        log_text(logger, "info", "请求以管理员身份重启: {0}", reason)
 
         # 获取当前可执行文件路径
         if getattr(sys, "frozen", False):
@@ -79,7 +82,7 @@ def restart_as_admin(reason: str = "", auto_restart: bool = False) -> bool:
         )
 
         if ret > 32:  # 成功
-            logger.info("已请求管理员重启，当前进程即将退出")
+            log_text(logger, "info", "已请求管理员重启，当前进程即将退出")
             # 给新进程一点启动时间
             import time
 
@@ -87,13 +90,13 @@ def restart_as_admin(reason: str = "", auto_restart: bool = False) -> bool:
             # 退出当前进程
             sys.exit(0)
         else:
-            logger.warning(f"用户取消了管理员权限请求 (返回码: {ret})")
+            log_text(logger, "warning", "用户取消了管理员权限请求 (返回码: {0})", ret)
             return False
 
     except Exception:
         from ..utils.logger import logger
 
-        logger.exception("请求管理员重启失败")
+        log_text(logger, "exception", "请求管理员重启失败")
         return False
 
 
@@ -105,9 +108,9 @@ def get_admin_status_message() -> str:
         str: 状态消息
     """
     if is_admin():
-        return "✅ 当前以管理员身份运行"
+        return standalone_text("✅ 当前以管理员身份运行")
     else:
-        return "ℹ️ 当前以普通用户身份运行"
+        return standalone_text("ℹ️ 当前以普通用户身份运行")
 
 
 def should_run_as_admin() -> bool:

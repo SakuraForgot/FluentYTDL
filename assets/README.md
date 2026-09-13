@@ -16,3 +16,12 @@ future changes, then regenerate the shipped resources from the project root:
 The existing packaging configuration ships the generated ICO/PNG resources.
 The SVG source and `icon-preview/` studies are development assets.
 Earlier production resources are preserved in `icon-preview/original-assets/`.
+
+
+## Animated variant
+
+- `logo-animated.svg`: pure-vector browser animation based on `logo.svg`; diagonal glass highlight and subtle blue-violet reflection, 4.8-second loop.
+- `logo-animated-preview.html`: self-contained light/dark preview with pause/play and reduced-motion support. Open in a browser.
+- `logo-animated-preview.png`: still screenshot for reference.
+
+This variant has not been connected to the desktop UI. The existing ICO and PNG resources remain static; displaying this effect inside the application requires an animated component.

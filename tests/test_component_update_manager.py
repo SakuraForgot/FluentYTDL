@@ -61,13 +61,18 @@ class TestParseVersion:
 
 
 class TestGetUpdateChannel:
-    """Test channel detection from the version string."""
+    """Installed version never opts users into prereleases."""
 
     @staticmethod
     def _channel(version: str) -> str:
         from fluentytdl.core.component_update_manager import _get_update_channel
 
-        with patch("fluentytdl.__version__", version):
+        with (
+            patch("fluentytdl.__version__", version),
+            patch(
+                "fluentytdl.core.component_update_manager.config_manager.get", return_value="stable"
+            ),
+        ):
             return _get_update_channel()
 
     @pytest.mark.parametrize("version", ["3.5.5", "3.0.16", "4.0.0"])
@@ -75,8 +80,8 @@ class TestGetUpdateChannel:
         assert self._channel(version) == "stable"
 
     @pytest.mark.parametrize("version", ["3.5.6-rc.1", "3.6.0-beta.1"])
-    def test_prerelease_suffix_is_locked(self, version):
-        assert self._channel(version) == "locked"
+    def test_prerelease_suffix_defaults_stable(self, version):
+        assert self._channel(version) == "stable"
 
     def test_v_tag_form_is_stable(self):
         """容忍误写成 tag 形式的版本号，不应把用户判成 locked。"""
@@ -87,38 +92,12 @@ class TestGetUpdateChannel:
         assert self._channel("v-3.0.16") == "stable"
 
     @pytest.mark.parametrize("version", ["pre-3.0.18", "beta-0.0.5"])
-    def test_legacy_prerelease_is_locked(self, version):
-        assert self._channel(version) == "locked"
+    def test_legacy_prerelease_defaults_stable(self, version):
+        assert self._channel(version) == "stable"
 
-    def test_garbage_is_locked(self):
-        """无法识别的版本一律 locked，宁可不更新也不要误更新。"""
-        assert self._channel("0.0.0-dev") == "locked"
-
-
-class TestGetMirrorUrl:
-    """Test mirror URL transformation."""
-
-    @staticmethod
-    def _mirror(url: str, source: str) -> str:
-        if source == "ghproxy" and url.startswith("https://github.com/"):
-            return "https://ghfast.top/" + url
-        return url
-
-    def test_github_to_ghproxy(self):
-        url = "https://github.com/owner/repo/releases/download/v1/file.7z"
-        result = self._mirror(url, "ghproxy")
-        assert result.startswith("https://ghfast.top/")
-        assert "github.com" in result
-
-    def test_github_official_unchanged(self):
-        url = "https://github.com/owner/repo/releases/download/v1/file.7z"
-        result = self._mirror(url, "github")
-        assert result == url
-
-    def test_non_github_unchanged(self):
-        url = "https://example.com/file.7z"
-        result = self._mirror(url, "ghproxy")
-        assert result == url
+    def test_dev_build_defaults_stable(self):
+        """通道默认值不取决于当前开发版本。"""
+        assert self._channel("0.0.0-dev") == "stable"
 
 
 # ── PySide6 signal tests (require QApplication) ──────────────────────────
@@ -151,16 +130,16 @@ def manager(qapp):
 
 
 @requires_windows_qt
-class TestLockedChannel:
-    """Pre-release versions should not perform update checks."""
+class TestUpdateAccess:
+    """Installed prereleases retain access to updates."""
 
-    def test_is_locked_true_for_prerelease(self, manager):
+    def test_prerelease_is_not_locked(self, manager):
         with patch(
             "fluentytdl.core.component_update_manager._get_update_channel",
-            return_value="locked",
+            return_value="pre",
         ):
-            assert manager.is_locked() is True
-            assert manager.is_beta() is True
+            assert manager.is_locked() is False
+            assert manager.is_beta() is False
 
     def test_is_locked_false_for_stable(self, manager):
         with patch(
@@ -204,6 +183,7 @@ class TestCompareAppVersion:
 
     def test_skipped_version_suppresses(self, manager, qapp):
         """Skipped version should emit app_no_update."""
+        manager._app_check_silent = True
         manager._manifest = {
             "app_version": "3.0.18",
             "_is_prerelease": False,

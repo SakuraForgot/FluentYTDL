@@ -22,6 +22,9 @@ from pathlib import Path
 
 from loguru import logger
 
+from fluentytdl.utils.localized_log import log_text
+from fluentytdl.utils.ui_text import tr_text
+
 from ..utils.paths import find_bundled_executable, frozen_app_dir, get_clean_env
 
 
@@ -89,9 +92,9 @@ class POTManager:
                 job_handle, win32job.JobObjectExtendedLimitInformation, info
             )
             self._job_handle = job_handle
-            logger.debug("POT Manager: Windows Job Object 已创建")
+            log_text(logger, "debug", "POT Manager: Windows Job Object 已创建")
         except Exception as e:
-            logger.warning(f"POT Manager: 创建 Job Object 失败: {e}")
+            log_text(logger, "warning", "POT Manager: 创建 Job Object 失败: {0}", e)
             self._job_handle = None
 
     def _find_available_port(self) -> int:
@@ -153,7 +156,7 @@ class POTManager:
             try:
                 req = urllib.request.Request(f"http://127.0.0.1:{port}/shutdown", method="POST")
                 self._local_urlopen(req, timeout=0.3)
-                logger.info(f"POT Manager: 已关闭残留服务 (端口 {port})")
+                log_text(logger, "info", "POT Manager: 已关闭残留服务 (端口 {0})", port)
             except Exception:
                 pass
 
@@ -168,7 +171,7 @@ class POTManager:
                     result = s.connect_ex(("127.0.0.1", self._active_port))
                     if result == 0:
                         # 端口已在监听
-                        logger.debug(f"POT Manager: 端口 {self._active_port} 已就绪")
+                        log_text(logger, "debug", "POT Manager: 端口 {0} 已就绪", self._active_port)
                         return True
             except Exception:
                 pass
@@ -179,13 +182,13 @@ class POTManager:
         """启动 POT 服务"""
         with self._lock:
             if self._is_running and self._process and self._process.poll() is None:
-                logger.debug("POT Manager: 服务已在运行")
+                log_text(logger, "debug", "POT Manager: 服务已在运行")
                 return True
 
             # 查找可执行文件
             exe = self._find_pot_executable()
             if not exe:
-                logger.warning("POT Manager: 未找到 POT Provider 可执行文件")
+                log_text(logger, "warning", "POT Manager: 未找到 POT Provider 可执行文件")
                 return False
 
             # 清理残留
@@ -193,7 +196,7 @@ class POTManager:
 
             # 查找可用端口
             self._active_port = self._find_available_port()
-            logger.info(f"POT Manager: 使用端口 {self._active_port}")
+            log_text(logger, "info", "POT Manager: 使用端口 {0}", self._active_port)
 
             try:
                 # bgutil-pot-provider 的命令行参数格式
@@ -230,17 +233,17 @@ class POTManager:
                         env["HTTPS_PROXY"] = proxy_full
                         env["HTTP_PROXY"] = proxy_full
                         env["ALL_PROXY"] = proxy_full
-                        logger.info(f"POT Manager: 注入代理 → {proxy_full}")
+                        log_text(logger, "info", "POT Manager: 注入代理 → {0}", proxy_full)
                     elif proxy_mode == "system":
                         # 系统代理 / TUN 模式：直接继承环境变量，不主动注入
                         # TUN 模式（如 V2RayN）已经在网络层透明代理所有流量，
                         # 如果再注入 HTTPS_PROXY 会造成双重代理导致服务卡死。
-                        logger.debug("POT Manager: 系统代理模式，继承环境（兼容 TUN）")
+                        log_text(logger, "debug", "POT Manager: 系统代理模式，继承环境（兼容 TUN）")
                     else:
                         # 无代理
-                        logger.debug("POT Manager: 无代理配置")
+                        log_text(logger, "debug", "POT Manager: 无代理配置")
                 except Exception as e:
-                    logger.debug(f"POT Manager: 读取代理配置失败: {e}")
+                    log_text(logger, "debug", "POT Manager: 读取代理配置失败: {0}", e)
 
                 creation_flags = 0
                 if sys.platform == "win32":
@@ -266,14 +269,18 @@ class POTManager:
                         )
                         win32job.AssignProcessToJobObject(self._job_handle, handle)
                     except Exception as e:
-                        logger.warning(f"POT Manager: 关联 Job Object 失败: {e}")
+                        log_text(logger, "warning", "POT Manager: 关联 Job Object 失败: {0}", e)
 
                 # 健康检查（增加超时到 10 秒）
-                logger.debug(f"POT Manager: 开始健康检查 (PID: {self._process.pid})")
+                log_text(logger, "debug", "POT Manager: 开始健康检查 (PID: {0})", self._process.pid)
                 if self._health_check(timeout=10.0):
                     self._is_running = True
-                    logger.info(
-                        f"POT Manager: 服务已启动 (PID: {self._process.pid}, 端口: {self._active_port})"
+                    log_text(
+                        logger,
+                        "info",
+                        "POT Manager: 服务已启动 (PID: {0}, 端口: {1})",
+                        self._process.pid,
+                        self._active_port,
                     )
                     return True
                 else:
@@ -283,29 +290,41 @@ class POTManager:
                         # 否则 is_running() 会撒谎 → 注入一个不可用的 base_url →
                         # yt-dlp 侧白等插件的 _GETPOT_TIMEOUT(20s) 后静默降级。
                         self._is_running = False
-                        logger.warning(
-                            "[POT][Ready] 失败 stage=server_down "
-                            f"(进程存活 pid={self._process.pid} 但端口 {self._active_port} 不通)"
+                        log_text(
+                            logger,
+                            "warning",
+                            "[POT][Ready] 失败 stage=server_down (进程存活 pid={0} 但端口 {1} 不通)",
+                            self._process.pid,
+                            self._active_port,
                         )
                         return False
                     else:
                         # 进程已退出，获取输出以便调试
                         stdout, stderr = self._process.communicate(timeout=1)
                         if stderr:
-                            logger.error(
-                                f"POT Manager 进程 stderr: {stderr.decode('utf-8', errors='ignore')[:500]}"
+                            log_text(
+                                logger,
+                                "error",
+                                "POT Manager 进程 stderr: {0}",
+                                stderr.decode("utf-8", errors="ignore")[:500],
                             )
                         if stdout:
-                            logger.debug(
-                                f"POT Manager 进程 stdout: {stdout.decode('utf-8', errors='ignore')[:500]}"
+                            log_text(
+                                logger,
+                                "debug",
+                                "POT Manager 进程 stdout: {0}",
+                                stdout.decode("utf-8", errors="ignore")[:500],
                             )
-                        logger.error(
-                            f"POT Manager: 进程已退出 (返回码: {self._process.returncode})"
+                        log_text(
+                            logger,
+                            "error",
+                            "POT Manager: 进程已退出 (返回码: {0})",
+                            self._process.returncode,
                         )
                         return False
 
             except Exception as e:
-                logger.error(f"POT Manager: 启动服务失败: {e}")
+                log_text(logger, "error", "POT Manager: 启动服务失败: {0}", e)
                 return False
 
     def stop_server(self):
@@ -313,7 +332,7 @@ class POTManager:
         with self._lock:
             # 防止重复停止（如果进程已经不存在了）
             if not self._is_running and self._process is None:
-                logger.debug("POT Manager: 服务未运行，跳过停止操作")
+                log_text(logger, "debug", "POT Manager: 服务未运行，跳过停止操作")
                 return
 
             proc = self._process
@@ -321,7 +340,7 @@ class POTManager:
                 try:
                     # 检查进程是否已经终止
                     if proc.poll() is not None:
-                        logger.debug("POT Manager: 进程已终止，跳过停止操作")
+                        log_text(logger, "debug", "POT Manager: 进程已终止，跳过停止操作")
                         self._process = None
                         self._is_running = False
                         self._active_port = 0
@@ -339,7 +358,7 @@ class POTManager:
 
             self._is_running = False
             self._active_port = 0
-            logger.info("POT Manager: 服务已停止")
+            log_text(logger, "info", "POT Manager: 服务已停止")
 
     def invalidate_caches(self) -> bool:
         """清除 POT 服务的所有内部缓存（最轻量的恢复手段）
@@ -357,10 +376,10 @@ class POTManager:
                 method="POST",
             )
             self._local_urlopen(req, timeout=3)
-            logger.info("POT Manager: 缓存已清除")
+            log_text(logger, "info", "POT Manager: 缓存已清除")
             return True
         except Exception as e:
-            logger.warning(f"POT Manager: 清除缓存失败: {e}")
+            log_text(logger, "warning", "POT Manager: 清除缓存失败: {0}", e)
             return False
 
     def invalidate_integrity_token(self) -> bool:
@@ -379,15 +398,15 @@ class POTManager:
                 method="POST",
             )
             self._local_urlopen(req, timeout=5)
-            logger.info("POT Manager: Integrity Token 已失效，将重新生成")
+            log_text(logger, "info", "POT Manager: Integrity Token 已失效，将重新生成")
             return True
         except Exception as e:
-            logger.warning(f"POT Manager: 使 Integrity Token 失效失败: {e}")
+            log_text(logger, "warning", "POT Manager: 使 Integrity Token 失效失败: {0}", e)
             return False
 
     def restart_server(self) -> bool:
         """完整重启 POT 服务（最彻底的恢复手段）"""
-        logger.info("POT Manager: 触发完整重启...")
+        log_text(logger, "info", "POT Manager: 触发完整重启...")
         self.stop_server()
         import time as _time
 
@@ -412,7 +431,7 @@ class POTManager:
         """
         # 服务未运行 → 直接启动
         if not self.is_running():
-            logger.info("POT Manager: 服务未运行，尝试启动...")
+            log_text(logger, "info", "POT Manager: 服务未运行，尝试启动...")
             if not self.start_server():
                 return False
             # 启动后验证 Token 生成能力
@@ -420,25 +439,25 @@ class POTManager:
             return ok
 
         # 第一步：清除缓存
-        logger.info("POT Manager: 恢复步骤 1/3 — 清除缓存")
+        log_text(logger, "info", "POT Manager: 恢复步骤 1/3 — 清除缓存")
         if self.invalidate_caches():
             ok, msg = self.verify_token_generation()
             if ok:
-                logger.info(f"POT Manager: 缓存清除后 Token 验证通过: {msg}")
+                log_text(logger, "info", "POT Manager: 缓存清除后 Token 验证通过: {0}", msg)
                 return True
-            logger.warning(f"POT Manager: 缓存清除后 Token 仍无效: {msg}")
+            log_text(logger, "warning", "POT Manager: 缓存清除后 Token 仍无效: {0}", msg)
 
         # 第二步：重置 Integrity Token
-        logger.info("POT Manager: 恢复步骤 2/3 — 重置 Integrity Token")
+        log_text(logger, "info", "POT Manager: 恢复步骤 2/3 — 重置 Integrity Token")
         if self.invalidate_integrity_token():
             ok, msg = self.verify_token_generation()
             if ok:
-                logger.info(f"POT Manager: IT 重置后 Token 验证通过: {msg}")
+                log_text(logger, "info", "POT Manager: IT 重置后 Token 验证通过: {0}", msg)
                 return True
-            logger.warning(f"POT Manager: IT 重置后 Token 仍无效: {msg}")
+            log_text(logger, "warning", "POT Manager: IT 重置后 Token 仍无效: {0}", msg)
 
         # 第三步：完整重启
-        logger.info("POT Manager: 恢复步骤 3/3 — 完整重启服务")
+        log_text(logger, "info", "POT Manager: 恢复步骤 3/3 — 完整重启服务")
         if not self.restart_server():
             return False
         ok, _ = self.verify_token_generation()
@@ -465,7 +484,7 @@ class POTManager:
             (success: bool, detail: str)
         """
         if not self.is_running():
-            return False, "服务未运行"
+            return False, tr_text("服务未运行")
 
         import json
         import urllib.error
@@ -487,15 +506,15 @@ class POTManager:
                 # 只记长度，绝不记 Token 明文（CLAUDE.md §5「字段纪律」/ §9 日志安全约束）
                 self._last_token_len = len(po_token)
                 self._warm_event.set()  # 标记预热完成
-                return True, f"Token 有效 (长度 {len(po_token)})"
+                return True, tr_text("Token 有效 (长度 {0})", len(po_token))
             else:
-                return False, f"Token 格式异常: 长度={len(str(po_token))}"
+                return False, tr_text("Token 格式异常: 长度={0}", len(str(po_token)))
         except urllib.error.HTTPError as e:
             return False, f"HTTP {e.code}: {e.reason}"
         except json.JSONDecodeError:
-            return False, "返回内容非 JSON"
+            return False, tr_text("返回内容非 JSON")
         except Exception as e:
-            return False, f"请求失败: {e}"
+            return False, tr_text("请求失败: {0}", e)
 
     def check_minter_health(self, timeout: float = 3.0) -> tuple[bool, str]:
         """L2 验证：检查 Minter 缓存状态（BotGuard 铸造器健康度）
@@ -506,7 +525,7 @@ class POTManager:
             (healthy: bool, detail: str)
         """
         if not self.is_running():
-            return False, "服务未运行"
+            return False, tr_text("服务未运行")
 
         import json
         import urllib.error
@@ -530,23 +549,23 @@ class POTManager:
                     cache_size = len(data)
                 self._last_minter_size = self._as_int(cache_size)
                 if cache_size is not None:
-                    return True, f"Minter 缓存正常 (条目: {cache_size})"
-                return True, "Minter 已初始化"
+                    return True, tr_text("Minter 缓存正常 (条目: {0})", cache_size)
+                return True, tr_text("Minter 已初始化")
             elif isinstance(data, list):
                 self._last_minter_size = len(data)
-                return True, f"Minter 缓存正常 ({len(data)} 条目)"
+                return True, tr_text("Minter 缓存正常 ({0} 条目)", len(data))
             else:
-                return True, "Minter 响应正常"
+                return True, tr_text("Minter 响应正常")
         except urllib.error.HTTPError as e:
             if e.code == 404:
                 # 旧版本可能不支持此端点
-                return True, "端点不存在 (旧版本，跳过)"
+                return True, tr_text("端点不存在 (旧版本，跳过)")
             return False, f"HTTP {e.code}: {e.reason}"
         except json.JSONDecodeError:
             # 非 JSON 响应也可能是正常的 (取决于版本)
-            return True, "Minter 响应正常 (非 JSON)"
+            return True, tr_text("Minter 响应正常 (非 JSON)")
         except Exception as e:
-            return False, f"请求失败: {e}"
+            return False, tr_text("请求失败: {0}", e)
 
     @staticmethod
     def _as_int(value: object) -> int | None:
@@ -595,7 +614,7 @@ class POTManager:
         # L0: 进程存活
         result["running"] = self.is_running()
         if not result["running"]:
-            result["summary"] = "服务未运行"
+            result["summary"] = tr_text("服务未运行")
             return result
 
         result["port"] = self._active_port
@@ -615,11 +634,11 @@ class POTManager:
         # 综合判定
         result["overall_ok"] = result["running"] and token_ok
         if result["overall_ok"]:
-            result["summary"] = f"运行中 (端口 {self._active_port}), {token_detail}"
+            result["summary"] = tr_text("运行中 (端口 {0}), {1}", self._active_port, token_detail)
         elif result["running"] and not token_ok:
-            result["summary"] = f"运行中但 Token 生成异常: {token_detail}"
+            result["summary"] = tr_text("运行中但 Token 生成异常: {0}", token_detail)
         else:
-            result["summary"] = f"异常: {token_detail}"
+            result["summary"] = tr_text("异常: {0}", token_detail)
 
         return result
 
@@ -641,7 +660,7 @@ class POTManager:
 
             exe = resolve_yt_dlp_exe()
             if exe is None:
-                return False, "yt-dlp 可执行文件未找到"
+                return False, tr_text("yt-dlp 可执行文件未找到")
 
             # 检查标准插件目录
             plugin_dir = (
@@ -654,8 +673,10 @@ class POTManager:
 
             if not plugin_dir.exists():
                 return False, (
-                    f"POT 插件目录不存在: {plugin_dir.parent.parent}。"
-                    "请确保 sync_pot_plugins_to_ytdlp() 已正确执行。"
+                    tr_text(
+                        "POT 插件目录不存在: {0}。请确保 sync_pot_plugins_to_ytdlp() 已正确执行。",
+                        plugin_dir.parent.parent,
+                    )
                 )
 
             # 检查关键插件文件
@@ -663,16 +684,18 @@ class POTManager:
             base_plugin = plugin_dir / "getpot_bgutil.py"
 
             if not http_plugin.exists():
-                return False, "POT HTTP 插件文件 (getpot_bgutil_http.py) 缺失"
+                return False, tr_text("POT HTTP 插件文件 (getpot_bgutil_http.py) 缺失")
             if not base_plugin.exists():
-                return False, "POT 基础插件文件 (getpot_bgutil.py) 缺失"
+                return False, tr_text("POT 基础插件文件 (getpot_bgutil.py) 缺失")
 
             # 全部检查通过
             plugin_files = list(plugin_dir.glob("getpot_bgutil*.py"))
-            return True, f"POT 插件已就位 ({len(plugin_files)} 个文件，位于 yt-dlp.exe 旁)"
+            return True, tr_text(
+                "POT 插件已就位 ({0} 个文件，位于 yt-dlp.exe 旁)", len(plugin_files)
+            )
 
         except Exception as e:
-            return False, f"插件检测异常: {e}"
+            return False, tr_text("插件检测异常: {0}", e)
 
     # 主动探测用的默认目标：yt-dlp 自己的测试视频，长期可用且时长极短。
     PROBE_URL = "https://www.youtube.com/watch?v=BaW_jenozKc"
@@ -700,11 +723,11 @@ class POTManager:
 
         exe = resolve_yt_dlp_exe()
         if exe is None:
-            return False, "yt-dlp 可执行文件未找到"
+            return False, tr_text("yt-dlp 可执行文件未找到")
 
         args = self.get_extractor_args()
         if not args:
-            return False, "POT 服务未运行，无法注入 base_url（先启用并等待预热）"
+            return False, tr_text("POT 服务未运行，无法注入 base_url（先启用并等待预热）")
 
         cmd = [
             str(exe),
@@ -728,9 +751,9 @@ class POTManager:
                 **_win_hide_console_kwargs(),
             )
         except subprocess.TimeoutExpired:
-            return False, f"探测超时（>{timeout:.0f}s）"
+            return False, tr_text("探测超时（>{0:.0f}s）", timeout)
         except Exception as e:
-            return False, f"探测执行失败: {e}"
+            return False, tr_text("探测执行失败: {0}", e)
 
         out = (proc.stdout or b"").decode("utf-8", errors="replace")
         out += "\n" + (proc.stderr or b"").decode("utf-8", errors="replace")
@@ -751,15 +774,18 @@ class POTManager:
 
         if not evidence:
             return False, (
-                f"yt-dlp 输出里没有任何 POT 痕迹 —— 插件很可能没被加载。\n退出码={proc.returncode}"
+                tr_text(
+                    "yt-dlp 输出里没有任何 POT 痕迹 —— 插件很可能没被加载。\n退出码={0}",
+                    proc.returncode,
+                )
             )
 
         text = "\n".join(evidence)
         hit_bgutil = any("bgutil" in e.lower() for e in evidence)
         if rejected:
-            return False, "provider 拒绝了请求（服务不可达时会静默降级）：\n" + text
+            return False, tr_text("provider 拒绝了请求（服务不可达时会静默降级）：\n") + text
         if not hit_bgutil:
-            return False, "只看到 POT 相关输出，但没有 bgutil provider 的痕迹：\n" + text
+            return False, tr_text("只看到 POT 相关输出，但没有 bgutil provider 的痕迹：\n") + text
         return True, text
 
     def status_brief(self) -> str:
@@ -770,12 +796,14 @@ class POTManager:
         from ..core.config_manager import config_manager
 
         if not config_manager.get("pot_provider_enabled", False):
-            return "已关闭"
+            return tr_text("已关闭")
         if self.is_warm:
-            extra = f"，Token 长度 {self._last_token_len}" if self._last_token_len else ""
+            extra = (
+                tr_text("，Token 长度 {0}", self._last_token_len) if self._last_token_len else ""
+            )
             if self._last_minter_size is not None:
-                extra += f"，minter 缓存 {self._last_minter_size}"
-            return f"已就绪（端口 {self._active_port}{extra}）"
+                extra += tr_text("，minter 缓存 {0}", self._last_minter_size)
+            return tr_text("已就绪（端口 {0}{1}）", self._active_port, extra)
         running = self.is_running()
         # 退避判定必须先于"预热中"：断网时服务是本地进程、起得来，只有铸 Token 失败，
         # 于是 running=True 而预热线程早已退出。若先看 running 就会一直显示"预热中…"，
@@ -783,11 +811,16 @@ class POTManager:
         if self._warm_retry_at:
             remaining = self._warm_retry_at - time.monotonic()
             if remaining > 0:
-                prefix = "服务已起但未就绪" if running else "未运行"
-                return f"{prefix}，{remaining:.0f}s 后重试预热（已失败 {self._warm_attempts} 次）"
+                prefix = tr_text("服务已起但未就绪") if running else tr_text("未运行")
+                return tr_text(
+                    "{0}，{1:.0f}s 后重试预热（已失败 {2} 次）",
+                    prefix,
+                    remaining,
+                    self._warm_attempts,
+                )
         if not running:
-            return "未运行"
-        return f"预热中…（端口 {self._active_port}，此期间解析降级为无 POT）"
+            return tr_text("未运行")
+        return tr_text("预热中…（端口 {0}，解析等待 POT 就绪）", self._active_port)
 
     def get_extractor_args(self) -> str | None:
         """获取 yt-dlp 的 extractor-args 参数"""
@@ -804,17 +837,24 @@ class POTManager:
         """预热是否完成（至少成功生成过一次 Token）"""
         return self._warm_event.is_set()
 
-    # 这里曾有一个 wait_until_ready(timeout=15)：等 _warm_event，超时后还会再主动跑一次
-    # verify_token_generation(timeout=20) —— 最坏 35s。它已被 ensure_warm_async() 取代
-    # （解析路径只读 is_warm，未就绪即降级），且全仓库无调用方，故整段删除而非留着当陷阱。
-    # 需要"等就绪"的场景请用 ensure_warm_async() + 轮询 is_warm，绝不要在解析路径上等。
+    def wait_until_ready(self, timeout: float = 45.0) -> bool:
+        """在任务线程等待共享预热；超时或失败时返回 False，不另起同步验证。"""
+        if self.is_running() and self.is_warm:
+            return True
+        self._warm_event.clear()
+        self.ensure_warm_async()
+        with self._lock:
+            worker = self._warm_thread
+        if worker is not None:
+            worker.join(timeout=max(0.0, timeout))
+        return self.is_running() and self.is_warm
 
-    # --- 后台预热（解析路径永不阻塞） ---
+    # --- 后台预热（UI 不等待，解析任务必须等待就绪） ---
 
     _BACKOFF_SCHEDULE = (30.0, 120.0, 300.0)
 
     def ensure_warm_async(self) -> None:
-        """触发一次后台预热，立即返回。解析路径调用此方法，绝不等待。
+        """触发一次后台预热，立即返回。解析任务通过 wait_until_ready 等待。
 
         - 已 warm 或已有预热线程在跑 → 直接返回
         - 失败按 30s / 2min / 5min 退避重试，不再"一次失败就永久不 warm"
@@ -856,21 +896,30 @@ class POTManager:
             else:
                 minter_state = f"OK(cache={self._last_minter_size})"
             warm_ms = (time.monotonic() - t0) * 1000
-            logger.info(
-                f"[POT][Ready] 服务就绪 port={self._active_port} "
-                f"pid={getattr(self._process, 'pid', '-')} token_len={self._last_token_len} "
-                f"warm_ms={warm_ms:.0f} plugin={'OK' if plugin_ok else plugin_msg} "
-                f"minter={minter_state} deno={'OK' if deno_ok else 'MISSING'}"
+            log_text(
+                logger,
+                "info",
+                "[POT][Ready] 服务就绪 port={0} pid={1} token_len={2} warm_ms={3:.0f} plugin={4} minter={5} deno={6}",
+                self._active_port,
+                getattr(self._process, "pid", "-"),
+                self._last_token_len,
+                warm_ms,
+                "OK" if plugin_ok else plugin_msg,
+                minter_state,
+                "OK" if deno_ok else "MISSING",
             )
             if not plugin_ok:
-                logger.warning(
-                    f"[POT][Ready] 警告 stage=plugin_missing {plugin_msg} "
-                    "— 服务已就绪但 yt-dlp 无法加载插件，PO Token 不会被使用"
+                log_text(
+                    logger,
+                    "warning",
+                    "[POT][Ready] 警告 stage=plugin_missing {0} — 服务已就绪但 yt-dlp 无法加载插件，PO Token 不会被使用",
+                    plugin_msg,
                 )
             if not deno_ok:
-                logger.warning(
-                    "[POT][Ready] 警告 stage=deno_missing — 未找到 deno.exe，"
-                    "POT 服务可能无法铸造 BotGuard Token。请在「设置 → 依赖组件」安装 JS Runtime (Deno)。"
+                log_text(
+                    logger,
+                    "warning",
+                    "[POT][Ready] 警告 stage=deno_missing — 未找到 deno.exe，POT 服务可能无法铸造 BotGuard Token。请在「设置 → 依赖组件」安装 JS Runtime (Deno)。",
                 )
             self._warm_attempts = 0
         except Exception as e:
@@ -898,9 +947,14 @@ class POTManager:
         delay = self._BACKOFF_SCHEDULE[min(self._warm_attempts, len(self._BACKOFF_SCHEDULE) - 1)]
         self._warm_attempts += 1
         self._warm_retry_at = time.monotonic() + delay
-        logger.warning(
-            f"[POT][Ready] 失败 stage={stage} {detail} 将在 {delay:.0f}s 后重试 "
-            f"(第 {self._warm_attempts} 次)"
+        log_text(
+            logger,
+            "warning",
+            "[POT][Ready] 失败 stage={0} {1} 将在 {2:.0f}s 后重试 (第 {3} 次)",
+            stage,
+            detail,
+            delay,
+            self._warm_attempts,
         )
 
 

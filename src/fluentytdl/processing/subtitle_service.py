@@ -20,6 +20,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, replace
 from typing import Any
 
+from fluentytdl.utils.ui_text import tr_text
+
 from ..core.config_manager import config_manager
 from ..models.subtitle_config import (
     SUBTITLE_CONFIG_KEY,
@@ -673,7 +675,7 @@ class NoneStrategy(SubtitleStrategy):
         }
 
     def get_description(self) -> str:
-        return "不下载字幕"
+        return tr_text("不下载字幕")
 
 
 class SingleLanguageStrategy(SubtitleStrategy):
@@ -750,7 +752,7 @@ class SingleLanguageStrategy(SubtitleStrategy):
         return opts
 
     def get_description(self) -> str:
-        return f"单语言字幕: {self.language}"
+        return tr_text("单语言字幕: {0}", self.language)
 
 
 class MultiLanguageStrategy(SubtitleStrategy):
@@ -832,8 +834,10 @@ class MultiLanguageStrategy(SubtitleStrategy):
         return opts
 
     def get_description(self) -> str:
-        return (
-            f"多语言字幕: {', '.join(self.languages[:3])}{'...' if len(self.languages) > 3 else ''}"
+        return tr_text(
+            "多语言字幕: {0}{1}",
+            ", ".join(self.languages[:3]),
+            "..." if len(self.languages) > 3 else "",
         )
 
 
@@ -925,7 +929,7 @@ class SmartStrategy(SubtitleStrategy):
         return opts
 
     def get_description(self) -> str:
-        return "智能选择字幕（中文→英语→日语）"
+        return tr_text("智能选择字幕（中文→英语→日语）")
 
 
 class SubtitleService:

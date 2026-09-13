@@ -5,6 +5,8 @@ import shutil
 import sys
 from pathlib import Path
 
+from fluentytdl.utils.message_catalog import english
+
 # ---------------------------------------------------------------------------
 # 数据目录：常量与迁移报告队列
 # ---------------------------------------------------------------------------
@@ -160,12 +162,12 @@ def _record(msg: str) -> None:
 
 def _record_failure(msg: str) -> None:
     _MIGRATION_FAILURES.append(msg)
-    _MIGRATION_LOG.append(f"[失败] {msg}")
+    _MIGRATION_LOG.append(english("[失败] {0}", msg))
 
 
 def _record_conflict(msg: str) -> None:
     _MIGRATION_CONFLICTS.append(msg)
-    _MIGRATION_LOG.append(f"[冲突] {msg}")
+    _MIGRATION_LOG.append(english("[冲突] {0}", msg))
 
 
 def take_migration_report() -> tuple[list[str], list[str], list[str]]:
@@ -209,7 +211,7 @@ def commit_migration_marker(app_name: str = "FluentYTDL") -> bool:
     try:
         marker = user_data_dir(app_name) / MIGRATION_MARKER
         marker.write_text(
-            "FluentYTDL 数据迁移已完成。删除本文件会让下次启动重新扫描旧数据位置。\n",
+            english("FluentYTDL 数据迁移已完成。删除本文件会让下次启动重新扫描旧数据位置。\n"),
             encoding="utf-8",
         )
         return True
@@ -502,10 +504,10 @@ def _preserve_loser(staged: Path, new_dir: Path, tag: str, item: str, winner: Pa
         return True
     try:
         _install_item(staged, target)
-        _record_conflict(f"{item}（来自 {tag}）已保留为 {target}")
+        _record_conflict(english("{0}（来自 {1}）已保留为 {2}", item, tag, target))
         return True
     except OSError as e:
-        _record_failure(f"保留落选的 {item}（来自 {tag}）失败: {e}")
+        _record_failure(english("保留落选的 {0}（来自 {1}）失败: {2}", item, tag, e))
         return False
 
 
@@ -529,7 +531,7 @@ def _merge_logs(staged_logs: dict[str, Path], dest_logs: Path) -> bool:
                     shutil.copy2(src, direct)
                     merged = True
                 except OSError as e:
-                    _record_failure(f"迁移日志 {rel}（来自 {tag}）失败: {e}")
+                    _record_failure(english("迁移日志 {0}（来自 {1}）失败: {2}", rel, tag, e))
                 continue
             if _same_file(src, direct):
                 continue
@@ -540,9 +542,13 @@ def _merge_logs(staged_logs: dict[str, Path], dest_logs: Path) -> bool:
                 renamed.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(src, renamed)
                 merged = True
-                _record_conflict(f"日志 {rel}（来自 {tag}）与现有文件不同，已另存为 {renamed.name}")
+                _record_conflict(
+                    english(
+                        "日志 {0}（来自 {1}）与现有文件不同，已另存为 {2}", rel, tag, renamed.name
+                    )
+                )
             except OSError as e:
-                _record_failure(f"迁移日志 {rel}（来自 {tag}）失败: {e}")
+                _record_failure(english("迁移日志 {0}（来自 {1}）失败: {2}", rel, tag, e))
     return merged
 
 
@@ -599,7 +605,7 @@ def migrate_user_data(app_name: str = "FluentYTDL") -> bool:
         _MIGRATION_OK = True
         return False
 
-    _record(f"数据迁移：目的地 {new_dir}，遗留候选 {[t for t, _ in pending]}")
+    _record(english("数据迁移：目的地 {0}，遗留候选 {1}", new_dir, [t for t, _ in pending]))
 
     tmp_root = new_dir / MIGRATE_TMP_DIRNAME
     # 开工先清 —— 上一次可能崩在中途留了半份副本。
@@ -627,10 +633,12 @@ def migrate_user_data(app_name: str = "FluentYTDL") -> bool:
                 try:
                     _copy_item(src, dst)
                 except OSError as e:
-                    _record_failure(f"复制 {item}（来自 {tag}）失败: {e}")
+                    _record_failure(english("复制 {0}（来自 {1}）失败: {2}", item, tag, e))
                     continue
                 if not _verify_copy(src, dst):
-                    _record_failure(f"{item}（来自 {tag}）副本校验未通过，该候选不参与裁决")
+                    _record_failure(
+                        english("{0}（来自 {1}）副本校验未通过，该候选不参与裁决", item, tag)
+                    )
                     _discard(dst)
                     continue
                 per_item[tag] = dst
@@ -666,7 +674,7 @@ def migrate_user_data(app_name: str = "FluentYTDL") -> bool:
             keep_losers = item in _CONFLICT_KEPT_ITEMS
 
             if winner_tag == "dest":
-                _record(f"{item}: 目的地已是最新，保持不动")
+                _record(english("{0}: 目的地已是最新，保持不动", item))
                 if keep_losers:
                     for tag, staged_path in per_tag.items():
                         _preserve_loser(staged_path, new_dir, tag, item, dest_path)
@@ -677,14 +685,14 @@ def migrate_user_data(app_name: str = "FluentYTDL") -> bool:
             # 会把用户目的地里那份直接吃掉 —— 而它可能是回滚后旧版写下的真数据。
             if dest_path.exists() and keep_losers:
                 if not _preserve_loser(dest_path, new_dir, "dest", item, per_tag[winner_tag]):
-                    _record(f"{item}: 无法保留目的地原有副本，本项跳过（下次启动重试）")
+                    _record(english("{0}: 无法保留目的地原有副本，本项跳过（下次启动重试）", item))
                     continue
             try:
                 _install_item(per_tag[winner_tag], dest_path)
                 changed = True
-                _record(f"{item}: 采用来自 {winner_tag} 的版本")
+                _record(english("{0}: 采用来自 {1} 的版本", item, winner_tag))
             except OSError as e:
-                _record_failure(f"安装 {item}（来自 {winner_tag}）失败: {e}")
+                _record_failure(english("安装 {0}（来自 {1}）失败: {2}", item, winner_tag, e))
                 continue
             if keep_losers:
                 for tag, staged_path in per_tag.items():
@@ -708,14 +716,20 @@ def migrate_user_data(app_name: str = "FluentYTDL") -> bool:
             except OSError:
                 # Program Files 根写不进去很正常，best-effort。**不算失败** ——
                 # 它只是面包屑，不影响数据完整性，算进失败会让标记永远写不出来。
-                _record(f"无法在 {root} 写下 {MIGRATION_BREADCRUMB}（只读位置，可忽略）")
+                _record(
+                    english("无法在 {0} 写下 {1}（只读位置，可忽略）", root, MIGRATION_BREADCRUMB)
+                )
     finally:
         shutil.rmtree(tmp_root, ignore_errors=True)
 
     _MIGRATION_OK = not _MIGRATION_FAILURES
     if _MIGRATION_FAILURES:
         _record(
-            f"迁移有 {len(_MIGRATION_FAILURES)} 项失败，下次启动将重试（不写 {MIGRATION_MARKER}）"
+            english(
+                "迁移有 {0} 项失败，下次启动将重试（不写 {1}）",
+                len(_MIGRATION_FAILURES),
+                MIGRATION_MARKER,
+            )
         )
     # 冲突副本也是"动过东西"。`_preserve_loser()` 返回的是"已安全交代"，其中包含
     # 纯 no-op（落选者与胜者本就是同一份），所以不能拿它当"写过"用 —— 那会让每次
@@ -964,7 +978,10 @@ def locate_runtime_tool(*relative_candidates: str) -> Path:
 
     # not found
     raise FileNotFoundError(
-        f"工具未找到: {relative_candidates}. 请将相应可执行文件放入 'bin' 目录，或将其加入系统 PATH，或在设置中指定路径。"
+        english(
+            "工具未找到: {0}. 请将相应可执行文件放入 'bin' 目录，或将其加入系统 PATH，或在设置中指定路径。",
+            relative_candidates,
+        )
     )
 
 

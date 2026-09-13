@@ -15,7 +15,7 @@ diff —— 真正的译文改动被埋在里面，没人看得见。
 所以这里改成**按字节区间原地替换**：只重写要改的那一段 ``<translation>…</translation>``，
 文件其余部分逐字节保持原样。代价是依赖 .ts 的规整格式，收益是 diff 里只剩真正改了的行。
 
-依赖的格式前提（已对仓库内四个 .ts 全量核对，并由 tests/test_i18n_integrity.py 守住）：
+依赖的格式前提（已对仓库内中英文 .ts 全量核对，并由 tests/test_i18n_integrity.py 守住）：
 
 * 元素集合仅 ``TS/context/name/message/location/source/extracomment/translation``；
 * 无 ``numerus="yes"`` / ``<numerusform>``（复数形式会让"一个 translation 一段文本"不成立）；

@@ -1,14 +1,10 @@
-import hashlib
 import json
 import os
 import shutil
-import ssl
 import subprocess
 import sys
 import tempfile
 import time
-import urllib.error
-import urllib.request
 import zipfile
 from pathlib import Path
 
@@ -53,19 +49,6 @@ def print_message(msg_type: str, **kwargs):
 def print_error(code: str, detail: str = ""):
     """`code` 给父进程和日志，`detail` 只用于日志排查。"""
     print_message("error", code=code, msg=code, detail=detail)
-
-
-def build_opener(
-    proxy_url: str | None = None, proxy_mode: str | None = None
-) -> urllib.request.OpenerDirector:
-    handlers = []
-    if proxy_mode in ("http", "socks5") and proxy_url:
-        proxies = {"http": proxy_url, "https": proxy_url}
-        handlers.append(urllib.request.ProxyHandler(proxies))
-
-    ctx = ssl.create_default_context()
-    handlers.append(urllib.request.HTTPSHandler(context=ctx))
-    return urllib.request.build_opener(*handlers)
 
 
 def kill_locking_processes(file_path: Path):
@@ -212,51 +195,28 @@ def run_worker():
     tmp_path = None
 
     try:
-        opener = build_opener(proxy_url, proxy_mode)
-        req = urllib.request.Request(
-            url, headers={"User-Agent": "FluentYTDL/DependencyManagerWorker"}
+        from .update_transport import Transport, UpdateError
+
+        fd, tmp_path = tempfile.mkstemp()
+        os.close(fd)
+        transport = Transport(
+            proxy_mode or "off",
+            proxy_url or "",
+            progress=lambda attempt: print_message("status", msg="retrying", attempt=attempt),
         )
-
-        with opener.open(req, timeout=30) as r:
-            total_length_str = r.headers.get("content-length")
-            total_length = int(total_length_str) if total_length_str else 0
-
-            fd, tmp_path = tempfile.mkstemp()
-            os.close(fd)
-
-            last_emit_time = 0
-            last_emit_percent = -1
-
-            sha256_hash = hashlib.sha256()
-
-            with open(tmp_path, "wb") as f:
-                downloaded = 0
-                while True:
-                    chunk = r.read(8192)
-                    if not chunk:
-                        break
-                    f.write(chunk)
-                    sha256_hash.update(chunk)
-                    downloaded += len(chunk)
-                    if total_length > 0:
-                        percent = int(downloaded * 100 / total_length)
-                        current_time = time.time()
-                        if percent != last_emit_percent:
-                            if (
-                                (percent - last_emit_percent >= 1)
-                                or (current_time - last_emit_time > 0.1)
-                                or percent == 100
-                            ):
-                                print_message("progress", percent=percent)
-                                last_emit_percent = percent
-                                last_emit_time = current_time
-
-            if expected_sha256:
-                actual_sha256 = sha256_hash.hexdigest()
-                if actual_sha256.upper() != expected_sha256.upper():
-                    raise HashMismatch(
-                        f"expected {expected_sha256[:16]}…, got {actual_sha256[:16]}…"
-                    )
+        try:
+            transport.download(
+                url,
+                Path(tmp_path),
+                expected_sha256,
+                lambda percent: print_message("progress", percent=percent),
+            )
+        except UpdateError as error:
+            if error.code == "update_hash":
+                raise HashMismatch(error.code) from error
+            raise
+        finally:
+            transport.session.close()
 
         dest_dir = target_exe.parent
         dest_dir.mkdir(parents=True, exist_ok=True)

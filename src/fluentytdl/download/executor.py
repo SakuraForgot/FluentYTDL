@@ -21,6 +21,9 @@ from typing import Any, Protocol
 
 from loguru import logger
 
+from fluentytdl.utils.localized_log import log_text
+from fluentytdl.utils.message_catalog import english
+
 from ..diagnostics.collect import DiagnosticLineCollector
 from ..models.errors import YtDlpExecutionError
 from ..observability import (
@@ -227,7 +230,7 @@ def determine_merge_container(
     if merge_fmt:
         # 字幕兼容性检查
         if ydl_opts.get("embedsubtitles") and merge_fmt == "webm":
-            logger.info("[Executor] 字幕嵌入 + webm → 强制 mkv")
+            log_text(logger, "info", "[Executor] 字幕嵌入 + webm → 强制 mkv")
             return "mkv"
         return merge_fmt
 
@@ -235,7 +238,7 @@ def determine_merge_container(
     computed = choose_lossless_merge_container(video_ext, audio_ext)
     if computed:
         if ydl_opts.get("embedsubtitles") and computed not in _SUBTITLE_COMPATIBLE_CONTAINERS:
-            logger.info("[Executor] 字幕嵌入 + {} → 强制 mkv", computed)
+            log_text(logger, "info", "[Executor] 字幕嵌入 + {} → 强制 mkv", computed)
             return "mkv"
         return computed
 
@@ -369,7 +372,7 @@ class DownloadExecutor:
         """yt-dlp 原生管线 — 与现有 _download_via_exe() 等效。"""
         exe = resolve_yt_dlp_exe()
         if exe is None:
-            raise RuntimeError("yt-dlp 可执行文件未找到")
+            raise RuntimeError(english("yt-dlp 可执行文件未找到"))
 
         ydl_opts["skip_unavailable_fragments"] = True
 
@@ -432,6 +435,12 @@ class DownloadExecutor:
         from ..auth.cookie_runfile import cookie_runfile
 
         self._cookie_stack = ExitStack()
+        from ..utils.url_router import UrlRouter
+        from ..utils.youtube_request import enforce_cookie_mode
+
+        if UrlRouter.detect_platform(url) == "youtube":
+            ydl_opts = dict(ydl_opts)
+            enforce_cookie_mode(ydl_opts)
         _run_cf = self._cookie_stack.enter_context(cookie_runfile(ydl_opts.get("cookiefile")))
         run_opts = {**ydl_opts, "cookiefile": _run_cf}
         cmd += ydl_opts_to_cli_args(run_opts)
@@ -486,6 +495,9 @@ class DownloadExecutor:
         # 规则驱动的自动重试会复用同一个 executor，上一轮的警告不能算进这一轮的诊断
         self.diag_lines.clear()
         self.raw_lines.clear()
+        from ..observability.warnings import WarningSummary
+
+        warnings = WarningSummary(current_flow())
         # 预期总大小，按文件名分流累计，用于 rc != 0 时的完整性校验。
         # 每个流（视频/音频各一次独立下载）在**每个 tick** 都会重报自己的 total_bytes，
         # 所以这里按文件名**赋值**而不是 `+=`，最后求和。
@@ -507,7 +519,7 @@ class DownloadExecutor:
         for raw in _iter_process_output(proc.stdout):
             if cancel_check():
                 self._terminate_proc()
-                raise RuntimeError("用户取消下载")
+                raise RuntimeError(english("用户取消下载"))
 
             line = _decode_line(raw)
             if not line:
@@ -588,7 +600,8 @@ class DownloadExecutor:
                 # 去掉 `--no-warnings` 之后这里才真的有东西可收。字幕限流 / PO Token
                 # 缺失都是 WARNING 级，且**不会**让任务失败 —— 不落到日志文件和
                 # `diag_lines` 里就等于彻底丢掉，用户只剩一句"未找到字幕文件"。
-                logger.warning("[yt-dlp] {}", parsed.message or line)
+                log_warning = logger.warning if warnings.feed(line) else logger.debug
+                log_warning("[yt-dlp] {}", parsed.message or line)
                 if parsed.message:
                     on_status("⚠️ " + parsed.message)
 
@@ -667,6 +680,7 @@ class DownloadExecutor:
                         # 丢掉，于是下游各自按后缀再猜一遍（那正是"少删误删"的根因）。
                         on_file_created(p, parsed.role)
 
+        warnings.finish()
         rc = proc.wait()
         self._proc = None
         # 子进程已退出，yt-dlp 的 cookie 回写（若有）已落在运行副本上——现在删掉它。
@@ -721,7 +735,9 @@ class DownloadExecutor:
             if is_valid and expected_total_bytes > 0 and actual_size > 0:
                 ratio = actual_size / expected_total_bytes
                 if ratio < 0.5:
-                    logger.warning(
+                    log_text(
+                        logger,
+                        "warning",
                         "文件大小 ({}) 仅为预期大小 ({}) 的 {:.0%}，判定为不完整下载",
                         actual_size,
                         expected_total_bytes,
@@ -732,9 +748,10 @@ class DownloadExecutor:
                     # 阈值刻意仍留 0.5：容器开销让合并产物与分流之和有正常偏差，调高会
                     # 误杀好文件。0.5–0.9 这段是"可疑但不判失败"——丢一条音轨通常只差
                     # 5-10%，落在这里。只记录，不改判定语义。
-                    logger.warning(
-                        "文件大小 ({}) 为预期 ({}) 的 {:.0%}，低于预期但仍判定为有效"
-                        "（预期由 {} 个流累计）",
+                    log_text(
+                        logger,
+                        "warning",
+                        "文件大小 ({}) 为预期 ({}) 的 {:.0%}，低于预期但仍判定为有效（预期由 {} 个流累计）",
                         actual_size,
                         expected_total_bytes,
                         ratio,
@@ -759,7 +776,9 @@ class DownloadExecutor:
             if is_valid:
                 if not output_path and valid_path_found:
                     output_path = valid_path_found
-                logger.warning(
+                log_text(
+                    logger,
+                    "warning",
                     "yt-dlp 退出码 {} (非零)，但输出文件有效 ({}, {:.1f} KB)。忽略错误。",
                     rc,
                     output_path,
@@ -881,7 +900,7 @@ class DownloadExecutor:
         """用 yt-dlp --dump-single-json 提取流 URL。"""
         exe = resolve_yt_dlp_exe()
         if exe is None:
-            raise RuntimeError("yt-dlp 可执行文件未找到")
+            raise RuntimeError(english("yt-dlp 可执行文件未找到"))
 
         cmd: list[str] = [str(exe), "--ignore-config", "--no-warnings", "-J"]
 
@@ -947,15 +966,17 @@ class DownloadExecutor:
         log_pot_from_output(stderr, stage="Download")
 
         if cancel_check():
-            raise RuntimeError("用户取消下载")
+            raise RuntimeError(english("用户取消下载"))
 
         if proc.returncode != 0:
-            raise RuntimeError(f"yt-dlp 信息提取失败 (rc={proc.returncode}): {stderr[:500]}")
+            raise RuntimeError(
+                english("yt-dlp 信息提取失败 (rc={0}): {1}", proc.returncode, stderr[:500])
+            )
 
         try:
             info = json.loads(stdout)
         except json.JSONDecodeError as e:
-            raise RuntimeError(f"yt-dlp JSON 解析失败: {e}") from e
+            raise RuntimeError(english("yt-dlp JSON 解析失败: {0}", e)) from e
 
         return self._parse_stream_info(info, check_protocol=check_protocol)
 
@@ -986,7 +1007,7 @@ class DownloadExecutor:
                 # Check protocol compatibility for Aria2
                 proto = info.get("protocol", "")
                 if check_protocol and proto in ("m3u8", "m3u8_native", "rtsp"):
-                    raise RuntimeError(f"流协议 {proto} 需要 yt-dlp native 处理")
+                    raise RuntimeError(english("流协议 {0} 需要 yt-dlp native 处理", proto))
 
                 vcodec = info.get("vcodec")
                 acodec = info.get("acodec")
@@ -1009,7 +1030,7 @@ class DownloadExecutor:
         for fmt in requested_formats:
             proto = fmt.get("protocol", "")
             if check_protocol and proto in ("m3u8", "m3u8_native", "rtsp"):
-                raise RuntimeError(f"流协议 {proto} 需要 yt-dlp native 处理")
+                raise RuntimeError(english("流协议 {0} 需要 yt-dlp native 处理", proto))
 
             # 提取信息
             stream_url = fmt.get("url", "")

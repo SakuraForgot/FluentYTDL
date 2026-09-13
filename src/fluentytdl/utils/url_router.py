@@ -22,7 +22,10 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 import requests
-from PySide6.QtCore import QObject, QThread, Signal
+from PySide6.QtCore import QT_TRANSLATE_NOOP, QObject, QThread, Signal
+
+from fluentytdl.utils.localized_log import log_text
+from fluentytdl.utils.ui_text import tr_text
 
 from ..core.config_manager import config_manager
 from ..utils.logger import logger
@@ -66,22 +69,70 @@ class UrlRouter:
 
     # 明确拒绝的类型 (按优先级排列)
     _X_REJECT_PATTERNS = [
-        (re.compile(r"/i/spaces/\w+", re.I), "spaces", "X Spaces 暂不支持下载"),
-        (re.compile(r"/i/lists/\d+", re.I), "list", "X 列表暂不支持下载"),
-        (re.compile(r"/i/communities/", re.I), "community", "X 社区暂不支持下载"),
-        (re.compile(r"/i/bookmarks", re.I), "bookmarks", "X 书签暂不支持下载"),
-        (re.compile(r"/i/moments/", re.I), "moments", "X Moments 暂不支持下载"),
-        (re.compile(r"/i/grok", re.I), "grok", "此链接非内容页面"),
-        (re.compile(r"/search\?", re.I), "search", "X 搜索结果暂不支持下载"),
-        (re.compile(r"/explore", re.I), "explore", "X 探索页暂不支持下载"),
-        (re.compile(r"/hashtag/", re.I), "hashtag", "X 话题标签暂不支持下载"),
-        (re.compile(r"/notifications", re.I), "notifications", "此链接非内容页面"),
-        (re.compile(r"/messages", re.I), "messages", "此链接非内容页面"),
-        (re.compile(r"/settings/", re.I), "settings", "此链接非内容页面"),
+        (
+            re.compile(r"/i/spaces/\w+", re.I),
+            "spaces",
+            QT_TRANSLATE_NOOP("RuntimeText", "X Spaces 暂不支持下载"),
+        ),
+        (
+            re.compile(r"/i/lists/\d+", re.I),
+            "list",
+            QT_TRANSLATE_NOOP("RuntimeText", "X 列表暂不支持下载"),
+        ),
+        (
+            re.compile(r"/i/communities/", re.I),
+            "community",
+            QT_TRANSLATE_NOOP("RuntimeText", "X 社区暂不支持下载"),
+        ),
+        (
+            re.compile(r"/i/bookmarks", re.I),
+            "bookmarks",
+            QT_TRANSLATE_NOOP("RuntimeText", "X 书签暂不支持下载"),
+        ),
+        (
+            re.compile(r"/i/moments/", re.I),
+            "moments",
+            QT_TRANSLATE_NOOP("RuntimeText", "X Moments 暂不支持下载"),
+        ),
+        (
+            re.compile(r"/i/grok", re.I),
+            "grok",
+            QT_TRANSLATE_NOOP("RuntimeText", "此链接非内容页面"),
+        ),
+        (
+            re.compile(r"/search\?", re.I),
+            "search",
+            QT_TRANSLATE_NOOP("RuntimeText", "X 搜索结果暂不支持下载"),
+        ),
+        (
+            re.compile(r"/explore", re.I),
+            "explore",
+            QT_TRANSLATE_NOOP("RuntimeText", "X 探索页暂不支持下载"),
+        ),
+        (
+            re.compile(r"/hashtag/", re.I),
+            "hashtag",
+            QT_TRANSLATE_NOOP("RuntimeText", "X 话题标签暂不支持下载"),
+        ),
+        (
+            re.compile(r"/notifications", re.I),
+            "notifications",
+            QT_TRANSLATE_NOOP("RuntimeText", "此链接非内容页面"),
+        ),
+        (
+            re.compile(r"/messages", re.I),
+            "messages",
+            QT_TRANSLATE_NOOP("RuntimeText", "此链接非内容页面"),
+        ),
+        (
+            re.compile(r"/settings/", re.I),
+            "settings",
+            QT_TRANSLATE_NOOP("RuntimeText", "此链接非内容页面"),
+        ),
         (
             re.compile(r"/(?:following|followers|verified_followers)", re.I),
             "social",
-            "此链接非内容页面",
+            QT_TRANSLATE_NOOP("RuntimeText", "此链接非内容页面"),
         ),
         # 用户主页/媒体页 (最后匹配，因为路径最短)
         (
@@ -90,7 +141,7 @@ class UrlRouter:
                 re.I,
             ),
             "profile",
-            "X 平台用户主页暂不支持下载，请粘贴具体推文链接",
+            QT_TRANSLATE_NOOP("RuntimeText", "X 平台用户主页暂不支持下载，请粘贴具体推文链接"),
         ),
     ]
 
@@ -159,9 +210,9 @@ class UrlRouter:
                 normalized_url="",
                 platform="unknown",
                 link_type="unknown",
-                link_type_display="未知链接",
+                link_type_display=tr_text("未知链接"),
                 accepted=False,
-                rejection_reason="链接不能为空",
+                rejection_reason=tr_text("链接不能为空"),
                 cookie_platform=None,
             )
 
@@ -174,9 +225,9 @@ class UrlRouter:
                     normalized_url=url,
                     platform="twitter",
                     link_type="t.co",
-                    link_type_display="t.co 短链接",
+                    link_type_display=tr_text("t.co 短链接"),
                     accepted=False,
-                    rejection_reason="短链接展开失败，请手动在浏览器打开复制完整链接",
+                    rejection_reason=tr_text("短链接展开失败，请手动在浏览器打开复制完整链接"),
                     cookie_platform=None,
                 )
             url = expanded
@@ -194,9 +245,9 @@ class UrlRouter:
                 normalized_url=url,
                 platform="unknown",
                 link_type="unknown",
-                link_type_display="未知链接",
+                link_type_display=tr_text("未知链接"),
                 accepted=False,
-                rejection_reason="不支持的平台",
+                rejection_reason=tr_text("不支持的平台"),
                 cookie_platform=None,
             )
 
@@ -248,9 +299,9 @@ class UrlRouter:
                     normalized_url=normalized_url,
                     platform="twitter",
                     link_type=link_type,
-                    link_type_display="不支持的链接",
+                    link_type_display=tr_text("不支持的链接"),
                     accepted=False,
-                    rejection_reason=reason,
+                    rejection_reason=tr_text(reason),
                     cookie_platform="twitter",
                 )
 
@@ -261,7 +312,7 @@ class UrlRouter:
                 normalized_url=normalized_url,
                 platform="twitter",
                 link_type="tweet_video",
-                link_type_display="𝕏 推文视频",
+                link_type_display=tr_text("𝕏 推文视频"),
                 accepted=True,
                 rejection_reason=None,
                 cookie_platform="twitter",
@@ -273,26 +324,26 @@ class UrlRouter:
             normalized_url=normalized_url,
             platform="twitter",
             link_type="unknown",
-            link_type_display="未知页面",
+            link_type_display=tr_text("未知页面"),
             accepted=False,
-            rejection_reason="无法识别该 X 平台链接类型",
+            rejection_reason=tr_text("无法识别该 X 平台链接类型"),
             cookie_platform="twitter",
         )
 
     def _process_youtube(self, original_url: str, url: str) -> UrlProcessResult:
         """处理 YouTube 链接 (由于项目原本支持良好，此处仅作放行)"""
         link_type = "video"
-        display = "🎬 YouTube 视频"
+        display = tr_text("🎬 YouTube 视频")
 
         if "playlist" in url.lower():
             link_type = "playlist"
-            display = "🎬 YouTube 播放列表"
+            display = tr_text("🎬 YouTube 播放列表")
         elif "@" in url or "/channel/" in url or "/c/" in url or "/user/" in url:
             link_type = "channel"
-            display = "🎬 YouTube 频道"
+            display = tr_text("🎬 YouTube 频道")
         elif "/shorts/" in url.lower():
             link_type = "shorts"
-            display = "🎬 YouTube 短视频"
+            display = tr_text("🎬 YouTube 短视频")
 
         return UrlProcessResult(
             original_url=original_url,
@@ -319,7 +370,7 @@ class UrlRouter:
             )
             return resp.url
         except (requests.Timeout, requests.ConnectionError, requests.RequestException) as e:
-            logger.warning(f"[UrlRouter] t.co 展开失败: {e}")
+            log_text(logger, "warning", "[UrlRouter] t.co 展开失败: {0}", e)
             return None
 
     def _get_proxies_from_config(self) -> dict | None:

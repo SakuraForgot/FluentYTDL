@@ -28,6 +28,8 @@ import os
 import time
 from pathlib import Path
 
+from fluentytdl.utils.message_catalog import english
+
 READY_FILENAME = ".update_ready"
 
 # 超过这个年龄的 READY 文件一律视为陈旧残留（与 updater.py::STALE_READY_MAX_AGE 同值）。
@@ -90,7 +92,7 @@ def _cleanup_stale_ready(ready_path: Path) -> None:
         if time.time() - ready_path.stat().st_mtime < STALE_READY_MAX_AGE:
             return
         ready_path.unlink(missing_ok=True)
-        _debug(f"已清理陈旧的 {READY_FILENAME}")
+        _debug(english("已清理陈旧的 {0}", READY_FILENAME))
     except OSError:
         pass
 
@@ -111,9 +113,9 @@ def _commit_migration() -> None:
         from .paths import commit_migration_marker
 
         if commit_migration_marker():
-            _debug("已写出数据迁移完成标记")
+            _debug(english("已写出数据迁移完成标记"))
     except Exception as e:
-        _debug(f"提交迁移标记失败，下次启动将重试: {e}")
+        _debug(english("提交迁移标记失败，下次启动将重试: {0}", e))
 
 
 def finalize_startup() -> None:
@@ -129,7 +131,7 @@ def finalize_startup() -> None:
         ready_dir = _ready_dir()
         ready_path = ready_dir / READY_FILENAME
     except Exception as e:  # pragma: no cover - 路径推导失败属于环境异常
-        _debug(f"无法确定 {READY_FILENAME} 落点，跳过: {e}")
+        _debug(english("无法确定 {0} 落点，跳过: {1}", READY_FILENAME, e))
         _commit_migration()
         return
 
@@ -144,10 +146,10 @@ def finalize_startup() -> None:
     try:
         ready_dir.mkdir(parents=True, exist_ok=True)
         _write_ready_file(ready_path, token)
-        _debug(f"已写出 {READY_FILENAME} (pid={os.getpid()}) → {ready_path}")
+        _debug(english("已写出 {0} (pid={1}) → {2}", READY_FILENAME, os.getpid(), ready_path))
     except OSError as e:
         # 写不进去 → updater 会在 90s 后判超时并回滚。回滚本身是安全的
         # （旧版会被重新启动），所以这里只记录，不抛。
-        _debug(f"写出 {READY_FILENAME} 失败，updater 将按超时回滚: {e}")
+        _debug(english("写出 {0} 失败，updater 将按超时回滚: {1}", READY_FILENAME, e))
 
     _commit_migration()

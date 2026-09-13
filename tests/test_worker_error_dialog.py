@@ -84,11 +84,11 @@ def test_sabr_dialog_shows_pot_button_and_no_cookie_button(host):
 
 
 def test_sabr_dialog_text_carries_the_corrected_verdict(host):
-    """标题/正文取自 catalog，"换档位没有用"必须出现在用户眼前。"""
+    """标题/正文取自 catalog，"仅切换画质不能解决缺少直接链接的问题"必须出现在用户眼前。"""
     dlg = _dialog(host, SABR_OUTPUT, phase="parse")
 
     assert "YouTube" in dlg.title_label.text()
-    assert "换档位没有用" in dlg.content_label.text()
+    assert "仅切换画质不能解决缺少直接链接的问题" in dlg.content_label.text()
 
 
 def test_dialog_detail_box_states_the_phase(host):

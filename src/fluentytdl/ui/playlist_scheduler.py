@@ -23,6 +23,8 @@ from collections.abc import Callable
 
 from PySide6.QtCore import QObject, QTimer, Signal, Slot
 
+from fluentytdl.utils.localized_log import log_text
+
 from ..download.extract_manager import AsyncExtractManager
 from ..utils.logger import logger
 from ..youtube.youtube_service import YoutubeServiceOptions
@@ -353,7 +355,9 @@ class PlaylistScheduler(QObject):
             try:
                 row = int(task_id)
             except (ValueError, TypeError):
-                logger.warning("PlaylistScheduler: 未知 task_id=%r (finished)", task_id)
+                log_text(
+                    logger, "warning", "PlaylistScheduler: 未知 task_id=%r (finished)", task_id
+                )
                 return
 
         self._running.discard(row)
@@ -370,7 +374,7 @@ class PlaylistScheduler(QObject):
             try:
                 row = int(task_id)
             except (ValueError, TypeError):
-                logger.warning("PlaylistScheduler: 未知 task_id=%r (error)", task_id)
+                log_text(logger, "warning", "PlaylistScheduler: 未知 task_id=%r (error)", task_id)
                 return
 
         self._running.discard(row)

@@ -382,7 +382,8 @@ def test_transition_out_of_a_sealed_state_is_a_warning():
     finally:
         logger.remove(sink_id)
 
-    assert seen == [("INFO", "completed"), ("WARNING", "downloading")], seen
+    assert seen == [("INFO", "completed")], seen
+    assert worker._last_transition_state == "completed"
 
 
 # ── 硬规则 2：diagnosis 只属于失败边界 ───────────────────────

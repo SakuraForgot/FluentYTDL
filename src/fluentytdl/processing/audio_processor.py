@@ -12,9 +12,14 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
+
+from PySide6.QtCore import QT_TRANSLATE_NOOP
+
+from fluentytdl.utils.localized_log import log_text
+from fluentytdl.utils.ui_text import tr_text
 
 from ..core.config_manager import config_manager
 from ..utils.logger import logger
@@ -43,8 +48,8 @@ class AudioPresetManager:
     BUILTIN_PRESETS: dict[str, AudioPreset] = {
         "mp3_320": AudioPreset(
             id="mp3_320",
-            name="MP3 320K (推荐)",
-            description="高品质 MP3，兼容性最佳",
+            name=QT_TRANSLATE_NOOP("RuntimeText", "MP3 320K (推荐)"),
+            description=QT_TRANSLATE_NOOP("RuntimeText", "高品质 MP3，兼容性最佳"),
             format="bestaudio/best",
             codec="mp3",
             quality="320K",
@@ -55,7 +60,7 @@ class AudioPresetManager:
         "mp3_192": AudioPreset(
             id="mp3_192",
             name="MP3 192K",
-            description="标准品质 MP3，体积较小",
+            description=QT_TRANSLATE_NOOP("RuntimeText", "标准品质 MP3，体积较小"),
             format="bestaudio/best",
             codec="mp3",
             quality="192K",
@@ -66,7 +71,7 @@ class AudioPresetManager:
         "mp3_v0": AudioPreset(
             id="mp3_v0",
             name="MP3 VBR V0",
-            description="VBR 最高品质 (~245kbps)",
+            description=QT_TRANSLATE_NOOP("RuntimeText", "VBR 最高品质 (~245kbps)"),
             format="bestaudio/best",
             codec="mp3",
             quality="0",  # VBR 等级
@@ -77,7 +82,7 @@ class AudioPresetManager:
         "aac_256": AudioPreset(
             id="aac_256",
             name="AAC 256K",
-            description="Apple/YouTube 原生格式",
+            description=QT_TRANSLATE_NOOP("RuntimeText", "Apple/YouTube 原生格式"),
             format="bestaudio[ext=m4a]/bestaudio/best",
             codec="aac",
             quality="256K",
@@ -87,8 +92,8 @@ class AudioPresetManager:
         ),
         "flac": AudioPreset(
             id="flac",
-            name="FLAC (无损)",
-            description="无损压缩，体积较大",
+            name=QT_TRANSLATE_NOOP("RuntimeText", "FLAC (无损)"),
+            description=QT_TRANSLATE_NOOP("RuntimeText", "无损压缩，体积较大"),
             format="bestaudio/best",
             codec="flac",
             quality="",  # 无损不需要比特率
@@ -99,7 +104,7 @@ class AudioPresetManager:
         "opus_128": AudioPreset(
             id="opus_128",
             name="Opus 128K",
-            description="现代编码，高效压缩",
+            description=QT_TRANSLATE_NOOP("RuntimeText", "现代编码，高效压缩"),
             format="bestaudio[ext=webm]/bestaudio/best",
             codec="opus",
             quality="128K",
@@ -109,8 +114,8 @@ class AudioPresetManager:
         ),
         "wav": AudioPreset(
             id="wav",
-            name="WAV (无压缩)",
-            description="原始音频，体积最大",
+            name=QT_TRANSLATE_NOOP("RuntimeText", "WAV (无压缩)"),
+            description=QT_TRANSLATE_NOOP("RuntimeText", "原始音频，体积最大"),
             format="bestaudio/best",
             codec="wav",
             quality="",
@@ -120,8 +125,8 @@ class AudioPresetManager:
         ),
         "best_original": AudioPreset(
             id="best_original",
-            name="保持原格式",
-            description="不转码，直接提取最佳音频流",
+            name=QT_TRANSLATE_NOOP("RuntimeText", "保持原格式"),
+            description=QT_TRANSLATE_NOOP("RuntimeText", "不转码，直接提取最佳音频流"),
             format="bestaudio/best",
             codec="",  # 不转码
             quality="",
@@ -134,17 +139,25 @@ class AudioPresetManager:
     @classmethod
     def get_preset(cls, preset_id: str) -> AudioPreset | None:
         """获取预设配置"""
-        return cls.BUILTIN_PRESETS.get(preset_id)
+        preset = cls.BUILTIN_PRESETS.get(preset_id)
+        return (
+            replace(preset, name=tr_text(preset.name), description=tr_text(preset.description))
+            if preset
+            else None
+        )
 
     @classmethod
     def get_all_presets(cls) -> list[AudioPreset]:
         """获取所有预设"""
-        return list(cls.BUILTIN_PRESETS.values())
+        return [
+            replace(p, name=tr_text(p.name), description=tr_text(p.description))
+            for p in cls.BUILTIN_PRESETS.values()
+        ]
 
     @classmethod
     def get_preset_names(cls) -> list[tuple[str, str]]:
         """获取预设 ID 和名称列表，用于 UI 下拉框"""
-        return [(p.id, p.name) for p in cls.BUILTIN_PRESETS.values()]
+        return [(p.id, tr_text(p.name)) for p in cls.BUILTIN_PRESETS.values()]
 
 
 class AudioProcessor:
@@ -288,12 +301,12 @@ class AudioProcessor:
         """
         ffmpeg = self._get_ffmpeg_path()
         if not ffmpeg:
-            logger.error("FFmpeg 未找到，无法进行音量标准化")
+            log_text(logger, "error", "FFmpeg 未找到，无法进行音量标准化")
             return False
 
         input_p = Path(input_path)
         if not input_p.exists():
-            logger.error(f"输入文件不存在: {input_path}")
+            log_text(logger, "error", "输入文件不存在: {0}", input_path)
             return False
 
         output_p = Path(output_path)
@@ -330,18 +343,18 @@ class AudioProcessor:
             )
 
             if result.returncode != 0:
-                logger.error(f"音量标准化失败: {result.stderr}")
+                log_text(logger, "error", "音量标准化失败: {0}", result.stderr)
                 return False
 
             if not output_p.exists():
-                logger.error(f"音量标准化未产出文件: {output_p}")
+                log_text(logger, "error", "音量标准化未产出文件: {0}", output_p)
                 return False
 
-            logger.info(f"音量标准化完成: {input_path} → {output_p}")
+            log_text(logger, "info", "音量标准化完成: {0} → {1}", input_path, output_p)
             return True
 
         except Exception as e:
-            logger.exception(f"音量标准化异常: {e}")
+            log_text(logger, "exception", "音量标准化异常: {0}", e)
             return False
 
     def embed_cover_art(self, audio_path: str, cover_path: str, output_path: str) -> bool:
@@ -360,14 +373,14 @@ class AudioProcessor:
         """
         ffmpeg = self._get_ffmpeg_path()
         if not ffmpeg:
-            logger.error("FFmpeg 未找到，无法嵌入封面")
+            log_text(logger, "error", "FFmpeg 未找到，无法嵌入封面")
             return False
 
         audio_p = Path(audio_path)
         cover_p = Path(cover_path)
 
         if not audio_p.exists() or not cover_p.exists():
-            logger.error("音频或封面文件不存在")
+            log_text(logger, "error", "音频或封面文件不存在")
             return False
 
         output_p = Path(output_path)
@@ -422,7 +435,7 @@ class AudioProcessor:
                     str(output_p),
                 ]
             else:
-                logger.warning(f"不支持为 {ext} 格式嵌入封面")
+                log_text(logger, "warning", "不支持为 {0} 格式嵌入封面", ext)
                 return False
 
             kwargs: dict[str, Any] = {}
@@ -445,18 +458,18 @@ class AudioProcessor:
             )
 
             if result.returncode != 0:
-                logger.error(f"封面嵌入失败: {result.stderr}")
+                log_text(logger, "error", "封面嵌入失败: {0}", result.stderr)
                 return False
 
             if not output_p.exists():
-                logger.error(f"封面嵌入未产出文件: {output_p}")
+                log_text(logger, "error", "封面嵌入未产出文件: {0}", output_p)
                 return False
 
-            logger.info(f"封面嵌入完成: {audio_path} → {output_p}")
+            log_text(logger, "info", "封面嵌入完成: {0} → {1}", audio_path, output_p)
             return True
 
         except Exception as e:
-            logger.exception(f"封面嵌入异常: {e}")
+            log_text(logger, "exception", "封面嵌入异常: {0}", e)
             return False
 
 

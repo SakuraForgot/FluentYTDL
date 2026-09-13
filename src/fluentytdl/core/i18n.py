@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import os
+
 from PySide6.QtCore import QCoreApplication, QLocale, QTranslator
 from qfluentwidgets import FluentTranslator
 
+from ..utils.language import normalize_language
 from .config_manager import config_manager
 
 
@@ -21,10 +24,8 @@ class I18nManager:
 
         lang_cfg = str(config_manager.get("app_language", "auto")).strip()
 
-        if lang_cfg == "auto" or not lang_cfg:
-            locale = QLocale.system()
-        else:
-            locale = QLocale(lang_cfg)
+        locale = QLocale(normalize_language(lang_cfg, QLocale.system().name()))
+        os.environ["FLUENTYTDL_UI_LANGUAGE"] = locale.name()
 
         QLocale.setDefault(locale)
 

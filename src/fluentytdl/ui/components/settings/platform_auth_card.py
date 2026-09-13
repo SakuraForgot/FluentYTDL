@@ -49,7 +49,7 @@ class PlatformAuthExpandCard(ExpandGroupSettingCard):
             self.tr("新增账号"),
             FluentIcon.ADD,
             self.tr("新增 WebView2 账号"),
-            self.tr(f"创建新的 {title} 隔离存储账号"),
+            self.tr("创建新的 {0} 隔离存储账号").format(title),
         )
         self.addAccountCard.clicked.connect(lambda: self.addAccountClicked.emit(self.platform))
 

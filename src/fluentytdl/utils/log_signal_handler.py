@@ -6,8 +6,13 @@
 
 from __future__ import annotations
 
+import threading
+from collections import deque
+
 from loguru import logger
-from PySide6.QtCore import QObject, Signal
+from PySide6.QtCore import QObject, QTimer, Signal
+
+from .log_runtime import health_snapshot, record_failure
 
 
 class LogSignalHandler(QObject):
@@ -33,8 +38,11 @@ class LogSignalHandler(QObject):
 
     # 信号: (时间, 级别, 模块, 消息)
     log_received = Signal(str, str, str, str)
+    display_record_received = Signal(dict)
     # 信号: Observability Event 的扁平 dict（含本处补的 `_time` / `_level`）
     event_received = Signal(dict)
+    records_received = Signal(list)
+    health_changed = Signal(dict)
 
     _instance: LogSignalHandler | None = None
 
@@ -51,6 +59,25 @@ class LogSignalHandler(QObject):
         super().__init__()
         self._sink_id: int | None = None
         self._initialized = True
+        self._pending = deque()
+        self._pending_lock = threading.Lock()
+        self._timer = QTimer(self)
+        self._timer.setInterval(75)
+        self._timer.timeout.connect(self._drain)
+        self._last_health = None
+        self._clients = 0
+        self._release_sink = False
+
+    def acquire(self):
+        if self._clients == 0:
+            self._release_sink = not self.is_installed
+        self._clients += 1
+        self.install()
+
+    def release(self):
+        self._clients = max(0, self._clients - 1)
+        if self._clients == 0 and self._release_sink:
+            self.uninstall()
 
     def install(self, level: str = "DEBUG") -> None:
         """安装到 loguru
@@ -61,11 +88,13 @@ class LogSignalHandler(QObject):
         if self._sink_id is not None:
             return  # 已安装
 
+        self._timer.start()
         self._sink_id = logger.add(
             self._emit_log,
             level=level,
             format="{message}",  # 我们自己解析 record
             enqueue=True,  # 异步
+            diagnose=False,
         )
 
     def uninstall(self) -> None:
@@ -76,27 +105,71 @@ class LogSignalHandler(QObject):
             except ValueError:
                 pass  # sink 已被移除
             self._sink_id = None
+            self._timer.stop()
+            with self._pending_lock:
+                self._pending.clear()
 
     def _emit_log(self, message) -> None:
         """loguru sink 回调"""
         record = message.record
 
-        time_str = record["time"].strftime("%H:%M:%S")
-        level = record["level"].name
-        module = record.get("name", "") or ""
-        msg = record["message"]
+        extra = record["extra"]
+        payload = dict(extra.get("localized") or {})
+        payload.update(
+            id=extra.get("record_id", payload.get("id")),
+            time=record["time"].isoformat(),
+            _ts=record["time"].timestamp(),
+            level=record["level"].name,
+            module=record.get("name") or "",
+            raw=record["message"],
+            session=extra.get("session"),
+            origin=extra.get("origin"),
+            event=extra.get("fytdl"),
+        )
+        payload["exception"] = (extra.get("display_record") or {}).get("exception", "")
+        with self._pending_lock:
+            if len(self._pending) >= 4000:
+                # Only the display queue is lossy. Disk sinks are independent.
+                victim = next(
+                    (
+                        i
+                        for i, r in enumerate(self._pending)
+                        if (r.get("event") or {}).get("kind") not in ("diagnosis", "outcome")
+                        and r["level"] not in ("ERROR", "CRITICAL")
+                    ),
+                    0,
+                )
+                del self._pending[victim]
+                record_failure("display_dropped")
+            self._pending.append(payload)
 
-        self.log_received.emit(time_str, level, module, msg)
-
-        # 结构化事件另发一路。`_time` / `_level` 带下划线前缀，标明它们是**本处补的**
-        # 展示辅助字段，不是事件字段本身（事件字段的封闭集合在 `observability/events.py`）。
-        # 整段吞异常：日志转发绝不能把业务线程绊倒。
-        try:
-            payload = record["extra"].get("fytdl")
-            if isinstance(payload, dict):
-                self.event_received.emit(dict(payload, _time=time_str, _level=level))
-        except Exception:
-            pass
+    def _drain(self):
+        with self._pending_lock:
+            batch = [self._pending.popleft() for _ in range(min(150, len(self._pending)))]
+        if batch:
+            self.records_received.emit(batch)
+        # Legacy consumers keep their original signals; the viewer uses batches.
+        for record in batch:
+            if record.get("message_id"):
+                self.display_record_received.emit(record)
+            else:
+                self.log_received.emit(
+                    record["time"], record["level"], record["module"], record["raw"]
+                )
+            if isinstance(record.get("event"), dict):
+                self.event_received.emit(
+                    dict(
+                        record["event"],
+                        _event_id=record["id"],
+                        _ts=record["_ts"],
+                        _time=record["time"],
+                        _level=record["level"],
+                    )
+                )
+        health = health_snapshot()
+        if health != self._last_health:
+            self._last_health = health
+            self.health_changed.emit(health)
 
     @property
     def is_installed(self) -> bool:

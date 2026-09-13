@@ -18,8 +18,9 @@ from qfluentwidgets import (
     ProgressBar,
     PushButton,
     SubtitleLabel,
-    TextEdit,
 )
+
+from fluentytdl.utils.ui_text import tr_text
 
 from ....core.component_update_manager import component_update_manager
 from ....core.config_manager import config_manager
@@ -41,9 +42,9 @@ class UpdateDialog(MessageBoxBase):
         version = update_info.get("version", "?")
         is_prerelease = update_info.get("is_prerelease", False)
         if is_prerelease:
-            title_text = f"发现预发布版本 {version}"
+            title_text = tr_text("发现预发布版本 {0}", version)
         else:
-            title_text = f"发现新版本 {version}"
+            title_text = tr_text("发现新版本 {0}", version)
 
         self.titleLabel = SubtitleLabel(title_text, self)
         self.viewLayout.addWidget(self.titleLabel)
@@ -57,7 +58,9 @@ class UpdateDialog(MessageBoxBase):
             self.viewLayout.addWidget(self.preNotice)
 
         # 更新日志
-        self.changelog = TextEdit(self)
+        from ..common.announcement_markdown import AnnouncementMarkdown
+
+        self.changelog = AnnouncementMarkdown(self)
         self.changelog.setReadOnly(True)
         self.changelog.setMarkdown(update_info.get("changelog") or self.tr("暂无更新说明"))
         self.changelog.setMaximumHeight(250)
@@ -108,7 +111,7 @@ class UpdateDialog(MessageBoxBase):
 
     def _on_progress(self, percent: int) -> None:
         self.progressBar.setValue(percent)
-        self.progressLabel.setText(f"正在下载更新... {percent}%")
+        self.progressLabel.setText(tr_text("正在下载更新... {0}%", percent))
 
     def _on_downloaded(self, path: str) -> None:
         """归档就绪 —— 本对话框的职责到此结束。
@@ -130,8 +133,8 @@ class UpdateDialog(MessageBoxBase):
 
     def _on_skip_clicked(self) -> None:
         ver = self.update_info.get("version") or ""
-        # 仅 stable 通道支持自动更新，统一使用 skipped_stable_version
-        config_manager.set("skipped_stable_version", ver)
+        channel = self.update_info.get("channel", component_update_manager.get_update_channel())
+        config_manager.set(f"skipped_{channel}_version", ver)
         self.reject()
 
     def hideEvent(self, event) -> None:  # noqa: N802

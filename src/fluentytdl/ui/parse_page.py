@@ -14,6 +14,8 @@ from qfluentwidgets import (
     SubtitleLabel,
 )
 
+from fluentytdl.utils.ui_text import tr_text
+
 
 class ParsePage(QWidget):
     """独立的解析页面
@@ -112,7 +114,7 @@ class ParsePage(QWidget):
         # Extra compact tips to reduce emptiness and guide users
         self.tipsLabel = CaptionLabel(
             self.tr("支持格式示例：\n")
-            + "- YouTube: https://www.youtube.com/watch?v=... 或 https://youtu.be/...\n"
+            + tr_text("- YouTube: https://www.youtube.com/watch?v=... 或 https://youtu.be/...\n")
             + "- X (Twitter): https://x.com/username/status/123456789...\n"
             + self.tr("- 注意：X 平台仅支持单个推文视频解析，暂不支持主页/列表等。\n")
             + self.tr("- YouTube 频道请使用「频道下载」页面"),

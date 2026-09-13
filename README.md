@@ -63,6 +63,7 @@ FluentYTDL makes advanced yt-dlp and FFmpeg workflows accessible to Windows user
 | Area | Current support |
 |---|---|
 | 🪟 Operating system | Windows 10/11, 64-bit |
+| 🌐 Application languages | Simplified Chinese and English; changes apply after restart. Audio/subtitle languages are independent. See [localization and log policy](docs/I18N.md). |
 | ▶️ YouTube | Videos, Shorts, live/video URLs, playlists, channels, subtitles, covers, and VR workflows |
 | 𝕏 X (Twitter) | Individual post URLs with downloadable media |
 | 🌐 Other yt-dlp sites | Not part of the supported product scope |

@@ -14,6 +14,8 @@ from PySide6.QtNetwork import (
     QNetworkRequest,
 )
 
+from fluentytdl.utils.localized_log import log_text
+
 from ..core.config_manager import config_manager
 from .logger import logger
 
@@ -60,11 +62,15 @@ def trim_disk_cache(max_mb: int = 50) -> None:
                 except Exception:
                     pass
         if removed:
-            logger.info(
-                f"[ImageLoader] 磁盘缓存清理：删除 {removed} 个旧文件，当前 {total // 1024 // 1024} MB"
+            log_text(
+                logger,
+                "info",
+                "[ImageLoader] 磁盘缓存清理：删除 {0} 个旧文件，当前 {1} MB",
+                removed,
+                total // 1024 // 1024,
             )
     except Exception as e:
-        logger.warning(f"[ImageLoader] 磁盘缓存清理失败: {e}")
+        log_text(logger, "warning", "[ImageLoader] 磁盘缓存清理失败: {0}", e)
 
 
 def _get_global_manager() -> QNetworkAccessManager:
@@ -89,9 +95,9 @@ def _get_global_manager() -> QNetworkAccessManager:
             disk_cache.setCacheDirectory(str(cache_dir))
             disk_cache.setMaximumCacheSize(50 * 1024 * 1024)  # 50MB 缓存
             _global_manager.setCache(disk_cache)
-            logger.debug("[ImageLoader] 已启用磁盘缓存: {}", cache_dir)
+            log_text(logger, "debug", "[ImageLoader] 已启用磁盘缓存: {}", cache_dir)
         except Exception as e:
-            logger.warning("[ImageLoader] 磁盘缓存初始化失败: {}", e)
+            log_text(logger, "warning", "[ImageLoader] 磁盘缓存初始化失败: {}", e)
 
     if not _global_manager_initialized:
         _global_manager_initialized = True
@@ -121,7 +127,7 @@ def _apply_proxy_to_manager(manager: QNetworkAccessManager) -> None:
         return
 
     if not proxy_url_str:
-        logger.warning("[ImageLoader] 代理模式=手动，但 URL 为空")
+        log_text(logger, "warning", "[ImageLoader] 代理模式=手动，但 URL 为空")
         return
 
     lower = proxy_url_str.lower()
@@ -134,7 +140,7 @@ def _apply_proxy_to_manager(manager: QNetworkAccessManager) -> None:
 
     url = QUrl(proxy_url_str)
     if not url.isValid() or not url.host() or url.port() <= 0:
-        logger.error("[ImageLoader] 代理 URL 无效: {}", proxy_url_str)
+        log_text(logger, "error", "[ImageLoader] 代理 URL 无效: {}", proxy_url_str)
         return
 
     proxy_type = QNetworkProxy.ProxyType.HttpProxy
@@ -143,7 +149,7 @@ def _apply_proxy_to_manager(manager: QNetworkAccessManager) -> None:
 
     proxy = QNetworkProxy(proxy_type, url.host(), url.port())
     manager.setProxy(proxy)
-    logger.info("[ImageLoader] 配置代理: {}:{}", url.host(), url.port())
+    log_text(logger, "info", "[ImageLoader] 配置代理: {}:{}", url.host(), url.port())
 
 
 class ImageLoader(QObject):
@@ -206,7 +212,9 @@ class ImageLoader(QObject):
         # SSL 错误处理
         try:
             reply.sslErrors.connect(
-                lambda errors: logger.warning(
+                lambda errors: log_text(
+                    logger,
+                    "warning",
                     "[ImageLoader] SSL 警告 ({}): {}",
                     url_str,
                     ", ".join(e.errorString() for e in errors),
@@ -265,7 +273,7 @@ class ImageLoader(QObject):
                     )
                     pixmap = QPixmap.fromImage(qimage)
                 except Exception as e:
-                    logger.warning(f"[ImageLoader] Pillow 解码失败: {e}")
+                    log_text(logger, "warning", "[ImageLoader] Pillow 解码失败: {0}", e)
                     self.failed.emit(str(original_url))
                     return
 

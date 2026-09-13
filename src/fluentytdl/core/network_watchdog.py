@@ -7,6 +7,8 @@ from __future__ import annotations
 import requests
 from PySide6.QtCore import QObject, QTimer, Signal
 
+from fluentytdl.utils.localized_log import log_text
+
 from ..utils.logger import logger
 
 
@@ -60,13 +62,13 @@ class NetworkWatchdog(QObject):
         self._is_running = True
         self._check_network()  # 立即检查一次
         self._timer.start()
-        logger.debug("网络监控已启动")
+        log_text(logger, "debug", "网络监控已启动")
 
     def stop(self):
         """停止监控"""
         self._timer.stop()
         self._is_running = False
-        logger.debug("网络监控已停止")
+        log_text(logger, "debug", "网络监控已停止")
 
     def _check_network(self):
         """检查网络状态"""
@@ -83,7 +85,7 @@ class NetworkWatchdog(QObject):
             except requests.exceptions.Timeout:
                 continue
             except Exception as e:
-                logger.debug(f"网络检测异常: {e}")
+                log_text(logger, "debug", "网络检测异常: {0}", e)
                 continue
 
         if reachable:
@@ -98,7 +100,7 @@ class NetworkWatchdog(QObject):
         self._current_status = "stable"
 
         if old_status != "stable":
-            logger.info("网络状态: 稳定")
+            log_text(logger, "info", "网络状态: 稳定")
             self.status_changed.emit("stable")
 
     def _on_failure(self):
@@ -110,12 +112,12 @@ class NetworkWatchdog(QObject):
         if self._failure_count >= self.FAILURE_THRESHOLD:
             self._current_status = "disconnected"
             if old_status != "disconnected":
-                logger.warning("网络状态: 断开")
+                log_text(logger, "warning", "网络状态: 断开")
                 self.status_changed.emit("disconnected")
         else:
             self._current_status = "unstable"
             if old_status == "stable":
-                logger.warning("网络状态: 不稳定")
+                log_text(logger, "warning", "网络状态: 不稳定")
                 self.status_changed.emit("unstable")
 
     def check_once(self) -> str:

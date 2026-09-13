@@ -15,6 +15,8 @@ from __future__ import annotations
 import time
 from typing import Any
 
+from fluentytdl.utils.localized_log import log_text
+
 from ..utils.logger import logger
 
 
@@ -158,15 +160,23 @@ class CookieCleaner:
 
         # 日志记录清洗结果
         if len(cleaned) < len(cookies):
-            logger.info(
-                f"[{platform}] Cookie 清洗完成: {len(cookies)} -> {len(cleaned)} "
-                f"(移除: {len(cookies) - len(cleaned)}, 其中已过期 {expired_count} 个)"
+            log_text(
+                logger,
+                "info",
+                "[{0}] Cookie 清洗完成: {1} -> {2} (移除: {3}, 其中已过期 {4} 个)",
+                platform,
+                len(cookies),
+                len(cleaned),
+                len(cookies) - len(cleaned),
+                expired_count,
             )
             if ignored_domains:
-                logger.debug(f"已过滤域名: {', '.join(list(ignored_domains)[:5])}等")
+                log_text(logger, "debug", "已过滤域名: {0}等", ", ".join(list(ignored_domains)[:5]))
             if ignored_names:
-                logger.debug(f"已过滤无关 Cookie: {', '.join(list(ignored_names)[:10])}等")
+                log_text(
+                    logger, "debug", "已过滤无关 Cookie: {0}等", ", ".join(list(ignored_names)[:10])
+                )
         else:
-            logger.debug(f"[{platform}] Cookie 清洗完成: 无需过滤")
+            log_text(logger, "debug", "[{0}] Cookie 清洗完成: 无需过滤", platform)
 
         return cleaned

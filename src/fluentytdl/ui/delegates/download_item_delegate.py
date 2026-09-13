@@ -20,6 +20,8 @@ from PySide6.QtGui import (
 from PySide6.QtWidgets import QStyle, QStyledItemDelegate, QStyleOptionViewItem
 from qfluentwidgets import Theme, ThemeColor, isDarkTheme, qconfig, themeColor
 
+from fluentytdl.utils.ui_text import tr_text
+
 from ...utils.formatters import format_size, format_time_ago
 from ...utils.image_loader import get_image_loader
 from ..models.task_row import TaskRow
@@ -547,7 +549,7 @@ class DownloadItemDelegate(QStyledItemDelegate):
                 # 统一使用 CleanLogger 精心调配的全能字符串
                 meta_str = status_text
             elif progress > 0:
-                meta_str = f"下载: {progress:.1f}%"
+                meta_str = tr_text("下载: {0:.1f}%", progress)
             else:
                 meta_str = self.tr("准备下载...")
         elif state == "completed":

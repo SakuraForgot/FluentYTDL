@@ -11,6 +11,7 @@ from fluentytdl.ui.components.dialogs.validated_edit_dialog import (
     ValidatedEditDialog,
     Validator,
 )
+from fluentytdl.utils.ui_text import tr_text
 
 from ....core.config_manager import config_manager
 
@@ -97,7 +98,7 @@ class SmartSettingCard(SettingCard):
             start_dir = str(Path(current).parent) if current else str(Path.home())
             filt = self._file_filter or "All Files (*)"
             path, _ = QFileDialog.getOpenFileName(
-                self.window(), f"选择 {self.titleLabel.text()}", start_dir, filt
+                self.window(), tr_text("选择 {0}", self.titleLabel.text()), start_dir, filt
             )
             if not path:
                 return
@@ -121,7 +122,7 @@ class SmartSettingCard(SettingCard):
             return
 
         dialog = ValidatedEditDialog(
-            title=f"编辑 {self.titleLabel.text()}",
+            title=tr_text("编辑 {0}", self.titleLabel.text()),
             content=self._dialog_content or self.tr("请输入新的值，系统将自动进行格式检查。"),
             initial_value=current,
             validator=self._validator,

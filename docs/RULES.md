@@ -97,7 +97,7 @@ pythonVersion = "3.12"
 
 这些规则来自生产环境的惨痛教训。违反它们**必然**导致用户可见的 bug。
 
-1. **优先使用 yt-dlp 默认的 `player_client` 策略**（tv → web_safari → android_vr）——绝不*锁定*单一客户端。**例外（SABR-only 账号）：** 当 yt-dlp 报告账号命中 SABR-only 实验（`forcing SABR streaming` / `formats ... missing a url` → 高清格式没有直链、被丢弃，只剩 360p）时，向客户端集合**追加** `web_safari`（`default,web_safari`，或已设 POT 时的 `<现有>,web_safari`，例如 `default,mweb`）。这是*追加*而非锁定——默认客户端仍先跑，web_safari 只是找回直链高清（HLS）的兜底。在解析期侦测（`yt_dlp_cli._maybe_mark_sabr_only`），持久化**在账号上**（`WebView2Account.sabr_only`，登出时用内存会话标志），并在 `build_ydl_options` 中消费（`_maybe_append_sabr_web_safari`），从而同时覆盖解析**与**下载两条 opts 路径（各自独立构建 opts）。此为临时方案——随着采样更多视频可能需要调整。
+1. **优先使用 yt-dlp 默认的 `player_client` 策略**（由实际内核版本及请求认证状态决定）——绝不*锁定*单一客户端。**例外（SABR-only 账号）：** 当 yt-dlp 报告账号命中 SABR-only 实验（`forcing SABR streaming` / `formats ... missing a url` → 高清格式没有直链、被丢弃，只剩 360p）时，向客户端集合**追加** `web_safari`（`default,web_safari`，或已设 POT 时的 `<现有>,web_safari`，例如 `default,mweb`）。这是*追加*而非锁定——默认客户端仍先跑，web_safari 只是找回直链高清（HLS）的兜底。在解析期侦测（`yt_dlp_cli._maybe_mark_sabr_only`），持久化**在账号上**（`WebView2Account.sabr_only`，登出时用内存会话标志），并在 `build_ydl_options` 中消费（`_maybe_append_sabr_web_safari`），从而同时覆盖解析**与**下载两条 opts 路径（各自独立构建 opts）。此为临时方案——随着采样更多视频可能需要调整。
 2. **绝不启用 `sleep_interval`** — 导致签名 URL 过期 → HTTP 403
 3. **绝不使用 `--cookies-from-browser`** — Windows 上导致 DPAPI 文件锁
 4. **`-S lang:xx` 是失效的 —— 绝不用它表达语言偏好。** `lang` 是 `language_preference` 的**数值**别名，不接受语言码（喂语言码会把全局 `settings['lang']['convert']` 改成 `'string'`、拿 10/5/−1/−10 跟 `"ja"` 比），而且 `FormatSorter.add_item` 只接受**第一个** `lang:` 条目。语言与原音偏好必须走 `_inject_language_into_format()` 的格式串过滤器：`[language^=xx]`（startswith —— 裸 `[language=en]` 匹配不到真实标注 `en-US`）与原音的 `[language_preference>=?10]`（**`?` 是必须的，且必须紧跟运算符** —— 只有 YouTube 有 `language_preference`，不带 none-inclusive 会把 Twitter 等平台的所有音轨过滤光；而 yt-dlp 的过滤器语法把该标记放在运算符与值之间，写成值侧的 `>=10?` 会直接 `SyntaxError: Invalid filter specification`，整个下载起不来）。原始格式串永远作为最后兜底
@@ -169,6 +169,14 @@ retry  transition  outcome  config  argv  identity
 
 ## 6. Cookie 系统规则 [关键]
 
+### YouTube 请求级 Cookie 模式
+
+- `youtube_cookies_enabled` 默认开启，仅控制请求是否携带 Cookie；账号、Cookie 文件和同步保留。
+- 解析开始固定 `__fluentytdl_youtube_cookies_enabled`，随队列任务持久化；切换设置不改变已有任务。匿名模式覆盖直接文件、Sentinel、参数合并、轻量提取和重试路径。
+- 缓存代次阻止切换前请求回写；SABR 根据实际请求 Cookie 上下文隔离，不能仅根据选中的账号打标。
+- POT、JS 运行时保持独立；匿名使用上游默认客户端，本功能不追加登录态 visionos，也不排除 web。
+- `utils/ytdlp_runtime.py` 统一实际路径和版本；组件安装目标独立，更新不能覆盖自定义或 PATH 内核。
+
 ### 两个真相源
 
 `bin/cookies_youtube.txt` 与 `bin/cookies_twitter.txt` 是 yt-dlp **唯一**会读的 Cookie 文件。`yt_dlp_cli.py` 里注入 `--cookies` 的那一处是唯一漏斗 —— 不要再加第二条 Cookie 路径，**绝对不要**用 `--cookies-from-browser`（§4.3，DPAPI 文件锁）。`bin/dle_user/<platform>/` 下的账号缓存、浏览器提取结果，都只是上游素材，必须**提交**进真相源才会生效。
@@ -222,7 +230,7 @@ retry  transition  outcome  config  argv  identity
 
 - pytest >= 7.0
 - 测试文件在 `tests/` 目录
-- **尚无 conftest.py** — 每个测试自行设置 `sys.path`
+- 根目录 `conftest.py` 在收集测试前将应用数据和日志隔离到临时目录，并默认使用 Qt offscreen；部分测试仍自行设置 `sys.path`。
 - 部分测试需要 `QApplication` —— 在**导入 fluentytdl 之前**设好 `QT_QPA_PLATFORM=offscreen` 与 `FLUENTYTDL_DATA_DIR_OVERRIDE` 即可无头运行（照抄 `tests/test_subtitle_selector_ux.py` 的文件头）。别写死"有几个 GUI 测试"，这个数字每加一个测试就过期
 - CI 对 lint、格式、版本与锁文件、翻译同步及测试实行硬门禁；仅 Pyright 保持提示性质。
 - 添加新测试时：优先使用普通 pytest 函数而非 unittest.TestCase

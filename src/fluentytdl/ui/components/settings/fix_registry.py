@@ -169,7 +169,7 @@ def enable_pot_provider(parent_widget: QWidget) -> None:
 
     与 ``refresh_pot`` 的区别是刻意的：那个动作假设引擎已启用、只是坏了，会直接跑
     一轮 ``try_recover()``；而字幕报 "requires a PO Token" 时最常见的前提恰恰是
-    ``pot_provider_enabled=False``（这是出厂默认，见 ``config_manager:48``），此时
+    ``pot_provider_enabled=False``（用户手动关闭），此时
     重启一个没开的服务毫无意义。
 
     **绝不代替用户把开关打开。** POT 引擎是实验性功能，启用后会常驻一个本地服务；
@@ -195,8 +195,7 @@ def enable_pot_provider(parent_widget: QWidget) -> None:
         QCoreApplication.translate("FixRegistry", "字幕需要 PO Token"),
         QCoreApplication.translate(
             "FixRegistry",
-            "自动生成/自动翻译字幕受 PO Token 保护。可在「高级 → POT 验证引擎」中启用"
-            "（实验性，会常驻一个本地服务）；不启用则只能下载人工字幕。",
+            "此字幕请求需要 PO Token。可在“设置 → 系统 → 高级”启用 POT 服务并重试；其他字幕轨是否可用取决于平台返回的结果。",
         ),
         parent=main_win,
         position=InfoBarPosition.TOP,

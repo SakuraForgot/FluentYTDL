@@ -17,6 +17,7 @@ from qfluentwidgets import (
 )
 
 from fluentytdl.ui.components.common.custom_info_bar import InfoBar
+from fluentytdl.utils.ui_text import tr_text
 
 
 class CookieRepairDialog(MessageBoxBase):
@@ -97,7 +98,7 @@ class CookieRepairDialog(MessageBoxBase):
         # 错误详情（可折叠）
         if self.error_message:
             self.error_label = BodyLabel(
-                f"错误详情：\n{self._truncate_error(self.error_message)}", self
+                tr_text("错误详情：\n{0}", self._truncate_error(self.error_message)), self
             )
             self.error_label.setWordWrap(True)
 
@@ -144,7 +145,7 @@ class CookieRepairDialog(MessageBoxBase):
         lines = error.strip().split("\n")
         if len(lines) <= max_lines:
             return error
-        return "\n".join(lines[:max_lines]) + f"\n... (还有 {len(lines) - max_lines} 行)"
+        return "\n".join(lines[:max_lines]) + tr_text("\n... (还有 {0} 行)", len(lines) - max_lines)
 
     def _on_auto_repair(self):
         """自动修复按钮点击"""

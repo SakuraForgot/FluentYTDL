@@ -18,6 +18,9 @@ from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 
+from fluentytdl.utils.localized_log import log_text
+from fluentytdl.utils.ui_text import tr_text
+
 from ..utils.logger import logger
 from ..utils.paths import frozen_app_dir, get_clean_env, is_frozen
 from .thumbnail_embed import (
@@ -245,10 +248,10 @@ class ThumbnailEmbedder:
         output_path = Path(output_path)
 
         if not video_path.exists():
-            return EmbedResult(False, None, f"视频文件不存在: {video_path}")
+            return EmbedResult(False, None, tr_text("视频文件不存在: {0}", video_path))
 
         if not thumbnail_path.exists():
-            return EmbedResult(False, None, f"封面文件不存在: {thumbnail_path}")
+            return EmbedResult(False, None, tr_text("封面文件不存在: {0}", thumbnail_path))
 
         ext = video_path.suffix.lower().lstrip(".")
 
@@ -258,14 +261,16 @@ class ThumbnailEmbedder:
             return EmbedResult(
                 success=False,
                 tool_used=None,
-                message=f"{ext.upper()} 格式不支持封面嵌入: {info.note}",
+                message=tr_text("{0} 格式不支持封面嵌入: {1}", ext.upper(), info.note),
                 skipped=True,
             )
 
         # 获取推荐工具
         tool = self.get_recommended_tool(ext)
         if tool is None:
-            return EmbedResult(success=False, tool_used=None, message="没有可用的封面嵌入工具")
+            return EmbedResult(
+                success=False, tool_used=None, message=tr_text("没有可用的封面嵌入工具")
+            )
 
         if tool.mutates_in_place and not output_path.exists():
             # 正常路径上调用方已经用 `reserve_workfile(seed_from=...)` 播种过了。这里兜一层
@@ -275,7 +280,7 @@ class ThumbnailEmbedder:
             try:
                 shutil.copy2(video_path, output_path)
             except OSError as e:
-                return EmbedResult(False, tool, f"无法准备嵌入落点: {e}")
+                return EmbedResult(False, tool, tr_text("无法准备嵌入落点: {0}", e))
 
         # 执行嵌入
         if tool == EmbedTool.ATOMICPARSLEY:
@@ -287,7 +292,7 @@ class ThumbnailEmbedder:
         elif tool == EmbedTool.MUTAGEN:
             return self._embed_with_mutagen(output_path, thumbnail_path, progress_callback)
 
-        return EmbedResult(False, None, "未知错误")
+        return EmbedResult(False, None, tr_text("未知错误"))
 
     def _embed_with_atomicparsley(
         self,
@@ -299,10 +304,10 @@ class ThumbnailEmbedder:
         必须已经是**播种好的副本**（见 `EmbedTool.mutates_in_place`），源文件不在这里出现。"""
         ap_path = self._find_atomicparsley()
         if not ap_path:
-            return EmbedResult(False, EmbedTool.ATOMICPARSLEY, "AtomicParsley 不可用")
+            return EmbedResult(False, EmbedTool.ATOMICPARSLEY, tr_text("AtomicParsley 不可用"))
 
         if progress_callback:
-            progress_callback("正在使用 AtomicParsley 嵌入封面...")
+            progress_callback(tr_text("正在使用 AtomicParsley 嵌入封面..."))
 
         try:
             cmd = [str(ap_path), str(target), "--artwork", str(thumbnail_path), "--overWrite"]
@@ -327,18 +332,20 @@ class ThumbnailEmbedder:
             )
 
             if result.returncode == 0:
-                logger.info(f"AtomicParsley 封面嵌入成功: {target}")
-                return EmbedResult(True, EmbedTool.ATOMICPARSLEY, "封面嵌入成功")
+                log_text(logger, "info", "AtomicParsley 封面嵌入成功: {0}", target)
+                return EmbedResult(True, EmbedTool.ATOMICPARSLEY, tr_text("封面嵌入成功"))
             else:
-                error_msg = result.stderr or result.stdout or "未知错误"
-                logger.error(f"AtomicParsley 失败: {error_msg}")
+                error_msg = result.stderr or result.stdout or tr_text("未知错误")
+                log_text(logger, "error", "AtomicParsley 失败: {0}", error_msg)
                 return EmbedResult(
-                    False, EmbedTool.ATOMICPARSLEY, f"AtomicParsley 错误: {error_msg}"
+                    False, EmbedTool.ATOMICPARSLEY, tr_text("AtomicParsley 错误: {0}", error_msg)
                 )
 
         except Exception as e:
-            logger.error(f"AtomicParsley 异常: {e}")
-            return EmbedResult(False, EmbedTool.ATOMICPARSLEY, f"AtomicParsley 异常: {e}")
+            log_text(logger, "error", "AtomicParsley 异常: {0}", e)
+            return EmbedResult(
+                False, EmbedTool.ATOMICPARSLEY, tr_text("AtomicParsley 异常: {0}", e)
+            )
 
     def _embed_with_ffmpeg(
         self,
@@ -356,10 +363,10 @@ class ThumbnailEmbedder:
         """
         ffmpeg_path = self._find_ffmpeg()
         if not ffmpeg_path:
-            return EmbedResult(False, EmbedTool.FFMPEG, "FFmpeg 不可用")
+            return EmbedResult(False, EmbedTool.FFMPEG, tr_text("FFmpeg 不可用"))
 
         if progress_callback:
-            progress_callback("正在使用 FFmpeg 嵌入封面...")
+            progress_callback(tr_text("正在使用 FFmpeg 嵌入封面..."))
 
         ext = video_path.suffix.lower()
         out = str(output_path)
@@ -426,16 +433,16 @@ class ThumbnailEmbedder:
             )
 
             if result.returncode == 0 and output_path.exists():
-                logger.info(f"FFmpeg 封面嵌入成功: {output_path}")
-                return EmbedResult(True, EmbedTool.FFMPEG, "封面嵌入成功")
+                log_text(logger, "info", "FFmpeg 封面嵌入成功: {0}", output_path)
+                return EmbedResult(True, EmbedTool.FFMPEG, tr_text("封面嵌入成功"))
             else:
-                error_msg = result.stderr or "未知错误"
-                logger.error(f"FFmpeg 失败: {error_msg}")
-                return EmbedResult(False, EmbedTool.FFMPEG, f"FFmpeg 错误: {error_msg}")
+                error_msg = result.stderr or tr_text("未知错误")
+                log_text(logger, "error", "FFmpeg 失败: {0}", error_msg)
+                return EmbedResult(False, EmbedTool.FFMPEG, tr_text("FFmpeg 错误: {0}", error_msg))
 
         except Exception as e:
-            logger.error(f"FFmpeg 异常: {e}")
-            return EmbedResult(False, EmbedTool.FFMPEG, f"FFmpeg 异常: {e}")
+            log_text(logger, "error", "FFmpeg 异常: {0}", e)
+            return EmbedResult(False, EmbedTool.FFMPEG, tr_text("FFmpeg 异常: {0}", e))
 
     def _embed_with_mutagen(
         self,
@@ -446,10 +453,10 @@ class ThumbnailEmbedder:
         """使用 mutagen 嵌入封面（用于音频文件）—— `audio.save()` 只能原地改写，
         所以 `target` 必须已经是**播种好的副本**（见 `EmbedTool.mutates_in_place`）。"""
         if not self._check_mutagen():
-            return EmbedResult(False, EmbedTool.MUTAGEN, "mutagen 库不可用")
+            return EmbedResult(False, EmbedTool.MUTAGEN, tr_text("mutagen 库不可用"))
 
         if progress_callback:
-            progress_callback("正在使用 mutagen 嵌入封面...")
+            progress_callback(tr_text("正在使用 mutagen 嵌入封面..."))
 
         ext = target.suffix.lower().lstrip(".")
 
@@ -465,11 +472,13 @@ class ThumbnailEmbedder:
             elif ext in ("ogg", "opus"):
                 return self._embed_ogg(target, thumbnail_data)
             else:
-                return EmbedResult(False, EmbedTool.MUTAGEN, f"mutagen 不支持 {ext} 格式")
+                return EmbedResult(
+                    False, EmbedTool.MUTAGEN, tr_text("mutagen 不支持 {0} 格式", ext)
+                )
 
         except Exception as e:
-            logger.error(f"mutagen 异常: {e}")
-            return EmbedResult(False, EmbedTool.MUTAGEN, f"mutagen 异常: {e}")
+            log_text(logger, "error", "mutagen 异常: {0}", e)
+            return EmbedResult(False, EmbedTool.MUTAGEN, tr_text("mutagen 异常: {0}", e))
 
     def _embed_mp3(self, file_path: Path, thumbnail_data: bytes) -> EmbedResult:
         """嵌入 MP3 封面"""
@@ -500,11 +509,11 @@ class ThumbnailEmbedder:
                 )
 
             audio.save()
-            logger.info(f"mutagen MP3 封面嵌入成功: {file_path}")
-            return EmbedResult(True, EmbedTool.MUTAGEN, "封面嵌入成功")
+            log_text(logger, "info", "mutagen MP3 封面嵌入成功: {0}", file_path)
+            return EmbedResult(True, EmbedTool.MUTAGEN, tr_text("封面嵌入成功"))
 
         except Exception as e:
-            return EmbedResult(False, EmbedTool.MUTAGEN, f"MP3 封面嵌入失败: {e}")
+            return EmbedResult(False, EmbedTool.MUTAGEN, tr_text("MP3 封面嵌入失败: {0}", e))
 
     def _embed_flac(self, file_path: Path, thumbnail_data: bytes) -> EmbedResult:
         """嵌入 FLAC 封面"""
@@ -526,11 +535,11 @@ class ThumbnailEmbedder:
             audio.add_picture(pic)
             audio.save()
 
-            logger.info(f"mutagen FLAC 封面嵌入成功: {file_path}")
-            return EmbedResult(True, EmbedTool.MUTAGEN, "封面嵌入成功")
+            log_text(logger, "info", "mutagen FLAC 封面嵌入成功: {0}", file_path)
+            return EmbedResult(True, EmbedTool.MUTAGEN, tr_text("封面嵌入成功"))
 
         except Exception as e:
-            return EmbedResult(False, EmbedTool.MUTAGEN, f"FLAC 封面嵌入失败: {e}")
+            return EmbedResult(False, EmbedTool.MUTAGEN, tr_text("FLAC 封面嵌入失败: {0}", e))
 
     def _embed_ogg(self, file_path: Path, thumbnail_data: bytes) -> EmbedResult:
         """嵌入 OGG/Opus 封面"""
@@ -559,11 +568,11 @@ class ThumbnailEmbedder:
             audio["METADATA_BLOCK_PICTURE"] = [base64.b64encode(pic.write()).decode("ascii")]
             audio.save()
 
-            logger.info(f"mutagen OGG 封面嵌入成功: {file_path}")
-            return EmbedResult(True, EmbedTool.MUTAGEN, "封面嵌入成功")
+            log_text(logger, "info", "mutagen OGG 封面嵌入成功: {0}", file_path)
+            return EmbedResult(True, EmbedTool.MUTAGEN, tr_text("封面嵌入成功"))
 
         except Exception as e:
-            return EmbedResult(False, EmbedTool.MUTAGEN, f"OGG 封面嵌入失败: {e}")
+            return EmbedResult(False, EmbedTool.MUTAGEN, tr_text("OGG 封面嵌入失败: {0}", e))
 
 
 # 全局实例

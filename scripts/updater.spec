@@ -2,8 +2,8 @@
 """
 FluentYTDL 更新器 PyInstaller 蓝图
 
-独立的极简更新器，不依赖 Qt 或 fluentytdl 包。
-仅包含 Python 标准库 + py7zr（7z 解压支持）。
+独立的极简更新器，不依赖 Qt。
+包含标准库、py7zr 和不依赖 Qt 的双语目录读取器。
 
 打包命令:
     pyinstaller scripts/updater.spec
@@ -90,10 +90,11 @@ if not hiddenimports:
 # ----------------------------------------------------------------------------
 a = Analysis(
     [entry_script],
-    pathex=[],
+    pathex=[os.path.join(spec_dir, '..', 'src')],
     binaries=[],
     datas=[(str(sevenzip_dir / name), 'tools/7zip')
-           for name in ('7za.exe', 'License.txt', 'version.json')],
+           for name in ('7za.exe', 'License.txt', 'version.json')]
+           + [(os.path.join(spec_dir, '..', 'assets', 'locales', 'runtime_en.json'), 'assets/locales')],
     hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},

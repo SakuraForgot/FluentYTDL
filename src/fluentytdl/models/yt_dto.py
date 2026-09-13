@@ -4,6 +4,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
+from fluentytdl.utils.message_catalog import standalone_text
+
 
 class ParseState(Enum):
     FLAT = 1  # 刚拿到播放列表目录，只有标题和封面
@@ -102,7 +104,7 @@ class YtFormatDTO:
     def filesize_str(self) -> str:
         """UI 层直接读取此属性进行绘制，绝对不自己算"""
         if self.filesize <= 0:
-            return "未知大小"
+            return standalone_text("未知大小")
         size = float(self.filesize)
         for unit in ["B", "KB", "MB", "GB"]:
             if size < 1024.0:

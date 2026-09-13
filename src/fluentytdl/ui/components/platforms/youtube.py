@@ -32,6 +32,7 @@ from qfluentwidgets import (
 )
 
 from fluentytdl.ui.components.common.badges import QualityCellWidget
+from fluentytdl.utils.ui_text import tr_text
 
 from ....core.config_manager import config_manager
 from ....observability import FlowTrace, emit_event
@@ -291,37 +292,41 @@ class SimplePresetWidget(QWidget):
                 (
                     "best_mp4",
                     self.tr("🎬 最佳画质"),
-                    self.tr("推荐。自动选择最佳画质并封装为选定容器，兼容性最好。"),
+                    self.tr(
+                        "自动选择最佳可用画质并保存为选定容器格式。播放兼容性取决于编码和播放器。"
+                    ),
                     {"type": "video", "max_height": None},
                 ),
                 (
                     "best_raw",
-                    self.tr("🎯 最佳画质 (原盘)"),
-                    self.tr("追求极致画质。通常为 WebM/MKV 格式，适合本地播放。"),
+                    self.tr("🎯 最佳画质（原始编码）"),
+                    self.tr(
+                        "选择最佳可用的视频和音频流。保留源视频编码，播放兼容性取决于输出格式和播放器。"
+                    ),
                     {"type": "video", "max_height": None},
                 ),
                 (
                     "2160p",
                     "📺 2160p 4K",
-                    self.tr("限制最高分辨率为 4K，超高清画质。"),
+                    self.tr("最高下载 2160p（4K），实际分辨率取决于可用的视频格式。"),
                     {"type": "video", "max_height": 2160},
                 ),
                 (
                     "1440p",
                     "📺 1440p 2K",
-                    self.tr("限制最高分辨率为 2K，高清画质。"),
+                    self.tr("最高下载 1440p，实际分辨率取决于可用的视频格式。"),
                     {"type": "video", "max_height": 1440},
                 ),
                 (
                     "1080p",
                     self.tr("📺 1080p 高清"),
-                    self.tr("限制最高分辨率为 1080p，平衡画质与体积。"),
+                    self.tr("最高下载 1080p，兼顾清晰度与文件大小。"),
                     {"type": "video", "max_height": 1080},
                 ),
                 (
                     "720p",
-                    self.tr("📺 720p 标清"),
-                    self.tr("限制最高分辨率为 720p，适合移动设备。"),
+                    self.tr("📺 720p 高清"),
+                    self.tr("最高下载 720p，适合较小屏幕或节省流量。"),
                     {"type": "video", "max_height": 720},
                 ),
                 (
@@ -333,7 +338,7 @@ class SimplePresetWidget(QWidget):
                 (
                     "360p",
                     "📺 360p",
-                    self.tr("限制最高分辨率为 360p，最小体积。"),
+                    self.tr("最高下载 360p，优先减少文件大小。"),
                     {"type": "video", "max_height": 360},
                 ),
             ],
@@ -341,13 +346,13 @@ class SimplePresetWidget(QWidget):
                 (
                     "best_video",
                     self.tr("🎬 最佳画质 (无音频)"),
-                    self.tr("仅下载视频轨，最高画质。"),
+                    self.tr("仅下载最佳可用视频流，不包含音频。"),
                     {"type": "video_only", "max_height": None},
                 ),
                 (
                     "1080p_video",
-                    self.tr("📺 1080p视频 (无音频)"),
-                    self.tr("仅下载1080p视频轨。"),
+                    self.tr("📺 1080p（仅视频）"),
+                    self.tr("仅下载视频，最高 1080p，不包含音频。"),
                     {"type": "video_only", "max_height": 1080},
                 ),
             ],
@@ -360,13 +365,13 @@ class SimplePresetWidget(QWidget):
                 ),
                 (
                     "audio_high",
-                    self.tr("🎵 高品质 (320kbps)"),
+                    self.tr("🎵 音频码率 320 kbps"),
                     self.tr("高品质音频压缩。"),
                     {"type": "audio_only", "quality": "320K"},
                 ),
                 (
                     "audio_std",
-                    self.tr("🎵 标准品质 (192kbps)"),
+                    self.tr("🎵 音频码率 192 kbps"),
                     self.tr("体积与音质平衡。"),
                     {"type": "audio_only", "quality": "192K"},
                 ),
@@ -489,7 +494,7 @@ class SimplePresetWidget(QWidget):
             self._audio_pick_result = result
             n = len(result.format_ids)
             if n > 1:
-                self.audio_pick_btn.setText(f"已选 {n} 条音轨 ✓")
+                self.audio_pick_btn.setText(tr_text("已选 {0} 条音轨 ✓", n))
             elif n == 1:
                 self.audio_pick_btn.setText(self.tr("已选 1 条音轨"))
             else:
@@ -1376,7 +1381,7 @@ class VideoFormatSelectorWidget(QWidget):
                         ab = f"{int(r.get('abr') or 0)}kbps"
                         a_sum = f"{ac} {ab}"
                 else:
-                    a_sum = f"已选 {n} 条音轨"
+                    a_sum = tr_text("已选 {0} 条音轨", n)
 
             self.video_card.set_summary(v_sum)
             self.audio_card.set_summary(a_sum)
@@ -1402,14 +1407,14 @@ class VideoFormatSelectorWidget(QWidget):
 
             if self._selected_video_id and sel_a:
                 if len(sel_a) > 1:
-                    label.setText(f"已选：视频流 + {len(sel_a)} 条音轨")
+                    label.setText(tr_text("已选：视频流 + {0} 条音轨", len(sel_a)))
                 else:
                     label.setText(self.tr("已选：视频流 + 音频流"))
             elif self._selected_video_id:
                 label.setText(self.tr("已选：视频流（将自动匹配最佳音频）"))
             elif sel_a:
                 if len(sel_a) > 1:
-                    label.setText(f"已选：{len(sel_a)} 条音轨（请再选择一个视频流）")
+                    label.setText(tr_text("已选：{0} 条音轨（请再选择一个视频流）", len(sel_a)))
                 else:
                     label.setText(self.tr("已选：音频流（请再选择一个视频流）"))
             else:

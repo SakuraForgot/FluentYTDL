@@ -4,10 +4,10 @@
 
 - `NotificationCard` —— 单条通知；
 - `NotificationListWidget` —— 列表本体（滚动区 + 空态 + 订阅刷新）；
-- `NotificationFlyoutView` —— 铃铛点开的浮窗，**外观和行为保持原样**；
+- `NotificationFlyoutView` —— 铃铛点开的浮窗，适应双语内容；
 - `NotificationWindow` —— 同一份列表的独立窗口版。
 
-浮窗和窗口两个都留着，因为它们回答的不是同一个问题。浮窗贴在铃铛底下、宽 360、
+浮窗和窗口两个都留着，因为它们回答的不是同一个问题。浮窗贴在铃铛底下、宽度按屏幕限制、
 点窗口外任何地方就消失 —— 这正好是"有几条新消息？"该有的代价。但"二十条下载错误
 一条条读完，一边读一边去任务列表点重试"在浮窗里做不到：手一点出去它就没了。
 所以浮窗右上角多一个按钮，把同一份列表甩进一个能拖动、能改大小、不会被点掉的窗口。
@@ -26,7 +26,7 @@ from datetime import datetime
 
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QFont, QPainter
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QFrame, QHBoxLayout, QSizePolicy, QVBoxLayout, QWidget
 from qfluentwidgets import (
     BodyLabel,
     CaptionLabel,
@@ -48,6 +48,7 @@ from qfluentwidgets import (
 )
 
 from ..notification import Notification, notification_center
+from ..notification.notification_text import display_fields
 from .components.common.standalone_window import StandaloneWindow
 
 #: severity → (浅色主题下的字色, 深色主题下的字色)。
@@ -100,6 +101,9 @@ class NotificationCard(CardWidget):
     def __init__(self, notif: Notification, parent=None):
         super().__init__(parent=parent)
         self.notif = notif
+        title, message = display_fields(notif)
+        self.setMinimumWidth(0)
+        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
         self.setBorderRadius(6)
 
         self.vBoxLayout = QVBoxLayout(self)
@@ -117,8 +121,10 @@ class NotificationCard(CardWidget):
         self.iconWidget = IconWidget(self._severity_icon(), self)
         self.iconWidget.setFixedSize(16, 16)
 
-        self.titleLabel = StrongBodyLabel(notif.title, self)
-        self.titleLabel.setWordWrap(False)
+        self.titleLabel = StrongBodyLabel(title, self)
+        self.titleLabel.setWordWrap(True)
+        self.titleLabel.setTextFormat(Qt.TextFormat.PlainText)
+        self.titleLabel.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
 
         dt = datetime.fromtimestamp(notif.timestamp)
         self.timeLabel = CaptionLabel(dt.strftime("%m-%d %H:%M"), self)
@@ -126,20 +132,24 @@ class NotificationCard(CardWidget):
         self.deleteBtn = TransparentToolButton(FluentIcon.CLOSE, self)
         self.deleteBtn.setFixedSize(24, 24)
         self.deleteBtn.setIconSize(self.deleteBtn.iconSize() * 0.8)
+        self.deleteBtn.setToolTip(self.tr("删除通知"))
+        self.deleteBtn.setAccessibleName(self.tr("删除通知"))
         self.deleteBtn.clicked.connect(self._on_delete)
 
         self.headerLayout.addWidget(self.unreadDot)
         self.headerLayout.addWidget(self.iconWidget)
         self.headerLayout.addWidget(self.titleLabel, 1)
-        self.headerLayout.addWidget(self.timeLabel)
         self.headerLayout.addWidget(self.deleteBtn)
 
         # 内容
-        self.msgLabel = CaptionLabel(notif.message, self)
+        self.msgLabel = BodyLabel(message, self)
         self.msgLabel.setWordWrap(True)
+        self.msgLabel.setTextFormat(Qt.TextFormat.PlainText)
+        self.msgLabel.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
 
         self.vBoxLayout.addLayout(self.headerLayout)
         self.vBoxLayout.addWidget(self.msgLabel)
+        self.vBoxLayout.addWidget(self.timeLabel)
 
         self._apply_text_style()
 
@@ -199,6 +209,8 @@ class NotificationCard(CardWidget):
     def mousePressEvent(self, event):
         if not self.notif.is_read:
             notification_center.mark_as_read(self.notif.id)
+        if self.notif.type == "announcement" and self.notif.metadata.get("announcement"):
+            notification_center.announcement_requested.emit(self.notif.metadata["announcement"])
         super().mousePressEvent(event)
 
 
@@ -286,7 +298,7 @@ class NotificationListWidget(QWidget):
 
 
 class NotificationFlyoutView(FlyoutViewBase):
-    """通知中心浮窗（铃铛点开的那个，外观保持原样）"""
+    """通知中心浮窗（铃铛点开的那个，支持双语布局）"""
 
     #: 请求把这份列表甩到独立窗口里。由主窗口接 —— 只有它握着 `Flyout` 的句柄，
     #: 要先把浮窗关掉再开窗口，否则新窗口一拿到焦点，浮窗就自己消失，看着像闪了一下。
@@ -297,7 +309,7 @@ class NotificationFlyoutView(FlyoutViewBase):
         self.vBoxLayout = QVBoxLayout(self)
         self.vBoxLayout.setContentsMargins(16, 16, 16, 16)
         self.vBoxLayout.setSpacing(12)
-        self.setFixedWidth(360)
+        self.setFixedWidth(min(480, max(280, self.screen().availableGeometry().width() - 48)))
 
         # 头部
         self.headerLayout = QHBoxLayout()
@@ -314,16 +326,38 @@ class NotificationFlyoutView(FlyoutViewBase):
         )
         self.detachBtn.clicked.connect(self.detachRequested)
 
+        from ..utils.control_center_text import text as cc_text
+
+        self.refreshAnnouncementsBtn = TransparentToolButton(FluentIcon.SYNC, self)
+        self.refreshAnnouncementsBtn.setToolTip(cc_text("refresh_announcements"))
+        self.refreshAnnouncementsBtn.setAccessibleName(cc_text("refresh_announcements"))
+        self.refreshAnnouncementsBtn.clicked.connect(
+            notification_center.announcement_refresh_requested
+        )
         self.clearAllBtn = PushButton(self.tr("全部已读"), self)
-        self.clearAllBtn.setFixedSize(80, 28)
+        self.clearAllBtn.setMinimumHeight(32)
         self.clearAllBtn.clicked.connect(notification_center.mark_all_as_read)
+        self.deleteAllBtn = PushButton(self.tr("全部清空"), self)
+        self.deleteAllBtn.setMinimumHeight(32)
+        self.deleteAllBtn.clicked.connect(notification_center.clear_all)
+        for button in (self.clearAllBtn, self.deleteAllBtn):
+            button.ensurePolished()
+            button.setMinimumWidth(button.sizeHint().width())
 
         self.headerLayout.addWidget(self.titleLabel)
         self.headerLayout.addStretch(1)
         self.headerLayout.addWidget(self.detachBtn)
+        self.headerLayout.addWidget(self.refreshAnnouncementsBtn)
         self.headerLayout.addWidget(self.clearAllBtn)
+        self.headerLayout.addWidget(self.deleteAllBtn)
 
         self.vBoxLayout.addLayout(self.headerLayout)
+        self.setFixedWidth(
+            min(
+                self.screen().availableGeometry().width() - 48,
+                max(self.width(), self.headerLayout.minimumSize().width() + 32),
+            )
+        )
 
         self.listWidget = NotificationListWidget(self)
         self.listWidget.countChanged.connect(self._fit_height)
@@ -339,7 +373,12 @@ class NotificationFlyoutView(FlyoutViewBase):
         """
         if self.isVisible():
             return
-        self.setFixedHeight(120 if count == 0 else min(450, 80 + count * 80))
+        width = self.width() - 48
+        content_height = self.listWidget.scrollLayout.totalHeightForWidth(width)
+        if content_height < 0:
+            content_height = self.listWidget.scrollLayout.sizeHint().height()
+        maximum = max(160, min(560, self.screen().availableGeometry().height() - 80))
+        self.setFixedHeight(min(maximum, 160 if count == 0 else max(220, 130 + content_height)))
 
 
 class NotificationWindow(StandaloneWindow):
@@ -351,7 +390,7 @@ class NotificationWindow(StandaloneWindow):
 
     #: 比基类窄：这一屏是一列卡片，宽了只会让每张卡片中间空出一大片。
     SIZE_RATIO = 0.5
-    SIZE_BOUNDS = ((420, 560), (420, 820))
+    SIZE_BOUNDS = ((480, 680), (480, 820))
     MIN_SIZE = (380, 320)
 
     def __init__(self, anchor: QWidget | None = None):
@@ -360,16 +399,40 @@ class NotificationWindow(StandaloneWindow):
 
         self.titleLabel = SubtitleLabel(self.tr("消息中心"), self)
 
+        from ..utils.control_center_text import text as cc_text
+
+        self.refreshAnnouncementsBtn = TransparentToolButton(FluentIcon.SYNC, self)
+        self.refreshAnnouncementsBtn.setToolTip(cc_text("refresh_announcements"))
+        self.refreshAnnouncementsBtn.setAccessibleName(cc_text("refresh_announcements"))
+        self.refreshAnnouncementsBtn.clicked.connect(
+            notification_center.announcement_refresh_requested
+        )
         self.clearAllBtn = PushButton(self.tr("全部已读"), self)
-        self.clearAllBtn.setFixedHeight(28)
+        self.clearAllBtn.setMinimumHeight(32)
         self.clearAllBtn.clicked.connect(notification_center.mark_all_as_read)
+        self.deleteAllBtn = PushButton(self.tr("全部清空"), self)
+        self.deleteAllBtn.setMinimumHeight(32)
+        self.deleteAllBtn.clicked.connect(notification_center.clear_all)
+        for button in (self.clearAllBtn, self.deleteAllBtn):
+            button.ensurePolished()
+            button.setMinimumWidth(button.sizeHint().width())
 
         self.headerLayout = QHBoxLayout()
         self.headerLayout.setContentsMargins(0, 0, 0, 0)
         self.headerLayout.addWidget(self.titleLabel)
         self.headerLayout.addStretch(1)
+        self.headerLayout.addWidget(self.refreshAnnouncementsBtn)
         self.headerLayout.addWidget(self.clearAllBtn)
+        self.headerLayout.addWidget(self.deleteAllBtn)
         self.viewLayout.addLayout(self.headerLayout)
+        self.setMinimumWidth(
+            max(
+                self.MIN_SIZE[0],
+                self.headerLayout.minimumSize().width()
+                + self.CONTENT_MARGINS[0]
+                + self.CONTENT_MARGINS[2],
+            )
+        )
 
         self.listWidget = NotificationListWidget(self)
         self.viewLayout.addWidget(self.listWidget, 1)
