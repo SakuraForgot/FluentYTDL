@@ -29,6 +29,18 @@ def main():
             print("Failed channels:", ", ".join(failed))
             return 1
         return 0
+    except requests.HTTPError as exc:
+        status = exc.response.status_code if exc.response is not None else "unknown"
+        code = "unknown"
+        if exc.response is not None:
+            try:
+                candidate = exc.response.json().get("error", "")
+                if isinstance(candidate, str) and candidate.replace("_", "").isalnum():
+                    code = candidate[:80]
+            except (ValueError, AttributeError):
+                pass
+        print(f"::error::Control center synchronization failed: HTTP {status}, code={code}")
+        return 1
     except (requests.RequestException, ValueError, KeyError):
         print("::error::Control center synchronization failed; inspect Worker sync status.")
         return 1
