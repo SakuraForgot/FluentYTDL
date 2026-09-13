@@ -435,6 +435,12 @@ class DownloadExecutor:
         from ..auth.cookie_runfile import cookie_runfile
 
         self._cookie_stack = ExitStack()
+        from ..utils.url_router import UrlRouter
+        from ..utils.youtube_request import enforce_cookie_mode
+
+        if UrlRouter.detect_platform(url) == "youtube":
+            ydl_opts = dict(ydl_opts)
+            enforce_cookie_mode(ydl_opts)
         _run_cf = self._cookie_stack.enter_context(cookie_runfile(ydl_opts.get("cookiefile")))
         run_opts = {**ydl_opts, "cookiefile": _run_cf}
         cmd += ydl_opts_to_cli_args(run_opts)

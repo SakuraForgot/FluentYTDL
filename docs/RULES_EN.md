@@ -99,7 +99,7 @@ pythonVersion = "3.12"
 
 These rules are hard-won from production issues. Violating them WILL cause user-facing bugs.
 
-1. **Prefer yt-dlp's default `player_client` strategy** (tv → web_safari → android_vr) — never *pin* a single client. **Exception (SABR-only accounts):** when yt-dlp reports the account is under the SABR-only experiment (`forcing SABR streaming` / `formats ... missing a url` → high-res formats have no direct URL and get dropped, leaving only 360p), **append** `web_safari` to the client set (`default,web_safari`, or `<existing>,web_safari` when POT already set e.g. `default,mweb`). This is an *addition*, not a pin — default clients still run first; web_safari is the fallback that recovers direct-URL high-res (HLS). Detected at parse time (`yt_dlp_cli._maybe_mark_sabr_only`), persisted **on the account** (`WebView2Account.sabr_only`, or an in-memory session flag when logged out), and consumed in `build_ydl_options` (`_maybe_append_sabr_web_safari`) so it covers the parse **and** download opts paths (each builds opts independently). Provisional — may need tuning as more videos are sampled.
+1. **Prefer yt-dlp's default `player_client` strategy** (selected by the active yt-dlp version and request authentication) — never *pin* a single client. **Exception (SABR-only accounts):** when yt-dlp reports the account is under the SABR-only experiment (`forcing SABR streaming` / `formats ... missing a url` → high-res formats have no direct URL and get dropped, leaving only 360p), **append** `web_safari` to the client set (`default,web_safari`, or `<existing>,web_safari` when POT already set e.g. `default,mweb`). This is an *addition*, not a pin — default clients still run first; web_safari is the fallback that recovers direct-URL high-res (HLS). Detected at parse time (`yt_dlp_cli._maybe_mark_sabr_only`), persisted **on the account** (`WebView2Account.sabr_only`, or an in-memory session flag when logged out), and consumed in `build_ydl_options` (`_maybe_append_sabr_web_safari`) so it covers the parse **and** download opts paths (each builds opts independently). Provisional — may need tuning as more videos are sampled.
 2. **NEVER enable `sleep_interval`** — causes signed URL expiry → HTTP 403
 3. **NEVER use `--cookies-from-browser`** — causes DPAPI file lock on Windows
 4. **`-S lang:xx` is inert — never use it for language preference.** `lang` is a **numeric** alias of `language_preference` and does not accept language codes (it rewrites the global `settings['lang']['convert']` to `'string'` and compares 10/5/−1/−10 against `"ja"`), and `FormatSorter.add_item` admits only the **first** `lang:` entry. Language and original-audio preferences must be expressed as format-string filters via `_inject_language_into_format()`: `[language^=xx]` (startswith — a bare `[language=en]` misses the real tag `en-US`) and `[language_preference>=?10]` for original audio (**the `?` is mandatory and belongs right after the operator** — `language_preference` exists only on YouTube, so without none-inclusive matching every audio track on Twitter etc. gets filtered away; and yt-dlp's filter grammar puts the marker between operator and value, so the value-side `>=10?` is a hard `SyntaxError: Invalid filter specification` that kills the whole download). The unfiltered format string always stays as the last fallback
@@ -172,6 +172,14 @@ Each hard rule has a matching assertion in `tests/test_observability_contract.py
 test is not a rule.
 
 ## 6. Cookie System Rules [CRITICAL]
+
+### Per-request YouTube Cookie Mode
+
+- `youtube_cookies_enabled` defaults to true and controls request attachment only; accounts, Cookie files and synchronization are retained.
+- Snapshot `__fluentytdl_youtube_cookies_enabled` at extraction start and persist it with queued task options. New settings never change existing task modes. Anonymous requests reject direct files, Sentinel injection and merged Cookie options, including lightweight and retry paths.
+- Cache generations reject writes from requests that predate a settings change. SABR scope follows the actual request Cookie context, not merely the selected account.
+- POT and JS runtime settings remain independent. Anonymous requests use upstream default clients; do not append visionos to an authenticated request or remove web as part of this feature.
+- `utils/ytdlp_runtime.py` owns executable selection and version identity. Runtime status and execution use the same result; managed installation targets are separate. Updating managed tools never overwrites custom/PATH executables.
 
 ### Two Truth Sources
 

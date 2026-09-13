@@ -277,7 +277,7 @@ def stub_ytdlp(monkeypatch):
         calls.append(url)
         return state["impl"](url, opts, **kwargs)  # type: ignore[operator]
 
-    monkeypatch.setattr(mod, "locate_runtime_tool", lambda *a, **k: "yt-dlp.exe")
+    monkeypatch.setattr(mod, "resolve_yt_dlp_exe", lambda *a, **k: "yt-dlp.exe")
     monkeypatch.setattr(mod, "run_dump_single_json", _run)
     # build_ydl_options 会读 cookie 文件与配置，与本文件要测的东西无关；
     # 固定成空 dict 让缓存键只由 url + mode 决定。
@@ -308,7 +308,7 @@ def test_channel_tab_failure_is_not_cached(svc, stub_ytdlp):
     # 恢复网络：必须真的再发一次请求并成功，而不是沿用 unsupported
     stub_ytdlp.set_result(lambda u, opts, **kw: {"entries": [{"id": "a"}], "title": "ch"})
     info = svc.extract_channel_flat(url, tab="videos", base_ydl_opts={})
-    assert info["entries"] == [{"id": "a"}]
+    assert info["entries"] == [{"id": "a", "__fluentytdl_youtube_cookies_enabled": True}]
     assert len(stub_ytdlp.calls) == 2
 
 
@@ -322,7 +322,7 @@ def test_channel_tab_hit_skips_subprocess_and_carries_tab(svc, stub_ytdlp):
     assert len(stub_ytdlp.calls) == 1
 
     second = svc.extract_channel_flat(url, tab="videos", base_ydl_opts={})
-    assert second["entries"] == [{"id": "a"}]
+    assert second["entries"] == [{"id": "a", "__fluentytdl_youtube_cookies_enabled": True}]
     assert second["__fluentytdl_tab"] == "videos"
     assert len(stub_ytdlp.calls) == 1  # 没有再起子进程
 

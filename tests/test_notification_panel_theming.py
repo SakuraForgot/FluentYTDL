@@ -435,7 +435,39 @@ def test_english_long_notifications_fit_narrow_window(qt_app):
         for label in (card.titleLabel, card.msgLabel):
             assert label.height() >= label.heightForWidth(label.width())
             assert label.geometry().right() < card.width()
-        assert window.titleLabel.geometry().bottom() < button.geometry().top()
+        assert (
+            window.refreshAnnouncementsBtn.geometry().center().y() == button.geometry().center().y()
+        )
+        assert window.deleteAllBtn.geometry().left() > button.geometry().right()
     finally:
         window.close()
         qt_app.removeTranslator(translator)
+
+
+@pytest.mark.parametrize("container", [NotificationFlyoutView, NotificationWindow])
+def test_clear_all_removes_notifications_and_updates_both_views(qt_app, container):
+    for is_read in (False, True):
+        notification_center.push(_notif(is_read=is_read))
+    view = container()
+    other = NotificationListWidget()
+    counts = []
+    notification_center.unread_count_changed.connect(counts.append)
+    try:
+        view.show()
+        qt_app.processEvents()
+        buttons = [view.refreshAnnouncementsBtn, view.clearAllBtn, view.deleteAllBtn]
+        if isinstance(view, NotificationFlyoutView):
+            buttons.insert(0, view.detachBtn)
+        assert len({button.geometry().center().y() for button in buttons}) == 1
+        view.deleteAllBtn.click()
+        qt_app.processEvents()
+        assert notification_center.get_all() == []
+        assert counts[-1] == 0
+        for listing in (view.listWidget, other):
+            assert listing.count() == 0
+            assert listing.scrollArea.isHidden()
+            assert not listing.emptyLabel.isHidden()
+    finally:
+        notification_center.unread_count_changed.disconnect(counts.append)
+        view.close()
+        other.deleteLater()

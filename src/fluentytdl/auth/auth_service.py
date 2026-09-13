@@ -412,24 +412,32 @@ class AuthService:
     # web_safari 客户端才能拿回直链。标记须落在 build_ydl_options() 之外的共享处，
     # 因为解析与下载各自独立调 build_ydl_options()，必须让两条路读到同一个状态。
 
-    def get_youtube_sabr_only(self) -> bool:
+    def get_youtube_sabr_only(self, account_id: str | None = None) -> bool:
         """当前 YouTube 账号是否处于 SABR-only 灰度。
 
         有当前账号 → 以账号对象上的持久化 `sabr_only` 为准（跨重启、切账号隔离）；
         无当前账号（无登录态）→ 退化到进程内 sticky 标志。
         """
-        account = self.get_current_webview2_account("youtube")
+        account = (
+            self.get_current_webview2_account("youtube")
+            if account_id is None
+            else self._webview2_accounts.get(account_id)
+        )
         if account is not None:
             return bool(account.sabr_only)
         return self._session_sabr_only
 
-    def mark_youtube_sabr_only(self) -> None:
+    def mark_youtube_sabr_only(self, account_id: str | None = None) -> None:
         """把当前 YouTube 账号（或无账号时的会话）标记为 SABR-only。
 
         幂等：已为 True 直接返回，绝不重复写盘。有当前账号时持久化到 accounts.json，
         无账号时只置内存 sticky（重启清零）。
         """
-        account = self.get_current_webview2_account("youtube")
+        account = (
+            self.get_current_webview2_account("youtube")
+            if account_id is None
+            else self._webview2_accounts.get(account_id)
+        )
         if account is not None:
             if account.sabr_only:
                 return

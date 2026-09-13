@@ -25,6 +25,7 @@ from fluentytdl.utils.ui_text import tr_text
 from ..core.config_manager import config_manager
 from ..models.errors import YtDlpExecutionError
 from ..observability import current_flow, emit_event, emit_success_signals, mask_secrets
+from ..utils.youtube_request import COOKIE_MODE, SABR_SCOPE, enforce_cookie_mode, stamp_result
 
 
 class YtDlpCancelled(Exception):
@@ -149,72 +150,26 @@ def _win_hide_console_kwargs() -> dict[str, Any]:
     return kwargs
 
 
-# 可执行文件路径探测的记忆化：键是配置里的 yt_dlp_exe_path，
-# 配置一变就自动失效。多路径探测每次解析都要跑，纯属重复劳动。
-_exe_cache_lock = Lock()
-_exe_cache: tuple[str, Path | None] | None = None
+def resolve_yt_dlp_runtime():
+    from ..utils.ytdlp_runtime import resolve_runtime
+
+    return resolve_runtime(str(config_manager.get("yt_dlp_exe_path") or "").strip())
 
 
 def resolve_yt_dlp_exe() -> Path | None:
-    """Resolve yt-dlp executable path.
-
-    Priority:
-    1) config yt_dlp_exe_path (if exists)
-    2) bundled _internal/yt-dlp/yt-dlp.exe (frozen)
-    3) yt-dlp on PATH
-
-    结果按配置项 `yt_dlp_exe_path` 记忆化；解析出的路径若已消失则重新探测。
-    """
-    global _exe_cache
-
-    cfg = str(config_manager.get("yt_dlp_exe_path") or "").strip()
-
-    with _exe_cache_lock:
-        if _exe_cache is not None and _exe_cache[0] == cfg:
-            cached = _exe_cache[1]
-            # 缓存命中但文件被删/被移动时，退回重新探测。
-            if cached is None or cached.exists():
-                return cached
-
-        resolved = _resolve_yt_dlp_exe_uncached(cfg)
-        _exe_cache = (cfg, resolved)
-        return resolved
+    return resolve_yt_dlp_runtime().path
 
 
 def invalidate_yt_dlp_exe_cache() -> None:
-    """清空 exe 路径缓存。
+    from ..utils.ytdlp_runtime import invalidate_version_cache
 
-    常规配置变更无需调用——缓存键就是 `yt_dlp_exe_path`，改配置即自动失效；
-    此函数留给"外部替换了 exe 文件但配置未变"这类场景。
-    """
-    global _exe_cache
-    with _exe_cache_lock:
-        _exe_cache = None
+    invalidate_version_cache()
 
 
 def _resolve_yt_dlp_exe_uncached(cfg: str) -> Path | None:
-    """`resolve_yt_dlp_exe` 的实际探测逻辑。"""
-    if cfg:
-        p = Path(cfg)
-        if p.exists():
-            return p
+    from ..utils.ytdlp_runtime import resolve_runtime
 
-    # Prefer tools placed into exe-adjacent `bin` (or project `bin`) via locate_runtime_tool.
-    try:
-        return locate_runtime_tool("yt-dlp.exe", "yt-dlp/yt-dlp.exe", "yt_dlp/yt-dlp.exe")
-    except FileNotFoundError:
-        # fallback to legacy bundled search when frozen
-        if is_frozen():
-            p = find_bundled_executable(
-                "yt-dlp.exe",
-                "yt-dlp/yt-dlp.exe",
-                "yt_dlp/yt-dlp.exe",
-            )
-            if p is not None:
-                return p
-
-    which = shutil.which("yt-dlp") or shutil.which("yt-dlp.exe")
-    return Path(which) if which else None
+    return resolve_runtime(cfg).path
 
 
 def _prepend_path(env: dict[str, str], *dirs: str) -> None:
@@ -733,6 +688,8 @@ def ydl_opts_to_cli_args(ydl_opts: dict[str, Any]) -> list[str]:
 
     This mapping is intentionally minimal and only covers what the app uses.
     """
+    ydl_opts = dict(ydl_opts)
+    enforce_cookie_mode(ydl_opts)
 
     args: list[str] = []
 
@@ -1064,7 +1021,7 @@ _SABR_MARKERS = (
 )
 
 
-def _maybe_mark_sabr_only(output: str) -> None:
+def _maybe_mark_sabr_only(output: str, opts: dict | None = None) -> None:
     """解析输出命中 SABR 标记 → 在当前 YouTube 账号 / 会话上打标。
 
     只打标、不改本次 opts：追加 web_safari 客户端由下一次 build_ydl_options() 消费
@@ -1079,15 +1036,20 @@ def _maybe_mark_sabr_only(output: str) -> None:
             return
         from ..auth.auth_service import auth_service
 
-        if auth_service.get_youtube_sabr_only():
+        scope = (
+            opts.get(SABR_SCOPE, "" if not opts.get("cookiefile") else None)
+            if opts is not None
+            else None
+        )
+        if auth_service.get_youtube_sabr_only(scope):
             return  # 已标记，避免重复日志/写盘
-        auth_service.mark_youtube_sabr_only()
+        auth_service.mark_youtube_sabr_only(scope)
         from loguru import logger
 
         log_text(
             logger,
             "warning",
-            "[SABR] 检测到账号级 SABR-only 灰度（高清直链被丢弃），已标记账号；后续解析/下载将追加 web_safari 客户端以拿回高清格式。",
+            "[SABR] 检测到 SABR-only（高清直链被丢弃），已标记本次请求对应的账号或匿名会话；后续解析/下载将追加 web_safari 客户端。",
         )
     except Exception:
         return
@@ -1100,6 +1062,8 @@ def run_dump_single_json(
     *,
     cancel_event: Event | None = None,
 ) -> dict[str, Any]:
+    ydl_opts = dict(ydl_opts)
+    enforce_cookie_mode(ydl_opts)
     exe = resolve_yt_dlp_exe()
     if exe is None:
         raise FileNotFoundError(english("未找到 yt-dlp.exe（既没有内置也不在 PATH 中）"))
@@ -1226,7 +1190,7 @@ def run_dump_single_json(
     # 客户端才能拿回。这里只**打标**（落在账号 / 会话上），下一次 build_ydl_options()
     # 读标记时才追加客户端——因为解析与下载各自独立调 build_ydl_options()，标记是唯一
     # 能同时命中两条路的位置。best-effort：观测绝不拖垮解析（硬规则 5）。
-    _maybe_mark_sabr_only(out)
+    _maybe_mark_sabr_only(out, ydl_opts)
 
     # yt-dlp may print other lines; pick the last parsable JSON line.
     _t_json = time.perf_counter()
@@ -1248,6 +1212,8 @@ def run_dump_single_json(
                     (time.perf_counter() - _t_json) * 1000,
                     len(out.splitlines()),
                 )
+                if COOKIE_MODE in ydl_opts:
+                    stamp_result(data, ydl_opts[COOKIE_MODE])
                 return data
         except Exception:
             continue
@@ -1257,17 +1223,7 @@ def run_dump_single_json(
 
 
 def run_version() -> str:
-    exe = resolve_yt_dlp_exe()
-    if exe is None:
-        return ""
-    try:
-        out = subprocess.check_output(
-            [str(exe), "--version"],
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            **_win_hide_console_kwargs(),
-        )
-        return (out or "").strip()
-    except Exception:
-        return ""
+    from ..utils.ytdlp_runtime import probe_version
+
+    result = probe_version(resolve_yt_dlp_exe())
+    return result.version if result.status == "ok" else ""

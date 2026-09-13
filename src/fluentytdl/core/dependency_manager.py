@@ -207,6 +207,12 @@ class DependencyManager(QObject):
 
         安装动作**不要**用这里的结果做目标路径：装到 PATH 上别人的目录里是越界。
         """
+        if component_key == "yt-dlp":
+            from ..youtube.yt_dlp_cli import resolve_yt_dlp_runtime
+
+            runtime = resolve_yt_dlp_runtime()
+            return runtime.path, runtime.source
+
         info = self.components.get(component_key)
         if info is None:
             return None, ""
@@ -273,7 +279,8 @@ class DependencyManager(QObject):
         # 装了个不对的包（或者装完 sidecar 没写上），UI 会一口咬定"已是最新"，用户
         # 再点也没用。现在只有版本和频道都对上才算装成功、才抑制。
         installed = self._just_installed.pop(key, None)
-        if installed is not None and result.get("update_available"):
+        external_active = key == "yt-dlp" and result.get("exe_path") != result.get("install_path")
+        if installed is not None and result.get("update_available") and not external_active:
             want_ver, want_ch = installed
             got_ver = str(result.get("current") or "")
             got_ch = str(result.get("current_channel") or "")
@@ -388,13 +395,8 @@ class DependencyManager(QObject):
             str(config_manager.get("ytdlp_channel", "stable")).strip() if key == "yt-dlp" else "",
         )
 
-        # yt-dlp.exe 被换掉了，但 `yt_dlp_exe_path` 配置没变 —— 而
-        # `resolve_yt_dlp_exe()` 正是按那个配置值记忆化的，不显式失效就会继续用
-        # 缓存里的旧 Path 对象。`invalidate_yt_dlp_exe_cache()` 的文档字符串写的
-        # 就是这个场景（"外部替换了 exe 文件但配置未变"）。
-        #
-        # 插件同步跟在后面：安装脚本会清理 exe 所在目录，`yt-dlp-plugins/` 有可能
-        # 被牵连。函数内 import —— core 只能惰性引用 Service 层（CLAUDE.md §2）。
+        # Installed bytes invalidate shared version identity; path resolution is always fresh.
+        # Plugin synchronization still targets the executable selected for execution.
         if key == "yt-dlp":
             try:
                 from ..youtube.yt_dlp_cli import (
@@ -534,6 +536,7 @@ class UpdateCheckerWorker(QThread):
                 # core 不再造 `"2026.08.20 (nightly)"` 这种复合串。
                 "current": current_ver,
                 "current_channel": current_ch,
+                "version_status": getattr(self, "_local_version_status", ""),
                 "latest": remote.version,
                 "latest_channel": remote.channel,
                 "update_available": update_available,
@@ -542,6 +545,7 @@ class UpdateCheckerWorker(QThread):
                 # "bundled" / "path" / ""：UI 靠它区分「未安装」和「用的是系统里那份」
                 "source": source,
                 "exe_path": str(exe_path),
+                "install_path": str(self.manager.get_exe_path(self.key)),
             }
             self.finished_signal.emit(self.key, result)
 
@@ -558,6 +562,13 @@ class UpdateCheckerWorker(QThread):
 
     def _get_local_version(self, key: str, path: Path) -> tuple[str, str]:
         """读本地已装版本，返回 `(裸版本号, 频道)`。频道只有 yt-dlp 非空。"""
+        if key == "yt-dlp":
+            from ..utils.ytdlp_runtime import probe_version
+
+            result = probe_version(path)
+            self._local_version_status = result.status
+            return result.version, result.channel
+
         if not path.exists():
             return "unknown", ""
 
@@ -592,25 +603,7 @@ class UpdateCheckerWorker(QThread):
                 return "unknown", ""
 
             out = proc.stdout.strip()
-            if key == "yt-dlp":
-                # yt-dlp output is just the date/version: "2023.11.16"
-                version_str = out.splitlines()[0].strip()
-                # 频道只从 sidecar 的 `channel` 键读。以前也解析过 `version` 里的
-                # 括号后缀，但那个后缀本身就是 bug（安装时把 " (nightly)" 写进了
-                # version 字段），跟着它解析等于把双重编码固化下来。
-                actual_channel = "stable"
-                manifest_path = path.parent / "manifest.json"
-                if manifest_path.exists():
-                    try:
-                        with open(manifest_path, encoding="utf-8") as f:
-                            data = json.load(f)
-                        ch = str(data.get("channel", "") or "").strip()
-                        if ch:
-                            actual_channel = ch
-                    except Exception:
-                        pass
-                return version_str, actual_channel
-            elif key == "deno":
+            if key == "deno":
                 # deno 1.38.0 (release, x86_64-pc-windows-msvc) ...
                 m = re.search(r"deno (\d+\.\d+\.\d+)", out)
                 if m:
@@ -931,8 +924,6 @@ class DownloaderWorker(QObject):
             "proxy_mode": proxy_mode,
         }
 
-        import json
-
         from ..utils.paths import is_frozen
 
         args = []
@@ -967,8 +958,6 @@ class DownloaderWorker(QObject):
         self._buffer += data
         lines = self._buffer.split("\n")
         self._buffer = lines[-1]
-
-        import json
 
         for line in lines[:-1]:
             line = line.strip()

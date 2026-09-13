@@ -114,7 +114,7 @@
 
 **Symptom**: Temptation to force `android` or `ios` client for better formats
 
-**Root Cause**: Android/iOS simulation can return incomplete format lists; yt-dlp's default strategy (tv → web_safari → android_vr) is well-tested
+**Root Cause**: Android/iOS simulation can return incomplete format lists; yt-dlp's default strategy (selected by the active yt-dlp version and request authentication) is well-tested
 
 **Rule**: NEVER force `player_client` via extractor_args; trust yt-dlp defaults
 

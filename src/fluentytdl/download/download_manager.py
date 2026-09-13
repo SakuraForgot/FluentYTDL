@@ -409,6 +409,18 @@ class DownloadManager(QObject):
         *,
         flow: FlowTrace | None = None,
     ) -> DownloadWorker:
+        from ..core.config_manager import config_manager
+        from ..utils.youtube_request import COOKIE_MODE
+
+        opts = dict(opts)
+        from ..utils.url_router import UrlRouter
+
+        if UrlRouter.detect_platform(url) == "youtube" and COOKIE_MODE not in opts:
+            opts[COOKIE_MODE] = (cached_info or {}).get(
+                COOKIE_MODE, bool(config_manager.get("youtube_cookies_enabled", True))
+            )
+            if restore_db_id > 0:
+                task_db.update_task_opts(restore_db_id, opts)
         worker = DownloadWorker(url, opts, cached_info=cached_info, flow=flow)
 
         # 1. 登记入库，建立 Worker 的持久化主键

@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import asyncio
 import copy
+import functools
 import hashlib
 import http.cookiejar
+import inspect
 import json
 import os
 import re
@@ -21,11 +23,17 @@ import requests
 
 from fluentytdl.utils.localized_log import log_text
 from fluentytdl.utils.logger import get_logger
-from fluentytdl.utils.paths import find_bundled_executable, is_frozen, locate_runtime_tool
+from fluentytdl.utils.paths import find_bundled_executable, is_frozen
 from fluentytdl.utils.ui_text import tr_text
 
 from ..core.config_manager import config_manager
-from .yt_dlp_cli import YtDlpCancelled, run_dump_single_json, run_version
+from ..utils.youtube_request import (
+    COOKIE_MODE,
+    SABR_SCOPE,
+    request_scope,
+    stamp_result,
+)
+from .yt_dlp_cli import YtDlpCancelled, resolve_yt_dlp_exe, run_dump_single_json, run_version
 
 LogCallback = Callable[[str, str], None]
 
@@ -89,6 +97,7 @@ class YtDlpAuthOptions:
     """
 
     cookies_file: str | None = None
+    use_youtube_cookies: bool | None = None
 
 
 @dataclass(slots=True)
@@ -115,6 +124,53 @@ class YoutubeServiceOptions:
     auth: YtDlpAuthOptions = field(default_factory=YtDlpAuthOptions)
     anti_blocking: AntiBlockingOptions = field(default_factory=AntiBlockingOptions)
     network: NetworkOptions = field(default_factory=NetworkOptions)
+
+
+def freeze_youtube_options(options=None, *, enabled=None):
+    result = copy.deepcopy(options) if options is not None else YoutubeServiceOptions()
+    if enabled is not None:
+        result.auth.use_youtube_cookies = bool(enabled)
+    elif result.auth.use_youtube_cookies is None:
+        current = request_scope.get()
+        result.auth.use_youtube_cookies = (
+            current[COOKIE_MODE]
+            if current
+            else bool(config_manager.get("youtube_cookies_enabled", True))
+        )
+    return result
+
+
+def _snapshot_request(method):
+    signature = inspect.signature(method)
+
+    @functools.wraps(method)
+    def wrapped(self, *args, **kwargs):
+        bound = signature.bind(self, *args, **kwargs)
+        base = bound.arguments.get("base_ydl_opts") or {}
+        options = freeze_youtube_options(
+            bound.arguments.get("options"), enabled=base.get(COOKIE_MODE)
+        )
+        bound.arguments["options"] = options
+        outer = request_scope.get()
+        context = {
+            COOKIE_MODE: options.auth.use_youtube_cookies,
+            "generation": outer["generation"] if outer else self._cookie_generation,
+        }
+        token = request_scope.set(context)
+        try:
+            result = method(*bound.args, **bound.kwargs)
+            from ..utils.url_router import UrlRouter
+
+            if (
+                isinstance(result, dict)
+                and UrlRouter.detect_platform(bound.arguments.get("url", "")) == "youtube"
+            ):
+                stamp_result(result, context[COOKIE_MODE])
+            return result
+        finally:
+            request_scope.reset(token)
+
+    return wrapped
 
 
 class YoutubeService:
@@ -168,6 +224,18 @@ class YoutubeService:
         # 不落盘：签名 URL 有时效，持久化只会带来假命中。
         self._parse_cache: OrderedDict[str, tuple[float, dict[str, Any]]] = OrderedDict()
         self._parse_cache_lock = threading.Lock()
+        self._cookie_generation = 0
+        from PySide6.QtCore import Qt
+
+        config_manager.configChanged.connect(
+            self._on_cookie_mode_config_changed, Qt.ConnectionType.DirectConnection
+        )
+
+    def _on_cookie_mode_config_changed(self, key, value):
+        if key == "youtube_cookies_enabled":
+            with self._parse_cache_lock:
+                self._cookie_generation += 1
+                self._parse_cache.clear()
 
     def set_log_callback(self, callback: LogCallback | None) -> None:
         """UI layer can subscribe to logs later (Stage 2+)."""
@@ -235,7 +303,7 @@ class YoutubeService:
     ) -> dict[str, Any]:
         """Construct yt-dlp options with anti-blocking and auth."""
 
-        options = options or YoutubeServiceOptions()
+        options = freeze_youtube_options(options)
 
         # 平台检测
         from ..utils.url_router import UrlRouter
@@ -252,6 +320,7 @@ class YoutubeService:
                 pass
 
         auth = options.auth
+        cookie_allowed = _platform != "youtube" or bool(auth.use_youtube_cookies)
         net = options.network
 
         # 应用全局网络重试设置
@@ -346,7 +415,9 @@ class YoutubeService:
         # 1. 检查 auth options 中是否直接指定了 cookie 文件（向后兼容）
         direct_cookiefile = (auth.cookies_file or "").strip() or None
 
-        if direct_cookiefile and os.path.exists(direct_cookiefile):
+        if not cookie_allowed:
+            self._emit_log("info", tr_text("YouTube Cookies 已关闭，本次请求不携带 Cookie。"))
+        elif direct_cookiefile and os.path.exists(direct_cookiefile):
             # 直接指定的 cookie 文件优先
             if self._is_probably_json_cookie_file(direct_cookiefile):
                 self._emit_log(
@@ -455,12 +526,21 @@ class YoutubeService:
             f"[Cookie] Path={cookiefile or 'None'}, Valid={has_valid_cookie}",
         )
 
+        if _platform == "youtube":
+            ydl_opts[COOKIE_MODE] = bool(auth.use_youtube_cookies)
+            from ..auth.auth_service import auth_service
+
+            account = auth_service.get_current_webview2_account("youtube") if cookiefile else None
+            ydl_opts[SABR_SCOPE] = account.account_id if account else ""
+            if request_scope.get() is not None:
+                request_scope.get()[SABR_SCOPE] = ydl_opts[SABR_SCOPE]
+
         # --- Smart client switching ---
-        # yt-dlp default strategy (tv -> web_safari -> android_vr) is the most robust.
+        # Default clients depend on the installed yt-dlp version and authentication.
         # We do not hardcode player_client to allow yt-dlp to adapt to YouTube SABR changes.
         if not has_valid_cookie:
             # 不指定 player_client，让 yt-dlp 使用默认策略
-            # (内部会尝试 tv → web_safari → android_vr，自动选择可用的)
+            # 客户端集合由实际使用的 yt-dlp 内核决定。
             self._emit_log("warning", tr_text("未检测到有效 Cookies，将使用无 Cookie 默认模式"))
         else:
             # 不强制指定 player_client，让 yt-dlp 自行决定最优组合
@@ -690,7 +770,7 @@ class YoutubeService:
         try:
             from ..auth.auth_service import auth_service
 
-            if not auth_service.get_youtube_sabr_only():
+            if not auth_service.get_youtube_sabr_only(ydl_opts.get(SABR_SCOPE)):
                 return
         except Exception:
             return
@@ -727,7 +807,7 @@ class YoutubeService:
         try:
             from ..auth.auth_service import auth_service
 
-            return auth_service.get_youtube_sabr_only()
+            return auth_service.get_youtube_sabr_only((request_scope.get() or {}).get(SABR_SCOPE))
         except Exception:
             return False
 
@@ -753,7 +833,7 @@ class YoutubeService:
             self._emit_log(
                 "info",
                 tr_text(
-                    "🔁 [SABR] 首次检测到账号级 SABR，正在追加 web_safari 客户端重新解析以拿回高清档…"
+                    "🔁 [SABR] 本次请求首次检测到 SABR，正在追加 web_safari 客户端重新解析以拿回高清档…"
                 ),
             )
             fresh = self.build_ydl_options(options, url=url)
@@ -1322,6 +1402,7 @@ class YoutubeService:
 
         return info
 
+    @_snapshot_request
     def extract_info_sync(
         self,
         url: str,
@@ -1357,14 +1438,10 @@ class YoutubeService:
             )
             return cached_info
 
-        try:
-            _ = locate_runtime_tool("yt-dlp.exe", "yt-dlp/yt-dlp.exe", "yt_dlp/yt-dlp.exe")
-        except FileNotFoundError as e:
+        if resolve_yt_dlp_exe() is None:
             raise FileNotFoundError(
-                tr_text(
-                    "未找到 yt-dlp.exe。请在设置页指定路径，或将 yt-dlp.exe 放入 _internal/yt-dlp/，或加入 PATH。"
-                )
-            ) from e
+                tr_text("未找到 yt-dlp.exe。请检查自定义内核路径、应用托管目录或系统 PATH。")
+            )
 
         def _do_extract(opts: dict[str, Any]) -> dict[str, Any]:
             self._emit_log("info", tr_text("[EXE] 开始解析 URL: {0}", url))
@@ -1514,6 +1591,10 @@ class YoutubeService:
             "url": url.strip(),
             "mode": mode,
             "cookie": self._cookie_fingerprint(ydl_opts.get("cookiefile")),
+            "cookie_mode": ydl_opts.get(COOKIE_MODE),
+            "cookie_generation": (request_scope.get() or {}).get(
+                "generation", self._cookie_generation
+            ),
             "proxy": ydl_opts.get("proxy") or "",
             # extractor_args 里含 player_client / POT base_url / skip=authcheck，
             # 它们都会改变返回的格式列表，必须进指纹。
@@ -1635,6 +1716,9 @@ class YoutubeService:
         limit = self._parse_cache_limit_for(mode)
         snapshot = copy.deepcopy(info)
         with self._parse_cache_lock:
+            context = request_scope.get()
+            if context is not None and context["generation"] != self._cookie_generation:
+                return
             self._parse_cache[key] = (time.monotonic(), snapshot)
             self._parse_cache.move_to_end(key)
             # 只在同 mode 桶内淘汰：OrderedDict 本身就是全局 LRU 顺序，
@@ -1665,6 +1749,7 @@ class YoutubeService:
             )
         return n
 
+    @_snapshot_request
     def extract_info_for_dialog_sync(
         self,
         url: str,
@@ -1750,14 +1835,10 @@ class YoutubeService:
                 ),
             )
 
-        try:
-            _ = locate_runtime_tool("yt-dlp.exe", "yt-dlp/yt-dlp.exe", "yt_dlp/yt-dlp.exe")
-        except FileNotFoundError as e:
+        if resolve_yt_dlp_exe() is None:
             raise FileNotFoundError(
-                tr_text(
-                    "未找到 yt-dlp.exe。请在设置页指定路径，或将 yt-dlp.exe 放入 _internal/yt-dlp/，或加入 PATH。"
-                )
-            ) from e
+                tr_text("未找到 yt-dlp.exe。请检查自定义内核路径、应用托管目录或系统 PATH。")
+            )
 
         # 记下解析前的 SABR 标记：这一趟可能是 web_creator 高清被 SABR 丢光、只回 360p，
         # 而 run_dump_single_json 会在输出里读到 SABR 标记并给账号打标（首次翻转）。
@@ -1800,7 +1881,11 @@ class YoutubeService:
                 raise
             msg = str(exc)
 
-            if self._is_page_reload_error(msg) and self._try_refresh_cookie_for_reload_error(url):
+            if (
+                tuned.get(COOKIE_MODE) is not False
+                and self._is_page_reload_error(msg)
+                and self._try_refresh_cookie_for_reload_error(url)
+            ):
                 info = run_dump_single_json(
                     url,
                     tuned,
@@ -1873,6 +1958,7 @@ class YoutubeService:
             _log_fail(exc, attempts=1)
             raise
 
+    @_snapshot_request
     def extract_vr_info_sync(
         self,
         url: str,
@@ -1888,14 +1974,10 @@ class YoutubeService:
         """
         self._emit_log("info", tr_text("🥽 [VR] 使用 android_vr 客户端解析: {0}", url))
 
-        try:
-            _ = locate_runtime_tool("yt-dlp.exe", "yt-dlp/yt-dlp.exe", "yt_dlp/yt-dlp.exe")
-        except FileNotFoundError as e:
+        if resolve_yt_dlp_exe() is None:
             raise FileNotFoundError(
-                tr_text(
-                    "未找到 yt-dlp.exe。请在设置页指定路径，或将 yt-dlp.exe 放入 _internal/yt-dlp/，或加入 PATH。"
-                )
-            ) from e
+                tr_text("未找到 yt-dlp.exe。请检查自定义内核路径、应用托管目录或系统 PATH。")
+            )
 
         # 构建 android_vr 专用选项（不使用 cookies）
         vr_opts: dict[str, Any] = {
@@ -2016,6 +2098,7 @@ class YoutubeService:
             url, options, read_cache=read_cache, cancel_event=cancel_event
         )
 
+    @_snapshot_request
     def extract_playlist_flat(
         self,
         url: str,
@@ -2030,8 +2113,8 @@ class YoutubeService:
         - return entries quickly to reduce request bursts
         """
 
-        options = options or YoutubeServiceOptions()
-        base_opts = self.build_ydl_options(options)
+        options = freeze_youtube_options(options)
+        base_opts = self.build_ydl_options(options, url=url)
         ydl_opts = dict(base_opts)
 
         # Key knobs to reduce requests
@@ -2062,14 +2145,10 @@ class YoutubeService:
             return cached_info
 
         try:
-            try:
-                _ = locate_runtime_tool("yt-dlp.exe", "yt-dlp/yt-dlp.exe", "yt_dlp/yt-dlp.exe")
-            except FileNotFoundError as e:
+            if resolve_yt_dlp_exe() is None:
                 raise FileNotFoundError(
-                    tr_text(
-                        "未找到 yt-dlp.exe。请在设置页指定路径，或将 yt-dlp.exe 放入 _internal/yt-dlp/，或加入 PATH。"
-                    )
-                ) from e
+                    tr_text("未找到 yt-dlp.exe。请检查自定义内核路径、应用托管目录或系统 PATH。")
+                )
 
             try:
                 info = run_dump_single_json(
@@ -2419,6 +2498,7 @@ class YoutubeService:
 
     # ── 频道解析 ───────────────────────────────────────────────────────────
 
+    @_snapshot_request
     def extract_channel_flat(
         self,
         url: str,
@@ -2447,7 +2527,7 @@ class YoutubeService:
         if base_ydl_opts is not None:
             ydl_opts = dict(base_ydl_opts)
         else:
-            ydl_opts = dict(self.build_ydl_options(options or YoutubeServiceOptions()))
+            ydl_opts = dict(self.build_ydl_options(options or YoutubeServiceOptions(), url=url))
         ydl_opts.update(
             {
                 "skip_download": True,
@@ -2485,14 +2565,10 @@ class YoutubeService:
             return cached_info
 
         try:
-            try:
-                _ = locate_runtime_tool("yt-dlp.exe", "yt-dlp/yt-dlp.exe", "yt_dlp/yt-dlp.exe")
-            except FileNotFoundError as e:
+            if resolve_yt_dlp_exe() is None:
                 raise FileNotFoundError(
-                    tr_text(
-                        "未找到 yt-dlp.exe。请在设置页指定路径，或将 yt-dlp.exe 放入 _internal/yt-dlp/，或加入 PATH。"
-                    )
-                ) from e
+                    tr_text("未找到 yt-dlp.exe。请检查自定义内核路径、应用托管目录或系统 PATH。")
+                )
 
             try:
                 info = run_dump_single_json(

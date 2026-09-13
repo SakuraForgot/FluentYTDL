@@ -38,7 +38,9 @@ from ..observability import (
 )
 from ..utils.logger import logger
 from ..utils.translator import translate_error
-from ..youtube.youtube_service import YoutubeServiceOptions, youtube_service
+from ..utils.url_router import UrlRouter
+from ..utils.youtube_request import COOKIE_MODE, enforce_cookie_mode
+from ..youtube.youtube_service import YoutubeServiceOptions, freeze_youtube_options, youtube_service
 from ..youtube.yt_dlp_cli import YtDlpCancelled
 from .executor import DownloadExecutor
 from .features import (
@@ -149,7 +151,7 @@ class InfoExtractWorker(QThread):
     ):
         super().__init__()
         self.url = url
-        self.options = options
+        self.options = freeze_youtube_options(options)
         self.playlist_flat = playlist_flat
         # 封面模式传 False：解析结果里的 thumbnails[].url 会直接变成下载任务的 URL，
         # 命中缓存等于发一条陈旧直链。跳过读，写照常。
@@ -219,7 +221,7 @@ class ChannelExtractWorker(QThread):
         super().__init__()
         self.base_url = base_url
         self.target_tabs = target_tabs
-        self.options = options
+        self.options = freeze_youtube_options(options)
         self.trace: FlowTrace = flow if flow is not None else new_flow()
         self._cancel_event = threading.Event()
 
@@ -432,8 +434,15 @@ class VRInfoExtractWorker(QThread):
     finished = Signal(dict)
     error = Signal(dict)
 
-    def __init__(self, url: str, *, flow: FlowTrace | None = None):
+    def __init__(
+        self,
+        url: str,
+        options: YoutubeServiceOptions | None = None,
+        *,
+        flow: FlowTrace | None = None,
+    ):
         super().__init__()
+        self.options = freeze_youtube_options(options)
         self.url = url
         self.trace: FlowTrace = flow if flow is not None else new_flow()
         self._cancel_event = threading.Event()
@@ -468,7 +477,7 @@ class VRInfoExtractWorker(QThread):
                 try:
                     # 尝试作为播放列表解析
                     info = youtube_service.extract_playlist_flat(
-                        self.url, cancel_event=self._cancel_event
+                        self.url, self.options, cancel_event=self._cancel_event
                     )
 
                     # 检查是否真的是播放列表
@@ -487,7 +496,7 @@ class VRInfoExtractWorker(QThread):
             if info is None:
                 # 单视频模式：使用 android_vr 客户端
                 info = youtube_service.extract_vr_info_sync(
-                    self.url, cancel_event=self._cancel_event
+                    self.url, self.options, cancel_event=self._cancel_event
                 )
 
             if self._cancel_event.is_set():
@@ -525,7 +534,7 @@ class EntryDetailWorker(QThread):
         super().__init__()
         self.row = row
         self.url = url
-        self.options = options
+        self.options = freeze_youtube_options(options)
         self.vr_mode = vr_mode
         # 封面模式传 False，理由同 InfoExtractWorker：逐行封面直链同样会进下载任务。
         # VR 分支不受影响——VR 与封面是两个互斥的入口，不会同时成立。
@@ -617,6 +626,10 @@ class DownloadWorker(QThread):
         super().__init__()
         self.url = url
         self.opts = dict(opts)
+        if UrlRouter.detect_platform(url) == "youtube":
+            self.opts.setdefault(
+                COOKIE_MODE, bool(config_manager.get("youtube_cookies_enabled", True))
+            )
         # 观测标识。`task_id` 还是 "-"：`db_id` 要等 `create_worker()` 入库后才有，
         # 那里会调 `trace.bind_task_id()` 补一条 identity 事件把 flow → task 钉起来。
         self.trace: TaskTrace = (
@@ -896,7 +909,11 @@ class DownloadWorker(QThread):
             return info
 
         try:
-            return youtube_service.extract_info_sync(self.url, cancel_event=self._cancel_event)
+            return youtube_service.extract_info_sync(
+                self.url,
+                freeze_youtube_options(enabled=self.opts.get(COOKIE_MODE)),
+                cancel_event=self._cancel_event,
+            )
         except YtDlpCancelled:
             raise
         except Exception as e:
@@ -1155,11 +1172,15 @@ class DownloadWorker(QThread):
                 return
 
             # 合并 YoutubeService 的基础反封锁/网络配置
-            base_opts = youtube_service.build_ydl_options()
+            base_opts = youtube_service.build_ydl_options(
+                freeze_youtube_options(enabled=self.opts.get(COOKIE_MODE)), url=self.url
+            )
             import copy
 
             merged = copy.deepcopy(base_opts)
             merged.update(copy.deepcopy(self.opts))
+            if UrlRouter.detect_platform(self.url) == "youtube":
+                enforce_cookie_mode(merged)
 
             # === 防止单个任务变异为播放列表下载造成无限死循环 ===
             merged["noplaylist"] = True
@@ -2016,10 +2037,9 @@ class DownloadWorker(QThread):
         )
 
         # 从 youtube_service 获取基础选项（仅一次）
-        try:
-            base_opts = youtube_service.build_ydl_options()
-        except Exception:
-            base_opts = {}
+        base_opts = youtube_service.build_ydl_options(
+            freeze_youtube_options(enabled=self.opts.get(COOKIE_MODE)), url=self.url
+        )
 
         # Cookie（必须保留，否则可能无法访问受限视频）。
         # yt-dlp 每次运行结束都把 jar 回写进 `--cookies` 文件；绝不把 Sentinel 真相源直接
@@ -2030,6 +2050,9 @@ class DownloadWorker(QThread):
         from ..auth.cookie_runfile import cookie_runfile
 
         _cookie_stack = ExitStack()
+        if UrlRouter.detect_platform(self.url) == "youtube":
+            enforce_cookie_mode(opts)
+            enforce_cookie_mode(base_opts)
         cookiefile = opts.get("cookiefile") or base_opts.get("cookiefile")
         _run_cf = _cookie_stack.enter_context(cookie_runfile(cookiefile))
         if isinstance(_run_cf, str) and _run_cf:

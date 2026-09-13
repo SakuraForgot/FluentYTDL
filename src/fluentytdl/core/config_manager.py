@@ -34,6 +34,7 @@ class ConfigManager(QObject):
         # - auto: 自动同步模式 (启动时/报错时自动从浏览器提取)
         # - browser: 运行时直接读取浏览器 (旧模式, 可能遇到文件锁)
         # - file: 手动导入 Netscape 格式文件
+        "youtube_cookies_enabled": True,
         "cookie_mode": "auto",  # auto / browser / file
         "cookie_browser": "edge",  # chrome / edge / firefox
         "cookie_file": "",
@@ -51,7 +52,7 @@ class ConfigManager(QObject):
         "js_runtime": "auto",  # auto / deno / node / bun / quickjs
         "js_runtime_path": "",  # optional absolute path to runtime executable
         # Optional yt-dlp.exe override path
-        # Empty means auto (prefer bundled _internal/yt-dlp/yt-dlp.exe, else PATH)
+        # Empty uses the shared runtime resolver (local candidates, then PATH).
         "yt_dlp_exe_path": "",
         "max_concurrent_downloads": 3,
         # UI/behavior

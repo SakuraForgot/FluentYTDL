@@ -10,7 +10,9 @@ from fluentytdl.utils.ui_text import tr_text
 from ..models.quick_download_params import QuickDownloadParams
 from ..observability import FlowTrace, bind_current_flow, new_flow
 from ..utils.quick_opts import quick_params_to_opts
-from ..youtube.youtube_service import YoutubeService
+from ..utils.url_router import UrlRouter
+from ..utils.youtube_request import COOKIE_MODE
+from ..youtube.youtube_service import YoutubeService, freeze_youtube_options
 
 if typing.TYPE_CHECKING:
     from .controller import AppController
@@ -36,6 +38,7 @@ class QuickAddWorker(QThread):
         flow: FlowTrace | None = None,
     ):
         super().__init__()
+        self.options = freeze_youtube_options()
         self.urls = urls
         self.params = params
         self.max_playlist_items = max_playlist_items
@@ -64,13 +67,18 @@ class QuickAddWorker(QThread):
 
                 try:
                     # We need to peek if it's a playlist and get its size
-                    info = service.extract_info_for_dialog_sync(url)
+                    info = service.extract_info_for_dialog_sync(url, self.options)
                 except Exception as e:
                     logger.warning(f"Failed to extract info for {url}: {e}")
                     if len(self.urls) == 1:
                         raise  # re-raise if it's the only URL to show error to user
                     continue
 
+                base_opts = quick_params_to_opts(self.params)
+                if UrlRouter.detect_platform(url) == "youtube":
+                    base_opts[COOKIE_MODE] = info.get(
+                        COOKIE_MODE, self.options.auth.use_youtube_cookies
+                    )
                 is_playlist = "entries" in info
 
                 if not is_playlist:

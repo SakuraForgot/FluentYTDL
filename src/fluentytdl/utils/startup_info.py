@@ -54,6 +54,12 @@ def _resolve_component(key: str, base: Path, rel_path: str) -> tuple[Path | None
     用户会在启动日志里看到一排「未安装」，而 yt-dlp 全程用得很好 —— 排查问题时
     这种假线索比没有日志更糟。
     """
+    if key == "yt-dlp":
+        from fluentytdl.youtube.yt_dlp_cli import resolve_yt_dlp_runtime
+
+        runtime = resolve_yt_dlp_runtime()
+        return runtime.path, runtime.source
+
     bundled = base / rel_path
     if bundled.exists():
         return bundled, english("内置")
@@ -77,6 +83,12 @@ def _resolve_component(key: str, base: Path, rel_path: str) -> tuple[Path | None
 
 def _quick_detect_version(key: str, exe_path: Path) -> str:
     """快速检测组件版本，3 秒超时避免阻塞启动。"""
+    if key == "yt-dlp":
+        from .ytdlp_runtime import probe_version
+
+        result = probe_version(exe_path)
+        return f"{result.version} ({result.channel or result.status})"
+
     if not exe_path.exists():
         return english("未安装")
 
@@ -220,7 +232,14 @@ def log_component_versions() -> None:
             lines.append(english("  {0:<16} 未安装", key))
             continue
         version = _quick_detect_version(key, exe_path)
-        versions[key] = {"version": version, "source": source}
+        versions[key] = {"version": version, "source": source, "path": str(exe_path)}
+        if key == "yt-dlp":
+            from .ytdlp_runtime import probe_version
+
+            identity = probe_version(exe_path)
+            versions[key].update(
+                version=identity.version, channel=identity.channel, status=identity.status
+            )
         lines.append(f"  {key:<16} {version:<24} [{source}] {exe_path}")
 
     from fluentytdl.observability import emit_event

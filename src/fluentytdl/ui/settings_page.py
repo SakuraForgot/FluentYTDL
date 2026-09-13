@@ -258,12 +258,24 @@ class ComponentSettingCard(SettingCard):
         silent = bool(result.get("silent"))
 
         curr_text = self._format_version(curr, curr_ch if curr != "unknown" else "")
+        if key == "yt-dlp" and source and curr == "unknown":
+            curr_text = (
+                self.tr("版本检测超时")
+                if result.get("version_status") == "timeout"
+                else self.tr("版本未知")
+            )
         latest_text = self._format_version(latest, latest_ch if latest != "unknown" else "")
 
         # 组件可能来自自带的 bin 目录，也可能是用户自己装在 PATH 上的那一份 ——
         # yt-dlp 子进程两种都能用，所以必须把来源写出来。不写的话，PATH 用户会看到
         # 一个版本号却不知道它是哪来的，而更新按钮装出来的是另一份（自带目录优先）。
         content = self.tr("当前: {}  |  最新: {}").format(curr_text, latest_text)
+        if source == "custom":
+            content += self.tr("  |  来源: 自定义路径")
+        if key == "yt-dlp":
+            content += self.tr("\n实际使用: {}\n托管安装目标: {}").format(
+                result.get("exe_path", ""), result.get("install_path", "")
+            )
         if source == "path":
             content += self.tr("  |  来源: 系统 PATH")
         self.setContent(content)
@@ -282,6 +294,8 @@ class ComponentSettingCard(SettingCard):
                 )
             else:
                 detail = self.tr("版本 {} 可用 (当前: {})").format(latest, curr)
+            if source == "custom":
+                detail += self.tr("\n更新仅安装到托管目录；当前自定义内核不会被替换或自动切换。")
             if source == "path":
                 # 安装动作只会写自带目录，不会去动 PATH 上别人的文件。
                 detail += self.tr(
@@ -309,7 +323,10 @@ class ComponentSettingCard(SettingCard):
                     parent=self.window(),
                 )
             elif curr == "unknown":
-                self._set_state(self._NOT_INSTALLED, self.tr("立即安装"))
+                if source:
+                    self._set_state(self._IDLE, self.tr("检查更新"))
+                else:
+                    self._set_state(self._NOT_INSTALLED, self.tr("立即安装"))
             else:
                 self._set_state(self._IDLE, self.tr("检查更新"))
                 # 「已是最新」用户什么都不用做 —— 自动检查时是纯噪音
@@ -352,7 +369,9 @@ class ComponentSettingCard(SettingCard):
         title_text = self.titleLabel.text()
         InfoBar.info(
             self.tr("安装完成"),
-            self.tr("{} 已成功安装/更新。").format(title_text),
+            self.tr("{} 已成功安装/更新到托管目录；实际使用版本以重新检查结果为准。").format(
+                title_text
+            ),
             duration=5000,
             parent=self.window(),
         )
@@ -945,6 +964,8 @@ class PotDiagnoseWorker(QThread):
 class SettingsPage(QWidget):
     """设置页面：管理下载、网络、核心组件配置 (重构版 - Pivot导航)"""
 
+    youtubeCookiesChanged = Signal(bool)
+
     clipboardAutoDetectChanged = Signal(bool)
 
     # 「解析结果保留时间」下拉框各档位对应的秒数，顺序必须与卡片里的文案一一对应。
@@ -1077,7 +1098,11 @@ class SettingsPage(QWidget):
         config_manager.configChanged.connect(self._on_global_config_changed)
 
     def _on_global_config_changed(self, key: str, value: Any):
-        if key == "single_container_override":
+        if key == "youtube_cookies_enabled":
+            self.youtubeCookiesCard.switchButton.blockSignals(True)
+            self.youtubeCookiesCard.switchButton.setChecked(bool(value))
+            self.youtubeCookiesCard.switchButton.blockSignals(False)
+        elif key == "single_container_override":
             idx = self.singleContainerCard.comboBox.findText(value)
             if idx >= 0 and self.singleContainerCard.comboBox.currentIndex() != idx:
                 self.singleContainerCard.comboBox.setCurrentIndex(idx)
@@ -1632,6 +1657,24 @@ class SettingsPage(QWidget):
 
         self.accountGroup = SettingCardGroup(self.tr("账号验证"), parent_widget)
 
+        self.youtubeCookiesCard = InlineSwitchCard(
+            FluentIcon.PEOPLE,
+            self.tr("使用 YouTube Cookies"),
+            self.tr(
+                "关闭后，新解析不携带 YouTube Cookies；账号和同步设置保留，已解析及已创建的任务沿用原模式。"
+            ),
+            parent=self.accountGroup,
+        )
+        self.youtubeCookiesCard.contentLabel.setWordWrap(True)
+        self.youtubeCookiesCard.setFixedHeight(96)
+        self.youtubeCookiesCard.hBoxLayout.setStretch(2, 1)
+        self.youtubeCookiesCard.hBoxLayout.setStretch(4, 0)
+        self.youtubeCookiesCard.vBoxLayout.setAlignment(
+            self.youtubeCookiesCard.contentLabel, Qt.AlignmentFlag(0)
+        )
+        self.youtubeCookiesCard.checkedChanged.connect(self.youtubeCookiesChanged)
+        self.youtubeCookiesChanged.connect(self._set_youtube_cookie_mode)
+
         # === Cookie Sentinel 配置组 ===
         self.cookieModeCard = InlineComboBoxCard(
             FluentIcon.PEOPLE,
@@ -1718,6 +1761,7 @@ class SettingsPage(QWidget):
         )
         self.cookieCleaningCard.checkedChanged.connect(self._on_cookie_cleaning_changed)
 
+        self.accountGroup.addSettingCard(self.youtubeCookiesCard)
         self.accountGroup.addSettingCard(self.cookieModeCard)
         self.accountGroup.addSettingCard(self.browserCard)
         self.accountGroup.addSettingCard(self.browserRefreshCard)
@@ -2755,6 +2799,12 @@ class SettingsPage(QWidget):
             str(config_manager.get("proxy_url") or "127.0.0.1:7890")
         )
 
+        self.youtubeCookiesCard.switchButton.blockSignals(True)
+        self.youtubeCookiesCard.switchButton.setChecked(
+            bool(config_manager.get("youtube_cookies_enabled", True))
+        )
+        self.youtubeCookiesCard.switchButton.blockSignals(False)
+
         # Cookie 配置从 auth_service 加载
         from ..auth.auth_service import AuthSourceType, auth_service, browser_combo_index
 
@@ -3339,6 +3389,15 @@ class SettingsPage(QWidget):
             )
         else:
             InfoBar.info(self.tr("已清空"), self.tr("代理地址已清空。"), duration=5000, parent=self)
+
+    def _set_youtube_cookie_mode(self, enabled: bool) -> None:
+        config_manager.set("youtube_cookies_enabled", enabled)
+        InfoBar.info(
+            self.tr("Cookie 使用方式已更改"),
+            self.tr("请重新解析链接以应用新设置；已有任务沿用原模式。"),
+            duration=4000,
+            parent=self,
+        )
 
     def _on_cookie_mode_changed(self, index: int) -> None:
         """Cookie 模式切换：0=浏览器提取, 1=DLE登录获取, 2=手动文件"""

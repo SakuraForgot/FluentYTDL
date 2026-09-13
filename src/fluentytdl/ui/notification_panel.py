@@ -337,17 +337,27 @@ class NotificationFlyoutView(FlyoutViewBase):
         self.clearAllBtn = PushButton(self.tr("全部已读"), self)
         self.clearAllBtn.setMinimumHeight(32)
         self.clearAllBtn.clicked.connect(notification_center.mark_all_as_read)
+        self.deleteAllBtn = PushButton(self.tr("全部清空"), self)
+        self.deleteAllBtn.setMinimumHeight(32)
+        self.deleteAllBtn.clicked.connect(notification_center.clear_all)
+        for button in (self.clearAllBtn, self.deleteAllBtn):
+            button.ensurePolished()
+            button.setMinimumWidth(button.sizeHint().width())
 
         self.headerLayout.addWidget(self.titleLabel)
         self.headerLayout.addStretch(1)
         self.headerLayout.addWidget(self.detachBtn)
         self.headerLayout.addWidget(self.refreshAnnouncementsBtn)
-        self.actionsLayout = QHBoxLayout()
-        self.actionsLayout.addStretch(1)
-        self.actionsLayout.addWidget(self.clearAllBtn)
+        self.headerLayout.addWidget(self.clearAllBtn)
+        self.headerLayout.addWidget(self.deleteAllBtn)
 
         self.vBoxLayout.addLayout(self.headerLayout)
-        self.vBoxLayout.addLayout(self.actionsLayout)
+        self.setFixedWidth(
+            min(
+                self.screen().availableGeometry().width() - 48,
+                max(self.width(), self.headerLayout.minimumSize().width() + 32),
+            )
+        )
 
         self.listWidget = NotificationListWidget(self)
         self.listWidget.countChanged.connect(self._fit_height)
@@ -400,17 +410,29 @@ class NotificationWindow(StandaloneWindow):
         self.clearAllBtn = PushButton(self.tr("全部已读"), self)
         self.clearAllBtn.setMinimumHeight(32)
         self.clearAllBtn.clicked.connect(notification_center.mark_all_as_read)
+        self.deleteAllBtn = PushButton(self.tr("全部清空"), self)
+        self.deleteAllBtn.setMinimumHeight(32)
+        self.deleteAllBtn.clicked.connect(notification_center.clear_all)
+        for button in (self.clearAllBtn, self.deleteAllBtn):
+            button.ensurePolished()
+            button.setMinimumWidth(button.sizeHint().width())
 
         self.headerLayout = QHBoxLayout()
         self.headerLayout.setContentsMargins(0, 0, 0, 0)
         self.headerLayout.addWidget(self.titleLabel)
         self.headerLayout.addStretch(1)
         self.headerLayout.addWidget(self.refreshAnnouncementsBtn)
-        self.actionsLayout = QHBoxLayout()
-        self.actionsLayout.addStretch(1)
-        self.actionsLayout.addWidget(self.clearAllBtn)
+        self.headerLayout.addWidget(self.clearAllBtn)
+        self.headerLayout.addWidget(self.deleteAllBtn)
         self.viewLayout.addLayout(self.headerLayout)
-        self.viewLayout.addLayout(self.actionsLayout)
+        self.setMinimumWidth(
+            max(
+                self.MIN_SIZE[0],
+                self.headerLayout.minimumSize().width()
+                + self.CONTENT_MARGINS[0]
+                + self.CONTENT_MARGINS[2],
+            )
+        )
 
         self.listWidget = NotificationListWidget(self)
         self.viewLayout.addWidget(self.listWidget, 1)
