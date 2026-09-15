@@ -31,6 +31,10 @@ def test_draft_protocol(tmp_path, monkeypatch, scenario):
     version = "3.7.1-rc.1" if is_rc else "3.7.1"
     tag = "v" + version
     (tmp_path / "build").mkdir()
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs/release-template.md").write_text(
+        (pipeline.ROOT / "docs/release-template.md").read_text(encoding="utf-8"), encoding="utf-8"
+    )
     (tmp_path / "VERSION").write_text(version)
     files = {}
     for name in pipeline.release_names("all", version).values():
@@ -40,6 +44,7 @@ def test_draft_protocol(tmp_path, monkeypatch, scenario):
         {
             "app_version": version,
             "release_tag": tag,
+            "changelog": "- Release protocol fixture",
             "components": {
                 "app-core": {
                     "size": len(files[core_name]),

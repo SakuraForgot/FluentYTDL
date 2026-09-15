@@ -595,11 +595,11 @@ class YoutubeService:
                                 ),
                             )
 
-                            # 校验成功后才缓存结果，失败后的重试仍会重新检查插件。
+                            # 每次检查当前内核的插件，允许组件更新/文件丢失后修复。
+                            plugin_ok, plugin_msg = pot_manager.verify_plugin_loadable()
+                            if not plugin_ok:
+                                raise RuntimeError(plugin_msg)
                             if not getattr(self, "_pot_plugin_checked", False):
-                                plugin_ok, plugin_msg = pot_manager.verify_plugin_loadable()
-                                if not plugin_ok:
-                                    raise RuntimeError(plugin_msg)
                                 self._pot_plugin_checked = True
                                 self._emit_log("info", plugin_msg)
                 if not pot_injected:

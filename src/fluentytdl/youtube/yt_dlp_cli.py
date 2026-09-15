@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import json
 import os
-import shutil
 import subprocess
+import tempfile
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -184,13 +184,11 @@ def _prepend_path(env: dict[str, str], *dirs: str) -> None:
 # POT Plugin Sync — 标准目录插件安装
 # ---------------------------------------------------------------------------
 # 独立编译的 yt-dlp.exe（PyInstaller/Nuitka）不支持 PYTHONPATH 外部插件加载。
-# 必须将插件放置在 <exe-dir>/yt-dlp-plugins/<pkg>/yt_dlp_plugins/extractor/ 下，
-# 这是 yt-dlp 官方推荐的 "Executable location" 安装方式。
+# 优先部署到 exe 旁的标准目录；不可写时以 --plugin-dirs 指定随包插件目录。
 # See: https://github.com/yt-dlp/yt-dlp#installing-plugins
 # ---------------------------------------------------------------------------
 
 _PLUGIN_PACKAGE_NAME = "bgutil-ytdlp-pot-provider"
-_PLUGIN_FILE_GLOB = "getpot_bgutil*.py"
 
 
 def _get_pot_plugin_source_dir() -> Path | None:
@@ -217,144 +215,123 @@ def _get_pot_plugin_source_dir() -> Path | None:
     return None
 
 
-# 插件同步的结果记忆化：键是源目录内容指纹（文件名 + mtime + size），
-# 值是上次同步结论。每次解析都跑一遍 glob + 逐文件 stat 是纯浪费，
-# 而并行解析（频道多标签）还会让多个线程同时 copy2 同一批文件。
+# Serialize deployment; these three small files are compared by content on every check.
 _pot_sync_lock = Lock()
-_pot_sync_cache: tuple[Any, bool] | None = None
+_POT_REQUIRED_FILES = ("getpot_bgutil.py", "getpot_bgutil_http.py", "getpot_bgutil_cli.py")
 
 
-def sync_pot_plugins_to_ytdlp() -> bool:
-    """将 POT 插件文件同步到 yt-dlp.exe 旁的标准插件目录。
-
-    yt-dlp 独立编译版（.exe）不支持 PYTHONPATH 插件加载，
-    需要将插件放置在 <exe-dir>/yt-dlp-plugins/<pkg>/yt_dlp_plugins/extractor/ 下。
-
-    此函数执行增量同步：仅当源文件更新（mtime 更新或目标不存在）时才复制。
-    结果按源目录指纹记忆化，并由 `_pot_sync_lock` 串行化，可安全并发调用。
-
-    Returns:
-        True 如果插件目录就绪（已同步或无需同步）
-    """
-    from loguru import logger
-
-    with _pot_sync_lock:
-        return _sync_pot_plugins_locked(logger)
+def _read_pot_sources() -> tuple[Path, dict[str, bytes]]:
+    source = _get_pot_plugin_source_dir()
+    if source is None:
+        raise FileNotFoundError("Bundled POT plugin sources missing")
+    files = {name: (source / name).read_bytes() for name in _POT_REQUIRED_FILES}
+    for name, content in files.items():
+        if not content.strip():
+            raise ValueError(f"Empty POT plugin source: {name}")
+        compile(content, str(source / name), "exec")
+    return source, files
 
 
-def _pot_source_fingerprint(source_dir: Path, source_files: list[Path]) -> Any:
-    """源插件目录的轻量指纹：(路径, mtime_ns, size) 三元组的有序元组。"""
-    items = []
-    for f in sorted(source_files):
-        try:
-            st = f.stat()
-            items.append((f.name, st.st_mtime_ns, st.st_size))
-        except OSError:
-            items.append((f.name, -1, -1))
-    return (str(source_dir), tuple(items))
-
-
-def _sync_pot_plugins_locked(logger: Any) -> bool:
-    """`sync_pot_plugins_to_ytdlp` 的实际实现，调用方必须已持有 `_pot_sync_lock`。"""
-    global _pot_sync_cache
-
+def _pot_file_matches(path: Path, content: bytes) -> bool:
     try:
-        exe = resolve_yt_dlp_exe()
-        if exe is None:
-            log_text(logger, "debug", "POT Plugin Sync: yt-dlp.exe 未找到，跳过同步")
-            return False
-
-        source_dir = _get_pot_plugin_source_dir()
-        if source_dir is None:
-            log_text(logger, "debug", "POT Plugin Sync: 插件源目录不存在，跳过同步")
-            return False
-
-        source_files = list(source_dir.glob(_PLUGIN_FILE_GLOB))
-        if not source_files:
-            log_text(logger, "debug", "POT Plugin Sync: 未找到插件源文件，跳过同步")
-            return False
-
-        # 目标: <exe-dir>/yt-dlp-plugins/<pkg>/yt_dlp_plugins/extractor/
-        target_dir = (
-            exe.parent / "yt-dlp-plugins" / _PLUGIN_PACKAGE_NAME / "yt_dlp_plugins" / "extractor"
-        )
-
-        # 记忆化：源指纹 + 目标目录都没变，就没必要再逐文件 stat 一遍。
-        fingerprint = (str(exe), _pot_source_fingerprint(source_dir, source_files))
-        if _pot_sync_cache is not None and _pot_sync_cache[0] == fingerprint:
-            return _pot_sync_cache[1]
-
-        # 增量同步：只在需要时创建目录和复制文件
-        needs_sync = False
-        if not target_dir.exists():
-            needs_sync = True
-        else:
-            for src_file in source_files:
-                dst_file = target_dir / src_file.name
-                if not dst_file.exists():
-                    needs_sync = True
-                    break
-                # 比较修改时间（源更新则需要同步）
-                if src_file.stat().st_mtime > dst_file.stat().st_mtime:
-                    needs_sync = True
-                    break
-
-        if not needs_sync:
-            log_text(logger, "debug", "POT Plugin Sync: 插件已是最新，无需同步")
-            _pot_sync_cache = (fingerprint, True)
-            return True
-
-        # 执行同步
-        try:
-            target_dir.mkdir(parents=True, exist_ok=True)
-        except PermissionError:
-            log_text(
-                logger,
-                "warning",
-                "POT Plugin Sync: 无法创建插件目录 {0}（权限不足）。如果安装在 Program Files 下，请以管理员身份运行一次，或手动复制插件文件。",
-                target_dir,
-            )
-            return False
-
-        synced = 0
-        for src_file in source_files:
-            dst_file = target_dir / src_file.name
-            try:
-                shutil.copy2(src_file, dst_file)
-                synced += 1
-            except PermissionError:
-                log_text(
-                    logger,
-                    "warning",
-                    "POT Plugin Sync: 复制 {0} 失败（权限不足）。请以管理员身份运行一次应用以完成插件部署。",
-                    src_file.name,
-                )
-            except Exception as e:
-                log_text(logger, "warning", "POT Plugin Sync: 复制 {0} 失败: {1}", src_file.name, e)
-
-        if synced > 0:
-            log_text(
-                logger,
-                "info",
-                "POT Plugin Sync: 已同步 {0} 个插件文件到 {1}",
-                synced,
-                target_dir.parent.parent,
-            )
-            _pot_sync_cache = (fingerprint, True)
-        return synced > 0
-
-    except Exception as e:
-        log_text(logger, "debug", "POT Plugin Sync: 同步异常: {0}", e)
+        return path.is_file() and path.read_bytes() == content
+    except OSError:
         return False
 
 
-def prepare_yt_dlp_env(extra_paths: list[str] | None = None) -> dict[str, str]:
+def _write_pot_file(path: Path, content: bytes) -> None:
+    """Replace only verified complete files; retry transient Windows sharing failures."""
+    for attempt in range(3):
+        temporary = None
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with tempfile.NamedTemporaryFile(
+                dir=path.parent, suffix=".tmp", delete=False
+            ) as stream:
+                temporary = Path(stream.name)
+                stream.write(content)
+                stream.flush()
+                os.fsync(stream.fileno())
+            if not _pot_file_matches(temporary, content):
+                raise OSError("POT temporary file verification failed")
+            os.replace(temporary, path)
+            if not _pot_file_matches(path, content):
+                raise OSError("POT destination verification failed")
+            return
+        except OSError:
+            if attempt == 2:
+                raise
+            time.sleep(0.1 * (attempt + 1))
+        finally:
+            if temporary is not None:
+                try:
+                    temporary.unlink(missing_ok=True)
+                except OSError:
+                    pass
+
+
+def sync_pot_plugins_to_ytdlp(exe: Path | None = None) -> bool:
+    """Verify and atomically deploy all bundled POT files beside the selected executable."""
+    from loguru import logger
+
+    with _pot_sync_lock:
+        try:
+            exe = exe if exe is not None else resolve_yt_dlp_exe()
+            if exe is None or not exe.is_file():
+                return False
+            _, files = _read_pot_sources()
+            target = (
+                exe.parent
+                / "yt-dlp-plugins"
+                / _PLUGIN_PACKAGE_NAME
+                / "yt_dlp_plugins"
+                / "extractor"
+            )
+            changed = 0
+            for name, content in files.items():
+                if not _pot_file_matches(target / name, content):
+                    _write_pot_file(target / name, content)
+                    changed += 1
+            if not all(
+                _pot_file_matches(target / name, content) for name, content in files.items()
+            ):
+                raise OSError("POT plugin deployment changed during verification")
+            if changed:
+                logger.info("POT Plugin Sync: verified {} files at {}", changed, target)
+            return True
+        except Exception as error:
+            logger.warning("POT Plugin Sync failed: {}", error)
+            return False
+
+
+def pot_plugin_directory(exe: Path | None = None) -> Path | None:
+    """Return an actual plugin search root, including a read-only bundled fallback.
+
+    --plugin-dirs searches packages immediately below this root. In the fallback,
+    yt_dlp_plugins_ext is that package; no writable installation directory is needed.
+    """
+    exe = exe if exe is not None else resolve_yt_dlp_exe()
+    if exe is None or not exe.is_file():
+        return None
+    if sync_pot_plugins_to_ytdlp(exe):
+        return exe.parent / "yt-dlp-plugins"
+    try:
+        source, _ = _read_pot_sources()
+        return source.parents[2]
+    except Exception:
+        return None
+
+
+def prepare_yt_dlp_env(
+    extra_paths: list[str] | None = None, *, command: list[str] | None = None
+) -> dict[str, str]:
     """Prepare environment so yt-dlp.exe can find bundled ffmpeg and JS runtime.
 
     We intentionally prefer PATH injection over less-portable flags.
 
     Args:
         extra_paths: Additional paths to prepend to PATH
+        command: CLI argv, updated in place to prioritize the verified POT directory.
     """
 
     env = get_clean_env()
@@ -395,8 +372,27 @@ def prepare_yt_dlp_env(extra_paths: list[str] | None = None) -> dict[str, str]:
                 _prepend_path(env, p)
 
     # --- POT Plugin Sync ---
-    # 确保 POT 插件位于 yt-dlp.exe 旁的标准插件目录（独立 exe 兼容）
-    sync_pot_plugins_to_ytdlp()
+    # 显式选择本次实际执行内核的插件目录；坏的旧副本不能先于已验证目录加载。
+    if command is not None:
+        plugin_root = pot_plugin_directory(Path(command[0]))
+        if plugin_root is not None:
+            command[1:1] = [
+                "--no-plugin-dirs",
+                "--plugin-dirs",
+                str(plugin_root),
+                "--plugin-dirs",
+                "default",
+            ]
+            env.pop("YTDLP_NO_PLUGINS", None)
+        elif any("youtubepot-bgutilhttp:" in arg for arg in command):
+            raise RuntimeError(
+                tr_text(
+                    "POT 加载失败，已停止本次请求：{0}",
+                    "Bundled POT plugins unavailable or invalid",
+                )
+            )
+    else:
+        sync_pot_plugins_to_ytdlp()
 
     # PYTHONPATH fallback: pip 安装的 yt-dlp（Python 脚本版）仍可通过此路径发现插件
     plugin_dir = Path(__file__).resolve().parent.parent / "yt_dlp_plugins_ext"
@@ -1092,7 +1088,7 @@ def run_dump_single_json(
         log_pot_in_argv(cmd, stage="Parse")
 
         _t_env = time.perf_counter()
-        env = prepare_yt_dlp_env()
+        env = prepare_yt_dlp_env(command=cmd)
         work_dir = _safe_working_dir()
         _env_ms = (time.perf_counter() - _t_env) * 1000
         _t_proc = time.perf_counter()

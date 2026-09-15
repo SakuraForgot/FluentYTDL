@@ -28,10 +28,8 @@ ERR_DOWNLOAD_FAILED = "worker_download_failed"
 #: yt-dlp 安装完会清理 exe 所在目录，这里是**不许删**的名字。
 #:
 #: `yt-dlp-plugins/` 必须留下：编译版 yt-dlp 只从 exe 旁边这个目录加载 POT 插件
-#: （CLAUDE.md §4 规则 6）。以前它会被一起删掉，而 `_sync_pot_plugins_locked()` 的
-#: 记忆化在 `target_dir.exists()` 检查**之前**就返回缓存值了 —— 指纹是
-#: `(exe 路径, 源文件指纹)`，清理不改变其中任何一项，所以装完再调 sync 也修不回来。
-#: 只能从源头不删。
+#: （CLAUDE.md §4 规则 6）。保留插件可避免组件更新期间破坏正在使用的插件目录；
+#: 同步层也会校验目标文件内容，在文件意外丢失时重新部署。
 _PURGE_KEEP_NAMES = ("manifest.json", "yt-dlp-plugins")
 
 

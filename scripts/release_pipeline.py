@@ -142,6 +142,36 @@ def verify_downloads(repository: str, tag: str, result: dict, *, public: bool = 
                 raise ValueError(f"Remote asset mismatch: {item['name']}")
 
 
+def render_release_notes(
+    version: str, channel: str, commit: str, repository: str, changelog: str
+) -> str:
+    """Keep the accepted download layout and show release changes outside details."""
+    from string import Template
+
+    if not str(changelog).strip():
+        raise ValueError("Release changelog must not be empty")
+    notice = (
+        "这是 rc 预发布，供测试使用，不替代稳定版 Latest。客户端默认 stable 通道；确认风险并切换到 pre 后可接收预发布更新。切回 stable 不会降级。\n\n"
+        if channel == "rc"
+        else ""
+    )
+    instructions = "已安装旧版本的用户可打开 **设置 → 检查更新**，程序会获取并应用更新包。" + (
+        f"稳定通道提供 `{version}`。"
+        if channel == "stable"
+        else "接收本预发布版本前，请先在设置中切换到 pre 通道。"
+    )
+    template = Template((ROOT / "docs/release-template.md").read_text(encoding="utf-8"))
+    return template.substitute(
+        version=version,
+        channel="pre" if channel == "rc" else channel,
+        commit=commit,
+        repository=repository,
+        changelog=str(changelog).strip(),
+        channel_notice=notice,
+        update_instructions=instructions,
+    )
+
+
 def publish() -> None:
     result = validate_result(ROOT / "build/latest-result.json", "all")
     if result["dirty"] or result["component_policy"] != "latest":
@@ -164,23 +194,14 @@ def publish() -> None:
         verify_downloads(repository, tag, result)
     else:
         notes = ROOT / "build/release-notes.md"
-        base = f"https://github.com/{repository}/releases/download/{tag}/FluentYTDL-{result['version']}-win64"
         manifest_path = next(
             Path(a["path"]) for a in result["artifacts"] if a["name"] == "update-manifest.json"
         )
         changelog = json.loads(manifest_path.read_text(encoding="utf-8")).get("changelog", "")
-        channel_notice = (
-            "这是 rc 预发布，供测试使用，不替代稳定版 Latest。客户端默认 stable 通道；在设置中确认风险并切换到 pre 后，可在应用内更新后续 rc 或正式版。切回 stable 不会降级。\n\n"
-            if policy["channel"] == "rc"
-            else ""
-        )
         notes.write_text(
-            channel_notice
-            + f"[便携完整版]({base}-full.7z) · [安装向导]({base}-setup.exe)\n\n"
-            + (str(changelog).strip() + "\n\n" if changelog else "")
-            + "app-core.7z 和 update-manifest.json 供应用内更新使用。\n\n"
-            "安装器支持简体中文与英文，默认仅为当前用户安装。卸载清除账号、配置和历史，保留下载成品。\n\n"
-            f"构建提交：{result['git_commit']}。所有附加组件在本次构建时获取上游最新版本。\n",
+            render_release_notes(
+                result["version"], policy["channel"], result["git_commit"], repository, changelog
+            ),
             encoding="utf-8",
         )
         args = [

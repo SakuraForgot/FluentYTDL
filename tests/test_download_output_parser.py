@@ -260,7 +260,7 @@ def _run_native(
         return _FakeProc(lines, returncode)
 
     monkeypatch.setattr(executor_mod, "resolve_yt_dlp_exe", lambda: Path("yt-dlp.exe"))
-    monkeypatch.setattr(executor_mod, "prepare_yt_dlp_env", lambda: dict(os.environ))
+    monkeypatch.setattr(executor_mod, "prepare_yt_dlp_env", lambda **kwargs: dict(os.environ))
     monkeypatch.setattr(executor_mod.subprocess, "Popen", fake_popen)
 
     cap = _Capture()
@@ -417,7 +417,7 @@ def test_progress_templates_survive_alongside_print_to_file(monkeypatch, tmp_pat
 def test_callbacks_are_optional(monkeypatch, tmp_path):
     """两个新回调都可以不给 —— Step 4 之前的调用点还没有 `StagingArea`。"""
     monkeypatch.setattr(executor_mod, "resolve_yt_dlp_exe", lambda: Path("yt-dlp.exe"))
-    monkeypatch.setattr(executor_mod, "prepare_yt_dlp_env", lambda: dict(os.environ))
+    monkeypatch.setattr(executor_mod, "prepare_yt_dlp_env", lambda **kwargs: dict(os.environ))
     media = str(tmp_path / "Title.mp4")
     monkeypatch.setattr(
         executor_mod.subprocess,
