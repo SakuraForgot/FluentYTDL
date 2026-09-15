@@ -461,7 +461,7 @@ class DownloadExecutor:
         )
         log_pot_in_argv(cmd, stage="Download", task_id=label or "native")
 
-        env = prepare_yt_dlp_env()
+        env = prepare_yt_dlp_env(command=cmd)
         env["PYTHONIOENCODING"] = "utf-8"
         work_dir = self._resolve_output_dir(ydl_opts)
         _emit_disk_space_signal(work_dir)
@@ -947,7 +947,7 @@ class DownloadExecutor:
         )
         log_pot_in_argv(cmd, stage="Download", task_id="extract_stream_urls")
 
-        env = prepare_yt_dlp_env()
+        env = prepare_yt_dlp_env(command=cmd)
         env["PYTHONIOENCODING"] = "utf-8"
 
         proc = subprocess.Popen(

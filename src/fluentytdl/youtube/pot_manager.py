@@ -643,56 +643,23 @@ class POTManager:
         return result
 
     def verify_plugin_loadable(self) -> tuple[bool, str]:
-        """验证 POT 插件是否已就位于 yt-dlp.exe 旁的标准插件目录。
+        """部署并校验 POT 插件；安装目录不可写时校验随包源目录。
 
-        独立编译的 yt-dlp.exe 不支持 PYTHONPATH 插件加载，只能通过
-        <exe-dir>/yt-dlp-plugins/<pkg>/yt_dlp_plugins/extractor/ 发现插件。
-
-        此方法检查：
-        1. yt-dlp.exe 旁是否存在标准插件目录结构
-        2. 插件文件是否存在
+        CLI 启动时通过 --plugin-dirs 使用这里选中的目录。
+        此处验证文件内容和语法；真实内核兼容性由 provider 探测验证。
 
         Returns:
             (ok, message) 元组
         """
         try:
-            from .yt_dlp_cli import resolve_yt_dlp_exe
+            from .yt_dlp_cli import pot_plugin_directory
 
-            exe = resolve_yt_dlp_exe()
-            if exe is None:
-                return False, tr_text("yt-dlp 可执行文件未找到")
-
-            # 检查标准插件目录
-            plugin_dir = (
-                exe.parent
-                / "yt-dlp-plugins"
-                / "bgutil-ytdlp-pot-provider"
-                / "yt_dlp_plugins"
-                / "extractor"
-            )
-
-            if not plugin_dir.exists():
-                return False, (
-                    tr_text(
-                        "POT 插件目录不存在: {0}。请确保 sync_pot_plugins_to_ytdlp() 已正确执行。",
-                        plugin_dir.parent.parent,
-                    )
+            root = pot_plugin_directory()
+            if root is None:
+                return False, tr_text(
+                    "插件检测异常: {0}", "Bundled POT plugins unavailable or invalid"
                 )
-
-            # 检查关键插件文件
-            http_plugin = plugin_dir / "getpot_bgutil_http.py"
-            base_plugin = plugin_dir / "getpot_bgutil.py"
-
-            if not http_plugin.exists():
-                return False, tr_text("POT HTTP 插件文件 (getpot_bgutil_http.py) 缺失")
-            if not base_plugin.exists():
-                return False, tr_text("POT 基础插件文件 (getpot_bgutil.py) 缺失")
-
-            # 全部检查通过
-            plugin_files = list(plugin_dir.glob("getpot_bgutil*.py"))
-            return True, tr_text(
-                "POT 插件已就位 ({0} 个文件，位于 yt-dlp.exe 旁)", len(plugin_files)
-            )
+            return True, f"POT plugins verified: {root}"
 
         except Exception as e:
             return False, tr_text("插件检测异常: {0}", e)
@@ -746,7 +713,7 @@ class POTManager:
                 cmd,
                 capture_output=True,
                 timeout=timeout,
-                env=prepare_yt_dlp_env(),
+                env=prepare_yt_dlp_env(command=cmd),
                 cwd=_safe_working_dir(),
                 **_win_hide_console_kwargs(),
             )

@@ -2134,7 +2134,7 @@ class DownloadWorker(QThread):
         )
         log_pot_in_argv(cmd, stage="Download", task_id="lightweight_extract")
 
-        env = prepare_yt_dlp_env()
+        env = prepare_yt_dlp_env(command=cmd)
         env["PYTHONIOENCODING"] = "utf-8"
 
         # Windows 隐藏窗口
@@ -2388,7 +2388,7 @@ class DownloadWorker(QThread):
             component="cover_direct",
             argv=render_argv(cmd),
         )
-        env = prepare_yt_dlp_env()
+        env = prepare_yt_dlp_env(command=cmd)
 
         extra_kw: dict[str, Any] = {}
         if os.name == "nt":

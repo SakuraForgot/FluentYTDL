@@ -287,3 +287,22 @@ if ($failures.Count -eq 0) {{ throw 'Reparse point not reported' }}
         timeout=30,
         capture_output=True,
     )
+
+
+@pytest.mark.parametrize("channel", ["stable", "rc"])
+def test_release_template_keeps_changelog_visible(channel):
+    notes = release.render_release_notes(
+        "3.7.3", channel, "abcdef", "example/repo", "- Repair POT plugins"
+    )
+    assert "## 🚀 推荐下载" in notes
+    assert "releases/download/v3.7.3/FluentYTDL-3.7.3-win64-full.7z" in notes
+    assert "## ✨ 3.7.3 更新内容" in notes
+    assert notes.rfind("</details>") < notes.index("- Repair POT plugins")
+    assert "${" not in notes
+    assert ("这是 rc 预发布" in notes) == (channel == "rc")
+    assert ("稳定通道提供" in notes) == (channel == "stable")
+
+
+def test_release_template_requires_changelog():
+    with pytest.raises(ValueError, match="changelog"):
+        release.render_release_notes("3.7.3", "stable", "abcdef", "example/repo", "")
