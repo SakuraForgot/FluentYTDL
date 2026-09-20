@@ -288,6 +288,9 @@ def inspect_media(
     elif "ogg" in formats:
         codecs = {s.get("codec_name") for s in result.streams if s.get("codec_type") == "audio"}
         kind = "opus" if codecs == {"opus"} else "ogg" if codecs == {"vorbis"} else ""
+    result.status = "partial"
+    if kind:
+        result.coverage["native"] = "pending"
     complete_fields(result)
     partial(result)
     if kind:
@@ -324,6 +327,8 @@ def inspect_media(
         result.issues.append("file_changed")
     elif result.issues:
         result.status = "partial"
+    else:
+        result.status = "ready"
     complete_fields(result)
     return result
 

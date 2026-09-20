@@ -347,6 +347,9 @@ def test_page_navigation_missing_values_and_export_options(qapp):
     page.set_tab("metadata")
     assert any("未读取到" in page.model.item(i, 1).text() for i in range(page.model.rowCount()))
     assert not page.include_path.isChecked() and not page.include_raw.isChecked()
+    page.show_error("cancelled")
+    assert page.result.report()["status"] == "cancelled"
+    assert "cancelled" in page.result.report()["issues"]
     page.open_file("b.mp3")
     assert page.result is None and page.back_button.isHidden()
     assert not page.export_button.isEnabled()

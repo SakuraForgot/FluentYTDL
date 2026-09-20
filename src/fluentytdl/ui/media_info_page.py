@@ -277,6 +277,10 @@ class MediaInfoPage(CardWidget):
 
     def show_error(self, code):
         self.final = False
+        if self.result is not None:
+            self.result.status = "cancelled" if code == "cancelled" else "partial"
+            if code not in self.result.issues:
+                self.result.issues.append(code)
         self.set_busy(False)
         self.status.setText(issue_text(code))
         self.settings_button.setVisible(code in {"tool_unavailable", "configured_probe_missing"})
