@@ -392,7 +392,8 @@ _ENTRIES: dict[str, tuple[str, str]] = {
         QT_TRANSLATE_NOOP("Diagnostics", "网络连接超时"),
         QT_TRANSLATE_NOOP(
             "Diagnostics",
-            "连接在建立或读取阶段超时。请检查网络与代理是否通畅，程序会自动重试几次。",
+            "连接在建立或读取阶段超时。请检查本程序的代理设置及网络连接。"
+            "浏览器 VPN 扩展通常只代理浏览器流量，浏览器能访问不代表本程序能访问。",
         ),
     ),
     "download_interrupted": (

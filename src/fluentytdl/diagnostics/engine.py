@@ -261,6 +261,36 @@ def _is_warning_only_primary(
     return rule is not None and rule.severity == "warning"
 
 
+def _playlist_authcheck_network_cause(
+    primary: DiagnosticEvent | None, events: list[DiagnosticEvent], rule_set: RuleSet
+) -> DiagnosticEvent | None:
+    """Recover the failed webpage request hidden by YouTube's authcheck guard.
+
+    Only this specific error chain may promote a preceding network warning;
+    unrelated errors and warnings retain the normal arbitration order.
+    """
+    marker = "youtubetab:skip=authcheck"
+    if (
+        primary is None
+        or primary.level != "error"
+        or primary.component.lower() != "youtube:tab"
+        or primary.code not in {rule_set.fallback_code, "login_required"}
+        or marker not in primary.raw_line.lower()
+        or any(e.level == "error" and marker not in e.raw_line.lower() for e in events)
+    ):
+        return primary
+    for event in reversed(events):
+        if (
+            event.line_no < primary.line_no
+            and event.component.lower() == "youtube:tab"
+            and "unable to download webpage" in event.raw_line.lower()
+            and (rule := rule_set.by_code(event.code)) is not None
+            and rule.category == "network"
+        ):
+            return event
+    return primary
+
+
 #: SABR 只解释"挑不到格式"这一类主因。403 / 429 / 需要登录都有自己的正解，
 #: 不许被它顶掉 —— 那些场景下格式选择根本没轮到。
 _SABR_SYMPTOM_CODES = ("format_unavailable", "no_formats_found")
@@ -412,6 +442,8 @@ def diagnose(
     # 2. 逐行事件流 + 主因仲裁
     diag.events = parse_events(clean_msg, rule_set)
     primary = pick_primary(diag.events)
+    if exit_code != 0:
+        primary = _playlist_authcheck_network_cause(primary, diag.events, rule_set)
 
     if primary is not None and primary.code != rule_set.fallback_code:
         rule = rule_set.by_code(primary.code)

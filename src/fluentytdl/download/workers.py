@@ -1573,6 +1573,62 @@ class DownloadWorker(QThread):
                             tr_text("后处理异常 ({0}): {1}", feature.__class__.__name__, str(e))
                         )
 
+                # Last media mutation: tag candidates are verified before atomic adoption.
+                from ..models.metadata import METADATA_POLICY, MetadataPolicy
+                from ..processing.metadata_finalizer import finalize_metadata
+                from ..processing.metadata_process import MetadataCancelled
+
+                metadata_actual: set[str] = set()
+                metadata_incomplete = False
+                if self.staging is not None and METADATA_POLICY in merged:
+                    policy = MetadataPolicy.from_dict(merged[METADATA_POLICY])
+
+                    def metadata_report(report):
+                        nonlocal metadata_incomplete
+                        expected = report.tokens(report.expected)
+                        actual = report.tokens(report.actual)
+                        self.trace.expect_artifacts(expected)
+                        metadata_actual.update(actual)
+                        metadata_incomplete |= bool(report.missing) or report.code in {
+                            "no_fields",
+                            "unsupported_container",
+                        }
+                        emit_event(
+                            "expect",
+                            trace=self.trace,
+                            stage="postprocess",
+                            subsystem="metadata",
+                            artifact_id=report.reference,
+                            expected=sorted(expected),
+                        )
+                        emit_event(
+                            "actual",
+                            trace=self.trace,
+                            stage="verify",
+                            subsystem="metadata",
+                            artifact_id=report.reference,
+                            code=report.code,
+                            fields=report.fields,
+                            sources=report.sources,
+                            matched=not report.missing,
+                            actual=sorted(actual),
+                            missing=sorted(report.tokens(report.missing)),
+                        )
+
+                    if policy.enabled:
+                        context.emit_status(tr_text("正在嵌入并验证元数据..."))
+                    try:
+                        finalize_metadata(
+                            self.staging,
+                            policy,
+                            self.staging.metadata_source_path(),
+                            self._cancel_event.is_set,
+                            ffmpeg_location=str(merged.get("ffmpeg_location") or ""),
+                            on_report=metadata_report,
+                        )
+                    except MetadataCancelled as exc:
+                        raise DownloadCancelled() from exc
+
                 # Strip internal meta options after all features have post-processed.
                 # Must run AFTER on_post_process so that protection gates like
                 # __fluentytdl_keep_thumbnail still work (context.opts is the same
@@ -1651,7 +1707,7 @@ class DownloadWorker(QThread):
                     #          所以物理丢失终于能推出 `missing`，而 `actual` 不必背叛
                     #          「报告过创建」的契约）；
                     #   嵌入 ← `manifest.embed_evidence`（结构化 PP 证据，不看磁盘也不看 rc）。
-                    extra: set[str] = set()
+                    extra: set[str] = set(metadata_actual)
                     if self.staging is not None:
                         extra |= delivery_tokens(self.staging.published_paths())
                         extra |= embed_tokens(self.staging.manifest.embed_evidence)
@@ -1686,7 +1742,12 @@ class DownloadWorker(QThread):
                             code="staging_cleanup_deferred",
                         )
 
-                self._clean_logger.force_update("completed", 100.0, tr_text("✅ 下载并处理完成！"))
+                done_message = (
+                    tr_text("文件已保存，部分元数据未写入")
+                    if metadata_incomplete
+                    else tr_text("✅ 下载并处理完成！")
+                )
+                self._clean_logger.force_update("completed", 100.0, done_message)
                 self._run_outcome = "success"
                 self.completed.emit()
 

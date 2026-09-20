@@ -1,0 +1,1122 @@
+{
+  "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\components\\dialogs\\download_config_window.py": [
+    {
+      "doc": "01-download-chain.md",
+      "anchor": "L1354"
+    },
+    {
+      "doc": "01-download-chain.md",
+      "anchor": "L1088"
+    },
+    {
+      "doc": "01-download-chain.md",
+      "anchor": "L4195"
+    },
+    {
+      "doc": "02-intake-and-preflight.md",
+      "anchor": "L1354"
+    },
+    {
+      "doc": "02-intake-and-preflight.md",
+      "anchor": "L4003"
+    },
+    {
+      "doc": "02-intake-and-preflight.md",
+      "anchor": "L4023"
+    },
+    {
+      "doc": "02-intake-and-preflight.md",
+      "anchor": "L1354"
+    },
+    {
+      "doc": "02-intake-and-preflight.md",
+      "anchor": "L486"
+    },
+    {
+      "doc": "02-intake-and-preflight.md",
+      "anchor": "L1358"
+    }
+  ],
+  "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\core\\quick_add_worker.py": [
+    {
+      "doc": "01-download-chain.md",
+      "anchor": "L51"
+    },
+    {
+      "doc": "02-intake-and-preflight.md",
+      "anchor": "L51"
+    },
+    {
+      "doc": "02-intake-and-preflight.md",
+      "anchor": "L51"
+    },
+    {
+      "doc": "02-intake-and-preflight.md",
+      "anchor": "L97"
+    },
+    {
+      "doc": "03-execution-and-control.md",
+      "anchor": "L129"
+    }
+  ],
+  "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\youtube\\youtube_service.py": [
+    {
+      "doc": "01-download-chain.md",
+      "anchor": "L144"
+    },
+    {
+      "doc": "02-intake-and-preflight.md",
+      "anchor": "L1963"
+    },
+    {
+      "doc": "02-intake-and-preflight.md",
+      "anchor": "L191"
+    },
+    {
+      "doc": "02-intake-and-preflight.md",
+      "anchor": "L1546"
+    },
+    {
+      "doc": "02-intake-and-preflight.md",
+      "anchor": "L1586"
+    },
+    {
+      "doc": "02-intake-and-preflight.md",
+      "anchor": "L1654"
+    },
+    {
+      "doc": "02-intake-and-preflight.md",
+      "anchor": "L235"
+    },
+    {
+      "doc": "02-intake-and-preflight.md",
+      "anchor": "L1718"
+    },
+    {
+      "doc": "02-intake-and-preflight.md",
+      "anchor": "L1734"
+    },
+    {
+      "doc": "05-context-and-runtime.md",
+      "anchor": "L560"
+    },
+    {
+      "doc": "evidence/review-intake.md",
+      "anchor": "L560"
+    }
+  ],
+  "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\youtube\\yt_dlp_cli.py": [
+    {
+      "doc": "01-download-chain.md",
+      "anchor": "L1054"
+    },
+    {
+      "doc": "02-intake-and-preflight.md",
+      "anchor": "L1054"
+    }
+  ],
+  "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\download\\workers.py": [
+    {
+      "doc": "01-download-chain.md",
+      "anchor": "L137"
+    },
+    {
+      "doc": "01-download-chain.md",
+      "anchor": "L1143"
+    },
+    {
+      "doc": "01-download-chain.md",
+      "anchor": "L1988"
+    },
+    {
+      "doc": "01-download-chain.md",
+      "anchor": "L2330"
+    },
+    {
+      "doc": "01-download-chain.md",
+      "anchor": "L1561"
+    },
+    {
+      "doc": "01-download-chain.md",
+      "anchor": "L1615"
+    },
+    {
+      "doc": "01-download-chain.md",
+      "anchor": "L1110"
+    },
+    {
+      "doc": "02-intake-and-preflight.md",
+      "anchor": "L360"
+    },
+    {
+      "doc": "02-intake-and-preflight.md",
+      "anchor": "L1174"
+    },
+    {
+      "doc": "02-intake-and-preflight.md",
+      "anchor": "L1174"
+    },
+    {
+      "doc": "02-intake-and-preflight.md",
+      "anchor": "L579"
+    },
+    {
+      "doc": "02-intake-and-preflight.md",
+      "anchor": "L1185"
+    },
+    {
+      "doc": "02-intake-and-preflight.md",
+      "anchor": "L360"
+    },
+    {
+      "doc": "03-execution-and-control.md",
+      "anchor": "L1143"
+    },
+    {
+      "doc": "03-execution-and-control.md",
+      "anchor": "L1174"
+    },
+    {
+      "doc": "03-execution-and-control.md",
+      "anchor": "L1242"
+    },
+    {
+      "doc": "03-execution-and-control.md",
+      "anchor": "L1256"
+    },
+    {
+      "doc": "03-execution-and-control.md",
+      "anchor": "L1330"
+    },
+    {
+      "doc": "03-execution-and-control.md",
+      "anchor": "L678"
+    },
+    {
+      "doc": "03-execution-and-control.md",
+      "anchor": "L1561"
+    },
+    {
+      "doc": "03-execution-and-control.md",
+      "anchor": "L1988"
+    },
+    {
+      "doc": "03-execution-and-control.md",
+      "anchor": "L2163"
+    },
+    {
+      "doc": "03-execution-and-control.md",
+      "anchor": "L2330"
+    },
+    {
+      "doc": "03-execution-and-control.md",
+      "anchor": "L2407"
+    },
+    {
+      "doc": "03-execution-and-control.md",
+      "anchor": "L1600"
+    },
+    {
+      "doc": "03-execution-and-control.md",
+      "anchor": "L1871"
+    },
+    {
+      "doc": "03-execution-and-control.md",
+      "anchor": "L1123"
+    },
+    {
+      "doc": "03-execution-and-control.md",
+      "anchor": "L2310"
+    },
+    {
+      "doc": "03-execution-and-control.md",
+      "anchor": "L2503"
+    },
+    {
+      "doc": "03-execution-and-control.md",
+      "anchor": "L2251"
+    },
+    {
+      "doc": "03-execution-and-control.md",
+      "anchor": "L2464"
+    },
+    {
+      "doc": "03-execution-and-control.md",
+      "anchor": "L1528"
+    },
+    {
+      "doc": "03-execution-and-control.md",
+      "anchor": "L1123"
+    },
+    {
+      "doc": "03-execution-and-control.md",
+      "anchor": "L791"
+    },
+    {
+      "doc": "03-execution-and-control.md",
+      "anchor": "L1475"
+    },
+    {
+      "doc": "03-execution-and-control.md",
+      "anchor": "L759"
+    },
+    {
+      "doc": "03-execution-and-control.md",
+      "anchor": "L798"
+    },
+    {
+      "doc": "03-execution-and-control.md",
+      "anchor": "L1561"
+    },
+    {
+      "doc": "03-execution-and-control.md",
+      "anchor": "L765"
+    },
+    {
+      "doc": "03-execution-and-control.md",
+      "anchor": "L891"
+    },
+    {
+      "doc": "03-execution-and-control.md",
+      "anchor": "L1421"
+    },
+    {
+      "doc": "03-execution-and-control.md",
+      "anchor": "L1475"
+    },
+    {
+      "doc": "03-execution-and-control.md",
+      "anchor": "L1186"
+    },
+    {
+      "doc": "04-artifacts-and-recovery.md",
+      "anchor": "L1593"
+    },
+    {
+      "doc": "04-artifacts-and-recovery.md",
+      "anchor": "L1918"
+    },
+    {
+      "doc": "04-artifacts-and-recovery.md",
+      "anchor": "L1615"
+    },
+    {
+      "doc": "04-artifacts-and-recovery.md",
+      "anchor": "L1675"
+    },
+    {
+      "doc": "04-artifacts-and-recovery.md",
+      "anchor": "L1953"
+    },
+    {
+      "doc": "04-artifacts-and-recovery.md",
+      "anchor": "L765"
+    },
+    {
+      "doc": "04-artifacts-and-recovery.md",
+      "anchor": "L1341"
+    },
+    {
+      "doc": "04-artifacts-and-recovery.md",
+      "anchor": "L1421"
+    },
+    {
+      "doc": "04-artifacts-and-recovery.md",
+      "anchor": "L1229"
+    },
+    {
+      "doc": "04-artifacts-and-recovery.md",
+      "anchor": "L1270"
+    },
+    {
+      "doc": "05-context-and-runtime.md",
+      "anchor": "L2052"
+    },
+    {
+      "doc": "evidence/review-commit-protocol.md",
+      "anchor": "L1123"
+    },
+    {
+      "doc": "evidence/review-commit-protocol.md",
+      "anchor": "L1248"
+    },
+    {
+      "doc": "evidence/review-commit-protocol.md",
+      "anchor": "L1848"
+    },
+    {
+      "doc": "evidence/review-intake.md",
+      "anchor": "L2325"
+    },
+    {
+      "doc": "evidence/review-intake.md",
+      "anchor": "L1475"
+    },
+    {
+      "doc": "evidence/review-intake.md",
+      "anchor": "L1561"
+    },
+    {
+      "doc": "evidence/review-intake.md",
+      "anchor": "L765"
+    },
+    {
+      "doc": "evidence/review-resources.md",
+      "anchor": "L1243"
+    }
+  ],
+  "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\download\\extract_manager.py": [
+    {
+      "doc": "01-download-chain.md",
+      "anchor": "L54"
+    },
+    {
+      "doc": "02-intake-and-preflight.md",
+      "anchor": "L96"
+    }
+  ],
+  "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\core\\controller.py": [
+    {
+      "doc": "01-download-chain.md",
+      "anchor": "L95"
+    },
+    {
+      "doc": "02-intake-and-preflight.md",
+      "anchor": "L95"
+    },
+    {
+      "doc": "02-intake-and-preflight.md",
+      "anchor": "L145"
+    },
+    {
+      "doc": "02-intake-and-preflight.md",
+      "anchor": "L123"
+    },
+    {
+      "doc": "03-execution-and-control.md",
+      "anchor": "L477"
+    },
+    {
+      "doc": "04-artifacts-and-recovery.md",
+      "anchor": "L477"
+    }
+  ],
+  "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\download\\download_manager.py": [
+    {
+      "doc": "01-download-chain.md",
+      "anchor": "L403"
+    },
+    {
+      "doc": "01-download-chain.md",
+      "anchor": "L376"
+    },
+    {
+      "doc": "01-download-chain.md",
+      "anchor": "L562"
+    },
+    {
+      "doc": "01-download-chain.md",
+      "anchor": "L174"
+    },
+    {
+      "doc": "02-intake-and-preflight.md",
+      "anchor": "L403"
+    },
+    {
+      "doc": "02-intake-and-preflight.md",
+      "anchor": "L334"
+    },
+    {
+      "doc": "03-execution-and-control.md",
+      "anchor": "L455"
+    },
+    {
+      "doc": "04-artifacts-and-recovery.md",
+      "anchor": "L291"
+    },
+    {
+      "doc": "04-artifacts-and-recovery.md",
+      "anchor": "L562"
+    },
+    {
+      "doc": "04-artifacts-and-recovery.md",
+      "anchor": "L455"
+    },
+    {
+      "doc": "04-artifacts-and-recovery.md",
+      "anchor": "L234"
+    },
+    {
+      "doc": "evidence/review-commit-protocol.md",
+      "anchor": "L455"
+    }
+  ],
+  "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\download\\staging.py": [
+    {
+      "doc": "01-download-chain.md",
+      "anchor": "L739"
+    },
+    {
+      "doc": "01-download-chain.md",
+      "anchor": "L1172"
+    },
+    {
+      "doc": "01-download-chain.md",
+      "anchor": "L1227"
+    },
+    {
+      "doc": "01-download-chain.md",
+      "anchor": "L1283"
+    },
+    {
+      "doc": "01-download-chain.md",
+      "anchor": "L1630"
+    },
+    {
+      "doc": "01-download-chain.md",
+      "anchor": "L1744"
+    },
+    {
+      "doc": "04-artifacts-and-recovery.md",
+      "anchor": "L739"
+    },
+    {
+      "doc": "04-artifacts-and-recovery.md",
+      "anchor": "L322"
+    },
+    {
+      "doc": "04-artifacts-and-recovery.md",
+      "anchor": "L1283"
+    },
+    {
+      "doc": "04-artifacts-and-recovery.md",
+      "anchor": "L156"
+    },
+    {
+      "doc": "04-artifacts-and-recovery.md",
+      "anchor": "L1613"
+    },
+    {
+      "doc": "04-artifacts-and-recovery.md",
+      "anchor": "L1630"
+    },
+    {
+      "doc": "04-artifacts-and-recovery.md",
+      "anchor": "L1293"
+    },
+    {
+      "doc": "04-artifacts-and-recovery.md",
+      "anchor": "L1379"
+    },
+    {
+      "doc": "04-artifacts-and-recovery.md",
+      "anchor": "L1744"
+    },
+    {
+      "doc": "04-artifacts-and-recovery.md",
+      "anchor": "L1807"
+    },
+    {
+      "doc": "04-artifacts-and-recovery.md",
+      "anchor": "L1864"
+    },
+    {
+      "doc": "04-artifacts-and-recovery.md",
+      "anchor": "L757"
+    },
+    {
+      "doc": "04-artifacts-and-recovery.md",
+      "anchor": "L1770"
+    },
+    {
+      "doc": "04-artifacts-and-recovery.md",
+      "anchor": "L1227"
+    },
+    {
+      "doc": "04-artifacts-and-recovery.md",
+      "anchor": "L1327"
+    },
+    {
+      "doc": "04-artifacts-and-recovery.md",
+      "anchor": "L1379"
+    },
+    {
+      "doc": "04-artifacts-and-recovery.md",
+      "anchor": "L1403"
+    },
+    {
+      "doc": "04-artifacts-and-recovery.md",
+      "anchor": "L1427"
+    },
+    {
+      "doc": "04-artifacts-and-recovery.md",
+      "anchor": "L1822"
+    },
+    {
+      "doc": "evidence/review-commit-protocol.md",
+      "anchor": "L1394"
+    },
+    {
+      "doc": "evidence/review-commit-protocol.md",
+      "anchor": "L1300"
+    },
+    {
+      "doc": "evidence/review-commit-protocol.md",
+      "anchor": "L757"
+    },
+    {
+      "doc": "evidence/review-commit-protocol.md",
+      "anchor": "L1770"
+    },
+    {
+      "doc": "evidence/review-commit-protocol.md",
+      "anchor": "L1403"
+    },
+    {
+      "doc": "evidence/review-commit-protocol.md",
+      "anchor": "L1630"
+    },
+    {
+      "doc": "evidence/review-commit-protocol.md",
+      "anchor": "L1298"
+    },
+    {
+      "doc": "evidence/review-commit-protocol.md",
+      "anchor": "L1316"
+    },
+    {
+      "doc": "evidence/review-commit-protocol.md",
+      "anchor": "L1340"
+    },
+    {
+      "doc": "evidence/review-commit-protocol.md",
+      "anchor": "L1364"
+    },
+    {
+      "doc": "evidence/review-commit-protocol.md",
+      "anchor": "L1438"
+    },
+    {
+      "doc": "evidence/review-commit-protocol.md",
+      "anchor": "L1476"
+    },
+    {
+      "doc": "evidence/review-commit-protocol.md",
+      "anchor": "L1807"
+    },
+    {
+      "doc": "evidence/review-commit-protocol.md",
+      "anchor": "L1864"
+    },
+    {
+      "doc": "evidence/review-commit-protocol.md",
+      "anchor": "L1845"
+    },
+    {
+      "doc": "evidence/review-intake.md",
+      "anchor": "L1517"
+    },
+    {
+      "doc": "evidence/review-resources.md",
+      "anchor": "L1293"
+    }
+  ],
+  "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\download\\executor.py": [
+    {
+      "doc": "01-download-chain.md",
+      "anchor": "L299"
+    },
+    {
+      "doc": "02-intake-and-preflight.md",
+      "anchor": "L373"
+    },
+    {
+      "doc": "03-execution-and-control.md",
+      "anchor": "L299"
+    },
+    {
+      "doc": "03-execution-and-control.md",
+      "anchor": "L469"
+    }
+  ],
+  "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\download\\features.py": [
+    {
+      "doc": "01-download-chain.md",
+      "anchor": "L477"
+    },
+    {
+      "doc": "03-execution-and-control.md",
+      "anchor": "L624"
+    },
+    {
+      "doc": "evidence/review-intake.md",
+      "anchor": "L624"
+    }
+  ],
+  "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\storage\\db_writer.py": [
+    {
+      "doc": "01-download-chain.md",
+      "anchor": "L125"
+    },
+    {
+      "doc": "04-artifacts-and-recovery.md",
+      "anchor": "L40"
+    },
+    {
+      "doc": "04-artifacts-and-recovery.md",
+      "anchor": "L147"
+    },
+    {
+      "doc": "04-artifacts-and-recovery.md",
+      "anchor": "L167"
+    },
+    {
+      "doc": "04-artifacts-and-recovery.md",
+      "anchor": "L74"
+    },
+    {
+      "doc": "04-artifacts-and-recovery.md",
+      "anchor": "L116"
+    },
+    {
+      "doc": "evidence/review-commit-protocol.md",
+      "anchor": "L166"
+    },
+    {
+      "doc": "evidence/review-commit-protocol.md",
+      "anchor": "L74"
+    },
+    {
+      "doc": "evidence/review-commit-protocol.md",
+      "anchor": "L116"
+    }
+  ],
+  "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\utils\\url_router.py": [
+    {
+      "doc": "02-intake-and-preflight.md",
+      "anchor": "L34"
+    },
+    {
+      "doc": "02-intake-and-preflight.md",
+      "anchor": "L202"
+    },
+    {
+      "doc": "02-intake-and-preflight.md",
+      "anchor": "L359"
+    }
+  ],
+  "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_youtube_cookie_mode.py": [
+    {
+      "doc": "02-intake-and-preflight.md",
+      "anchor": "L206"
+    },
+    {
+      "doc": "02-intake-and-preflight.md",
+      "anchor": "L79"
+    },
+    {
+      "doc": "02-intake-and-preflight.md",
+      "anchor": "L103"
+    },
+    {
+      "doc": "02-intake-and-preflight.md",
+      "anchor": "L206"
+    },
+    {
+      "doc": "03-execution-and-control.md",
+      "anchor": "L135"
+    },
+    {
+      "doc": "05-context-and-runtime.md",
+      "anchor": "L206"
+    },
+    {
+      "doc": "08-validation-and-benchmarks.md",
+      "anchor": ""
+    }
+  ],
+  "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_section_download.py": [
+    {
+      "doc": "02-intake-and-preflight.md",
+      "anchor": "L35"
+    },
+    {
+      "doc": "02-intake-and-preflight.md",
+      "anchor": "L35"
+    }
+  ],
+  "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\playlist_scheduler.py": [
+    {
+      "doc": "02-intake-and-preflight.md",
+      "anchor": "L297"
+    },
+    {
+      "doc": "02-intake-and-preflight.md",
+      "anchor": "L128"
+    },
+    {
+      "doc": "02-intake-and-preflight.md",
+      "anchor": "L157"
+    }
+  ],
+  "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_parse_cache.py": [
+    {
+      "doc": "02-intake-and-preflight.md",
+      "anchor": "L389"
+    },
+    {
+      "doc": "02-intake-and-preflight.md",
+      "anchor": "L68"
+    },
+    {
+      "doc": "02-intake-and-preflight.md",
+      "anchor": "L105"
+    },
+    {
+      "doc": "02-intake-and-preflight.md",
+      "anchor": "L149"
+    },
+    {
+      "doc": "02-intake-and-preflight.md",
+      "anchor": "L356"
+    },
+    {
+      "doc": "02-intake-and-preflight.md",
+      "anchor": "L418"
+    },
+    {
+      "doc": "08-validation-and-benchmarks.md",
+      "anchor": ""
+    }
+  ],
+  "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\utils\\ytdlp_runtime.py": [
+    {
+      "doc": "02-intake-and-preflight.md",
+      "anchor": "L22"
+    }
+  ],
+  "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\core\\dependency_manager.py": [
+    {
+      "doc": "02-intake-and-preflight.md",
+      "anchor": "L191"
+    }
+  ],
+  "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_ytdlp_runtime.py": [
+    {
+      "doc": "02-intake-and-preflight.md",
+      "anchor": "L7"
+    },
+    {
+      "doc": "02-intake-and-preflight.md",
+      "anchor": "L41"
+    },
+    {
+      "doc": "02-intake-and-preflight.md",
+      "anchor": "L83"
+    },
+    {
+      "doc": "02-intake-and-preflight.md",
+      "anchor": "L117"
+    }
+  ],
+  "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_download_staging.py": [
+    {
+      "doc": "03-execution-and-control.md",
+      "anchor": "L1278"
+    },
+    {
+      "doc": "03-execution-and-control.md",
+      "anchor": "L1310"
+    },
+    {
+      "doc": "03-execution-and-control.md",
+      "anchor": "L1345"
+    },
+    {
+      "doc": "03-execution-and-control.md",
+      "anchor": "L1364"
+    },
+    {
+      "doc": "03-execution-and-control.md",
+      "anchor": "L1532"
+    },
+    {
+      "doc": "04-artifacts-and-recovery.md",
+      "anchor": "L856"
+    },
+    {
+      "doc": "04-artifacts-and-recovery.md",
+      "anchor": "L1532"
+    },
+    {
+      "doc": "04-artifacts-and-recovery.md",
+      "anchor": "L1604"
+    },
+    {
+      "doc": "04-artifacts-and-recovery.md",
+      "anchor": "L881"
+    },
+    {
+      "doc": "04-artifacts-and-recovery.md",
+      "anchor": "L903"
+    },
+    {
+      "doc": "04-artifacts-and-recovery.md",
+      "anchor": "L922"
+    },
+    {
+      "doc": "04-artifacts-and-recovery.md",
+      "anchor": "L694"
+    },
+    {
+      "doc": "04-artifacts-and-recovery.md",
+      "anchor": "L746"
+    },
+    {
+      "doc": "04-artifacts-and-recovery.md",
+      "anchor": "L786"
+    },
+    {
+      "doc": "04-artifacts-and-recovery.md",
+      "anchor": "L1532"
+    },
+    {
+      "doc": "04-artifacts-and-recovery.md",
+      "anchor": "L1225"
+    },
+    {
+      "doc": "08-validation-and-benchmarks.md",
+      "anchor": ""
+    },
+    {
+      "doc": "evidence/review-commit-protocol.md",
+      "anchor": "L856"
+    },
+    {
+      "doc": "evidence/review-commit-protocol.md",
+      "anchor": "L1604"
+    },
+    {
+      "doc": "evidence/review-commit-protocol.md",
+      "anchor": "L1532"
+    }
+  ],
+  "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_observability_contract.py": [
+    {
+      "doc": "03-execution-and-control.md",
+      "anchor": "L548"
+    },
+    {
+      "doc": "03-execution-and-control.md",
+      "anchor": "L671"
+    },
+    {
+      "doc": "03-execution-and-control.md",
+      "anchor": "L659"
+    },
+    {
+      "doc": "04-artifacts-and-recovery.md",
+      "anchor": "L671"
+    },
+    {
+      "doc": "04-artifacts-and-recovery.md",
+      "anchor": "L207"
+    },
+    {
+      "doc": "05-context-and-runtime.md",
+      "anchor": "L300"
+    },
+    {
+      "doc": "08-validation-and-benchmarks.md",
+      "anchor": ""
+    }
+  ],
+  "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_observability_raw_dump.py": [
+    {
+      "doc": "03-execution-and-control.md",
+      "anchor": "L249"
+    },
+    {
+      "doc": "03-execution-and-control.md",
+      "anchor": "L302"
+    }
+  ],
+  "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_subtitle_deferred_resolution.py": [
+    {
+      "doc": "03-execution-and-control.md",
+      "anchor": "L282"
+    }
+  ],
+  "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_worker_error_dialog.py": [
+    {
+      "doc": "03-execution-and-control.md",
+      "anchor": "L101"
+    }
+  ],
+  "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\storage\\task_db.py": [
+    {
+      "doc": "04-artifacts-and-recovery.md",
+      "anchor": "L67"
+    },
+    {
+      "doc": "04-artifacts-and-recovery.md",
+      "anchor": "L279"
+    }
+  ],
+  "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_db_writer_batch.py": [
+    {
+      "doc": "04-artifacts-and-recovery.md",
+      "anchor": "L32"
+    },
+    {
+      "doc": "04-artifacts-and-recovery.md",
+      "anchor": "L71"
+    },
+    {
+      "doc": "04-artifacts-and-recovery.md",
+      "anchor": "L143"
+    },
+    {
+      "doc": "08-validation-and-benchmarks.md",
+      "anchor": ""
+    },
+    {
+      "doc": "evidence/review-commit-protocol.md",
+      "anchor": "L78"
+    }
+  ],
+  "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_download_artifact_architecture.py": [
+    {
+      "doc": "04-artifacts-and-recovery.md",
+      "anchor": "L339"
+    }
+  ],
+  "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\auth\\auth_service.py": [
+    {
+      "doc": "05-context-and-runtime.md",
+      "anchor": "L1307"
+    },
+    {
+      "doc": "evidence/review-intake.md",
+      "anchor": "L1307"
+    }
+  ],
+  "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\auth\\cookie_sentinel.py": [
+    {
+      "doc": "05-context-and-runtime.md",
+      "anchor": "L382"
+    },
+    {
+      "doc": "05-context-and-runtime.md",
+      "anchor": "L180"
+    },
+    {
+      "doc": "evidence/review-intake.md",
+      "anchor": "L424"
+    },
+    {
+      "doc": "evidence/review-intake.md",
+      "anchor": "L180"
+    },
+    {
+      "doc": "evidence/review-resources.md",
+      "anchor": "L382"
+    }
+  ],
+  "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\utils\\youtube_request.py": [
+    {
+      "doc": "05-context-and-runtime.md",
+      "anchor": "L5"
+    },
+    {
+      "doc": "evidence/review-intake.md",
+      "anchor": "L10"
+    }
+  ],
+  "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_cookie_truth_source.py": [
+    {
+      "doc": "05-context-and-runtime.md",
+      "anchor": "L118"
+    }
+  ],
+  "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\auth\\cookie_runfile.py": [
+    {
+      "doc": "05-context-and-runtime.md",
+      "anchor": "L58"
+    },
+    {
+      "doc": "05-context-and-runtime.md",
+      "anchor": "L37"
+    },
+    {
+      "doc": "05-context-and-runtime.md",
+      "anchor": "L91"
+    },
+    {
+      "doc": "evidence/review-intake.md",
+      "anchor": "L79"
+    },
+    {
+      "doc": "evidence/review-intake.md",
+      "anchor": "L58"
+    },
+    {
+      "doc": "evidence/review-resources.md",
+      "anchor": "L58"
+    }
+  ],
+  "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_cookie_runfile.py": [
+    {
+      "doc": "05-context-and-runtime.md",
+      "anchor": "L60"
+    }
+  ],
+  "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\youtube\\pot_manager.py": [
+    {
+      "doc": "05-context-and-runtime.md",
+      "anchor": "L151"
+    },
+    {
+      "doc": "05-context-and-runtime.md",
+      "anchor": "L807"
+    },
+    {
+      "doc": "05-context-and-runtime.md",
+      "anchor": "L823"
+    },
+    {
+      "doc": "evidence/review-intake.md",
+      "anchor": "L807"
+    },
+    {
+      "doc": "evidence/review-intake.md",
+      "anchor": "L151"
+    }
+  ],
+  "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_pot_warm_backoff.py": [
+    {
+      "doc": "05-context-and-runtime.md",
+      "anchor": "L59"
+    }
+  ],
+  "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_pot_job_object.py": [
+    {
+      "doc": "05-context-and-runtime.md",
+      "anchor": "L51"
+    }
+  ],
+  "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\auth\\providers\\webview2_provider.py": [
+    {
+      "doc": "05-context-and-runtime.md",
+      "anchor": "L112"
+    },
+    {
+      "doc": "05-context-and-runtime.md",
+      "anchor": "L157"
+    },
+    {
+      "doc": "evidence/review-intake.md",
+      "anchor": "L109"
+    }
+  ]
+}

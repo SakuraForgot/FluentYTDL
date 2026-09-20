@@ -166,11 +166,9 @@ class SponsorBlockFeature(DownloadFeature):
 
 class MetadataFeature(DownloadFeature):
     def configure(self, ydl_opts: dict[str, Any]) -> None:
-        if config_manager.get("embed_metadata", True):
-            pps = ydl_opts.setdefault("postprocessors", [])
-            if not any(p.get("key") == "FFmpegMetadata" for p in pps):
-                pps.append({"key": "FFmpegMetadata"})
-            logger.info("[Metadata] Enabled")
+        from ..processing.metadata_policy import configure_metadata
+
+        configure_metadata(ydl_opts, bool(config_manager.get("embed_metadata", True)))
 
 
 class SubtitleFeature(DownloadFeature):

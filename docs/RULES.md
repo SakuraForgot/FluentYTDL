@@ -221,10 +221,13 @@ retry  transition  outcome  config  argv  identity
 ## 7. 后处理管道顺序
 
 1. `SponsorBlockFeature` — sponsorblock_remove/mark
-2. `MetadataFeature` — FFmpegMetadata 后处理器
+2. `MetadataFeature` — 冻结任务意图，关闭上游自动文本标签，章节保持独立控制
 3. `SubtitleFeature` — 语言解析、嵌入、清理
 4. `ThumbnailFeature` — 通过 AtomicParsley (MP4) > FFmpeg (MKV) > mutagen (audio) 嵌入
 5. `VRFeature` — EAC→Equi 转换 + 空间元数据（仅 VR 模式）
+6. `finalize_metadata` — 提交前最后一次媒体改写，经回读验证后采纳 staging 候选
+
+任务创建时将元数据策略持久化到 `__fluentytdl_metadata_policy`；任务显式 False 优先于全局默认和预设。仅从 staging 控制区读取当前 attempt 的白名单 JSONL。MP4/M4A 使用 AtomicParsley，音频使用显式依赖 Mutagen，Matroska 使用受保护的 FFmpeg 流复制。不得将分类当音乐流派、列表序号当曲目号，也不得只凭工具返回码采纳候选。保留非自有标签、封面、章节、媒体流和空间 atom。元数据失败保留原媒体，通过既有 expected/actual 及终态边界报告。
 
 ## 8. 测试规则
 

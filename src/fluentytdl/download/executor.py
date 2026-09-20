@@ -424,6 +424,17 @@ class DownloadExecutor:
                 "after_move:filepath",
                 final_paths_file.replace("%", "%%"),
             ]
+            from ..models.metadata import METADATA_POLICY, MetadataPolicy
+            from ..processing.metadata_source import SOURCE_TEMPLATE
+
+            frozen = ydl_opts.get(METADATA_POLICY)
+            if frozen and MetadataPolicy.from_dict(frozen).enabled:
+                # Same attempt and internal directory as the authoritative path report.
+                report = Path(final_paths_file)
+                source_file = report.with_name(
+                    report.name.replace("final.", "metadata.", 1)
+                ).with_suffix(".jsonl")
+                cmd += ["--print-to-file", SOURCE_TEMPLATE, str(source_file).replace("%", "%%")]
 
         # yt-dlp 每次运行结束都把 cookie jar 回写进 `--cookies` 文件（固有行为，无开关可关）。
         # 绝不把 Sentinel 真相源直接交给它——改传一份用完即弃的字节副本，回写只污染副本，

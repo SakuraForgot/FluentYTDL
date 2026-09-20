@@ -1,0 +1,28 @@
+{
+  "checked_at": "2026-09-20T12:19:11.591545+00:00",
+  "markdown_files": 43,
+  "local_links": 1374,
+  "mermaid_blocks": 30,
+  "source_hashes": 366,
+  "failures": [
+    "Source drift: D:\\ALL Projects\\YouTube\\FluentYTDL\\.github\\workflows\\checks.yml",
+    "Source drift: D:\\ALL Projects\\YouTube\\FluentYTDL\\installer\\FluentYTDL.iss",
+    "Source drift: D:\\ALL Projects\\YouTube\\FluentYTDL\\pyproject.toml",
+    "Source drift: D:\\ALL Projects\\YouTube\\FluentYTDL\\scripts\\FluentYTDL.spec",
+    "Source drift: D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\download\\download_manager.py",
+    "Source drift: D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\download\\executor.py",
+    "Source drift: D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\download\\features.py",
+    "Source drift: D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\download\\staging.py",
+    "Source drift: D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\download\\workers.py",
+    "Source drift: D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\processing\\audio_processor.py",
+    "Source drift: D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\components\\dialogs\\download_config_window.py",
+    "Source drift: D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\utils\\build_selftest.py",
+    "Source drift: D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\utils\\quick_opts.py",
+    "Source drift: D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\utils\\ui_text.py",
+    "Source drift: D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\youtube\\youtube_service.py",
+    "Source drift: D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\youtube\\yt_dlp_cli.py",
+    "Source drift: D:\\ALL Projects\\YouTube\\FluentYTDL\\uv.lock",
+    "Source drift: D:\\ALL Projects\\YouTube\\FluentYTDL\\VERSION"
+  ],
+  "limits": "Recorded-file hash comparison only; new unlisted files are not detected. Simple Markdown heading slugs only. No source-symbol semantic, Mermaid renderer, product test, build, or runtime validation."
+}

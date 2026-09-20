@@ -957,7 +957,7 @@ class DownloadConfigWindow(FramelessWindow):
 
         meta_enabled = bool(config_manager.get("embed_metadata", True))
         self.metadata_check = self._add_labeled_toggle(
-            layout, container, self.tr("下载元数据"), meta_enabled
+            layout, container, self.tr("嵌入元数据"), meta_enabled
         )
 
         layout.addStretch(1)
@@ -1072,7 +1072,7 @@ class DownloadConfigWindow(FramelessWindow):
 
         meta_enabled = bool(config_manager.get("embed_metadata", True))
         self.playlist_metadata_check = self._add_labeled_toggle(
-            layout, container, self.tr("下载元数据"), meta_enabled
+            layout, container, self.tr("嵌入元数据"), meta_enabled
         )
 
         layout.addStretch(1)

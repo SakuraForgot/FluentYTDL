@@ -1,0 +1,9 @@
+{
+  "checked_at": "2026-09-19T08:09:12.167389+00:00",
+  "markdown_files": 12,
+  "local_links": 379,
+  "mermaid_blocks": 2,
+  "source_hashes": 366,
+  "failures": [],
+  "limits": "Recorded-file hash comparison only; new unlisted files are not detected. No semantic link-anchor, Mermaid renderer, product test, build, or runtime validation."
+}

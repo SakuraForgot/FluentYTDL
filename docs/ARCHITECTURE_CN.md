@@ -1,4 +1,6 @@
-# FluentYTDL 架构文档
+# FluentYTDL 架构文档（旧版，历史参考）
+
+> **历史文档提示（2026-09-19）：** 本文长期未与当前实现同步，部分调用、沙箱、状态和恢复说明存在明显差异，不能作为当前代码实施依据。请阅读独立的[新版架构 V2](architecture-v2/NEW_ARCHITECTURE_REFERENCE.md)，以其源码证据和明确的验证边界为准。下文保留原有内容供历史比较。
 
 > [English version](ARCHITECTURE_EN.md)
 >
@@ -365,7 +367,7 @@ flowchart LR
 ```python
 self.features = [
     SponsorBlockFeature(),   # 1. 仅 configure() — 注入 sponsorblock_remove/mark
-    MetadataFeature(),       # 2. 仅 configure() — 追加 FFmpegMetadata 后处理器
+    MetadataFeature(),       # 2. 仅 configure() — 冻结任务意图，独立控制文本和章节
     SubtitleFeature(),       # 3. 两个钩子 — 语言解析、格式兼容修复、嵌入
     ThumbnailFeature(),      # 4. 仅 on_post_process() — 通过 AtomicParsley/FFmpeg/mutagen 嵌入
     VRFeature(),             # 5. 仅 on_post_process() — EAC→Equi 转换 + 空间元数据
@@ -374,11 +376,13 @@ self.features = [
 
 执行顺序固定且不可更改 — 后续 Feature 依赖前面的已完成配置。
 
+所有 Feature 后处理结束后，Worker 调用 `MetadataFinalizer`，读取本 attempt 的白名单来源，按最终容器写入 staging 候选，回读标签并验证受保护内容后原子采纳，随后进入既有验证门及事务提交。文本写入失败保留原媒体并汇总不完整结果。
+
 ```mermaid
 flowchart TD
     subgraph configure["配置阶段 — yt-dlp 运行前"]
         SB1["SponsorBlock 功能<br/>注入广告跳过/标记参数"]
-        MF1["元数据功能<br/>追加 FFmpeg 元数据后处理器"]
+        MF1["元数据功能<br/>冻结任务策略，关闭上游文本写入"]
     end
 
     subgraph on_start["下载开始回调 — yt-dlp 运行前"]

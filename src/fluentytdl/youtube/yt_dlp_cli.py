@@ -863,7 +863,11 @@ def ydl_opts_to_cli_args(ydl_opts: dict[str, Any]) -> list[str]:
         elif isinstance(audio_quality, (int, float)):
             args += ["--audio-quality", str(audio_quality)]
 
-    if ydl_opts.get("addmetadata") is True:
+    managed_metadata = "__fluentytdl_metadata_policy" in ydl_opts
+    if managed_metadata:
+        args += ["--no-embed-metadata", "--no-embed-info-json"]
+        args += ["--embed-chapters" if ydl_opts.get("embedchapters") else "--no-embed-chapters"]
+    elif ydl_opts.get("addmetadata") is True:
         args += ["--add-metadata"]
 
     # 封面缩略图下载
@@ -917,7 +921,7 @@ def ydl_opts_to_cli_args(ydl_opts: dict[str, Any]) -> list[str]:
         # 不再添加 --embed-thumbnail 参数
 
         # 添加元数据嵌入参数
-        if has_embed_metadata:
+        if has_embed_metadata and not managed_metadata:
             args += ["--embed-metadata"]
 
     # 后处理器参数（如 loudnorm 音量标准化）

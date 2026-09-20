@@ -27,6 +27,18 @@ def run_selftest(output: Path) -> int:
     try:
         check_pot_sources()
         report["checks"].append("Bundled POT plugin sources and syntax")
+        from ..processing.metadata_normalizer import normalize_metadata
+        from ..processing.metadata_writers import read_id3, write_id3
+
+        tag_file = output / "metadata-selftest.id3"
+        tag_file.write_bytes(b"")
+        values = normalize_metadata(
+            {"title": "Metadata roundtrip", "upload_date": "20260920"}
+        ).values
+        write_id3(str(tag_file), values)
+        if read_id3(str(tag_file), values) != values:
+            raise RuntimeError("Metadata tag roundtrip failed")
+        report["checks"].append("Metadata normalization and bundled Mutagen ID3 roundtrip")
         from PySide6.QtCore import QTranslator
         from PySide6.QtGui import QIcon
         from PySide6.QtWidgets import QApplication

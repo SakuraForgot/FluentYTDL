@@ -50,9 +50,7 @@ def quick_params_to_opts(params: QuickDownloadParams) -> dict[str, Any]:
         opts["merge_output_format"] = params.container.lower()
 
     # === 元数据偏好 ===
-    if params.embed_metadata:
-        opts["addmetadata"] = True
-        opts["postprocessors"] = opts.get("postprocessors", []) + [{"key": "FFmpegMetadata"}]
+    opts["addmetadata"] = bool(params.embed_metadata)
     if params.embed_thumbnail:
         opts["writethumbnail"] = True
         opts["embedthumbnail"] = True

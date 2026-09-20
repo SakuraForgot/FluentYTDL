@@ -805,6 +805,11 @@ class StagingArea:
             self._write_journal()
             return path
 
+    def metadata_source_path(self, attempt: int | None = None) -> str:
+        """Internal metadata protocol; never discovered or delivered as a sidecar."""
+        n = self._attempt if attempt is None else int(attempt)
+        return os.path.join(self.control_dir, f"metadata.{n}.jsonl")
+
     def read_attempt_paths(self, attempt: int | None = None) -> list[str]:
         """读本轮 `final.<n>.txt` 里 yt-dlp 报告的 `after_move` 路径。"""
         n = self._attempt if attempt is None else int(attempt)

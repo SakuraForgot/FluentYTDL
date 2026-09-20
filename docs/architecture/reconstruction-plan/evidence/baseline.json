@@ -1,0 +1,21 @@
+{
+  "observed_date": "2026-09-19",
+  "client_root": "D:/ALL Projects/YouTube/FluentYTDL",
+  "branch": "release/3.7.3",
+  "head": "c441f2cde2e7973fe5902da50358f25c37c6525f",
+  "git_status_before_document_creation": [
+    " M assets/locales/fluentytdl_en.qm",
+    " M assets/locales/fluentytdl_en_US.qm",
+    " M assets/locales/fluentytdl_en_US.ts",
+    " M assets/locales/fluentytdl_zh.qm",
+    " M assets/locales/fluentytdl_zh_CN.qm",
+    " M assets/locales/fluentytdl_zh_CN.ts",
+    " M src/fluentytdl/diagnostics/catalog.py",
+    " M src/fluentytdl/diagnostics/engine.py",
+    " M src/fluentytdl/youtube/youtube_service.py",
+    "?? specs/",
+    "?? tests/test_playlist_authcheck.py"
+  ],
+  "scope": "Client working tree and sibling ControlCenter source; no production verification.",
+  "note": "Existing modifications predate this documentation task. Inventory hashes were captured after investigation and cover selected source/build/test files, not all user data."
+}

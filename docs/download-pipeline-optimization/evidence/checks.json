@@ -1,0 +1,31 @@
+{
+  "checked_at": "2026-09-20T12:19:33.508724+00:00",
+  "markdown": 15,
+  "local_links": 337,
+  "mermaid": 4,
+  "baseline_files": 412,
+  "referenced_source_files": 38,
+  "failures": [
+    "Baseline changed: D:\\ALL Projects\\YouTube\\FluentYTDL\\.github\\workflows\\checks.yml",
+    "Baseline changed: D:\\ALL Projects\\YouTube\\FluentYTDL\\installer\\FluentYTDL.iss",
+    "Baseline changed: D:\\ALL Projects\\YouTube\\FluentYTDL\\pyproject.toml",
+    "Baseline changed: D:\\ALL Projects\\YouTube\\FluentYTDL\\scripts\\FluentYTDL.spec",
+    "Baseline changed: D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\download\\download_manager.py",
+    "Baseline changed: D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\download\\executor.py",
+    "Baseline changed: D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\download\\features.py",
+    "Baseline changed: D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\download\\staging.py",
+    "Baseline changed: D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\download\\workers.py",
+    "Baseline changed: D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\processing\\audio_processor.py",
+    "Baseline changed: D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\components\\dialogs\\download_config_window.py",
+    "Baseline changed: D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\utils\\build_selftest.py",
+    "Baseline changed: D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\utils\\quick_opts.py",
+    "Baseline changed: D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\utils\\ui_text.py",
+    "Baseline changed: D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\youtube\\youtube_service.py",
+    "Baseline changed: D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\youtube\\yt_dlp_cli.py",
+    "Baseline changed: D:\\ALL Projects\\YouTube\\FluentYTDL\\uv.lock",
+    "Baseline changed: D:\\ALL Projects\\YouTube\\FluentYTDL\\VERSION",
+    "Baseline changed: D:\\ALL Projects\\YouTube\\FluentYTDL\\specs\\media-metadata\\design.md",
+    "Baseline changed: D:\\ALL Projects\\YouTube\\FluentYTDL\\specs\\media-metadata\\requirements.md"
+  ],
+  "limits": "Basic links, line bounds, heading slugs, fences and listed-file hashes only; no semantic proof, new-file detection, rendering, product tests, builds or performance measurement."
+}
