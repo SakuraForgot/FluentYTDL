@@ -1,0 +1,4557 @@
+{
+  "limits": "File-level citations, not inferred call edges or complete symbol coverage.",
+  "references": {
+    "main.py": [
+      {
+        "document": "00-system-overview.md",
+        "anchor": "L289"
+      },
+      {
+        "document": "01-repository-map.md",
+        "anchor": "L289"
+      },
+      {
+        "document": "01-repository-map.md",
+        "anchor": "L303"
+      },
+      {
+        "document": "01-repository-map.md",
+        "anchor": "L7"
+      },
+      {
+        "document": "01-repository-map.md",
+        "anchor": "L289"
+      },
+      {
+        "document": "01-repository-map.md",
+        "anchor": "L423"
+      },
+      {
+        "document": "01-repository-map.md",
+        "anchor": "L493"
+      },
+      {
+        "document": "01-repository-map.md",
+        "anchor": "L509"
+      },
+      {
+        "document": "02-module-map.md",
+        "anchor": "L289"
+      },
+      {
+        "document": "02-module-map.md",
+        "anchor": "L379"
+      },
+      {
+        "document": "03-runtime-architecture.md",
+        "anchor": "L423"
+      },
+      {
+        "document": "08-dependency-model.md",
+        "anchor": "L527"
+      },
+      {
+        "document": "08-dependency-model.md",
+        "anchor": "L53"
+      },
+      {
+        "document": "09-concurrency-model.md",
+        "anchor": "L468"
+      },
+      {
+        "document": "14-code-index.md",
+        "anchor": "L289"
+      },
+      {
+        "document": "vertical-slices/VS-01-startup-shutdown.md",
+        "anchor": "L7"
+      },
+      {
+        "document": "vertical-slices/VS-01-startup-shutdown.md",
+        "anchor": "L289"
+      },
+      {
+        "document": "vertical-slices/VS-01-startup-shutdown.md",
+        "anchor": "L331"
+      },
+      {
+        "document": "vertical-slices/VS-01-startup-shutdown.md",
+        "anchor": "L423"
+      },
+      {
+        "document": "vertical-slices/VS-01-startup-shutdown.md",
+        "anchor": "L468"
+      },
+      {
+        "document": "vertical-slices/VS-01-startup-shutdown.md",
+        "anchor": "L509"
+      },
+      {
+        "document": "vertical-slices/VS-14-pot-runtime.md",
+        "anchor": "L498"
+      },
+      {
+        "document": "vertical-slices/VS-16-app-update.md",
+        "anchor": "L527"
+      },
+      {
+        "document": "vertical-slices/VS-16-app-update.md",
+        "anchor": "L63"
+      },
+      {
+        "document": "vertical-slices/VS-17-component-update.md",
+        "anchor": "L303"
+      }
+    ],
+    "src/fluentytdl/youtube/yt_dlp_cli.py": [
+      {
+        "document": "00-system-overview.md",
+        "anchor": "L1054"
+      },
+      {
+        "document": "01-repository-map.md",
+        "anchor": "L1054"
+      },
+      {
+        "document": "02-module-map.md",
+        "anchor": "L1054"
+      },
+      {
+        "document": "07-resource-model.md",
+        "anchor": "L242"
+      },
+      {
+        "document": "07-resource-model.md",
+        "anchor": "L1124"
+      },
+      {
+        "document": "07-resource-model.md",
+        "anchor": "L1136"
+      },
+      {
+        "document": "08-dependency-model.md",
+        "anchor": "L1054"
+      },
+      {
+        "document": "08-dependency-model.md",
+        "anchor": "L682"
+      },
+      {
+        "document": "08-dependency-model.md",
+        "anchor": "L273"
+      },
+      {
+        "document": "09-concurrency-model.md",
+        "anchor": "L1124"
+      },
+      {
+        "document": "11-security-boundaries.md",
+        "anchor": "L1054"
+      },
+      {
+        "document": "11-security-boundaries.md",
+        "anchor": "L242"
+      },
+      {
+        "document": "11-security-boundaries.md",
+        "anchor": "L374"
+      },
+      {
+        "document": "14-code-index.md",
+        "anchor": "L1054"
+      },
+      {
+        "document": "vertical-slices/VS-13-cookie-context.md",
+        "anchor": "L1073"
+      },
+      {
+        "document": "vertical-slices/VS-14-pot-runtime.md",
+        "anchor": "L374"
+      },
+      {
+        "document": "vertical-slices/VS-14-pot-runtime.md",
+        "anchor": "L325"
+      },
+      {
+        "document": "vertical-slices/VS-14-pot-runtime.md",
+        "anchor": "L242"
+      },
+      {
+        "document": "vertical-slices/VS-14-pot-runtime.md",
+        "anchor": "L307"
+      },
+      {
+        "document": "vertical-slices/VS-14-pot-runtime.md",
+        "anchor": "L387"
+      }
+    ],
+    "src/fluentytdl/download/executor.py": [
+      {
+        "document": "00-system-overview.md",
+        "anchor": "L469"
+      },
+      {
+        "document": "01-repository-map.md",
+        "anchor": "L273"
+      },
+      {
+        "document": "02-module-map.md",
+        "anchor": "L299"
+      },
+      {
+        "document": "02-module-map.md",
+        "anchor": "L356"
+      },
+      {
+        "document": "03-runtime-architecture.md",
+        "anchor": "L356"
+      },
+      {
+        "document": "03-runtime-architecture.md",
+        "anchor": "L1090"
+      },
+      {
+        "document": "03-runtime-architecture.md",
+        "anchor": "L299"
+      },
+      {
+        "document": "05-control-flow.md",
+        "anchor": "L519"
+      },
+      {
+        "document": "05-control-flow.md",
+        "anchor": "L1163"
+      },
+      {
+        "document": "07-resource-model.md",
+        "anchor": "L356"
+      },
+      {
+        "document": "07-resource-model.md",
+        "anchor": "L683"
+      },
+      {
+        "document": "07-resource-model.md",
+        "anchor": "L1131"
+      },
+      {
+        "document": "08-dependency-model.md",
+        "anchor": "L469"
+      },
+      {
+        "document": "09-concurrency-model.md",
+        "anchor": "L483"
+      },
+      {
+        "document": "09-concurrency-model.md",
+        "anchor": "L1186"
+      },
+      {
+        "document": "10-error-recovery.md",
+        "anchor": "L508"
+      },
+      {
+        "document": "10-error-recovery.md",
+        "anchor": "L815"
+      },
+      {
+        "document": "10-error-recovery.md",
+        "anchor": "L684"
+      },
+      {
+        "document": "10-error-recovery.md",
+        "anchor": "L795"
+      },
+      {
+        "document": "14-code-index.md",
+        "anchor": "L273"
+      },
+      {
+        "document": "vertical-slices/VS-02-video.md",
+        "anchor": "L469"
+      },
+      {
+        "document": "vertical-slices/VS-08-quick-audio-section.md",
+        "anchor": "L729"
+      },
+      {
+        "document": "vertical-slices/VS-08-quick-audio-section.md",
+        "anchor": "L483"
+      },
+      {
+        "document": "vertical-slices/VS-08-quick-audio-section.md",
+        "anchor": "L1163"
+      },
+      {
+        "document": "vertical-slices/VS-10-retry.md",
+        "anchor": "L815"
+      }
+    ],
+    "../FluentYTDL-ControlCenter/apps/worker/src/index.ts": [
+      {
+        "document": "00-system-overview.md",
+        "anchor": "L44"
+      },
+      {
+        "document": "00-system-overview.md",
+        "anchor": ""
+      },
+      {
+        "document": "01-repository-map.md",
+        "anchor": "L41"
+      },
+      {
+        "document": "05-control-flow.md",
+        "anchor": "L116"
+      },
+      {
+        "document": "08-dependency-model.md",
+        "anchor": "L41"
+      },
+      {
+        "document": "12-deployment.md",
+        "anchor": "L41"
+      },
+      {
+        "document": "14-code-index.md",
+        "anchor": "L41"
+      },
+      {
+        "document": "evidence/review-boundaries.md",
+        "anchor": "L9"
+      },
+      {
+        "document": "evidence/review-deployment-modules.md",
+        "anchor": "L29"
+      },
+      {
+        "document": "evidence/review-deployment-modules.md",
+        "anchor": "L44"
+      },
+      {
+        "document": "vertical-slices/VS-18-announcements.md",
+        "anchor": "L9"
+      },
+      {
+        "document": "vertical-slices/VS-18-announcements.md",
+        "anchor": "L29"
+      },
+      {
+        "document": "vertical-slices/VS-18-announcements.md",
+        "anchor": "L116"
+      },
+      {
+        "document": "vertical-slices/VS-20-build-release.md",
+        "anchor": "L61"
+      }
+    ],
+    "src/fluentytdl/youtube/pot_manager.py": [
+      {
+        "document": "00-system-overview.md",
+        "anchor": "L181"
+      },
+      {
+        "document": "05-control-flow.md",
+        "anchor": "L181"
+      },
+      {
+        "document": "05-control-flow.md",
+        "anchor": "L416"
+      },
+      {
+        "document": "05-control-flow.md",
+        "anchor": "L807"
+      },
+      {
+        "document": "07-resource-model.md",
+        "anchor": "L330"
+      },
+      {
+        "document": "07-resource-model.md",
+        "anchor": "L70"
+      },
+      {
+        "document": "07-resource-model.md",
+        "anchor": "L260"
+      },
+      {
+        "document": "07-resource-model.md",
+        "anchor": "L151"
+      },
+      {
+        "document": "08-dependency-model.md",
+        "anchor": "L46"
+      },
+      {
+        "document": "08-dependency-model.md",
+        "anchor": "L204"
+      },
+      {
+        "document": "11-security-boundaries.md",
+        "anchor": "L181"
+      },
+      {
+        "document": "11-security-boundaries.md",
+        "anchor": "L202"
+      },
+      {
+        "document": "11-security-boundaries.md",
+        "anchor": "L139"
+      },
+      {
+        "document": "11-security-boundaries.md",
+        "anchor": "L151"
+      },
+      {
+        "document": "11-security-boundaries.md",
+        "anchor": "L70"
+      },
+      {
+        "document": "13-known-risks.md",
+        "anchor": "L151"
+      },
+      {
+        "document": "14-code-index.md",
+        "anchor": "L31"
+      },
+      {
+        "document": "evidence/review-boundaries.md",
+        "anchor": "L202"
+      },
+      {
+        "document": "evidence/review-boundaries.md",
+        "anchor": "L151"
+      },
+      {
+        "document": "evidence/review-boundaries.md",
+        "anchor": "L70"
+      },
+      {
+        "document": "evidence/review-runtime-resources.md",
+        "anchor": "L163"
+      },
+      {
+        "document": "evidence/review-runtime-resources.md",
+        "anchor": "L151"
+      },
+      {
+        "document": "evidence/review-runtime-resources.md",
+        "anchor": "L807"
+      },
+      {
+        "document": "evidence/review-runtime-resources.md",
+        "anchor": "L823"
+      },
+      {
+        "document": "vertical-slices/VS-14-pot-runtime.md",
+        "anchor": "L823"
+      },
+      {
+        "document": "vertical-slices/VS-14-pot-runtime.md",
+        "anchor": "L181"
+      },
+      {
+        "document": "vertical-slices/VS-14-pot-runtime.md",
+        "anchor": "L841"
+      },
+      {
+        "document": "vertical-slices/VS-14-pot-runtime.md",
+        "anchor": "L792"
+      },
+      {
+        "document": "vertical-slices/VS-14-pot-runtime.md",
+        "anchor": "L46"
+      },
+      {
+        "document": "vertical-slices/VS-14-pot-runtime.md",
+        "anchor": "L803"
+      },
+      {
+        "document": "vertical-slices/VS-14-pot-runtime.md",
+        "anchor": "L807"
+      },
+      {
+        "document": "vertical-slices/VS-14-pot-runtime.md",
+        "anchor": "L912"
+      },
+      {
+        "document": "vertical-slices/VS-14-pot-runtime.md",
+        "anchor": "L841"
+      },
+      {
+        "document": "vertical-slices/VS-14-pot-runtime.md",
+        "anchor": "L416"
+      },
+      {
+        "document": "vertical-slices/VS-14-pot-runtime.md",
+        "anchor": "L854"
+      },
+      {
+        "document": "vertical-slices/VS-14-pot-runtime.md",
+        "anchor": "L139"
+      },
+      {
+        "document": "vertical-slices/VS-14-pot-runtime.md",
+        "anchor": "L330"
+      },
+      {
+        "document": "vertical-slices/VS-14-pot-runtime.md",
+        "anchor": "L70"
+      },
+      {
+        "document": "vertical-slices/VS-14-pot-runtime.md",
+        "anchor": "L151"
+      },
+      {
+        "document": "vertical-slices/VS-14-pot-runtime.md",
+        "anchor": "L70"
+      }
+    ],
+    "src/fluentytdl/auth/providers/webview2_provider.py": [
+      {
+        "document": "00-system-overview.md",
+        "anchor": ""
+      },
+      {
+        "document": "07-resource-model.md",
+        "anchor": "L553"
+      },
+      {
+        "document": "07-resource-model.md",
+        "anchor": "L109"
+      },
+      {
+        "document": "08-dependency-model.md",
+        "anchor": "L686"
+      },
+      {
+        "document": "11-security-boundaries.md",
+        "anchor": "L109"
+      },
+      {
+        "document": "11-security-boundaries.md",
+        "anchor": "L155"
+      },
+      {
+        "document": "13-known-risks.md",
+        "anchor": "L109"
+      },
+      {
+        "document": "13-known-risks.md",
+        "anchor": "L155"
+      },
+      {
+        "document": "14-code-index.md",
+        "anchor": "L495"
+      },
+      {
+        "document": "evidence/review-boundaries.md",
+        "anchor": "L109"
+      },
+      {
+        "document": "evidence/review-boundaries.md",
+        "anchor": "L155"
+      },
+      {
+        "document": "evidence/review-runtime-resources.md",
+        "anchor": "L627"
+      },
+      {
+        "document": "evidence/review-runtime-resources.md",
+        "anchor": "L122"
+      },
+      {
+        "document": "evidence/review-runtime-resources.md",
+        "anchor": "L109"
+      },
+      {
+        "document": "evidence/review-runtime-resources.md",
+        "anchor": "L155"
+      },
+      {
+        "document": "vertical-slices/VS-12-authentication.md",
+        "anchor": "L507"
+      },
+      {
+        "document": "vertical-slices/VS-12-authentication.md",
+        "anchor": "L636"
+      },
+      {
+        "document": "vertical-slices/VS-12-authentication.md",
+        "anchor": "L122"
+      },
+      {
+        "document": "vertical-slices/VS-12-authentication.md",
+        "anchor": "L518"
+      },
+      {
+        "document": "vertical-slices/VS-12-authentication.md",
+        "anchor": "L169"
+      },
+      {
+        "document": "vertical-slices/VS-12-authentication.md",
+        "anchor": "L651"
+      },
+      {
+        "document": "vertical-slices/VS-12-authentication.md",
+        "anchor": "L404"
+      },
+      {
+        "document": "vertical-slices/VS-12-authentication.md",
+        "anchor": "L627"
+      },
+      {
+        "document": "vertical-slices/VS-12-authentication.md",
+        "anchor": "L109"
+      },
+      {
+        "document": "vertical-slices/VS-12-authentication.md",
+        "anchor": "L155"
+      },
+      {
+        "document": "vertical-slices/VS-15-diagnostics.md",
+        "anchor": "L109"
+      },
+      {
+        "document": "vertical-slices/VS-15-diagnostics.md",
+        "anchor": "L155"
+      }
+    ],
+    "src/fluentytdl/core/updater.py": [
+      {
+        "document": "00-system-overview.md",
+        "anchor": "L1390"
+      },
+      {
+        "document": "01-repository-map.md",
+        "anchor": "L1390"
+      },
+      {
+        "document": "05-control-flow.md",
+        "anchor": "L1663"
+      },
+      {
+        "document": "05-control-flow.md",
+        "anchor": "L1692"
+      },
+      {
+        "document": "07-resource-model.md",
+        "anchor": "L1125"
+      },
+      {
+        "document": "07-resource-model.md",
+        "anchor": "L1180"
+      },
+      {
+        "document": "07-resource-model.md",
+        "anchor": "L1663"
+      },
+      {
+        "document": "07-resource-model.md",
+        "anchor": "L1488"
+      },
+      {
+        "document": "07-resource-model.md",
+        "anchor": "L1334"
+      },
+      {
+        "document": "07-resource-model.md",
+        "anchor": "L1281"
+      },
+      {
+        "document": "08-dependency-model.md",
+        "anchor": "L1729"
+      },
+      {
+        "document": "11-security-boundaries.md",
+        "anchor": "L1125"
+      },
+      {
+        "document": "11-security-boundaries.md",
+        "anchor": "L1663"
+      },
+      {
+        "document": "11-security-boundaries.md",
+        "anchor": "L1488"
+      },
+      {
+        "document": "12-deployment.md",
+        "anchor": "L1663"
+      },
+      {
+        "document": "13-known-risks.md",
+        "anchor": "L1663"
+      },
+      {
+        "document": "13-known-risks.md",
+        "anchor": "L1488"
+      },
+      {
+        "document": "14-code-index.md",
+        "anchor": "L1390"
+      },
+      {
+        "document": "evidence/review-boundaries.md",
+        "anchor": "L1663"
+      },
+      {
+        "document": "evidence/review-boundaries.md",
+        "anchor": "L1488"
+      },
+      {
+        "document": "evidence/review-deployment-modules.md",
+        "anchor": "L1663"
+      },
+      {
+        "document": "evidence/review-deployment-modules.md",
+        "anchor": "L1147"
+      },
+      {
+        "document": "evidence/review-deployment-modules.md",
+        "anchor": "L1162"
+      },
+      {
+        "document": "vertical-slices/VS-16-app-update.md",
+        "anchor": "L1486"
+      },
+      {
+        "document": "vertical-slices/VS-16-app-update.md",
+        "anchor": "L1494"
+      },
+      {
+        "document": "vertical-slices/VS-16-app-update.md",
+        "anchor": "L624"
+      },
+      {
+        "document": "vertical-slices/VS-16-app-update.md",
+        "anchor": "L693"
+      },
+      {
+        "document": "vertical-slices/VS-16-app-update.md",
+        "anchor": "L1147"
+      },
+      {
+        "document": "vertical-slices/VS-16-app-update.md",
+        "anchor": "L1161"
+      },
+      {
+        "document": "vertical-slices/VS-16-app-update.md",
+        "anchor": "L1663"
+      },
+      {
+        "document": "vertical-slices/VS-16-app-update.md",
+        "anchor": "L1712"
+      },
+      {
+        "document": "vertical-slices/VS-16-app-update.md",
+        "anchor": "L513"
+      },
+      {
+        "document": "vertical-slices/VS-16-app-update.md",
+        "anchor": "L990"
+      },
+      {
+        "document": "vertical-slices/VS-16-app-update.md",
+        "anchor": "L1281"
+      },
+      {
+        "document": "vertical-slices/VS-16-app-update.md",
+        "anchor": "L1334"
+      }
+    ],
+    "src/fluentytdl/core/updater_worker.py": [
+      {
+        "document": "00-system-overview.md",
+        "anchor": "L169"
+      },
+      {
+        "document": "01-repository-map.md",
+        "anchor": "L169"
+      },
+      {
+        "document": "07-resource-model.md",
+        "anchor": "L52"
+      },
+      {
+        "document": "11-security-boundaries.md",
+        "anchor": "L52"
+      },
+      {
+        "document": "11-security-boundaries.md",
+        "anchor": "L183"
+      },
+      {
+        "document": "13-known-risks.md",
+        "anchor": "L52"
+      },
+      {
+        "document": "14-code-index.md",
+        "anchor": "L169"
+      },
+      {
+        "document": "evidence/review-boundaries.md",
+        "anchor": "L52"
+      },
+      {
+        "document": "evidence/review-deployment-modules.md",
+        "anchor": "L52"
+      },
+      {
+        "document": "evidence/review-deployment-modules.md",
+        "anchor": "L129"
+      },
+      {
+        "document": "vertical-slices/VS-17-component-update.md",
+        "anchor": "L169"
+      },
+      {
+        "document": "vertical-slices/VS-17-component-update.md",
+        "anchor": "L129"
+      },
+      {
+        "document": "vertical-slices/VS-17-component-update.md",
+        "anchor": "L85"
+      },
+      {
+        "document": "vertical-slices/VS-17-component-update.md",
+        "anchor": "L85"
+      },
+      {
+        "document": "vertical-slices/VS-17-component-update.md",
+        "anchor": "L251"
+      },
+      {
+        "document": "vertical-slices/VS-17-component-update.md",
+        "anchor": "L52"
+      },
+      {
+        "document": "vertical-slices/VS-17-component-update.md",
+        "anchor": "L226"
+      }
+    ],
+    "installer/FluentYTDL.iss": [
+      {
+        "document": "00-system-overview.md",
+        "anchor": ""
+      },
+      {
+        "document": "01-repository-map.md",
+        "anchor": "L159"
+      },
+      {
+        "document": "12-deployment.md",
+        "anchor": "L139"
+      },
+      {
+        "document": "12-deployment.md",
+        "anchor": "L84"
+      },
+      {
+        "document": "12-deployment.md",
+        "anchor": "L190"
+      },
+      {
+        "document": "14-code-index.md",
+        "anchor": ""
+      },
+      {
+        "document": "vertical-slices/VS-19-install-uninstall.md",
+        "anchor": "L46"
+      },
+      {
+        "document": "vertical-slices/VS-19-install-uninstall.md",
+        "anchor": "L84"
+      },
+      {
+        "document": "vertical-slices/VS-19-install-uninstall.md",
+        "anchor": "L104"
+      },
+      {
+        "document": "vertical-slices/VS-19-install-uninstall.md",
+        "anchor": "L173"
+      },
+      {
+        "document": "vertical-slices/VS-19-install-uninstall.md",
+        "anchor": "L190"
+      },
+      {
+        "document": "vertical-slices/VS-19-install-uninstall.md",
+        "anchor": "L208"
+      }
+    ],
+    "installer/maintenance.ps1": [
+      {
+        "document": "00-system-overview.md",
+        "anchor": "L1"
+      },
+      {
+        "document": "01-repository-map.md",
+        "anchor": "L1"
+      },
+      {
+        "document": "07-resource-model.md",
+        "anchor": "L205"
+      },
+      {
+        "document": "08-dependency-model.md",
+        "anchor": "L66"
+      },
+      {
+        "document": "11-security-boundaries.md",
+        "anchor": "L205"
+      },
+      {
+        "document": "12-deployment.md",
+        "anchor": "L35"
+      },
+      {
+        "document": "12-deployment.md",
+        "anchor": "L205"
+      },
+      {
+        "document": "13-known-risks.md",
+        "anchor": "L205"
+      },
+      {
+        "document": "14-code-index.md",
+        "anchor": "L1"
+      },
+      {
+        "document": "evidence/review-boundaries.md",
+        "anchor": "L205"
+      },
+      {
+        "document": "evidence/review-deployment-modules.md",
+        "anchor": "L35"
+      },
+      {
+        "document": "evidence/review-deployment-modules.md",
+        "anchor": "L205"
+      },
+      {
+        "document": "vertical-slices/VS-18-announcements.md",
+        "anchor": "L205"
+      },
+      {
+        "document": "vertical-slices/VS-19-install-uninstall.md",
+        "anchor": "L35"
+      },
+      {
+        "document": "vertical-slices/VS-19-install-uninstall.md",
+        "anchor": "L66"
+      },
+      {
+        "document": "vertical-slices/VS-19-install-uninstall.md",
+        "anchor": "L1"
+      },
+      {
+        "document": "vertical-slices/VS-19-install-uninstall.md",
+        "anchor": "L107"
+      },
+      {
+        "document": "vertical-slices/VS-19-install-uninstall.md",
+        "anchor": "L176"
+      },
+      {
+        "document": "vertical-slices/VS-19-install-uninstall.md",
+        "anchor": "L205"
+      },
+      {
+        "document": "vertical-slices/VS-19-install-uninstall.md",
+        "anchor": "L205"
+      },
+      {
+        "document": "vertical-slices/VS-19-install-uninstall.md",
+        "anchor": "L55"
+      },
+      {
+        "document": "vertical-slices/VS-19-install-uninstall.md",
+        "anchor": "L176"
+      },
+      {
+        "document": "vertical-slices/VS-19-install-uninstall.md",
+        "anchor": "L223"
+      }
+    ],
+    "../FluentYTDL-ControlCenter/apps/admin/src/main.ts": [
+      {
+        "document": "00-system-overview.md",
+        "anchor": ""
+      },
+      {
+        "document": "01-repository-map.md",
+        "anchor": "L1"
+      }
+    ],
+    "scripts/build.py": [
+      {
+        "document": "00-system-overview.md",
+        "anchor": "L1232"
+      },
+      {
+        "document": "01-repository-map.md",
+        "anchor": "L806"
+      },
+      {
+        "document": "12-deployment.md",
+        "anchor": "L77"
+      },
+      {
+        "document": "12-deployment.md",
+        "anchor": "L806"
+      },
+      {
+        "document": "12-deployment.md",
+        "anchor": "L708"
+      },
+      {
+        "document": "12-deployment.md",
+        "anchor": "L407"
+      },
+      {
+        "document": "14-code-index.md",
+        "anchor": "L77"
+      },
+      {
+        "document": "evidence/review-deployment-modules.md",
+        "anchor": "L77"
+      },
+      {
+        "document": "evidence/review-deployment-modules.md",
+        "anchor": "L818"
+      },
+      {
+        "document": "vertical-slices/VS-19-install-uninstall.md",
+        "anchor": "L708"
+      },
+      {
+        "document": "vertical-slices/VS-20-build-release.md",
+        "anchor": "L877"
+      },
+      {
+        "document": "vertical-slices/VS-20-build-release.md",
+        "anchor": "L407"
+      },
+      {
+        "document": "vertical-slices/VS-20-build-release.md",
+        "anchor": "L806"
+      },
+      {
+        "document": "vertical-slices/VS-20-build-release.md",
+        "anchor": "L77"
+      },
+      {
+        "document": "vertical-slices/VS-20-build-release.md",
+        "anchor": "L266"
+      },
+      {
+        "document": "vertical-slices/VS-20-build-release.md",
+        "anchor": "L294"
+      },
+      {
+        "document": "vertical-slices/VS-20-build-release.md",
+        "anchor": "L925"
+      },
+      {
+        "document": "vertical-slices/VS-20-build-release.md",
+        "anchor": "L402"
+      }
+    ],
+    "scripts/release_pipeline.py": [
+      {
+        "document": "00-system-overview.md",
+        "anchor": ""
+      },
+      {
+        "document": "01-repository-map.md",
+        "anchor": "L32"
+      },
+      {
+        "document": "12-deployment.md",
+        "anchor": "L81"
+      },
+      {
+        "document": "12-deployment.md",
+        "anchor": "L175"
+      },
+      {
+        "document": "14-code-index.md",
+        "anchor": "L175"
+      },
+      {
+        "document": "evidence/review-boundaries.md",
+        "anchor": "L32"
+      },
+      {
+        "document": "evidence/review-boundaries.md",
+        "anchor": "L66"
+      },
+      {
+        "document": "evidence/review-deployment-modules.md",
+        "anchor": "L66"
+      },
+      {
+        "document": "evidence/review-deployment-modules.md",
+        "anchor": "L175"
+      },
+      {
+        "document": "vertical-slices/VS-20-build-release.md",
+        "anchor": "L32"
+      },
+      {
+        "document": "vertical-slices/VS-20-build-release.md",
+        "anchor": "L66"
+      },
+      {
+        "document": "vertical-slices/VS-20-build-release.md",
+        "anchor": "L175"
+      },
+      {
+        "document": "vertical-slices/VS-20-build-release.md",
+        "anchor": "L110"
+      }
+    ],
+    "src/fluentytdl/observability/trace.py": [
+      {
+        "document": "00-system-overview.md",
+        "anchor": "L47"
+      },
+      {
+        "document": "01-repository-map.md",
+        "anchor": "L126"
+      },
+      {
+        "document": "02-module-map.md",
+        "anchor": "L101"
+      },
+      {
+        "document": "06-state-machines.md",
+        "anchor": "L119"
+      },
+      {
+        "document": "10-error-recovery.md",
+        "anchor": "L195"
+      },
+      {
+        "document": "14-code-index.md",
+        "anchor": "L42"
+      },
+      {
+        "document": "14-code-index.md",
+        "anchor": "L101"
+      },
+      {
+        "document": "vertical-slices/VS-15-diagnostics.md",
+        "anchor": "L41"
+      },
+      {
+        "document": "vertical-slices/VS-15-diagnostics.md",
+        "anchor": "L90"
+      },
+      {
+        "document": "vertical-slices/VS-15-diagnostics.md",
+        "anchor": "L126"
+      },
+      {
+        "document": "vertical-slices/VS-15-diagnostics.md",
+        "anchor": "L167"
+      }
+    ],
+    "src/fluentytdl/download/staging.py": [
+      {
+        "document": "00-system-overview.md",
+        "anchor": "L739"
+      },
+      {
+        "document": "01-repository-map.md",
+        "anchor": "L690"
+      },
+      {
+        "document": "01-repository-map.md",
+        "anchor": "L755"
+      },
+      {
+        "document": "02-module-map.md",
+        "anchor": "L690"
+      },
+      {
+        "document": "03-runtime-architecture.md",
+        "anchor": "L739"
+      },
+      {
+        "document": "03-runtime-architecture.md",
+        "anchor": "L1517"
+      },
+      {
+        "document": "05-control-flow.md",
+        "anchor": "L1283"
+      },
+      {
+        "document": "05-control-flow.md",
+        "anchor": "L1744"
+      },
+      {
+        "document": "06-state-machines.md",
+        "anchor": "L140"
+      },
+      {
+        "document": "06-state-machines.md",
+        "anchor": "L1276"
+      },
+      {
+        "document": "06-state-machines.md",
+        "anchor": "L1283"
+      },
+      {
+        "document": "06-state-machines.md",
+        "anchor": "L1427"
+      },
+      {
+        "document": "06-state-machines.md",
+        "anchor": "L1517"
+      },
+      {
+        "document": "07-resource-model.md",
+        "anchor": "L739"
+      },
+      {
+        "document": "07-resource-model.md",
+        "anchor": "L878"
+      },
+      {
+        "document": "07-resource-model.md",
+        "anchor": "L1517"
+      },
+      {
+        "document": "07-resource-model.md",
+        "anchor": "L1744"
+      },
+      {
+        "document": "07-resource-model.md",
+        "anchor": "L322"
+      },
+      {
+        "document": "07-resource-model.md",
+        "anchor": "L294"
+      },
+      {
+        "document": "07-resource-model.md",
+        "anchor": "L1227"
+      },
+      {
+        "document": "07-resource-model.md",
+        "anchor": "L1283"
+      },
+      {
+        "document": "07-resource-model.md",
+        "anchor": "L1327"
+      },
+      {
+        "document": "07-resource-model.md",
+        "anchor": "L1427"
+      },
+      {
+        "document": "07-resource-model.md",
+        "anchor": "L1493"
+      },
+      {
+        "document": "08-dependency-model.md",
+        "anchor": "L982"
+      },
+      {
+        "document": "08-dependency-model.md",
+        "anchor": "L739"
+      },
+      {
+        "document": "10-error-recovery.md",
+        "anchor": "L1172"
+      },
+      {
+        "document": "10-error-recovery.md",
+        "anchor": "L1517"
+      },
+      {
+        "document": "10-error-recovery.md",
+        "anchor": "L1744"
+      },
+      {
+        "document": "10-error-recovery.md",
+        "anchor": "L1807"
+      },
+      {
+        "document": "10-error-recovery.md",
+        "anchor": "L1845"
+      },
+      {
+        "document": "10-error-recovery.md",
+        "anchor": "L1864"
+      },
+      {
+        "document": "10-error-recovery.md",
+        "anchor": "L1630"
+      },
+      {
+        "document": "10-error-recovery.md",
+        "anchor": "L1298"
+      },
+      {
+        "document": "13-known-risks.md",
+        "anchor": "L1283"
+      },
+      {
+        "document": "13-known-risks.md",
+        "anchor": "L1630"
+      },
+      {
+        "document": "13-known-risks.md",
+        "anchor": "L1293"
+      },
+      {
+        "document": "13-known-risks.md",
+        "anchor": "L1807"
+      },
+      {
+        "document": "13-known-risks.md",
+        "anchor": "L1845"
+      },
+      {
+        "document": "14-code-index.md",
+        "anchor": "L690"
+      },
+      {
+        "document": "14-code-index.md",
+        "anchor": "L322"
+      },
+      {
+        "document": "14-code-index.md",
+        "anchor": "L295"
+      },
+      {
+        "document": "evidence/review-deployment-modules.md",
+        "anchor": "L1636"
+      },
+      {
+        "document": "evidence/review-deployment-modules.md",
+        "anchor": "L1298"
+      },
+      {
+        "document": "evidence/review-deployment-modules.md",
+        "anchor": "L1864"
+      },
+      {
+        "document": "evidence/review-deployment-modules.md",
+        "anchor": "L1807"
+      },
+      {
+        "document": "evidence/review-deployment-modules.md",
+        "anchor": "L1845"
+      },
+      {
+        "document": "evidence/review-runtime-resources.md",
+        "anchor": "L1792"
+      },
+      {
+        "document": "evidence/review-runtime-resources.md",
+        "anchor": "L1807"
+      },
+      {
+        "document": "evidence/review-runtime-resources.md",
+        "anchor": "L1844"
+      },
+      {
+        "document": "evidence/review-runtime-resources.md",
+        "anchor": "L1864"
+      },
+      {
+        "document": "evidence/review-runtime-resources.md",
+        "anchor": "L1293"
+      },
+      {
+        "document": "evidence/review-runtime-resources.md",
+        "anchor": "L1630"
+      },
+      {
+        "document": "evidence/review-runtime-resources.md",
+        "anchor": "L1283"
+      },
+      {
+        "document": "evidence/review-runtime-resources.md",
+        "anchor": "L1517"
+      },
+      {
+        "document": "evidence/review-runtime-resources.md",
+        "anchor": "L1172"
+      },
+      {
+        "document": "evidence/review-runtime-resources.md",
+        "anchor": "L1227"
+      },
+      {
+        "document": "vertical-slices/VS-06-subtitle.md",
+        "anchor": "L1252"
+      },
+      {
+        "document": "vertical-slices/VS-11-cancel-recovery.md",
+        "anchor": "L1283"
+      },
+      {
+        "document": "vertical-slices/VS-11-cancel-recovery.md",
+        "anchor": "L1321"
+      },
+      {
+        "document": "vertical-slices/VS-11-cancel-recovery.md",
+        "anchor": "L1517"
+      },
+      {
+        "document": "vertical-slices/VS-11-cancel-recovery.md",
+        "anchor": "L1427"
+      },
+      {
+        "document": "vertical-slices/VS-11-cancel-recovery.md",
+        "anchor": "L1807"
+      },
+      {
+        "document": "vertical-slices/VS-11-cancel-recovery.md",
+        "anchor": "L1845"
+      },
+      {
+        "document": "vertical-slices/VS-11-cancel-recovery.md",
+        "anchor": "L1864"
+      },
+      {
+        "document": "vertical-slices/VS-11-cancel-recovery.md",
+        "anchor": "L1744"
+      },
+      {
+        "document": "vertical-slices/VS-11-cancel-recovery.md",
+        "anchor": "L1630"
+      },
+      {
+        "document": "vertical-slices/VS-11-cancel-recovery.md",
+        "anchor": "L1298"
+      }
+    ],
+    "scripts/updater.spec": [
+      {
+        "document": "01-repository-map.md",
+        "anchor": "L21"
+      },
+      {
+        "document": "08-dependency-model.md",
+        "anchor": "L22"
+      },
+      {
+        "document": "12-deployment.md",
+        "anchor": "L117"
+      }
+    ],
+    "pyproject.toml": [
+      {
+        "document": "01-repository-map.md",
+        "anchor": "L62"
+      },
+      {
+        "document": "08-dependency-model.md",
+        "anchor": "L5"
+      },
+      {
+        "document": "12-deployment.md",
+        "anchor": "L5"
+      },
+      {
+        "document": "12-deployment.md",
+        "anchor": "L133"
+      },
+      {
+        "document": "13-known-risks.md",
+        "anchor": "L64"
+      },
+      {
+        "document": "vertical-slices/VS-20-build-release.md",
+        "anchor": "L133"
+      }
+    ],
+    "scripts/FluentYTDL.spec": [
+      {
+        "document": "01-repository-map.md",
+        "anchor": "L78"
+      },
+      {
+        "document": "12-deployment.md",
+        "anchor": "L78"
+      }
+    ],
+    "src/fluentytdl/ui/reimagined_main_window.py": [
+      {
+        "document": "01-repository-map.md",
+        "anchor": "L680"
+      },
+      {
+        "document": "01-repository-map.md",
+        "anchor": "L826"
+      },
+      {
+        "document": "02-module-map.md",
+        "anchor": "L161"
+      },
+      {
+        "document": "03-runtime-architecture.md",
+        "anchor": "L708"
+      },
+      {
+        "document": "03-runtime-architecture.md",
+        "anchor": "L835"
+      },
+      {
+        "document": "05-control-flow.md",
+        "anchor": "L835"
+      },
+      {
+        "document": "08-dependency-model.md",
+        "anchor": "L708"
+      },
+      {
+        "document": "08-dependency-model.md",
+        "anchor": "L835"
+      },
+      {
+        "document": "08-dependency-model.md",
+        "anchor": "L307"
+      },
+      {
+        "document": "09-concurrency-model.md",
+        "anchor": "L596"
+      },
+      {
+        "document": "10-error-recovery.md",
+        "anchor": "L1933"
+      },
+      {
+        "document": "14-code-index.md",
+        "anchor": "L161"
+      },
+      {
+        "document": "vertical-slices/VS-01-startup-shutdown.md",
+        "anchor": "L319"
+      },
+      {
+        "document": "vertical-slices/VS-01-startup-shutdown.md",
+        "anchor": "L596"
+      },
+      {
+        "document": "vertical-slices/VS-02-video.md",
+        "anchor": "L746"
+      },
+      {
+        "document": "vertical-slices/VS-03-vr.md",
+        "anchor": "L766"
+      },
+      {
+        "document": "vertical-slices/VS-03-vr.md",
+        "anchor": "L793"
+      },
+      {
+        "document": "vertical-slices/VS-04-channel.md",
+        "anchor": "L783"
+      },
+      {
+        "document": "vertical-slices/VS-06-subtitle.md",
+        "anchor": "L812"
+      },
+      {
+        "document": "vertical-slices/VS-09-pause-resume.md",
+        "anchor": "L1147"
+      },
+      {
+        "document": "vertical-slices/VS-10-retry.md",
+        "anchor": "L1933"
+      },
+      {
+        "document": "vertical-slices/VS-16-app-update.md",
+        "anchor": "L307"
+      },
+      {
+        "document": "vertical-slices/VS-18-announcements.md",
+        "anchor": "L302"
+      }
+    ],
+    "src/fluentytdl/core/controller.py": [
+      {
+        "document": "01-repository-map.md",
+        "anchor": "L80"
+      },
+      {
+        "document": "02-module-map.md",
+        "anchor": "L80"
+      },
+      {
+        "document": "03-runtime-architecture.md",
+        "anchor": "L95"
+      },
+      {
+        "document": "05-control-flow.md",
+        "anchor": "L95"
+      },
+      {
+        "document": "06-state-machines.md",
+        "anchor": "L477"
+      },
+      {
+        "document": "08-dependency-model.md",
+        "anchor": "L194"
+      },
+      {
+        "document": "14-code-index.md",
+        "anchor": "L80"
+      },
+      {
+        "document": "evidence/review-runtime-resources.md",
+        "anchor": "L477"
+      },
+      {
+        "document": "evidence/review-runtime-resources.md",
+        "anchor": "L537"
+      },
+      {
+        "document": "vertical-slices/VS-02-video.md",
+        "anchor": "L95"
+      },
+      {
+        "document": "vertical-slices/VS-08-quick-audio-section.md",
+        "anchor": "L184"
+      },
+      {
+        "document": "vertical-slices/VS-09-pause-resume.md",
+        "anchor": "L477"
+      },
+      {
+        "document": "vertical-slices/VS-09-pause-resume.md",
+        "anchor": "L352"
+      },
+      {
+        "document": "vertical-slices/VS-09-pause-resume.md",
+        "anchor": "L485"
+      },
+      {
+        "document": "vertical-slices/VS-09-pause-resume.md",
+        "anchor": "L537"
+      },
+      {
+        "document": "vertical-slices/VS-10-retry.md",
+        "anchor": "L509"
+      },
+      {
+        "document": "vertical-slices/VS-11-cancel-recovery.md",
+        "anchor": "L242"
+      },
+      {
+        "document": "vertical-slices/VS-11-cancel-recovery.md",
+        "anchor": "L280"
+      },
+      {
+        "document": "vertical-slices/VS-11-cancel-recovery.md",
+        "anchor": "L24"
+      },
+      {
+        "document": "vertical-slices/VS-11-cancel-recovery.md",
+        "anchor": "L559"
+      }
+    ],
+    "src/fluentytdl/youtube/youtube_service.py": [
+      {
+        "document": "01-repository-map.md",
+        "anchor": "L302"
+      },
+      {
+        "document": "02-module-map.md",
+        "anchor": "L177"
+      },
+      {
+        "document": "04-data-flow.md",
+        "anchor": "L144"
+      },
+      {
+        "document": "04-data-flow.md",
+        "anchor": "L1697"
+      },
+      {
+        "document": "04-data-flow.md",
+        "anchor": "L144"
+      },
+      {
+        "document": "04-data-flow.md",
+        "anchor": "L235"
+      },
+      {
+        "document": "04-data-flow.md",
+        "anchor": "L1586"
+      },
+      {
+        "document": "04-data-flow.md",
+        "anchor": "L1697"
+      },
+      {
+        "document": "07-resource-model.md",
+        "anchor": "L144"
+      },
+      {
+        "document": "07-resource-model.md",
+        "anchor": "L1697"
+      },
+      {
+        "document": "14-code-index.md",
+        "anchor": "L177"
+      },
+      {
+        "document": "vertical-slices/VS-03-vr.md",
+        "anchor": "L1963"
+      },
+      {
+        "document": "vertical-slices/VS-10-retry.md",
+        "anchor": "L2103"
+      },
+      {
+        "document": "vertical-slices/VS-10-retry.md",
+        "anchor": "L815"
+      },
+      {
+        "document": "vertical-slices/VS-13-cookie-context.md",
+        "anchor": "L235"
+      },
+      {
+        "document": "vertical-slices/VS-13-cookie-context.md",
+        "anchor": "L130"
+      },
+      {
+        "document": "vertical-slices/VS-13-cookie-context.md",
+        "anchor": "L144"
+      },
+      {
+        "document": "vertical-slices/VS-13-cookie-context.md",
+        "anchor": "L1586"
+      },
+      {
+        "document": "vertical-slices/VS-13-cookie-context.md",
+        "anchor": "L1697"
+      },
+      {
+        "document": "vertical-slices/VS-13-cookie-context.md",
+        "anchor": "L1734"
+      },
+      {
+        "document": "vertical-slices/VS-13-cookie-context.md",
+        "anchor": "L160"
+      },
+      {
+        "document": "vertical-slices/VS-14-pot-runtime.md",
+        "anchor": "L564"
+      }
+    ],
+    "src/fluentytdl/download/download_manager.py": [
+      {
+        "document": "01-repository-map.md",
+        "anchor": "L376"
+      },
+      {
+        "document": "02-module-map.md",
+        "anchor": "L153"
+      },
+      {
+        "document": "03-runtime-architecture.md",
+        "anchor": "L168"
+      },
+      {
+        "document": "03-runtime-architecture.md",
+        "anchor": "L376"
+      },
+      {
+        "document": "04-data-flow.md",
+        "anchor": "L408"
+      },
+      {
+        "document": "04-data-flow.md",
+        "anchor": "L562"
+      },
+      {
+        "document": "04-data-flow.md",
+        "anchor": "L183"
+      },
+      {
+        "document": "04-data-flow.md",
+        "anchor": "L293"
+      },
+      {
+        "document": "05-control-flow.md",
+        "anchor": "L403"
+      },
+      {
+        "document": "05-control-flow.md",
+        "anchor": "L376"
+      },
+      {
+        "document": "05-control-flow.md",
+        "anchor": "L455"
+      },
+      {
+        "document": "06-state-machines.md",
+        "anchor": "L424"
+      },
+      {
+        "document": "06-state-machines.md",
+        "anchor": "L538"
+      },
+      {
+        "document": "06-state-machines.md",
+        "anchor": "L22"
+      },
+      {
+        "document": "06-state-machines.md",
+        "anchor": "L174"
+      },
+      {
+        "document": "06-state-machines.md",
+        "anchor": "L48"
+      },
+      {
+        "document": "07-resource-model.md",
+        "anchor": "L507"
+      },
+      {
+        "document": "07-resource-model.md",
+        "anchor": "L562"
+      },
+      {
+        "document": "08-dependency-model.md",
+        "anchor": "L168"
+      },
+      {
+        "document": "08-dependency-model.md",
+        "anchor": "L168"
+      },
+      {
+        "document": "09-concurrency-model.md",
+        "anchor": "L507"
+      },
+      {
+        "document": "09-concurrency-model.md",
+        "anchor": "L443"
+      },
+      {
+        "document": "09-concurrency-model.md",
+        "anchor": "L376"
+      },
+      {
+        "document": "09-concurrency-model.md",
+        "anchor": "L562"
+      },
+      {
+        "document": "09-concurrency-model.md",
+        "anchor": "L599"
+      },
+      {
+        "document": "10-error-recovery.md",
+        "anchor": "L174"
+      },
+      {
+        "document": "13-known-risks.md",
+        "anchor": "L562"
+      },
+      {
+        "document": "13-known-risks.md",
+        "anchor": "L48"
+      },
+      {
+        "document": "14-code-index.md",
+        "anchor": "L153"
+      },
+      {
+        "document": "evidence/review-boundaries.md",
+        "anchor": "L562"
+      },
+      {
+        "document": "evidence/review-boundaries.md",
+        "anchor": "L48"
+      },
+      {
+        "document": "evidence/review-runtime-resources.md",
+        "anchor": "L33"
+      },
+      {
+        "document": "evidence/review-runtime-resources.md",
+        "anchor": "L455"
+      },
+      {
+        "document": "evidence/review-runtime-resources.md",
+        "anchor": "L562"
+      },
+      {
+        "document": "evidence/review-runtime-resources.md",
+        "anchor": "L599"
+      },
+      {
+        "document": "vertical-slices/VS-01-startup-shutdown.md",
+        "anchor": "L174"
+      },
+      {
+        "document": "vertical-slices/VS-01-startup-shutdown.md",
+        "anchor": "L562"
+      },
+      {
+        "document": "vertical-slices/VS-02-video.md",
+        "anchor": "L403"
+      },
+      {
+        "document": "vertical-slices/VS-06-subtitle.md",
+        "anchor": "L236"
+      },
+      {
+        "document": "vertical-slices/VS-07-cover.md",
+        "anchor": "L236"
+      },
+      {
+        "document": "vertical-slices/VS-08-quick-audio-section.md",
+        "anchor": "L376"
+      },
+      {
+        "document": "vertical-slices/VS-09-pause-resume.md",
+        "anchor": "L245"
+      },
+      {
+        "document": "vertical-slices/VS-11-cancel-recovery.md",
+        "anchor": "L599"
+      },
+      {
+        "document": "vertical-slices/VS-11-cancel-recovery.md",
+        "anchor": "L96"
+      },
+      {
+        "document": "vertical-slices/VS-11-cancel-recovery.md",
+        "anchor": "L174"
+      },
+      {
+        "document": "vertical-slices/VS-11-cancel-recovery.md",
+        "anchor": "L322"
+      },
+      {
+        "document": "vertical-slices/VS-13-cookie-context.md",
+        "anchor": "L408"
+      },
+      {
+        "document": "vertical-slices/VS-13-cookie-context.md",
+        "anchor": "L293"
+      },
+      {
+        "document": "vertical-slices/VS-16-app-update.md",
+        "anchor": "L562"
+      }
+    ],
+    "src/fluentytdl/download/workers.py": [
+      {
+        "document": "01-repository-map.md",
+        "anchor": "L1143"
+      },
+      {
+        "document": "02-module-map.md",
+        "anchor": "L137"
+      },
+      {
+        "document": "02-module-map.md",
+        "anchor": "L597"
+      },
+      {
+        "document": "03-runtime-architecture.md",
+        "anchor": "L618"
+      },
+      {
+        "document": "03-runtime-architecture.md",
+        "anchor": "L1753"
+      },
+      {
+        "document": "03-runtime-architecture.md",
+        "anchor": "L1159"
+      },
+      {
+        "document": "03-runtime-architecture.md",
+        "anchor": "L1988"
+      },
+      {
+        "document": "03-runtime-architecture.md",
+        "anchor": "L2330"
+      },
+      {
+        "document": "03-runtime-architecture.md",
+        "anchor": "L678"
+      },
+      {
+        "document": "03-runtime-architecture.md",
+        "anchor": "L1256"
+      },
+      {
+        "document": "03-runtime-architecture.md",
+        "anchor": "L1561"
+      },
+      {
+        "document": "05-control-flow.md",
+        "anchor": "L1143"
+      },
+      {
+        "document": "05-control-flow.md",
+        "anchor": "L1330"
+      },
+      {
+        "document": "05-control-flow.md",
+        "anchor": "L891"
+      },
+      {
+        "document": "05-control-flow.md",
+        "anchor": "L1421"
+      },
+      {
+        "document": "05-control-flow.md",
+        "anchor": "L1475"
+      },
+      {
+        "document": "05-control-flow.md",
+        "anchor": "L759"
+      },
+      {
+        "document": "05-control-flow.md",
+        "anchor": "L2163"
+      },
+      {
+        "document": "05-control-flow.md",
+        "anchor": "L2413"
+      },
+      {
+        "document": "05-control-flow.md",
+        "anchor": "L309"
+      },
+      {
+        "document": "05-control-flow.md",
+        "anchor": "L717"
+      },
+      {
+        "document": "05-control-flow.md",
+        "anchor": "L1615"
+      },
+      {
+        "document": "05-control-flow.md",
+        "anchor": "L1648"
+      },
+      {
+        "document": "06-state-machines.md",
+        "anchor": "L717"
+      },
+      {
+        "document": "06-state-machines.md",
+        "anchor": "L1108"
+      },
+      {
+        "document": "06-state-machines.md",
+        "anchor": "L1488"
+      },
+      {
+        "document": "06-state-machines.md",
+        "anchor": "L1330"
+      },
+      {
+        "document": "06-state-machines.md",
+        "anchor": "L765"
+      },
+      {
+        "document": "06-state-machines.md",
+        "anchor": "L742"
+      },
+      {
+        "document": "06-state-machines.md",
+        "anchor": "L1528"
+      },
+      {
+        "document": "06-state-machines.md",
+        "anchor": "L1123"
+      },
+      {
+        "document": "06-state-machines.md",
+        "anchor": "L738"
+      },
+      {
+        "document": "07-resource-model.md",
+        "anchor": "L597"
+      },
+      {
+        "document": "07-resource-model.md",
+        "anchor": "L759"
+      },
+      {
+        "document": "07-resource-model.md",
+        "anchor": "L1475"
+      },
+      {
+        "document": "07-resource-model.md",
+        "anchor": "L2052"
+      },
+      {
+        "document": "07-resource-model.md",
+        "anchor": "L2069"
+      },
+      {
+        "document": "07-resource-model.md",
+        "anchor": "L2162"
+      },
+      {
+        "document": "07-resource-model.md",
+        "anchor": "L2325"
+      },
+      {
+        "document": "08-dependency-model.md",
+        "anchor": "L46"
+      },
+      {
+        "document": "09-concurrency-model.md",
+        "anchor": "L360"
+      },
+      {
+        "document": "09-concurrency-model.md",
+        "anchor": "L765"
+      },
+      {
+        "document": "09-concurrency-model.md",
+        "anchor": "L579"
+      },
+      {
+        "document": "10-error-recovery.md",
+        "anchor": "L1369"
+      },
+      {
+        "document": "10-error-recovery.md",
+        "anchor": "L1421"
+      },
+      {
+        "document": "10-error-recovery.md",
+        "anchor": "L168"
+      },
+      {
+        "document": "10-error-recovery.md",
+        "anchor": "L241"
+      },
+      {
+        "document": "10-error-recovery.md",
+        "anchor": "L1561"
+      },
+      {
+        "document": "10-error-recovery.md",
+        "anchor": "L2251"
+      },
+      {
+        "document": "10-error-recovery.md",
+        "anchor": "L2464"
+      },
+      {
+        "document": "10-error-recovery.md",
+        "anchor": "L1648"
+      },
+      {
+        "document": "10-error-recovery.md",
+        "anchor": "L1242"
+      },
+      {
+        "document": "10-error-recovery.md",
+        "anchor": "L1272"
+      },
+      {
+        "document": "10-error-recovery.md",
+        "anchor": "L2310"
+      },
+      {
+        "document": "10-error-recovery.md",
+        "anchor": "L2503"
+      },
+      {
+        "document": "10-error-recovery.md",
+        "anchor": "L2251"
+      },
+      {
+        "document": "10-error-recovery.md",
+        "anchor": "L2464"
+      },
+      {
+        "document": "13-known-risks.md",
+        "anchor": "L2052"
+      },
+      {
+        "document": "13-known-risks.md",
+        "anchor": "L2162"
+      },
+      {
+        "document": "13-known-risks.md",
+        "anchor": "L791"
+      },
+      {
+        "document": "13-known-risks.md",
+        "anchor": "L1485"
+      },
+      {
+        "document": "13-known-risks.md",
+        "anchor": "L579"
+      },
+      {
+        "document": "13-known-risks.md",
+        "anchor": "L754"
+      },
+      {
+        "document": "13-known-risks.md",
+        "anchor": "L1186"
+      },
+      {
+        "document": "13-known-risks.md",
+        "anchor": "L1965"
+      },
+      {
+        "document": "13-known-risks.md",
+        "anchor": "L2310"
+      },
+      {
+        "document": "13-known-risks.md",
+        "anchor": "L2503"
+      },
+      {
+        "document": "13-known-risks.md",
+        "anchor": "L2251"
+      },
+      {
+        "document": "13-known-risks.md",
+        "anchor": "L2464"
+      },
+      {
+        "document": "13-known-risks.md",
+        "anchor": "L1528"
+      },
+      {
+        "document": "13-known-risks.md",
+        "anchor": "L1122"
+      },
+      {
+        "document": "14-code-index.md",
+        "anchor": "L137"
+      },
+      {
+        "document": "14-code-index.md",
+        "anchor": "L518"
+      },
+      {
+        "document": "14-code-index.md",
+        "anchor": "L597"
+      },
+      {
+        "document": "14-code-index.md",
+        "anchor": "L1988"
+      },
+      {
+        "document": "14-code-index.md",
+        "anchor": "L2330"
+      },
+      {
+        "document": "evidence/review-boundaries.md",
+        "anchor": "L2052"
+      },
+      {
+        "document": "evidence/review-boundaries.md",
+        "anchor": "L2162"
+      },
+      {
+        "document": "evidence/review-boundaries.md",
+        "anchor": "L791"
+      },
+      {
+        "document": "evidence/review-boundaries.md",
+        "anchor": "L1475"
+      },
+      {
+        "document": "evidence/review-boundaries.md",
+        "anchor": "L579"
+      },
+      {
+        "document": "evidence/review-boundaries.md",
+        "anchor": "L742"
+      },
+      {
+        "document": "evidence/review-boundaries.md",
+        "anchor": "L1186"
+      },
+      {
+        "document": "evidence/review-deployment-modules.md",
+        "anchor": "L2310"
+      },
+      {
+        "document": "evidence/review-deployment-modules.md",
+        "anchor": "L2503"
+      },
+      {
+        "document": "evidence/review-deployment-modules.md",
+        "anchor": "L2251"
+      },
+      {
+        "document": "evidence/review-deployment-modules.md",
+        "anchor": "L2464"
+      },
+      {
+        "document": "evidence/review-deployment-modules.md",
+        "anchor": "L1528"
+      },
+      {
+        "document": "evidence/review-deployment-modules.md",
+        "anchor": "L1123"
+      },
+      {
+        "document": "evidence/review-runtime-resources.md",
+        "anchor": "L765"
+      },
+      {
+        "document": "evidence/review-runtime-resources.md",
+        "anchor": "L791"
+      },
+      {
+        "document": "evidence/review-runtime-resources.md",
+        "anchor": "L1475"
+      },
+      {
+        "document": "evidence/review-runtime-resources.md",
+        "anchor": "L759"
+      },
+      {
+        "document": "evidence/review-runtime-resources.md",
+        "anchor": "L1599"
+      },
+      {
+        "document": "evidence/review-runtime-resources.md",
+        "anchor": "L1871"
+      },
+      {
+        "document": "evidence/review-runtime-resources.md",
+        "anchor": "L2069"
+      },
+      {
+        "document": "evidence/review-runtime-resources.md",
+        "anchor": "L2354"
+      },
+      {
+        "document": "evidence/review-runtime-resources.md",
+        "anchor": "L1615"
+      },
+      {
+        "document": "evidence/review-runtime-resources.md",
+        "anchor": "L360"
+      },
+      {
+        "document": "evidence/review-runtime-resources.md",
+        "anchor": "L579"
+      },
+      {
+        "document": "evidence/review-runtime-resources.md",
+        "anchor": "L2052"
+      },
+      {
+        "document": "evidence/review-runtime-resources.md",
+        "anchor": "L2162"
+      },
+      {
+        "document": "evidence/review-runtime-resources.md",
+        "anchor": "L2325"
+      },
+      {
+        "document": "vertical-slices/VS-02-video.md",
+        "anchor": "L168"
+      },
+      {
+        "document": "vertical-slices/VS-02-video.md",
+        "anchor": "L1174"
+      },
+      {
+        "document": "vertical-slices/VS-02-video.md",
+        "anchor": "L1330"
+      },
+      {
+        "document": "vertical-slices/VS-02-video.md",
+        "anchor": "L1526"
+      },
+      {
+        "document": "vertical-slices/VS-02-video.md",
+        "anchor": "L1615"
+      },
+      {
+        "document": "vertical-slices/VS-03-vr.md",
+        "anchor": "L453"
+      },
+      {
+        "document": "vertical-slices/VS-04-channel.md",
+        "anchor": "L241"
+      },
+      {
+        "document": "vertical-slices/VS-04-channel.md",
+        "anchor": "L309"
+      },
+      {
+        "document": "vertical-slices/VS-04-channel.md",
+        "anchor": "L241"
+      },
+      {
+        "document": "vertical-slices/VS-04-channel.md",
+        "anchor": "L360"
+      },
+      {
+        "document": "vertical-slices/VS-04-channel.md",
+        "anchor": "L1186"
+      },
+      {
+        "document": "vertical-slices/VS-05-playlist.md",
+        "anchor": "L179"
+      },
+      {
+        "document": "vertical-slices/VS-05-playlist.md",
+        "anchor": "L548"
+      },
+      {
+        "document": "vertical-slices/VS-06-subtitle.md",
+        "anchor": "L1168"
+      },
+      {
+        "document": "vertical-slices/VS-06-subtitle.md",
+        "anchor": "L899"
+      },
+      {
+        "document": "vertical-slices/VS-06-subtitle.md",
+        "anchor": "L949"
+      },
+      {
+        "document": "vertical-slices/VS-06-subtitle.md",
+        "anchor": "L1988"
+      },
+      {
+        "document": "vertical-slices/VS-06-subtitle.md",
+        "anchor": "L2085"
+      },
+      {
+        "document": "vertical-slices/VS-06-subtitle.md",
+        "anchor": "L2251"
+      },
+      {
+        "document": "vertical-slices/VS-06-subtitle.md",
+        "anchor": "L1871"
+      },
+      {
+        "document": "vertical-slices/VS-07-cover.md",
+        "anchor": "L1159"
+      },
+      {
+        "document": "vertical-slices/VS-07-cover.md",
+        "anchor": "L2330"
+      },
+      {
+        "document": "vertical-slices/VS-07-cover.md",
+        "anchor": "L2413"
+      },
+      {
+        "document": "vertical-slices/VS-07-cover.md",
+        "anchor": "L1871"
+      },
+      {
+        "document": "vertical-slices/VS-07-cover.md",
+        "anchor": "L2494"
+      },
+      {
+        "document": "vertical-slices/VS-07-cover.md",
+        "anchor": "L2503"
+      },
+      {
+        "document": "vertical-slices/VS-08-quick-audio-section.md",
+        "anchor": "L1186"
+      },
+      {
+        "document": "vertical-slices/VS-08-quick-audio-section.md",
+        "anchor": "L1276"
+      },
+      {
+        "document": "vertical-slices/VS-09-pause-resume.md",
+        "anchor": "L765"
+      },
+      {
+        "document": "vertical-slices/VS-09-pause-resume.md",
+        "anchor": "L891"
+      },
+      {
+        "document": "vertical-slices/VS-09-pause-resume.md",
+        "anchor": "L778"
+      },
+      {
+        "document": "vertical-slices/VS-10-retry.md",
+        "anchor": "L1369"
+      },
+      {
+        "document": "vertical-slices/VS-10-retry.md",
+        "anchor": "L1421"
+      },
+      {
+        "document": "vertical-slices/VS-10-retry.md",
+        "anchor": "L1475"
+      },
+      {
+        "document": "vertical-slices/VS-10-retry.md",
+        "anchor": "L1488"
+      },
+      {
+        "document": "vertical-slices/VS-10-retry.md",
+        "anchor": "L1335"
+      },
+      {
+        "document": "vertical-slices/VS-10-retry.md",
+        "anchor": "L1070"
+      },
+      {
+        "document": "vertical-slices/VS-10-retry.md",
+        "anchor": "L2254"
+      },
+      {
+        "document": "vertical-slices/VS-11-cancel-recovery.md",
+        "anchor": "L791"
+      },
+      {
+        "document": "vertical-slices/VS-11-cancel-recovery.md",
+        "anchor": "L832"
+      },
+      {
+        "document": "vertical-slices/VS-13-cookie-context.md",
+        "anchor": "L2052"
+      },
+      {
+        "document": "vertical-slices/VS-13-cookie-context.md",
+        "anchor": "L2162"
+      },
+      {
+        "document": "vertical-slices/VS-13-cookie-context.md",
+        "anchor": "L2325"
+      }
+    ],
+    "src/fluentytdl/download/features.py": [
+      {
+        "document": "01-repository-map.md",
+        "anchor": ""
+      },
+      {
+        "document": "02-module-map.md",
+        "anchor": "L23"
+      },
+      {
+        "document": "03-runtime-architecture.md",
+        "anchor": "L150"
+      },
+      {
+        "document": "03-runtime-architecture.md",
+        "anchor": "L328"
+      },
+      {
+        "document": "03-runtime-architecture.md",
+        "anchor": "L477"
+      },
+      {
+        "document": "08-dependency-model.md",
+        "anchor": "L18"
+      },
+      {
+        "document": "09-concurrency-model.md",
+        "anchor": "L624"
+      },
+      {
+        "document": "10-error-recovery.md",
+        "anchor": "L624"
+      },
+      {
+        "document": "13-known-risks.md",
+        "anchor": "L624"
+      },
+      {
+        "document": "14-code-index.md",
+        "anchor": "L23"
+      },
+      {
+        "document": "evidence/review-boundaries.md",
+        "anchor": "L624"
+      },
+      {
+        "document": "evidence/review-runtime-resources.md",
+        "anchor": "L624"
+      },
+      {
+        "document": "vertical-slices/VS-03-vr.md",
+        "anchor": "L477"
+      },
+      {
+        "document": "vertical-slices/VS-03-vr.md",
+        "anchor": "L541"
+      },
+      {
+        "document": "vertical-slices/VS-03-vr.md",
+        "anchor": "L652"
+      },
+      {
+        "document": "vertical-slices/VS-03-vr.md",
+        "anchor": "L624"
+      }
+    ],
+    "src/fluentytdl/auth/cookie_sentinel.py": [
+      {
+        "document": "01-repository-map.md",
+        "anchor": "L382"
+      },
+      {
+        "document": "07-resource-model.md",
+        "anchor": "L382"
+      },
+      {
+        "document": "08-dependency-model.md",
+        "anchor": "L31"
+      },
+      {
+        "document": "11-security-boundaries.md",
+        "anchor": "L382"
+      },
+      {
+        "document": "11-security-boundaries.md",
+        "anchor": "L411"
+      },
+      {
+        "document": "14-code-index.md",
+        "anchor": "L34"
+      },
+      {
+        "document": "vertical-slices/VS-12-authentication.md",
+        "anchor": "L707"
+      },
+      {
+        "document": "vertical-slices/VS-12-authentication.md",
+        "anchor": "L934"
+      },
+      {
+        "document": "vertical-slices/VS-12-authentication.md",
+        "anchor": "L382"
+      },
+      {
+        "document": "vertical-slices/VS-12-authentication.md",
+        "anchor": "L720"
+      },
+      {
+        "document": "vertical-slices/VS-13-cookie-context.md",
+        "anchor": "L180"
+      }
+    ],
+    "src/fluentytdl/auth/cookie_runfile.py": [
+      {
+        "document": "01-repository-map.md",
+        "anchor": "L58"
+      },
+      {
+        "document": "02-module-map.md",
+        "anchor": "L58"
+      },
+      {
+        "document": "04-data-flow.md",
+        "anchor": "L58"
+      },
+      {
+        "document": "04-data-flow.md",
+        "anchor": "L37"
+      },
+      {
+        "document": "05-control-flow.md",
+        "anchor": "L91"
+      },
+      {
+        "document": "07-resource-model.md",
+        "anchor": "L58"
+      },
+      {
+        "document": "11-security-boundaries.md",
+        "anchor": "L37"
+      },
+      {
+        "document": "11-security-boundaries.md",
+        "anchor": "L91"
+      },
+      {
+        "document": "13-known-risks.md",
+        "anchor": "L91"
+      },
+      {
+        "document": "13-known-risks.md",
+        "anchor": "L37"
+      },
+      {
+        "document": "14-code-index.md",
+        "anchor": "L58"
+      },
+      {
+        "document": "evidence/review-boundaries.md",
+        "anchor": "L37"
+      },
+      {
+        "document": "evidence/review-boundaries.md",
+        "anchor": "L91"
+      },
+      {
+        "document": "evidence/review-runtime-resources.md",
+        "anchor": "L58"
+      },
+      {
+        "document": "evidence/review-runtime-resources.md",
+        "anchor": "L37"
+      },
+      {
+        "document": "evidence/review-runtime-resources.md",
+        "anchor": "L91"
+      },
+      {
+        "document": "vertical-slices/VS-13-cookie-context.md",
+        "anchor": "L37"
+      },
+      {
+        "document": "vertical-slices/VS-13-cookie-context.md",
+        "anchor": "L58"
+      },
+      {
+        "document": "vertical-slices/VS-13-cookie-context.md",
+        "anchor": "L91"
+      }
+    ],
+    "src/fluentytdl/storage/task_db.py": [
+      {
+        "document": "01-repository-map.md",
+        "anchor": "L40"
+      },
+      {
+        "document": "02-module-map.md",
+        "anchor": "L40"
+      },
+      {
+        "document": "04-data-flow.md",
+        "anchor": "L227"
+      },
+      {
+        "document": "04-data-flow.md",
+        "anchor": "L292"
+      },
+      {
+        "document": "04-data-flow.md",
+        "anchor": "L105"
+      },
+      {
+        "document": "04-data-flow.md",
+        "anchor": "L126"
+      },
+      {
+        "document": "04-data-flow.md",
+        "anchor": "L67"
+      },
+      {
+        "document": "04-data-flow.md",
+        "anchor": "L92"
+      },
+      {
+        "document": "06-state-machines.md",
+        "anchor": "L28"
+      },
+      {
+        "document": "07-resource-model.md",
+        "anchor": "L67"
+      },
+      {
+        "document": "14-code-index.md",
+        "anchor": "L40"
+      },
+      {
+        "document": "evidence/review-boundaries.md",
+        "anchor": "L67"
+      },
+      {
+        "document": "evidence/review-runtime-resources.md",
+        "anchor": "L200"
+      },
+      {
+        "document": "vertical-slices/VS-13-cookie-context.md",
+        "anchor": "L227"
+      }
+    ],
+    "src/fluentytdl/storage/db_writer.py": [
+      {
+        "document": "01-repository-map.md",
+        "anchor": "L40"
+      },
+      {
+        "document": "02-module-map.md",
+        "anchor": "L27"
+      },
+      {
+        "document": "03-runtime-architecture.md",
+        "anchor": "L40"
+      },
+      {
+        "document": "03-runtime-architecture.md",
+        "anchor": "L74"
+      },
+      {
+        "document": "03-runtime-architecture.md",
+        "anchor": "L116"
+      },
+      {
+        "document": "03-runtime-architecture.md",
+        "anchor": "L166"
+      },
+      {
+        "document": "04-data-flow.md",
+        "anchor": "L45"
+      },
+      {
+        "document": "04-data-flow.md",
+        "anchor": "L40"
+      },
+      {
+        "document": "04-data-flow.md",
+        "anchor": "L45"
+      },
+      {
+        "document": "04-data-flow.md",
+        "anchor": "L98"
+      },
+      {
+        "document": "04-data-flow.md",
+        "anchor": "L128"
+      },
+      {
+        "document": "04-data-flow.md",
+        "anchor": "L166"
+      },
+      {
+        "document": "04-data-flow.md",
+        "anchor": "L74"
+      },
+      {
+        "document": "05-control-flow.md",
+        "anchor": "L79"
+      },
+      {
+        "document": "05-control-flow.md",
+        "anchor": "L116"
+      },
+      {
+        "document": "05-control-flow.md",
+        "anchor": "L148"
+      },
+      {
+        "document": "07-resource-model.md",
+        "anchor": "L40"
+      },
+      {
+        "document": "07-resource-model.md",
+        "anchor": "L116"
+      },
+      {
+        "document": "08-dependency-model.md",
+        "anchor": "L40"
+      },
+      {
+        "document": "08-dependency-model.md",
+        "anchor": "L40"
+      },
+      {
+        "document": "09-concurrency-model.md",
+        "anchor": "L40"
+      },
+      {
+        "document": "09-concurrency-model.md",
+        "anchor": "L74"
+      },
+      {
+        "document": "09-concurrency-model.md",
+        "anchor": "L116"
+      },
+      {
+        "document": "09-concurrency-model.md",
+        "anchor": "L40"
+      },
+      {
+        "document": "09-concurrency-model.md",
+        "anchor": "L98"
+      },
+      {
+        "document": "09-concurrency-model.md",
+        "anchor": "L116"
+      },
+      {
+        "document": "09-concurrency-model.md",
+        "anchor": "L148"
+      },
+      {
+        "document": "10-error-recovery.md",
+        "anchor": "L128"
+      },
+      {
+        "document": "10-error-recovery.md",
+        "anchor": "L166"
+      },
+      {
+        "document": "13-known-risks.md",
+        "anchor": "L74"
+      },
+      {
+        "document": "13-known-risks.md",
+        "anchor": "L166"
+      },
+      {
+        "document": "13-known-risks.md",
+        "anchor": "L125"
+      },
+      {
+        "document": "14-code-index.md",
+        "anchor": "L27"
+      },
+      {
+        "document": "evidence/review-boundaries.md",
+        "anchor": "L40"
+      },
+      {
+        "document": "evidence/review-boundaries.md",
+        "anchor": "L74"
+      },
+      {
+        "document": "evidence/review-boundaries.md",
+        "anchor": "L166"
+      },
+      {
+        "document": "evidence/review-boundaries.md",
+        "anchor": "L128"
+      },
+      {
+        "document": "evidence/review-deployment-modules.md",
+        "anchor": "L98"
+      },
+      {
+        "document": "evidence/review-deployment-modules.md",
+        "anchor": "L116"
+      },
+      {
+        "document": "evidence/review-deployment-modules.md",
+        "anchor": "L166"
+      },
+      {
+        "document": "evidence/review-runtime-resources.md",
+        "anchor": "L98"
+      },
+      {
+        "document": "evidence/review-runtime-resources.md",
+        "anchor": "L116"
+      },
+      {
+        "document": "evidence/review-runtime-resources.md",
+        "anchor": "L128"
+      },
+      {
+        "document": "evidence/review-runtime-resources.md",
+        "anchor": "L166"
+      },
+      {
+        "document": "evidence/review-runtime-resources.md",
+        "anchor": "L148"
+      }
+    ],
+    "src/fluentytdl/diagnostics/engine.py": [
+      {
+        "document": "01-repository-map.md",
+        "anchor": ""
+      },
+      {
+        "document": "10-error-recovery.md",
+        "anchor": "L405"
+      },
+      {
+        "document": "14-code-index.md",
+        "anchor": ""
+      }
+    ],
+    "src/fluentytdl/observability/events.py": [
+      {
+        "document": "01-repository-map.md",
+        "anchor": "L382"
+      },
+      {
+        "document": "04-data-flow.md",
+        "anchor": "L268"
+      },
+      {
+        "document": "vertical-slices/VS-15-diagnostics.md",
+        "anchor": "L268"
+      },
+      {
+        "document": "vertical-slices/VS-15-diagnostics.md",
+        "anchor": "L382"
+      }
+    ],
+    "src/fluentytdl/core/update_transport.py": [
+      {
+        "document": "01-repository-map.md",
+        "anchor": "L240"
+      },
+      {
+        "document": "08-dependency-model.md",
+        "anchor": "L325"
+      },
+      {
+        "document": "08-dependency-model.md",
+        "anchor": "L252"
+      },
+      {
+        "document": "11-security-boundaries.md",
+        "anchor": "L201"
+      },
+      {
+        "document": "11-security-boundaries.md",
+        "anchor": "L201"
+      },
+      {
+        "document": "14-code-index.md",
+        "anchor": "L240"
+      },
+      {
+        "document": "evidence/review-boundaries.md",
+        "anchor": "L252"
+      },
+      {
+        "document": "evidence/review-deployment-modules.md",
+        "anchor": "L222"
+      },
+      {
+        "document": "vertical-slices/VS-16-app-update.md",
+        "anchor": "L252"
+      },
+      {
+        "document": "vertical-slices/VS-17-component-update.md",
+        "anchor": "L201"
+      }
+    ],
+    "src/fluentytdl/core/component_update_manager.py": [
+      {
+        "document": "01-repository-map.md",
+        "anchor": "L191"
+      },
+      {
+        "document": "08-dependency-model.md",
+        "anchor": "L586"
+      },
+      {
+        "document": "08-dependency-model.md",
+        "anchor": "L467"
+      },
+      {
+        "document": "11-security-boundaries.md",
+        "anchor": "L369"
+      },
+      {
+        "document": "11-security-boundaries.md",
+        "anchor": "L379"
+      },
+      {
+        "document": "14-code-index.md",
+        "anchor": "L191"
+      },
+      {
+        "document": "vertical-slices/VS-16-app-update.md",
+        "anchor": "L127"
+      },
+      {
+        "document": "vertical-slices/VS-16-app-update.md",
+        "anchor": "L325"
+      },
+      {
+        "document": "vertical-slices/VS-16-app-update.md",
+        "anchor": "L427"
+      },
+      {
+        "document": "vertical-slices/VS-16-app-update.md",
+        "anchor": "L535"
+      },
+      {
+        "document": "vertical-slices/VS-16-app-update.md",
+        "anchor": "L550"
+      },
+      {
+        "document": "vertical-slices/VS-16-app-update.md",
+        "anchor": "L586"
+      }
+    ],
+    "src/fluentytdl/notification/announcement_service.py": [
+      {
+        "document": "01-repository-map.md",
+        "anchor": "L147"
+      },
+      {
+        "document": "02-module-map.md",
+        "anchor": "L155"
+      },
+      {
+        "document": "04-data-flow.md",
+        "anchor": "L77"
+      },
+      {
+        "document": "04-data-flow.md",
+        "anchor": "L155"
+      },
+      {
+        "document": "04-data-flow.md",
+        "anchor": "L159"
+      },
+      {
+        "document": "05-control-flow.md",
+        "anchor": "L155"
+      },
+      {
+        "document": "07-resource-model.md",
+        "anchor": "L77"
+      },
+      {
+        "document": "07-resource-model.md",
+        "anchor": "L159"
+      },
+      {
+        "document": "08-dependency-model.md",
+        "anchor": "L77"
+      },
+      {
+        "document": "08-dependency-model.md",
+        "anchor": "L130"
+      },
+      {
+        "document": "11-security-boundaries.md",
+        "anchor": "L159"
+      },
+      {
+        "document": "12-deployment.md",
+        "anchor": "L159"
+      },
+      {
+        "document": "13-known-risks.md",
+        "anchor": "L155"
+      },
+      {
+        "document": "14-code-index.md",
+        "anchor": "L147"
+      },
+      {
+        "document": "evidence/review-boundaries.md",
+        "anchor": "L83"
+      },
+      {
+        "document": "evidence/review-boundaries.md",
+        "anchor": "L159"
+      },
+      {
+        "document": "vertical-slices/VS-18-announcements.md",
+        "anchor": "L155"
+      },
+      {
+        "document": "vertical-slices/VS-18-announcements.md",
+        "anchor": "L130"
+      },
+      {
+        "document": "vertical-slices/VS-18-announcements.md",
+        "anchor": "L77"
+      },
+      {
+        "document": "vertical-slices/VS-18-announcements.md",
+        "anchor": "L180"
+      },
+      {
+        "document": "vertical-slices/VS-18-announcements.md",
+        "anchor": "L216"
+      },
+      {
+        "document": "vertical-slices/VS-19-install-uninstall.md",
+        "anchor": "L159"
+      }
+    ],
+    "src/fluentytdl/models/video_task.py": [
+      {
+        "document": "01-repository-map.md",
+        "anchor": ""
+      },
+      {
+        "document": "02-module-map.md",
+        "anchor": "L87"
+      },
+      {
+        "document": "14-code-index.md",
+        "anchor": "L87"
+      }
+    ],
+    "src/fluentytdl/utils/paths.py": [
+      {
+        "document": "01-repository-map.md",
+        "anchor": ""
+      },
+      {
+        "document": "04-data-flow.md",
+        "anchor": "L81"
+      },
+      {
+        "document": "12-deployment.md",
+        "anchor": "L81"
+      },
+      {
+        "document": "vertical-slices/VS-19-install-uninstall.md",
+        "anchor": "L81"
+      }
+    ],
+    "src/fluentytdl/utils/ytdlp_runtime.py": [
+      {
+        "document": "01-repository-map.md",
+        "anchor": ""
+      },
+      {
+        "document": "02-module-map.md",
+        "anchor": "L22"
+      },
+      {
+        "document": "08-dependency-model.md",
+        "anchor": "L22"
+      },
+      {
+        "document": "14-code-index.md",
+        "anchor": "L22"
+      },
+      {
+        "document": "vertical-slices/VS-14-pot-runtime.md",
+        "anchor": "L22"
+      }
+    ],
+    "../FluentYTDL-ControlCenter/package.json": [
+      {
+        "document": "01-repository-map.md",
+        "anchor": "L6"
+      },
+      {
+        "document": "12-deployment.md",
+        "anchor": "L6"
+      }
+    ],
+    "../FluentYTDL-ControlCenter/packages/shared/src/index.ts": [
+      {
+        "document": "01-repository-map.md",
+        "anchor": "L6"
+      },
+      {
+        "document": "vertical-slices/VS-18-announcements.md",
+        "anchor": "L6"
+      }
+    ],
+    "../FluentYTDL-ControlCenter/migrations/0001.sql": [
+      {
+        "document": "01-repository-map.md",
+        "anchor": "L1"
+      }
+    ],
+    "../FluentYTDL-ControlCenter/apps/worker/src/types.ts": [
+      {
+        "document": "01-repository-map.md",
+        "anchor": "L22"
+      },
+      {
+        "document": "12-deployment.md",
+        "anchor": "L22"
+      },
+      {
+        "document": "13-known-risks.md",
+        "anchor": "L22"
+      },
+      {
+        "document": "evidence/review-boundaries.md",
+        "anchor": "L22"
+      },
+      {
+        "document": "evidence/review-deployment-modules.md",
+        "anchor": "L22"
+      },
+      {
+        "document": "vertical-slices/VS-18-announcements.md",
+        "anchor": "L22"
+      }
+    ],
+    "scripts/build_environment.py": [
+      {
+        "document": "01-repository-map.md",
+        "anchor": "L40"
+      },
+      {
+        "document": "08-dependency-model.md",
+        "anchor": "L40"
+      },
+      {
+        "document": "12-deployment.md",
+        "anchor": "L40"
+      },
+      {
+        "document": "vertical-slices/VS-20-build-release.md",
+        "anchor": "L40"
+      }
+    ],
+    "src/fluentytdl/ui/components/dialogs/download_config_window.py": [
+      {
+        "document": "02-module-map.md",
+        "anchor": "L1354"
+      },
+      {
+        "document": "02-module-map.md",
+        "anchor": "L453"
+      },
+      {
+        "document": "02-module-map.md",
+        "anchor": "L1258"
+      },
+      {
+        "document": "03-runtime-architecture.md",
+        "anchor": "L1230"
+      },
+      {
+        "document": "03-runtime-architecture.md",
+        "anchor": "L1354"
+      },
+      {
+        "document": "03-runtime-architecture.md",
+        "anchor": "L4195"
+      },
+      {
+        "document": "03-runtime-architecture.md",
+        "anchor": "L1098"
+      },
+      {
+        "document": "05-control-flow.md",
+        "anchor": "L1088"
+      },
+      {
+        "document": "06-state-machines.md",
+        "anchor": "L152"
+      },
+      {
+        "document": "07-resource-model.md",
+        "anchor": "L453"
+      },
+      {
+        "document": "07-resource-model.md",
+        "anchor": "L1258"
+      },
+      {
+        "document": "09-concurrency-model.md",
+        "anchor": "L1354"
+      },
+      {
+        "document": "09-concurrency-model.md",
+        "anchor": "L453"
+      },
+      {
+        "document": "09-concurrency-model.md",
+        "anchor": "L1258"
+      },
+      {
+        "document": "09-concurrency-model.md",
+        "anchor": "L1230"
+      },
+      {
+        "document": "14-code-index.md",
+        "anchor": "L1354"
+      },
+      {
+        "document": "vertical-slices/VS-02-video.md",
+        "anchor": "L1354"
+      },
+      {
+        "document": "vertical-slices/VS-02-video.md",
+        "anchor": "L1088"
+      },
+      {
+        "document": "vertical-slices/VS-02-video.md",
+        "anchor": "L4003"
+      },
+      {
+        "document": "vertical-slices/VS-03-vr.md",
+        "anchor": "L4084"
+      },
+      {
+        "document": "vertical-slices/VS-04-channel.md",
+        "anchor": "L1374"
+      },
+      {
+        "document": "vertical-slices/VS-04-channel.md",
+        "anchor": "L1456"
+      },
+      {
+        "document": "vertical-slices/VS-04-channel.md",
+        "anchor": "L1484"
+      },
+      {
+        "document": "vertical-slices/VS-04-channel.md",
+        "anchor": "L2832"
+      },
+      {
+        "document": "vertical-slices/VS-05-playlist.md",
+        "anchor": "L2536"
+      },
+      {
+        "document": "vertical-slices/VS-05-playlist.md",
+        "anchor": "L4336"
+      },
+      {
+        "document": "vertical-slices/VS-05-playlist.md",
+        "anchor": "L2580"
+      },
+      {
+        "document": "vertical-slices/VS-05-playlist.md",
+        "anchor": "L4003"
+      },
+      {
+        "document": "vertical-slices/VS-05-playlist.md",
+        "anchor": "L1230"
+      },
+      {
+        "document": "vertical-slices/VS-06-subtitle.md",
+        "anchor": "L4023"
+      },
+      {
+        "document": "vertical-slices/VS-07-cover.md",
+        "anchor": "L1395"
+      },
+      {
+        "document": "vertical-slices/VS-07-cover.md",
+        "anchor": "L4045"
+      },
+      {
+        "document": "vertical-slices/VS-07-cover.md",
+        "anchor": "L4422"
+      },
+      {
+        "document": "vertical-slices/VS-08-quick-audio-section.md",
+        "anchor": "L4530"
+      },
+      {
+        "document": "vertical-slices/VS-08-quick-audio-section.md",
+        "anchor": "L4232"
+      }
+    ],
+    "src/fluentytdl/ui/playlist_scheduler.py": [
+      {
+        "document": "02-module-map.md",
+        "anchor": "L297"
+      },
+      {
+        "document": "05-control-flow.md",
+        "anchor": "L157"
+      },
+      {
+        "document": "05-control-flow.md",
+        "anchor": "L276"
+      },
+      {
+        "document": "05-control-flow.md",
+        "anchor": "L371"
+      },
+      {
+        "document": "06-state-machines.md",
+        "anchor": "L50"
+      },
+      {
+        "document": "09-concurrency-model.md",
+        "anchor": "L157"
+      },
+      {
+        "document": "09-concurrency-model.md",
+        "anchor": "L276"
+      },
+      {
+        "document": "09-concurrency-model.md",
+        "anchor": "L320"
+      },
+      {
+        "document": "10-error-recovery.md",
+        "anchor": "L371"
+      },
+      {
+        "document": "14-code-index.md",
+        "anchor": "L33"
+      },
+      {
+        "document": "vertical-slices/VS-05-playlist.md",
+        "anchor": "L297"
+      },
+      {
+        "document": "vertical-slices/VS-05-playlist.md",
+        "anchor": "L157"
+      },
+      {
+        "document": "vertical-slices/VS-05-playlist.md",
+        "anchor": "L236"
+      },
+      {
+        "document": "vertical-slices/VS-05-playlist.md",
+        "anchor": "L371"
+      },
+      {
+        "document": "vertical-slices/VS-09-pause-resume.md",
+        "anchor": "L178"
+      },
+      {
+        "document": "vertical-slices/VS-09-pause-resume.md",
+        "anchor": "L297"
+      },
+      {
+        "document": "vertical-slices/VS-10-retry.md",
+        "anchor": "L371"
+      }
+    ],
+    "src/fluentytdl/download/extract_manager.py": [
+      {
+        "document": "02-module-map.md",
+        "anchor": "L65"
+      },
+      {
+        "document": "09-concurrency-model.md",
+        "anchor": "L11"
+      },
+      {
+        "document": "09-concurrency-model.md",
+        "anchor": "L139"
+      },
+      {
+        "document": "09-concurrency-model.md",
+        "anchor": "L139"
+      },
+      {
+        "document": "13-known-risks.md",
+        "anchor": "L139"
+      },
+      {
+        "document": "14-code-index.md",
+        "anchor": "L65"
+      },
+      {
+        "document": "evidence/review-boundaries.md",
+        "anchor": "L11"
+      },
+      {
+        "document": "evidence/review-boundaries.md",
+        "anchor": "L139"
+      },
+      {
+        "document": "evidence/review-runtime-resources.md",
+        "anchor": "L54"
+      },
+      {
+        "document": "vertical-slices/VS-05-playlist.md",
+        "anchor": "L100"
+      }
+    ],
+    "src/fluentytdl/core/config_manager.py": [
+      {
+        "document": "02-module-map.md",
+        "anchor": "L461"
+      },
+      {
+        "document": "04-data-flow.md",
+        "anchor": "L461"
+      },
+      {
+        "document": "13-known-risks.md",
+        "anchor": "L461"
+      },
+      {
+        "document": "14-code-index.md",
+        "anchor": "L13"
+      },
+      {
+        "document": "evidence/review-boundaries.md",
+        "anchor": "L461"
+      }
+    ],
+    "src/fluentytdl/utils/image_loader.py": [
+      {
+        "document": "02-module-map.md",
+        "anchor": "L76"
+      },
+      {
+        "document": "07-resource-model.md",
+        "anchor": "L76"
+      },
+      {
+        "document": "07-resource-model.md",
+        "anchor": "L37"
+      },
+      {
+        "document": "08-dependency-model.md",
+        "anchor": "L19"
+      },
+      {
+        "document": "09-concurrency-model.md",
+        "anchor": "L76"
+      },
+      {
+        "document": "14-code-index.md",
+        "anchor": "L155"
+      }
+    ],
+    "src/fluentytdl/core/i18n.py": [
+      {
+        "document": "02-module-map.md",
+        "anchor": "L19"
+      },
+      {
+        "document": "14-code-index.md",
+        "anchor": "L12"
+      }
+    ],
+    "src/fluentytdl/notification/notification_center.py": [
+      {
+        "document": "02-module-map.md",
+        "anchor": "L37"
+      },
+      {
+        "document": "14-code-index.md",
+        "anchor": "L15"
+      }
+    ],
+    "src/fluentytdl/core/network_watchdog.py": [
+      {
+        "document": "02-module-map.md",
+        "anchor": "L15"
+      },
+      {
+        "document": "09-concurrency-model.md",
+        "anchor": "L15"
+      }
+    ],
+    "src/fluentytdl/core/disk_monitor.py": [
+      {
+        "document": "02-module-map.md",
+        "anchor": "L18"
+      },
+      {
+        "document": "09-concurrency-model.md",
+        "anchor": "L18"
+      }
+    ],
+    "src/fluentytdl/download/quality_guard.py": [
+      {
+        "document": "02-module-map.md",
+        "anchor": "L136"
+      },
+      {
+        "document": "10-error-recovery.md",
+        "anchor": "L100"
+      }
+    ],
+    "src/fluentytdl/observability/artifacts.py": [
+      {
+        "document": "03-runtime-architecture.md",
+        "anchor": "L83"
+      },
+      {
+        "document": "10-error-recovery.md",
+        "anchor": "L83"
+      }
+    ],
+    "src/fluentytdl/utils/youtube_request.py": [
+      {
+        "document": "04-data-flow.md",
+        "anchor": "L1"
+      },
+      {
+        "document": "04-data-flow.md",
+        "anchor": "L18"
+      },
+      {
+        "document": "11-security-boundaries.md",
+        "anchor": "L10"
+      },
+      {
+        "document": "14-code-index.md",
+        "anchor": "L5"
+      },
+      {
+        "document": "vertical-slices/VS-13-cookie-context.md",
+        "anchor": "L5"
+      },
+      {
+        "document": "vertical-slices/VS-13-cookie-context.md",
+        "anchor": "L5"
+      }
+    ],
+    "src/fluentytdl/auth/auth_service.py": [
+      {
+        "document": "04-data-flow.md",
+        "anchor": "L192"
+      },
+      {
+        "document": "04-data-flow.md",
+        "anchor": "L232"
+      },
+      {
+        "document": "04-data-flow.md",
+        "anchor": "L310"
+      },
+      {
+        "document": "04-data-flow.md",
+        "anchor": "L319"
+      },
+      {
+        "document": "07-resource-model.md",
+        "anchor": "L569"
+      },
+      {
+        "document": "08-dependency-model.md",
+        "anchor": "L567"
+      },
+      {
+        "document": "11-security-boundaries.md",
+        "anchor": "L483"
+      },
+      {
+        "document": "11-security-boundaries.md",
+        "anchor": "L1144"
+      },
+      {
+        "document": "11-security-boundaries.md",
+        "anchor": "L922"
+      },
+      {
+        "document": "11-security-boundaries.md",
+        "anchor": "L841"
+      },
+      {
+        "document": "13-known-risks.md",
+        "anchor": "L1307"
+      },
+      {
+        "document": "13-known-risks.md",
+        "anchor": "L1324"
+      },
+      {
+        "document": "14-code-index.md",
+        "anchor": "L300"
+      },
+      {
+        "document": "evidence/review-boundaries.md",
+        "anchor": "L1307"
+      },
+      {
+        "document": "evidence/review-boundaries.md",
+        "anchor": "L1324"
+      },
+      {
+        "document": "evidence/review-runtime-resources.md",
+        "anchor": "L1307"
+      },
+      {
+        "document": "evidence/review-runtime-resources.md",
+        "anchor": "L1319"
+      },
+      {
+        "document": "vertical-slices/VS-12-authentication.md",
+        "anchor": "L483"
+      },
+      {
+        "document": "vertical-slices/VS-12-authentication.md",
+        "anchor": "L599"
+      },
+      {
+        "document": "vertical-slices/VS-12-authentication.md",
+        "anchor": "L192"
+      },
+      {
+        "document": "vertical-slices/VS-12-authentication.md",
+        "anchor": "L310"
+      },
+      {
+        "document": "vertical-slices/VS-12-authentication.md",
+        "anchor": "L1363"
+      },
+      {
+        "document": "vertical-slices/VS-12-authentication.md",
+        "anchor": "L1307"
+      },
+      {
+        "document": "vertical-slices/VS-12-authentication.md",
+        "anchor": "L1319"
+      },
+      {
+        "document": "vertical-slices/VS-12-authentication.md",
+        "anchor": "L841"
+      },
+      {
+        "document": "vertical-slices/VS-12-authentication.md",
+        "anchor": "L811"
+      },
+      {
+        "document": "vertical-slices/VS-12-authentication.md",
+        "anchor": "L1258"
+      },
+      {
+        "document": "vertical-slices/VS-13-cookie-context.md",
+        "anchor": "L1307"
+      }
+    ],
+    "src/fluentytdl/observability/bundle.py": [
+      {
+        "document": "04-data-flow.md",
+        "anchor": "L87"
+      },
+      {
+        "document": "07-resource-model.md",
+        "anchor": "L87"
+      },
+      {
+        "document": "11-security-boundaries.md",
+        "anchor": "L87"
+      },
+      {
+        "document": "14-code-index.md",
+        "anchor": "L87"
+      },
+      {
+        "document": "evidence/review-runtime-resources.md",
+        "anchor": "L313"
+      },
+      {
+        "document": "vertical-slices/VS-15-diagnostics.md",
+        "anchor": "L87"
+      },
+      {
+        "document": "vertical-slices/VS-15-diagnostics.md",
+        "anchor": "L313"
+      },
+      {
+        "document": "vertical-slices/VS-15-diagnostics.md",
+        "anchor": "L315"
+      }
+    ],
+    "src/fluentytdl/core/dependency_manager.py": [
+      {
+        "document": "05-control-flow.md",
+        "anchor": "L901"
+      },
+      {
+        "document": "05-control-flow.md",
+        "anchor": "L947"
+      },
+      {
+        "document": "08-dependency-model.md",
+        "anchor": "L191"
+      },
+      {
+        "document": "11-security-boundaries.md",
+        "anchor": "L358"
+      },
+      {
+        "document": "11-security-boundaries.md",
+        "anchor": "L921"
+      },
+      {
+        "document": "11-security-boundaries.md",
+        "anchor": "L735"
+      },
+      {
+        "document": "11-security-boundaries.md",
+        "anchor": "L763"
+      },
+      {
+        "document": "11-security-boundaries.md",
+        "anchor": "L801"
+      },
+      {
+        "document": "12-deployment.md",
+        "anchor": "L197"
+      },
+      {
+        "document": "12-deployment.md",
+        "anchor": "L909"
+      },
+      {
+        "document": "evidence/review-boundaries.md",
+        "anchor": "L909"
+      },
+      {
+        "document": "evidence/review-deployment-modules.md",
+        "anchor": "L220"
+      },
+      {
+        "document": "evidence/review-deployment-modules.md",
+        "anchor": "L230"
+      },
+      {
+        "document": "evidence/review-deployment-modules.md",
+        "anchor": "L191"
+      },
+      {
+        "document": "evidence/review-deployment-modules.md",
+        "anchor": "L197"
+      },
+      {
+        "document": "evidence/review-deployment-modules.md",
+        "anchor": "L355"
+      },
+      {
+        "document": "evidence/review-deployment-modules.md",
+        "anchor": "L982"
+      },
+      {
+        "document": "evidence/review-runtime-resources.md",
+        "anchor": "L220"
+      },
+      {
+        "document": "vertical-slices/VS-17-component-update.md",
+        "anchor": "L247"
+      },
+      {
+        "document": "vertical-slices/VS-17-component-update.md",
+        "anchor": "L330"
+      },
+      {
+        "document": "vertical-slices/VS-17-component-update.md",
+        "anchor": "L169"
+      },
+      {
+        "document": "vertical-slices/VS-17-component-update.md",
+        "anchor": "L853"
+      },
+      {
+        "document": "vertical-slices/VS-17-component-update.md",
+        "anchor": "L909"
+      },
+      {
+        "document": "vertical-slices/VS-17-component-update.md",
+        "anchor": "L956"
+      },
+      {
+        "document": "vertical-slices/VS-17-component-update.md",
+        "anchor": "L391"
+      },
+      {
+        "document": "vertical-slices/VS-17-component-update.md",
+        "anchor": "L61"
+      },
+      {
+        "document": "vertical-slices/VS-17-component-update.md",
+        "anchor": "L901"
+      },
+      {
+        "document": "vertical-slices/VS-17-component-update.md",
+        "anchor": "L949"
+      }
+    ],
+    "src/fluentytdl/observability/sinks.py": [
+      {
+        "document": "05-control-flow.md",
+        "anchor": "L85"
+      },
+      {
+        "document": "05-control-flow.md",
+        "anchor": "L306"
+      },
+      {
+        "document": "07-resource-model.md",
+        "anchor": "L72"
+      },
+      {
+        "document": "14-code-index.md",
+        "anchor": ""
+      },
+      {
+        "document": "evidence/review-runtime-resources.md",
+        "anchor": "L72"
+      },
+      {
+        "document": "vertical-slices/VS-15-diagnostics.md",
+        "anchor": "L72"
+      },
+      {
+        "document": "vertical-slices/VS-15-diagnostics.md",
+        "anchor": "L321"
+      },
+      {
+        "document": "vertical-slices/VS-15-diagnostics.md",
+        "anchor": "L190"
+      },
+      {
+        "document": "vertical-slices/VS-15-diagnostics.md",
+        "anchor": "L218"
+      },
+      {
+        "document": "vertical-slices/VS-15-diagnostics.md",
+        "anchor": "L321"
+      }
+    ],
+    "src/fluentytdl/utils/clean_logger.py": [
+      {
+        "document": "05-control-flow.md",
+        "anchor": "L116"
+      }
+    ],
+    "src/fluentytdl/ui/components/common/log_jobs.py": [
+      {
+        "document": "07-resource-model.md",
+        "anchor": "L21"
+      },
+      {
+        "document": "evidence/review-runtime-resources.md",
+        "anchor": "L21"
+      },
+      {
+        "document": "vertical-slices/VS-15-diagnostics.md",
+        "anchor": "L50"
+      },
+      {
+        "document": "vertical-slices/VS-15-diagnostics.md",
+        "anchor": "L21"
+      }
+    ],
+    "src/fluentytdl/core/process_manager.py": [
+      {
+        "document": "07-resource-model.md",
+        "anchor": "L106"
+      },
+      {
+        "document": "07-resource-model.md",
+        "anchor": "L194"
+      },
+      {
+        "document": "11-security-boundaries.md",
+        "anchor": "L194"
+      },
+      {
+        "document": "14-code-index.md",
+        "anchor": "L44"
+      }
+    ],
+    "src/fluentytdl/utils/log_runtime.py": [
+      {
+        "document": "07-resource-model.md",
+        "anchor": "L184"
+      },
+      {
+        "document": "11-security-boundaries.md",
+        "anchor": "L64"
+      },
+      {
+        "document": "11-security-boundaries.md",
+        "anchor": "L184"
+      },
+      {
+        "document": "evidence/review-runtime-resources.md",
+        "anchor": "L184"
+      },
+      {
+        "document": "vertical-slices/VS-15-diagnostics.md",
+        "anchor": "L64"
+      },
+      {
+        "document": "vertical-slices/VS-15-diagnostics.md",
+        "anchor": "L184"
+      }
+    ],
+    "src/fluentytdl/auth/webview2_runtime.py": [
+      {
+        "document": "08-dependency-model.md",
+        "anchor": ""
+      }
+    ],
+    "src/fluentytdl/yt_dlp_plugins_ext/yt_dlp_plugins/extractor/getpot_bgutil.py": [
+      {
+        "document": "08-dependency-model.md",
+        "anchor": "L8"
+      }
+    ],
+    "src/fluentytdl/diagnostics/catalog.py": [
+      {
+        "document": "08-dependency-model.md",
+        "anchor": "L13"
+      }
+    ],
+    "src/fluentytdl/diagnostics/models.py": [
+      {
+        "document": "08-dependency-model.md",
+        "anchor": "L178"
+      },
+      {
+        "document": "10-error-recovery.md",
+        "anchor": "L94"
+      },
+      {
+        "document": "vertical-slices/VS-10-retry.md",
+        "anchor": "L94"
+      }
+    ],
+    "src/fluentytdl/core/quick_add_worker.py": [
+      {
+        "document": "08-dependency-model.md",
+        "anchor": "L17"
+      },
+      {
+        "document": "10-error-recovery.md",
+        "anchor": "L51"
+      },
+      {
+        "document": "13-known-risks.md",
+        "anchor": "L129"
+      },
+      {
+        "document": "evidence/review-boundaries.md",
+        "anchor": "L129"
+      },
+      {
+        "document": "evidence/review-runtime-resources.md",
+        "anchor": "L51"
+      },
+      {
+        "document": "vertical-slices/VS-08-quick-audio-section.md",
+        "anchor": "L51"
+      },
+      {
+        "document": "vertical-slices/VS-08-quick-audio-section.md",
+        "anchor": "L97"
+      }
+    ],
+    "src/fluentytdl/utils/spatialmedia/mpeg/__init__.py": [
+      {
+        "document": "08-dependency-model.md",
+        "anchor": "L1"
+      }
+    ],
+    "src/fluentytdl/utils/spatialmedia/mpeg/container.py": [
+      {
+        "document": "08-dependency-model.md",
+        "anchor": "L24"
+      }
+    ],
+    "src/fluentytdl/utils/startup_info.py": [
+      {
+        "document": "08-dependency-model.md",
+        "anchor": "L245"
+      },
+      {
+        "document": "08-dependency-model.md",
+        "anchor": "L307"
+      },
+      {
+        "document": "08-dependency-model.md",
+        "anchor": "L329"
+      }
+    ],
+    "src/fluentytdl/ui/settings_page.py": [
+      {
+        "document": "11-security-boundaries.md",
+        "anchor": "L3861"
+      },
+      {
+        "document": "vertical-slices/VS-12-authentication.md",
+        "anchor": "L1722"
+      },
+      {
+        "document": "vertical-slices/VS-12-authentication.md",
+        "anchor": "L3628"
+      },
+      {
+        "document": "vertical-slices/VS-12-authentication.md",
+        "anchor": "L3672"
+      },
+      {
+        "document": "vertical-slices/VS-12-authentication.md",
+        "anchor": "L3758"
+      },
+      {
+        "document": "vertical-slices/VS-12-authentication.md",
+        "anchor": "L3861"
+      },
+      {
+        "document": "vertical-slices/VS-13-cookie-context.md",
+        "anchor": "L3394"
+      },
+      {
+        "document": "vertical-slices/VS-14-pot-runtime.md",
+        "anchor": "L2192"
+      },
+      {
+        "document": "vertical-slices/VS-14-pot-runtime.md",
+        "anchor": "L2237"
+      },
+      {
+        "document": "vertical-slices/VS-14-pot-runtime.md",
+        "anchor": "L2261"
+      },
+      {
+        "document": "vertical-slices/VS-14-pot-runtime.md",
+        "anchor": "L2291"
+      },
+      {
+        "document": "vertical-slices/VS-14-pot-runtime.md",
+        "anchor": "L4403"
+      },
+      {
+        "document": "vertical-slices/VS-17-component-update.md",
+        "anchor": "L164"
+      }
+    ],
+    "src/fluentytdl/ui/components/common/cookie_refresh_worker.py": [
+      {
+        "document": "11-security-boundaries.md",
+        "anchor": "L76"
+      },
+      {
+        "document": "vertical-slices/VS-12-authentication.md",
+        "anchor": "L32"
+      }
+    ],
+    "src/fluentytdl/utils/logger.py": [
+      {
+        "document": "11-security-boundaries.md",
+        "anchor": "L15"
+      },
+      {
+        "document": "vertical-slices/VS-15-diagnostics.md",
+        "anchor": "L15"
+      }
+    ],
+    "src/fluentytdl/utils/log_privacy.py": [
+      {
+        "document": "11-security-boundaries.md",
+        "anchor": "L23"
+      },
+      {
+        "document": "11-security-boundaries.md",
+        "anchor": "L9"
+      },
+      {
+        "document": "vertical-slices/VS-15-diagnostics.md",
+        "anchor": "L9"
+      }
+    ],
+    "src/fluentytdl/ui/components/dialogs/update_dialog.py": [
+      {
+        "document": "11-security-boundaries.md",
+        "anchor": "L109"
+      }
+    ],
+    "build-environment.json": [
+      {
+        "document": "12-deployment.md",
+        "anchor": "L1"
+      }
+    ],
+    "../FluentYTDL-ControlCenter/wrangler.toml": [
+      {
+        "document": "12-deployment.md",
+        "anchor": "L1"
+      },
+      {
+        "document": "vertical-slices/VS-18-announcements.md",
+        "anchor": "L11"
+      }
+    ],
+    "scripts/component_snapshot.py": [
+      {
+        "document": "12-deployment.md",
+        "anchor": "L68"
+      },
+      {
+        "document": "vertical-slices/VS-20-build-release.md",
+        "anchor": "L68"
+      },
+      {
+        "document": "vertical-slices/VS-20-build-release.md",
+        "anchor": "L36"
+      },
+      {
+        "document": "vertical-slices/VS-20-build-release.md",
+        "anchor": "L146"
+      }
+    ],
+    "../FluentYTDL-ControlCenter/apps/worker/src/announcements.ts": [
+      {
+        "document": "12-deployment.md",
+        "anchor": "L4"
+      },
+      {
+        "document": "13-known-risks.md",
+        "anchor": "L8"
+      },
+      {
+        "document": "evidence/review-boundaries.md",
+        "anchor": "L4"
+      },
+      {
+        "document": "evidence/review-deployment-modules.md",
+        "anchor": "L8"
+      },
+      {
+        "document": "evidence/review-deployment-modules.md",
+        "anchor": "L36"
+      },
+      {
+        "document": "evidence/review-deployment-modules.md",
+        "anchor": "L46"
+      },
+      {
+        "document": "evidence/review-runtime-resources.md",
+        "anchor": "L4"
+      },
+      {
+        "document": "vertical-slices/VS-18-announcements.md",
+        "anchor": "L22"
+      },
+      {
+        "document": "vertical-slices/VS-18-announcements.md",
+        "anchor": "L28"
+      },
+      {
+        "document": "vertical-slices/VS-18-announcements.md",
+        "anchor": "L40"
+      },
+      {
+        "document": "vertical-slices/VS-18-announcements.md",
+        "anchor": "L4"
+      }
+    ],
+    "../FluentYTDL-ControlCenter/apps/worker/src/updates.ts": [
+      {
+        "document": "12-deployment.md",
+        "anchor": "L74"
+      },
+      {
+        "document": "13-known-risks.md",
+        "anchor": "L74"
+      },
+      {
+        "document": "evidence/review-boundaries.md",
+        "anchor": "L74"
+      },
+      {
+        "document": "evidence/review-boundaries.md",
+        "anchor": "L80"
+      },
+      {
+        "document": "evidence/review-boundaries.md",
+        "anchor": "L74"
+      },
+      {
+        "document": "evidence/review-deployment-modules.md",
+        "anchor": "L74"
+      },
+      {
+        "document": "evidence/review-runtime-resources.md",
+        "anchor": "L74"
+      },
+      {
+        "document": "vertical-slices/VS-20-build-release.md",
+        "anchor": "L4"
+      },
+      {
+        "document": "vertical-slices/VS-20-build-release.md",
+        "anchor": "L50"
+      },
+      {
+        "document": "vertical-slices/VS-20-build-release.md",
+        "anchor": "L33"
+      }
+    ],
+    "src/fluentytdl/diagnostics/rules.py": [
+      {
+        "document": "14-code-index.md",
+        "anchor": ""
+      }
+    ],
+    "docs/architecture/reconstruction-plan/evidence/baseline.json": [
+      {
+        "document": "evidence/source-baseline.md",
+        "anchor": ""
+      }
+    ],
+    "src/fluentytdl/utils/quick_opts.py": [
+      {
+        "document": "vertical-slices/VS-08-quick-audio-section.md",
+        "anchor": "L6"
+      }
+    ],
+    "src/fluentytdl/core/section_download.py": [
+      {
+        "document": "vertical-slices/VS-08-quick-audio-section.md",
+        "anchor": "L160"
+      }
+    ],
+    "src/fluentytdl/ui/components/settings/platform_auth_card.py": [
+      {
+        "document": "vertical-slices/VS-12-authentication.md",
+        "anchor": "L15"
+      }
+    ],
+    "tests/test_youtube_cookie_mode.py": [
+      {
+        "document": "vertical-slices/VS-13-cookie-context.md",
+        "anchor": ""
+      }
+    ],
+    "tests/test_cookie_runfile.py": [
+      {
+        "document": "vertical-slices/VS-13-cookie-context.md",
+        "anchor": ""
+      }
+    ],
+    "tests/test_pot_job_object.py": [
+      {
+        "document": "vertical-slices/VS-14-pot-runtime.md",
+        "anchor": ""
+      }
+    ],
+    "tests/test_pot_plugin_sync.py": [
+      {
+        "document": "vertical-slices/VS-14-pot-runtime.md",
+        "anchor": ""
+      }
+    ],
+    "tests/test_pot_warm_backoff.py": [
+      {
+        "document": "vertical-slices/VS-14-pot-runtime.md",
+        "anchor": ""
+      }
+    ],
+    "src/fluentytdl/ui/components/dialogs/log_viewer_window.py": [
+      {
+        "document": "vertical-slices/VS-15-diagnostics.md",
+        "anchor": "L641"
+      },
+      {
+        "document": "vertical-slices/VS-15-diagnostics.md",
+        "anchor": "L659"
+      },
+      {
+        "document": "vertical-slices/VS-15-diagnostics.md",
+        "anchor": "L112"
+      },
+      {
+        "document": "vertical-slices/VS-15-diagnostics.md",
+        "anchor": "L680"
+      }
+    ],
+    "src/fluentytdl/ui/components/settings/app_update_card.py": [
+      {
+        "document": "vertical-slices/VS-16-app-update.md",
+        "anchor": "L132"
+      }
+    ],
+    "src/fluentytdl/utils/update_signal.py": [
+      {
+        "document": "vertical-slices/VS-16-app-update.md",
+        "anchor": "L70"
+      }
+    ],
+    "tests/test_updater.py": [
+      {
+        "document": "vertical-slices/VS-16-app-update.md",
+        "anchor": ""
+      }
+    ],
+    "tests/test_component_update_manager.py": [
+      {
+        "document": "vertical-slices/VS-16-app-update.md",
+        "anchor": ""
+      }
+    ],
+    "tests/test_dependency_manager.py": [
+      {
+        "document": "vertical-slices/VS-17-component-update.md",
+        "anchor": ""
+      }
+    ],
+    "tests/test_update_transport.py": [
+      {
+        "document": "vertical-slices/VS-17-component-update.md",
+        "anchor": ""
+      }
+    ],
+    "../FluentYTDL-ControlCenter/apps/admin/src/App.vue": [
+      {
+        "document": "vertical-slices/VS-18-announcements.md",
+        "anchor": "L21"
+      }
+    ],
+    "src/fluentytdl/ui/announcement_controller.py": [
+      {
+        "document": "vertical-slices/VS-18-announcements.md",
+        "anchor": "L14"
+      }
+    ],
+    "../FluentYTDL-ControlCenter/tests/worker.test.ts": [
+      {
+        "document": "vertical-slices/VS-18-announcements.md",
+        "anchor": ""
+      }
+    ],
+    "tests/test_announcements.py": [
+      {
+        "document": "vertical-slices/VS-18-announcements.md",
+        "anchor": ""
+      }
+    ],
+    "tests/test_announcement_dialog.py": [
+      {
+        "document": "vertical-slices/VS-18-announcements.md",
+        "anchor": ""
+      }
+    ],
+    "scripts/test_installer.py": [
+      {
+        "document": "vertical-slices/VS-19-install-uninstall.md",
+        "anchor": ""
+      }
+    ],
+    "tests/test_paths_migration.py": [
+      {
+        "document": "vertical-slices/VS-19-install-uninstall.md",
+        "anchor": ""
+      }
+    ],
+    ".github/workflows/release.yml": [
+      {
+        "document": "vertical-slices/VS-20-build-release.md",
+        "anchor": "L1"
+      },
+      {
+        "document": "vertical-slices/VS-20-build-release.md",
+        "anchor": "L58"
+      }
+    ],
+    "tests/test_release_pipeline.py": [
+      {
+        "document": "vertical-slices/VS-20-build-release.md",
+        "anchor": ""
+      }
+    ],
+    "tests/test_release_protocol.py": [
+      {
+        "document": "vertical-slices/VS-20-build-release.md",
+        "anchor": ""
+      }
+    ],
+    "tests/test_build_app_core.py": [
+      {
+        "document": "vertical-slices/VS-20-build-release.md",
+        "anchor": ""
+      }
+    ],
+    "tests/test_fetch_tools.py": [
+      {
+        "document": "vertical-slices/VS-20-build-release.md",
+        "anchor": ""
+      }
+    ]
+  }
+}

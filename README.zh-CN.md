@@ -14,7 +14,7 @@
   <a href="#-功能">✨ 功能</a> ·
   <a href="#-安装">📦 安装</a> ·
   <a href="#-开发">🧑‍💻 开发</a> ·
-  <a href="docs/ARCHITECTURE_CN.md">🏗️ 架构</a>
+  <a href="docs/architecture-v2/NEW_ARCHITECTURE_REFERENCE.md">🏗️ 新版架构 V2</a>
 </p>
 
 <p align="center">
@@ -132,7 +132,7 @@ uv run python scripts/version_manager.py check
 | 文档 | 适合何时阅读 |
 | --- | --- |
 | [贡献指南](CONTRIBUTING.md) | 环境配置、开发流程、测试与 Pull Request 要求 |
-| [架构说明](docs/ARCHITECTURE_CN.md) | 模块边界与应用结构 |
+| [新版架构 V2](docs/architecture-v2/NEW_ARCHITECTURE_REFERENCE.md) | 源码现状、运行机制、处理缘由与验证边界 |
 | [开发规则](docs/RULES.md) | 本仓库特有的工程约束 |
 | [yt-dlp 集成知识](docs/YTDLP_KNOWLEDGE.md) | 子进程协议与下载器行为 |
 | [安全政策](SECURITY.md) | 支持版本与私密漏洞报告流程 |

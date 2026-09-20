@@ -14,7 +14,7 @@
   <a href="#-features">✨ Features</a> ·
   <a href="#-installation">📦 Installation</a> ·
   <a href="#-development">🧑‍💻 Development</a> ·
-  <a href="docs/ARCHITECTURE_EN.md">🏗️ Architecture</a>
+  <a href="docs/architecture-v2/NEW_ARCHITECTURE_REFERENCE.md">🏗️ Architecture V2 (Chinese)</a>
 </p>
 
 <p align="center">
@@ -132,7 +132,7 @@ uv run python scripts/version_manager.py check
 | Read | When you need it |
 | --- | --- |
 | [Contributing guide](CONTRIBUTING.md) | Setup, workflow, tests, and pull request expectations |
-| [Architecture](docs/ARCHITECTURE_EN.md) | Module boundaries and application structure |
+| [Architecture V2 (Chinese)](docs/architecture-v2/NEW_ARCHITECTURE_REFERENCE.md) | Current source, runtime mechanisms, rationale and verification limits |
 | [Development rules](docs/RULES_EN.md) | Repository-specific engineering constraints |
 | [yt-dlp integration notes](docs/YTDLP_KNOWLEDGE_EN.md) | Subprocess protocol and downloader behavior |
 | [Security policy](SECURITY.md) | Supported versions and private vulnerability reporting |

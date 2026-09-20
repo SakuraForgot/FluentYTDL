@@ -1,0 +1,1656 @@
+{
+  "captured_at": "2026-09-19T08:36:54.588415+00:00",
+  "git_status": " M README.md\n M README.zh-CN.md\n M assets/locales/fluentytdl_en.qm\n M assets/locales/fluentytdl_en_US.qm\n M assets/locales/fluentytdl_en_US.ts\n M assets/locales/fluentytdl_zh.qm\n M assets/locales/fluentytdl_zh_CN.qm\n M assets/locales/fluentytdl_zh_CN.ts\n M docs/ARCHITECTURE_CN.md\n M docs/ARCHITECTURE_EN.md\n M src/fluentytdl/diagnostics/catalog.py\n M src/fluentytdl/diagnostics/engine.py\n M src/fluentytdl/youtube/youtube_service.py\n?? docs/architecture-v2/\n?? docs/architecture/\n?? docs/download-pipeline-optimization/\n?? specs/\n?? tests/test_playlist_authcheck.py\n",
+  "records": [
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\.github\\workflows\\checks.yml",
+      "sha256": "eb023e70b4a822d391462077ee4a2f02da300a7ca5e15d46e710093558f16592"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\.github\\workflows\\ci.yml",
+      "sha256": "8a24cabb68ebbfe6191af275bcd2118d0326072ef25c9d2a0f51544ccad4273d"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\.github\\workflows\\control-center-sync.yml",
+      "sha256": "05fec3ce6dd61f24218e592fda6e508dcfdb85c7cb8396bdcd7264eb9409d2b8"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\.github\\workflows\\release.yml",
+      "sha256": "34c497d1dfedc8aa80ed854bd45735aa086a5c25a922aa81e880ea0dd49700a6"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\build-environment.json",
+      "sha256": "14731ccd80494f0ae51c0eb1f29c643a6b8d80686fd1a1882c2fcf54449ea6bd"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\conftest.py",
+      "sha256": "23b356bbf32966d4c9809e757d276013eaa7f6c3961c0b464801fe3889c3fb58"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\installer\\FluentYTDL.iss",
+      "sha256": "34b266d74bd3f4e8191f4f5a3c563f949f19078194aecc42702a15545dca6bd1"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\installer\\maintenance.ps1",
+      "sha256": "1d08541bdb475f8f75c8a237b8caec1ff2a6fc1b8eeff482121e59c530696cb5"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\main.py",
+      "sha256": "ea640dc9802cc6b30c0c84da6c13a98033f741810af3cab331294f5bdf2d1e4a"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\pyproject.toml",
+      "sha256": "6fbd5ce874e6292391a0d19512fe567efa86656cee088aa981d1b5ac311550ec"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\scripts\\__init__.py",
+      "sha256": "900741fafdca75be6fd4957ab95b7bbc266c56309a3cf3c972bd1811856252fb"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\scripts\\archive_compat.py",
+      "sha256": "29b94ea7b370f98d46d54b67cb3255685fa75b9624f6237f0d07990c416e382f"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\scripts\\build.py",
+      "sha256": "ff42cbc1bd9f7b3b79385a31653529ce5fa6474c92418b6481a14ff9800f3abe"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\scripts\\build_environment.py",
+      "sha256": "01c8099f5372e69d80b81bee9147c3fff35ae31fbb6601192992bb38fb4c6b29"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\scripts\\build_gui.cmd",
+      "sha256": "7244ec797c0a9cc25400c078799e16fbbcc2e5b1644aef80ec5da674ca69ae8b"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\scripts\\build_gui.py",
+      "sha256": "58249fb9d3eb5f612ffa60178cf5896c500e8224bfda6e5f42276fcf429eca95"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\scripts\\check_imports.py",
+      "sha256": "ef0d51a22e2c8cd8fb2c17296149b9701705a456f466dc500ec9a16f9679e43c"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\scripts\\check_logging_viewer.py",
+      "sha256": "e2db4f2b1407188c8b1e1069a64f378811add548caf6e54940e67e5d21bdb5c5"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\scripts\\checksums.py",
+      "sha256": "fd7b47e2f7e8c4d1f107c4a7b113feb24fb2ed143a7a7ac348f193e201af6969"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\scripts\\collect_licenses.py",
+      "sha256": "bfb6591e0768c79211cec87cbd0007e3902684dc1b08ed03badb2826d4dca070"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\scripts\\component_snapshot.py",
+      "sha256": "c020ca014d76c3e67e1aed48ccb3797bbce11afe479681fd7509a77ca6aace88"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\scripts\\configure_branch_protection.py",
+      "sha256": "68a62b3b53d98ddad9ddad503557fd5f8bdf517cdefee590ba602bb1ca6a82ca"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\scripts\\debug\\inject_error.py",
+      "sha256": "e52d044baf8b7ed3afddf372078c01a8a2784346aa8be705d501bedbdb2582c0"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\scripts\\diagnose_webview2.ps1",
+      "sha256": "069d58aec45f3a3ba7d812e323c30a18ce8828e78a0d4a765ed5e534799eebf9"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\scripts\\do_translate.py",
+      "sha256": "95ba8c02e153ebfa39f4acea455c59720a99b292f088b6ac021f8b05ad60abf1"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\scripts\\fetch_tools.py",
+      "sha256": "b502766c8ebf8353ca345f5a65fb49f7bbb2a6b44627fb42352c25f684fd322f"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\scripts\\FluentYTDL.spec",
+      "sha256": "c5be280c204cb9d8509cecb2c250d845fd0de1c77a7ba69d089054237a975044"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\scripts\\generate_app_icons.py",
+      "sha256": "29eb9b326e3f970836228c1ed7ffb836f1c15d785b33b2228c8edee67a27ca82"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\scripts\\generate_manifest.py",
+      "sha256": "aa1bbcd2ff2329c6ee2351978acfade5c14c75c36ae6d5baadb7b7eafc450305"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\scripts\\hook-rookiepy.py",
+      "sha256": "68009dc8ee139d59a0673a59eaa17080992610035989f95c4534fa563779e31b"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\scripts\\i18n_audit.py",
+      "sha256": "f70a9d3ea0ae8721071387c886eaafa9f48bf59db12799e4aa0d307176e6b529"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\scripts\\i18n_export_untranslated.py",
+      "sha256": "2e25657f83d2d3e67d2fe689dd22c9c6e40cdc98da06a0bcabad1215f97f826e"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\scripts\\i18n_import_translated.py",
+      "sha256": "90bd47141154bc65dcdb7a12536c7d7dfa6ffb562d55cd0edc238a8065fdaeee"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\scripts\\i18n_release.py",
+      "sha256": "f23845cd8f64afd57189dafec15e0a6cefa1866decb404463fc7796cf6666aec"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\scripts\\i18n_ts.py",
+      "sha256": "061f8ae9f67a871b5c78dea804cbc7f5a88598b38dff6aa407ae916e6ae03729"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\scripts\\i18n_update.py",
+      "sha256": "8985088b2cab335d50c221b754cee695a02bea242f33b39415ef7fce9525e90b"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\scripts\\prepare_7zip.py",
+      "sha256": "176f38ab6cb9a77bfc434399a05b8a5aa8517690c7fe1539923c47fab1401b7b"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\scripts\\release_pipeline.py",
+      "sha256": "3c29ee5a31f1c85d837dbe43033cadc733a5e412cc9319c7c8956a456705d6b3"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\scripts\\sync_control_center.py",
+      "sha256": "8db24c6f45223651edcd0030da00af488b8de3891bfa8e1fe05eb05f1af4c308"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\scripts\\sync_rules.py",
+      "sha256": "6331ac7d1eeacc24886706efae6590ae5c3ee75fe4ba4e94ba6182a50ab01262"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\scripts\\test_installer.py",
+      "sha256": "9dc2157f1b8284efecd852c6db5b09fbe47f47ad4a10b3325046b71ee42abbaa"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\scripts\\test_main.py",
+      "sha256": "03a1023162ad177fa76514be5158224ac898cc300c7c7d7db5ce8e4a92e364d3"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\scripts\\TOOLS.lock.json",
+      "sha256": "0e8433099ce6047a300fb4807905bbbfcddc2200aa8c168440d60180bac8960c"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\scripts\\trace_imports.py",
+      "sha256": "97259ceb11e639f7ae4196155fd306e6eb874acb0a8adc8c485a3a9a9bb4ba1b"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\scripts\\updater.spec",
+      "sha256": "b269108ff9cb8e32b6d9ac17a9e2e9786d6efbb0a0323f291640f98081b9bb2e"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\scripts\\version_manager.py",
+      "sha256": "dd6b56f30d136c8b8e0686e722f4806cac3bf424e48576dc981c19d6f5d3d59e"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\scripts\\wrap_html.py",
+      "sha256": "f621ade974d90a25b99944744adbce8e1aaf90fee91743be5426d83fd3da1745"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\__init__.py",
+      "sha256": "3e7b5baa6f1be0a96515cfff9374784ef563e7f84a5c4b4540edd39e35d75105"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\auth\\__init__.py",
+      "sha256": "f70f355950e1d25c2a6a6a078925303d28bfd9307b3156e868648cd556acdc63"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\auth\\auth_service.py",
+      "sha256": "7d37b3ea1ebf2135027c0f0757467fa489518b97961f22a9258e1e937ef1ceac"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\auth\\cookie_cleaner.py",
+      "sha256": "1c96c70bc787429bcb9001ef4bc29722c6e28333543c19d9a2fbd2d3325fca87"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\auth\\cookie_runfile.py",
+      "sha256": "8dd60d9f9abcd69dad05e48e20aa95a82464cef4de7c65c099b48fd6541ef16c"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\auth\\cookie_sentinel.py",
+      "sha256": "51c7be99e1f0f65ec0d8f3bf84f89b0b5caecb534b179de780bdb9dbd741f1ee"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\auth\\providers\\__init__.py",
+      "sha256": "4cb4c31a0c28eff689dcdc8688a9ed221967839e958a01ff8a3eb303ccf78a27"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\auth\\providers\\webview2_provider.py",
+      "sha256": "06ed6689be2cd3792a937ae23421680cad6be3fa0cd28ecefbdca53ebbd66f2e"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\auth\\pythonnet_diagnostics.py",
+      "sha256": "30f3e05b50ae33de49d7efed8c20660694a1fc2b17f6d92ce7ba8996a809a6ab"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\auth\\webview2_runtime.py",
+      "sha256": "b5d43457968c8eae923558b1eddfce843b0dd96fa2d7c82c8805cb66926f113b"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\core\\__init__.py",
+      "sha256": "a6d355f875634d34c27f988d40de65a95968bfd2362d19efdbcda37a1e58fd4e"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\core\\component_update_manager.py",
+      "sha256": "5e40a668419869c8f0d69f4eac292b138c64a24fe50bf2d8a221df4d346dba17"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\core\\config_manager.py",
+      "sha256": "7458fa9df36d945d62ce69e8eb58e7b60a0b3ba9123fe9dca1cfeae16a2d9db0"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\core\\controller.py",
+      "sha256": "77cf148b523499b58df305efe8cb9ac755815f90f0ffaf70346a8d940ae91cfb"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\core\\dependency_manager.py",
+      "sha256": "3e3407f6e88f53127315e602b534b742f96d011de7fdc848f3575bccc12f9ccd"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\core\\disk_monitor.py",
+      "sha256": "9583446a66954e48f9eaaf8afc83a40ab243aec3a3fdf845b187291adecdc417"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\core\\environment_checker.py",
+      "sha256": "40ce43a80bf9d43f3a7ab696db08b74f1b31ff8654205677103d643b2a7768c9"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\core\\hardware_manager.py",
+      "sha256": "57c62c337816f60303070e917b9c26429ae3e7bf4acadcdd6f49a745fea47a76"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\core\\i18n.py",
+      "sha256": "b223f9f62835d1ec0b9e04de8885bfa3a8f5cab851420a449e5dc443df17476a"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\core\\network_watchdog.py",
+      "sha256": "58f766074d66011f47deab7f1a0b365a4d2317e1ff25b3fbf9d20464acc995e6"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\core\\notification_manager.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\core\\process_manager.py",
+      "sha256": "4602a29f75b4bc52d1da493dd69596628b35a4bd297e83c1e37c7cc4e0002c85"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\core\\quick_add_worker.py",
+      "sha256": "578bbf212ae2e2d33a12c2941a6be337eed8adebc0d38dfdec8b0f14ec0892b1"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\core\\section_download.py",
+      "sha256": "2c87805a6bf42df9722e5dff400094d7f795e38b3a2e72945dd802ad20a5b83c"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\core\\update_transport.py",
+      "sha256": "729d690e1a065a966c1dadf8563581b872b14e758eb01ef9e0958f4cfb6d30ee"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\core\\updater.py",
+      "sha256": "14c8c98b662a147e2b7d94db63a23a8ff09367bc730b9d3870c00400601c674d"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\core\\updater_worker.py",
+      "sha256": "668eac354f4ef7635ddf37c7a7e1612d087929024414053c3bd48d42b963e5ce"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\core\\video_analyzer.py",
+      "sha256": "13b863b2e9195d273c464380cd8c90b1bc0267fd645919a0b57d2e82d54957ca"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\diagnostics\\__init__.py",
+      "sha256": "f6779efd1034679caf78fe728a41cf4b1881ecb06d50fdd79281cda94d1969d3"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\diagnostics\\catalog.py",
+      "sha256": "14bda68dd0bf880a517c0b4bd34a2b267a7e242f674eb9423c8acc94a42a4bf1"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\diagnostics\\collect.py",
+      "sha256": "3246a3053492fd121fb9279e6990fcc8246fa1e4041acbeb18243fb125c94a0d"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\diagnostics\\engine.py",
+      "sha256": "2303cdf24f402d24749aa8dcf5b44298d6ed5e24f43ebff9517eddba06991bcb"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\diagnostics\\models.py",
+      "sha256": "a61dba59c276c717b536330a53198f73ba6c339b1f5d248c55962bc23271665d"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\diagnostics\\rules.py",
+      "sha256": "ddd256dd7fc24b2762c29e93cecc05fd4c2d8166b0da5339c1cf41d6b32da796"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\download\\__init__.py",
+      "sha256": "44c02f762e49a4f4c307d038561e268b95f6c62e52b4a94b8a530e61cbed9f5b"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\download\\download_manager.py",
+      "sha256": "af3857748f0a6cee0dd9c278724dbd28348696e2e619fa40c2dba8cdb921f05e"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\download\\executor.py",
+      "sha256": "2cf451627fcec19d5eee86d861aaae8bfe82da1fb8a87662e99f626ebea906ee"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\download\\extract_manager.py",
+      "sha256": "ea3e530ab0a4d4e7526a24af12608eb7ddf24d0b680603fd3dd3f936770ab5cf"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\download\\features.py",
+      "sha256": "9bf664a0d43162964d85f2f076573f765915d3dd2339305572457e4efa51627f"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\download\\output_parser.py",
+      "sha256": "2d790013dda851145168824e6f2a88d90bac12b3daa8925b19343ac023a588f0"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\download\\playlist_progress.py",
+      "sha256": "129849f61981b6e681435c0d57b0702e40927189be80ca08330d2f8e9a8ad4bd"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\download\\quality_guard.py",
+      "sha256": "847f717bf554cb627b8b346f9cc78e2c9e77b336e0f884306f2c0eec410c1225"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\download\\staging.py",
+      "sha256": "9db6e89afd76388942b20d0245b1fba34c442b2884bdba049c221329f6ac876e"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\download\\workers.py",
+      "sha256": "08e739ff57029484c2a56d2ffb4c8c98b1eceac121a7382a435b45569fab9451"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\models\\__init__.py",
+      "sha256": "cdbe63c7e4ce8b196294451922fba7928e224e7873bfdb5b0a4f25319cccb839"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\models\\errors.py",
+      "sha256": "b192c9a28183bb938cbc03f5234db2f75da9adc2147a77d9703de4fb547eba61"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\models\\mappers\\__init__.py",
+      "sha256": "f9feb68614b250854fd746f4d92102ff20eb5d1dc3ddeec7cc0e33ea59728fed"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\models\\mappers\\video_info_mapper.py",
+      "sha256": "560f1c149214db887494a36c0a81aa935f29b1a0e207bb7dfed166760cca02c7"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\models\\playlist_format.py",
+      "sha256": "e22c4da3c02249caf5e1708c5142176f97a42ce1bb84f8fe746d3fb53853c140"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\models\\quick_download_params.py",
+      "sha256": "c3777af3feeb690b7c933d4291733fe9024dc7f03058c75d759d63b7964f7f95"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\models\\subtitle_config.py",
+      "sha256": "bd515f3879a48d32d46d487eca49d82b41d9d1ea9f15d3562d5ae13028e18ca7"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\models\\video_info.py",
+      "sha256": "2af35f54c296af7dfdae5b448a25a11b5c7d634fb6de855e7fed91a900ad7922"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\models\\video_task.py",
+      "sha256": "7ca33d99bd8d1a8c8572f9cac4b58f84b6fb936c5508595c4a3e13f4dd365180"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\models\\video_utils.py",
+      "sha256": "54882ce4cc3b7fa7106a275f38ad927428e111bf394cf85b286980577ff690f3"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\models\\yt_dto.py",
+      "sha256": "6bc9d108b5cc37df71a65112e95da410801500cfb9adc4f90c6a7791aec948d9"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\notification\\__init__.py",
+      "sha256": "9451fe9ecd3849efadd528a81a655ca9d0909348996b00f207762aa62d5556ad"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\notification\\announcement_service.py",
+      "sha256": "0624a0159b60ab8adf7c12c478aae7735e05fe24f773345a7149e56f55e6df2f"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\notification\\notification_center.py",
+      "sha256": "e6614a0fd15c9e64d8af73c9d2ef08c3f2d8c0f22304fc0b9a0b902e659127a5"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\notification\\notification_model.py",
+      "sha256": "9a22575c690501254a6819c7f45c7c66a73a812a680a6b51fc55f917727a0344"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\notification\\notification_text.py",
+      "sha256": "703b008079ecf034e1bc8e83afb59aa2f10ea6447a45d929738227c53343e605"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\notification\\update_notifier.py",
+      "sha256": "1cdbd2b09f8434dc3fd13a41dd2b61a3f504a986697d97e0dbf148125d2ebebb"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\observability\\__init__.py",
+      "sha256": "c2136265df76e3c6520903ddfeb1109bb079311b898134f703914d72371bb015"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\observability\\artifacts.py",
+      "sha256": "8de3d2608a0b2e6d8441dd1a61c87ce145b007d32769fac2ca85b4b3000eff4a"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\observability\\bundle.py",
+      "sha256": "72329d7408bb3168adbc47de1962518d39740d5a8421ecc38b11f501fa407b43"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\observability\\config_snapshot.py",
+      "sha256": "4fac38f8db9305bb1c88edf9ddbb3666908ef02049c319cb5673a0dd2dddc778"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\observability\\events.py",
+      "sha256": "0c91f48fa2e88dfd07b1578a60b524d729b7a7dcd9b2aa290a5deae51e20256d"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\observability\\futures.py",
+      "sha256": "17aad9d0d8112d7b0c0af35f60cb1be6395074b40dd90badcdb0e862c323f53f"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\observability\\sanitize.py",
+      "sha256": "62edf6d60679cc5c2b3154f32c3f3f2704d69b8aebd69fea8a053d8f319df95a"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\observability\\signals.py",
+      "sha256": "a64224541e12476b6c911c2e9690fc45834caf4b5cc0c495814d5f8a688b1001"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\observability\\sinks.py",
+      "sha256": "cba3449728b61b679534f7b622dff7b63e96aa91a4f4bed2cf82fe283257dc67"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\observability\\trace.py",
+      "sha256": "5b2dc22144d32acc91cfe1d4ce3b7166decd40bce1696d78218f27d58453a084"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\observability\\warnings.py",
+      "sha256": "bc4b72c609523404f1f3f82caba0598d242248e45edfb751a229341d054181b8"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\processing\\__init__.py",
+      "sha256": "da0765d4e594abff109de66c3e761fc09b59bbd866dd2051b6efee8ae3b15600"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\processing\\audio_processor.py",
+      "sha256": "e5c3e3d2740d997c39639b248a755e3cd3236f540843a86ceaf78d35edd6920f"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\processing\\audio_track_manager.py",
+      "sha256": "d0cb4924df274fd47e83b4bf65691018750b62a3d0445b9aaea3d13934200269"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\processing\\section_download.py",
+      "sha256": "886244a689c94af29e2c0d19340fce1af3859d25894d76b0aba2d87e4122fd42"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\processing\\sponsorblock.py",
+      "sha256": "44dbcca90aa8e1c130544071a439d8e46ef61537f5090552a29c09c3f71f6d23"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\processing\\subtitle_manager.py",
+      "sha256": "f9612017f102ba228a47663c59abf3bbbb73cb59a0d02b1b34d9858402b33dc2"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\processing\\subtitle_processor.py",
+      "sha256": "4e7f6af1a6053adaa0149af7f4cb46d8c7885f9f682731ab5065b57e8c2c05bd"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\processing\\subtitle_service.py",
+      "sha256": "95d3c80ca29b0ebdcf483b8ca26c0be5c1a4dfd4c978cc47630474b5bda23805"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\processing\\thumbnail_embed.py",
+      "sha256": "bf9c27c36949a72d340361189d273d042ce897585e21738e1067ab26ccf08c0f"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\processing\\thumbnail_embedder.py",
+      "sha256": "e4885edd17172ad63dbdd3c93d355c6887a69e30ed2eaf62962b5df3a24816f2"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\storage\\__init__.py",
+      "sha256": "73e4c29ccf3ff9a08662372ec154081b170e043eff0a8fcc9d9ef2f5cf82dac4"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\storage\\db_writer.py",
+      "sha256": "6517f37486d698020a1ade3d7fec51accbc0a0898501d01b94cf9a3e004e4f8d"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\storage\\task_db.py",
+      "sha256": "066187de7de73e159d82600f0315332b1526a3a3304c6993689b5478e4c2e670"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\__init__.py",
+      "sha256": "9bb4ae6ece8e0f86975f547add55f46fb14076ca6b702c2b9a6461321ee3c597"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\announcement_controller.py",
+      "sha256": "63a21e10b00dbecf11b4f3002ecd60414f6693384cff83a377bad14a2ca76329"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\batch_operation_panel.py",
+      "sha256": "f527b25009e915ed28c5bc5332e023036450d30c25c570f07fa7ff99e967e2f1"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\channel_parse_page.py",
+      "sha256": "565715b8768155eacec34c552dc43ede0047585374c70872ba7d19ae321d1c0c"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\components\\__init__.py",
+      "sha256": "a450a380760e177591a3ca4e9cff3d7f715101104c6f4630767e976f403cb0c6"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\components\\common\\__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\components\\common\\announcement_markdown.py",
+      "sha256": "ebae73af3d7a5fb045914c00aeb43b507576c9382af30b433b0dd4d774cddd7b"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\components\\common\\badges.py",
+      "sha256": "d2a9658ee4d09279509e67f101ac3c021e2d3b2c753f56c996ec964ab3252026"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\components\\common\\clipboard_monitor.py",
+      "sha256": "ef5c6586c9f3e4762420c92189f84f52b2114796511cb085ae35b661df235533"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\components\\common\\cookie_refresh_worker.py",
+      "sha256": "1439fdf2b9cd6dc7b3837eb24a5725f5683db698ac5fc50c4d3999f9e17f9bf6"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\components\\common\\custom_info_bar.py",
+      "sha256": "b4b24b4b9d0f435e7953d7aa3a6250fb5388d194bf21b0f9798a4386b4f756d5"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\components\\common\\event_timeline.py",
+      "sha256": "bb684d278883441fd1cf8768ed83e19b322643589ba1462bcb2cf3146a78c9f7"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\components\\common\\interruptible_navigation.py",
+      "sha256": "15aaa7194c924105906d0a7f74d59e0cb7ae58823f1095a03ae28fa6feb3f5df"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\components\\common\\log_jobs.py",
+      "sha256": "a2a50b6c0c5d26d5187d1fc5dbf7cc1e06b081e1927e27170cd49168802a9418"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\components\\common\\notification_center.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\components\\common\\rate_limit.py",
+      "sha256": "d840010351bc63e03997539cc9b7ed5d13727d3b5a816861aac77bc2c25471c2"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\components\\common\\responsive_command_bar.py",
+      "sha256": "8b735a763b2e03b0b6dcfef226b45ca8bbee128300f4592b36a4e9b0258aac81"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\components\\common\\standalone_window.py",
+      "sha256": "8e5da1e017a598afe50db27f5d597011719f4df7ccacc762fc4437113cd52f30"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\components\\common\\themed_title_bar.py",
+      "sha256": "bf1ccd8fa8c0ed784190c902c86e9a398f3aa48e19b79b08e83572b74fd05c47"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\components\\dialogs\\__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\components\\dialogs\\cookie_repair_dialog.py",
+      "sha256": "9c30a543ffcc354bbb53b1321b1f4d3f72a6ea7ada8fff9189e035043005bd31"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\components\\dialogs\\download_config_window.py",
+      "sha256": "e26d7947e6ea9d74ba3e9ccb7b182ded57d1f5947fc663d52f23ab9b01bfbddf"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\components\\dialogs\\log_viewer_window.py",
+      "sha256": "88cd522a9719601337e88ea4d17ff72e610e069778b0eccb971b1795d884b324"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\components\\dialogs\\section_range_selector.py",
+      "sha256": "4379e86b49e799e030e99b1d340500e9b0518fad6c1d7a07fcdcc9dc61b3579e"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\components\\dialogs\\selection_dialog.py",
+      "sha256": "60f38720454887495e1d040f06297104a25fcb0ec6ff3dc10f5ae0b3db42c765"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\components\\dialogs\\sponsorblock_dialog.py",
+      "sha256": "b9aed6e2ddb722e7dfa92c25011b2ea00060969d2098d25e225d7f7162a4be1a"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\components\\dialogs\\update_dialog.py",
+      "sha256": "44ce6cee184f37b28da4a9add3ee03b6157053a01b01a5ad1d9f450040094f88"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\components\\dialogs\\validated_edit_dialog.py",
+      "sha256": "876d10b7a6a479d4fd3ca9a80d726f0b95091a4ecee847e0af371a4184ed651c"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\components\\dialogs\\worker_error_dialog.py",
+      "sha256": "a1c9777a320d1068149dabecbeae74d51d7b4c128541f41d470a9a9e5a2c88dd"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\components\\home\\__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\components\\home\\playlist_item_card.py",
+      "sha256": "90304ba53a7b5c190b1eabe08fd5edb76511820c7ca7167514f06b6b0eb6c7e4"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\components\\home\\section_download_card.py",
+      "sha256": "c1ccd9654b3d91f91a709c9565ecaee9a8b17c16294096d975f205914a4eb2f7"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\components\\platforms\\__init__.py",
+      "sha256": "acb91849de63787d97e0ab7dec81866cd3a69b2906a3233ee3c4a07bad13e5da"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\components\\platforms\\cover.py",
+      "sha256": "c3a18fbf90d808ff68141f610e71705b32052a91d2337c6bb04316b01b853e45"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\components\\platforms\\subtitle.py",
+      "sha256": "f0f369464f7e22ed3254a6278cddd01ab75c36fe5415348822349a395ea14ab8"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\components\\platforms\\vr.py",
+      "sha256": "3cb8a8fcdf3a7b424c68acd68715bba07790068ffb9560e14257cac7b477addd"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\components\\platforms\\youtube.py",
+      "sha256": "b5811ec52c1014b317db30eebc31fdc72ed89505e29a4ab282d157339ae53544"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\components\\settings\\__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\components\\settings\\app_update_card.py",
+      "sha256": "757a01a3ba1d1f8ebdea000bb327b5f37d4e5ddd08b8ffc05dc69546f43c0d99"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\components\\settings\\component_error_text.py",
+      "sha256": "c9af1938b45c2cd29a83688a6a63b25fe74fb51fdff21ac2fe13be3d174e51af"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\components\\settings\\fix_registry.py",
+      "sha256": "01a7daf516633d1364f54d3c9b6adcedec2056b8c06e14f4657ca1cb989c4bad"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\components\\settings\\platform_auth_card.py",
+      "sha256": "ed9d8b1fca0db2e146e84b1e96734bb7bf547909077cf32850e032879c687eb2"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\components\\settings\\smart_setting_card.py",
+      "sha256": "c39f1ad6731e92a68ae117a8a5cf26c5ad7ed22708804647b51ebc6a5753199a"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\cover_download_page.py",
+      "sha256": "fa7e388b86c224700d525252657bd15f4319574fbce7201c05cfb200020320ea"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\delegates\\download_item_delegate.py",
+      "sha256": "3c3d1472e0253f0dd8b872c913d56c3b2b8f2c1b51439d50e7a48398217f1a79"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\delegates\\playlist_delegate.py",
+      "sha256": "fb7a97cea5d705286a8bf2d7d13a75507adee00309a91e338f9cefdfe5bddcaf"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\delegates\\row_animator.py",
+      "sha256": "f826bf65044425d0d1993e7c0aec1f1ffff382cc63b1bdca32837ccc8216e63e"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\dialogs\\__init__.py",
+      "sha256": "60b2b5c85cab557ab5021c96332dec2c73c335332ebcee3d3a2ef0baf5120229"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\dialogs\\audio_picker_dialog.py",
+      "sha256": "7a6ba1b6131fc056b5ae1e38f25b9bcf2964a8ae3c1c82d8384afb1b77c1e609"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\dialogs\\platform_selector_dialog.py",
+      "sha256": "7edd43a9b6d8cfce280b857096fe9547f15b0efc97bb8b5ae73690c9459466ba"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\dialogs\\playlist_format_dialog.py",
+      "sha256": "25afc8618db53d1f0b7b9078758e756622a13f89f18257b0d1af21a1cc14f3ca"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\dialogs\\playlist_subtitle_dialog.py",
+      "sha256": "20d50dd2bfd90e6945e06e93370de97810c807af909f7b73e889f2d7e7a5de35"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\dialogs\\quality_report_dialog.py",
+      "sha256": "5c9528cce6f8c686fdaccf73d10ac80493f6e30bcbbbc90ebfb3313aa6e8d9f1"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\dialogs\\subtitle_picker_dialog.py",
+      "sha256": "0dd5820ed0c28cc91e29ab045635007ac1b9c76213d339c4762c90910dca4810"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\dialogs\\webview2_missing_dialog.py",
+      "sha256": "0952756ef146834be273f78cd03b5b23339035b15bd0c930a8575bdd38d26282"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\dummy_strings.py",
+      "sha256": "9489733afe3e501b4b2369033b1685f4028585513dcf34657eae7f1a7324d9a4"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\help_window.py",
+      "sha256": "8a8bae75004ee8ad4aa196b8af6c7dd0129959aabb15b6d7518522d8264aa817"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\models\\download_list_model.py",
+      "sha256": "5faf6b0aa598003a8c225c4b54c39e788a86be28e7ce64033a9772ab22ea8baf"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\models\\file_probe.py",
+      "sha256": "fb66eef22ce58395d9bca4f006e1d27bfc58014b262a6ad30a37632364ea4c4d"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\models\\playlist_model.py",
+      "sha256": "2f6c132a27f758b73ba5a5f4434fd292a9620c0048deaa1aed588b9ceac0ec1d"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\models\\task_row.py",
+      "sha256": "953c12eac8ce02a8fe2dc9d36d146cd60aa0a0e2f7eb5affb5d4676ddb4dd1a1"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\notification_panel.py",
+      "sha256": "47fcbf9cdb6671317b7db9d2648a14cad771f472e44733f08dc5ef8e4a15f492"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\parse_page.py",
+      "sha256": "09363f96240ab338b29a4b2069a9e3ab45837a6bab4191e7ea0b63655197a5c1"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\playlist_scheduler.py",
+      "sha256": "592a9e35a9e344db97d415fd7258fbfaf148d8ed4bdbbad3411a4aa8cc744aa5"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\quick_add_panel.py",
+      "sha256": "fb2ed10cd95de141d5f4f2d7925e392160962365c20578b3105a95c018e8196f"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\reimagined_main_window.py",
+      "sha256": "64dbe0bc5a8ebd8b5a5bdbb9358d47dd02e3a2fc137056a7dbcb52441b0dc0a3"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\settings\\__init__.py",
+      "sha256": "b157069f710b0792d99b2a8d34eef27acfff32acdd30ecea00fe4808b81d2a50"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\settings_page.py",
+      "sha256": "2a4241c02e5672552c95c47927f4e04ec46496c37efb2a014447317c4ec9287a"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\subtitle_download_page.py",
+      "sha256": "82555c0eae7d64bb368f0e4460f27a4a116f787031b6760c04988034f03a6826"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\unified_task_list_page.py",
+      "sha256": "352103b2ca7f976a8f40ccafff9f68a0dcd616ff93eb032c73bd6d0ca7aaf29a"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\views\\task_list_view.py",
+      "sha256": "a83cb00f3f66b5ca7b89adfa499dc6be4f91da0becc180d57c7ff8936b7b2294"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\vr_parse_page.py",
+      "sha256": "f63bd92af90965cc86d12a8d3b5f680bd2f4d68ca9727cad0ecb026f02016786"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\ui\\welcome_wizard.py",
+      "sha256": "bbfd7be594789d6b5c2826802de23c8998e9a7b9460c554e02d255a69fd83422"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\utils\\__init__.py",
+      "sha256": "2a50415e511602b27faf76963cb4ea9122787f699b2943ae64b2463519156ffe"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\utils\\admin_utils.py",
+      "sha256": "993f27ea02c2cd32183702b13395aab40b28b518e8a982fbd3e13033c06df9c7"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\utils\\app_restart.py",
+      "sha256": "e651610809b38f0b70571175d7c7cba035584516efd7681c3756c6cb812022b2"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\utils\\app_version.py",
+      "sha256": "bd0aa2455291ae24ac0e3cdc3086c9ab5c66123c5ddb7fbbf1bbeb11b56e8b66"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\utils\\aux_files.py",
+      "sha256": "a039011011b1e6ae35923a0dd89b009167f064df7fe999b736c84defd9508495"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\utils\\bcp47.py",
+      "sha256": "becc785c3b76694cb4ecba92a1c9a75429b80f411524bfea9d5bf76c28811787"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\utils\\build_selftest.py",
+      "sha256": "d1c58c77c178d8aaf4192db42b680bf743414cc4e905829bef5fa2c050a6bca9"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\utils\\clean_logger.py",
+      "sha256": "7b5c9d93cfb948ea4758e13be4df3af7ff25f4b30e911ec2379690661fae0cc1"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\utils\\container_compat.py",
+      "sha256": "65798f07da725f368b552237106aaa8240f5003afb446bf689ec19e312e18237"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\utils\\control_center_text.py",
+      "sha256": "5e8f2b79ded51edca155500809aebfbc53771c0ab95ffda987d4d444686ac8bd"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\utils\\disk_space.py",
+      "sha256": "c946df023d915dbb5cfa59c7c5993715158d19b6bd022730565876d79db42fa1"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\utils\\error_parser.py",
+      "sha256": "0f9ee5376a218e857b17bc6ccb6e403aca41dfbffebe3a18c57438a4dc994172"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\utils\\filesystem.py",
+      "sha256": "62bc5bf78f5ad181760dce1addb2ea1c539cfeeb67ec29058c02a7132f626469"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\utils\\format_scorer.py",
+      "sha256": "82de430d9ae05a6593178aec89096fcb2e8afda54dbdcbe94e2b8fbb24bfbeae"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\utils\\formatters.py",
+      "sha256": "ffcdc16ffc1558326261b7e3cbaf62cfb2353e9eba28db509e8df1eb5365ddf9"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\utils\\icons.py",
+      "sha256": "859b51f9830dd36bb2f451aac740a31d4031ced07d2a1f1b5bc796c2092eeeb5"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\utils\\image_loader.py",
+      "sha256": "3476a55acc429daa1a89883f92bd287b6e92b22ae5ce248b6c142cd5e78ddf54"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\utils\\install_registration.py",
+      "sha256": "06f879a1e682e120fd29b19a241175866cce1590aacc522e732b603e9579d950"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\utils\\language.py",
+      "sha256": "bad6e79d1e63407888ab18c0295ce9df24c05c256205f0b30c7320cf2c76d3de"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\utils\\localized_log.py",
+      "sha256": "c7affb14ee28701994af14106db6344c02e10a2b5c06f6e2e89343a5f4c9dafa"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\utils\\log_history.py",
+      "sha256": "2bf91561db151729ea22e2e2730da5a2573ce63665301f5d92093db91ee3878e"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\utils\\log_privacy.py",
+      "sha256": "b913feabd088d31009b084a6a2cdd5cfe6d26b7e68cb004d00e0e4179d2f0f50"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\utils\\log_reader.py",
+      "sha256": "a98b60a1603e383916e73f1d1b7923fcdc1b399f3f07450de3635bce7de4b25b"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\utils\\log_runtime.py",
+      "sha256": "7b7437c9c03a3e2980f2629923a8ec053bf662c74c5bf24b96357d8ca7774c65"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\utils\\log_signal_handler.py",
+      "sha256": "0856ebd15ba2bd685364bb0024b4e626f94c84ee6a10f717437d7bf6921145e8"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\utils\\logger.py",
+      "sha256": "1693f2364f89a508c129b96668f5d93d33818d44fbd610aafc984ed6e6ee5ae8"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\utils\\message_catalog.py",
+      "sha256": "98f0a440c82f889c37d4234fe5ad8e64680011d49a87de5b55c2fce06f39fd11"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\utils\\path_manager.py",
+      "sha256": "51fae3ef2ef1bdb5ae92a1dfa5ce398356d04f0bf67c45e66e91b0532e05d4a0"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\utils\\paths.py",
+      "sha256": "ae36e31830c4f3b7039b3fcd70fca08cc0d25c4848afbe775cec2fd38f2040fa"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\utils\\quality_presets.py",
+      "sha256": "e7e6a7638aa6296f79d0bf92e657437add3e5798b333ee12ee514334ea2fe93e"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\utils\\quick_opts.py",
+      "sha256": "e7c8da17d522da01747b0f4d10cd1ef79191190dfee9bdcb4ae9cc46a025ab5e"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\utils\\single_instance.py",
+      "sha256": "dcce4db1e01aa7eb1afbfbf1b15b4c2669ace538c40bbce85ed9026a1713b255"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\utils\\spatialmedia\\__init__.py",
+      "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\utils\\spatialmedia\\metadata_utils.py",
+      "sha256": "2fd2d0947959c500797cea16efb1e8f0dbf28d0fe6295fbeb25ee61a95fe691a"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\utils\\spatialmedia\\mpeg\\__init__.py",
+      "sha256": "6011b73498c837d79c51022ff13e93d5e943259229fa600e8fbf7adfc9ae62d8"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\utils\\spatialmedia\\mpeg\\box.py",
+      "sha256": "c7a8d5cf763401a3d47c30469df01dec7afa5b03abe560a3e32f856aae97b25f"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\utils\\spatialmedia\\mpeg\\constants.py",
+      "sha256": "d8bc2202bdb0ba6a29dcede9f69ac3a8125fe5b215b29d8f6bdf67831eb9a71d"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\utils\\spatialmedia\\mpeg\\container.py",
+      "sha256": "5f9afe6653771dbd1d5d0d657e5b7bed1dbd826146bed4de074d3511ca1c510c"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\utils\\spatialmedia\\mpeg\\mpeg4_container.py",
+      "sha256": "583fdadaeddc4a8c4b4d630ef8decdff980813ddc10a6bbcc0073e89c862752e"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\utils\\spatialmedia\\mpeg\\sa3d.py",
+      "sha256": "884a12102a739047b57c33239d76d49c4a0117e57d380d5d8bc8518701fee0df"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\utils\\spatialmedia\\mpeg\\sv3d.py",
+      "sha256": "d8db743c42398726c549a4543fd986e78115631c6ab0d722b37d63e0a1559052"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\utils\\startup_info.py",
+      "sha256": "6beb70ade6913e74c336b127ec1e9cd8bb3c82c162a092519e1c63482d456ffe"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\utils\\translator.py",
+      "sha256": "692dc3f0eea1ad52457587fc4bacfbc6a6d7c363aa53e0314049240ae91af34c"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\utils\\ui_text.py",
+      "sha256": "4cb7d71e786884edb580f6f518dcb1029065f67c277f60af67b4f9c92fd58d44"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\utils\\update_signal.py",
+      "sha256": "8e7a00916b6a00d2099b6350b04350b0eea263cddf673c7e55aba7f44bc98ca4"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\utils\\url_router.py",
+      "sha256": "9944c435481b7a0c205d4efc9980bca809a341b262a231c9e10c221205cae37b"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\utils\\validators.py",
+      "sha256": "39f9238acaaf98c3c8f0ba159e60a5860453f20c9898fc45e767fde09a1442f1"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\utils\\win_identity.py",
+      "sha256": "1eb900af478570a1caa5d62ac0a4965cdcf97a11dc9122dfb5675ea52abf0172"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\utils\\youtube_request.py",
+      "sha256": "6b4dfa8d704710116d7195497909b03458095eff252cb80fd7c42b94e7b52b82"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\utils\\ytdlp_runtime.py",
+      "sha256": "7f3a4b56f8a703f7f8568017dce6cfd9a18a77ed3c168839f3f262451b253be6"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\youtube\\__init__.py",
+      "sha256": "06101e1aa984fe734506a00a22b67976d5cbfa0ab5b89f490f6d7462d5e4e78c"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\youtube\\pot_manager.py",
+      "sha256": "248458ed6ae8f59ff39d6e795eb41ce0584cb8643121e6c5b2fb9ab084891a55"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\youtube\\youtube_service.py",
+      "sha256": "b3d38573cdb26694d26079d6b443af634c8885757e157a2305a55c29725e8c41"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\youtube\\yt_dlp_cli.py",
+      "sha256": "98a5798a5a0d1c25f6c87a1e826f75e52b65b7d20cf887236cb14125fc5300d8"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\yt_dlp_plugins_ext\\yt_dlp_plugins\\extractor\\getpot_bgutil.py",
+      "sha256": "714630e5dd2109fcd9c3d74531ffa53f2495485a881c8d71b296571510d7fbaf"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\yt_dlp_plugins_ext\\yt_dlp_plugins\\extractor\\getpot_bgutil_cli.py",
+      "sha256": "ee40fefbce38c79f764935933dfff4f7a7a42a554f27ed1ae64d8bc869a793b6"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\src\\fluentytdl\\yt_dlp_plugins_ext\\yt_dlp_plugins\\extractor\\getpot_bgutil_http.py",
+      "sha256": "f284c49c18928a0bbfadf0a088e9ee049f8d71f2f5eeca4ba3534f4f3ce412f6"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_announcement_dialog.py",
+      "sha256": "55ab8aa16e5dbf7186a4e7cd980482dcd64eb188a7a1f4cc0a9eea43c58a39ef"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_announcements.py",
+      "sha256": "f9492d39343c1613b0ef8dded9a192f433177c2b4858f7dc641539c740322629"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_app_restart.py",
+      "sha256": "0df7b039b05cbda249f4167ccaeaf2d19e0bd69dee04144867e1e03ffab5249f"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_app_update_channels.py",
+      "sha256": "cb29248fa4e9041988e16a12099460b29a2547c10510bad4c7e715060388d3e0"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_archive_compat.py",
+      "sha256": "a4250b40b439fcf174e45eb6ab08af439de08957377007172eafbbd6acb8cb03"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_audio_format_injection.py",
+      "sha256": "840b0cf08e7adf3485bc525ee93bfb73696620c2790666d45bb45ce537da4fef"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_audio_picker_filter.py",
+      "sha256": "8d3862ad8f1d3349616e4eebed7d13e19fc97bd8853ccc2169e4c157024b367c"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_audio_track_selection.py",
+      "sha256": "a6a75c8fec4f83ad4b9d4857dcfcad1fd33c50f201ffc8df9860db2fff5e201e"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_aux_files.py",
+      "sha256": "9218c92332c425843e8c11d17aacbd8d771993119cb9eba77912691179d3b5d5"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_build_app_core.py",
+      "sha256": "9220ccae11d33e3fe28844812d18c0de54497678c0d7fa88372fc9a40b804564"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_channel_tab_status.py",
+      "sha256": "45bc49561851acdb8357ea0212d70040bb1ac96e7251fba105b75a0bd8460479"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_component_update_manager.py",
+      "sha256": "492095e95ee12a977c7085cf50fa771cd27f89516ed431fca360fb32ea7a1ced"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_cookie_runfile.py",
+      "sha256": "0d233805be5e59c7d4c7652d60b19899fcbbb5ecb433c569e95e9bd0f7f0a564"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_cookie_truth_source.py",
+      "sha256": "ba6b0709b4b878ca7db0fbac8c388f5138d25550cdff4d21a2d0e563fd1c6b89"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_db_writer_batch.py",
+      "sha256": "1443976ba0ee64d4d5a4d0011a4b9fea58c24ffe33096c709bfd6da32c5c3d3a"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_dependency_manager.py",
+      "sha256": "8f91a11af21116ea6c6c3618d99c1497ea0ebe163d7bf42170018c86b34957ff"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_diagnostic_collect.py",
+      "sha256": "40d69e78c10c71dbe67aa84978cc46cee30bdd97e05d44ef525177a94780ff0f"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_download_artifact_architecture.py",
+      "sha256": "e411f8cdb8022713a4f3318d787a2f0b08f1c55275022f7a6f83d7175676551d"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_download_item_delegate_meta.py",
+      "sha256": "69cd1e811ba966ec6ad67bebab86f0d9c2f482376addb08243f5bee3584c8c61"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_download_output_parser.py",
+      "sha256": "d404035150094ca8019754221c3144d413eadaf80002d666e2fa33936ea6ef08"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_download_size_fuse.py",
+      "sha256": "24611da685638a72186659d1f00eaa8bb1dfe18f6ead50a754493ad5281418b1"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_download_staging.py",
+      "sha256": "b5ee98700408404d20cbe2f3d5570aae4d1942d6d7c0efad0a7ed555be7e0890"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_error_panel.py",
+      "sha256": "489e7dcd2f07b3cb0a783ad1713d89e86a2dc0ee0f309ea63e586a3cdfacd719"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_error_parser.py",
+      "sha256": "b498093d0c8fd760a88348648d1754789682d486f7449bd513904d48230f481f"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_error_rules_integrity.py",
+      "sha256": "dc32f9a244cafa9ae02ee82d8d2fcd5c6d89fa920d777fce2f7adb3974f7ce68"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_event_timeline_visuals.py",
+      "sha256": "69528da22a9d654fe5f5aa826dfa5c4deaa408d2bff78ffe0ed74c5c22776683"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_fake_download_warning.py",
+      "sha256": "ad5e212cb59a1d2053f09e3e25feaf3a374e855536ff31190e1a9725541f4d31"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_fake_low_quality.py",
+      "sha256": "10380365e365f00a376230fdc47a8f1794d69e1cc07d0ecf414913ab020d2ee3"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_fetch_tools.py",
+      "sha256": "c47e866a54d9a23af16159862ae1b8aaf65aa2e4b2074e2f2f1c3f9bc081d7c4"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_formatters.py",
+      "sha256": "71c10f29ab5fbf3a977aebeed0501db03653db636b4271c330a5026c9ff4c218"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_generate_manifest.py",
+      "sha256": "9c7e5807728e556e316a9013bf94661199031d073dbb21e679fce67fbe95344b"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_i18n_integrity.py",
+      "sha256": "8194381233377d49d844081eb9482f3f1a6ac03c7bb746cdc999ad6f5262857b"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_i18n_runtime.py",
+      "sha256": "b66574af05fec1861bc41b5e561ab59de3bc703996dc406bf3c3a4aae30ceea4"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_log_viewer_timeline.py",
+      "sha256": "05b17c69908177f506c9e811a73dbbbc08638f6b6f282a706a54d271b7845f43"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_logging_reliability.py",
+      "sha256": "e27583c67b986b3845a61df50a3a246a3d20e227b75cc19e396ec16910106e7e"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_logging_viewer_reliability.py",
+      "sha256": "5cd8539d6068368d54eea85ff9f6a18fe67d9c55c8c6bbb20b9eec8709b49805"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_navigation_animation.py",
+      "sha256": "af74e7072b75d9e0dd5f3834a54217fff8ceebd590524a80898d02fa4a641757"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_notification_panel_theming.py",
+      "sha256": "002ac9ddc0a8f7ef77d600a05b59bf4c31f812cb7acb608a0d788fded0c822ef"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_observability_artifacts.py",
+      "sha256": "6674624b9a256491a1bb79b841883da5254a8082545ad246f56ab5ddcac3fca2"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_observability_config_snapshot.py",
+      "sha256": "e6871427ae4b554274c842a47ff29eef8e6bcdb6e198ec4e65a5caaf1c961e23"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_observability_container_disk.py",
+      "sha256": "e322b2dc3ca26c0f2169d94f474747217363e376cf85070f16fd4a1d114cd30b"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_observability_contract.py",
+      "sha256": "08000c47f56c0920ef77145d3e24ed62f84bce9b59246c73ef670ad379fd4c1e"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_observability_format_decision.py",
+      "sha256": "b8a7c0aa300fd5bc8bd97754104474a64470df0acab73c211c27cdc296d99b36"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_observability_raw_dump.py",
+      "sha256": "0b5f3ed9dd9c2dcd6599589197c30a6de869d12ffae9d2f1df1a02bd7111b5f3"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_observability_threads.py",
+      "sha256": "68dafe953c5beaff64ee4ed0d15b54b1ef1655c3265b7b8a5fb988e1846cd539"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_parse_cache.py",
+      "sha256": "2314230704c45776dc2969391a5e957a83caa2f8335b5d0ac5ddf24fdbc01a19"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_paths_migration.py",
+      "sha256": "923cfb5130d1a2404f6d81bb56ad63e31b18fef96fb25042427e7ac350e0fb25"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_playlist_authcheck.py",
+      "sha256": "38c3e136b015ca429e0f2457e10a75c8568b349127b8b2e157bbf0510002b6d5"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_pot_job_object.py",
+      "sha256": "6adf00be89fb0b6a741bb2a4f0a5b9b2a248e48241d2c9012d25a9a159714386"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_pot_plugin_sync.py",
+      "sha256": "159dd0d1fc8796df2f19f5ed35ec8503cd5dd4246dd2c3bf1ab245f017b4964a"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_pot_required.py",
+      "sha256": "ba462dac0271f255ea0d7e7d630170969bf8f5a28c884a1fba015ada8268726a"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_pot_warm_backoff.py",
+      "sha256": "3ce0f5b50c4229d9db4fa98c132741ed56bd2cf899ba262f49d01765ab7ee785"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_py7zr_pin.py",
+      "sha256": "ab108c53a39b82701b148e27002f9e6c63636c2ddcee06e0d32c8eb905c2edee"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_quality_presets.py",
+      "sha256": "9ef0a0ff31a5577e52d6a73c1b929d29a32bd6a23921604f535d06f4a661f2c0"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_release_pipeline.py",
+      "sha256": "17d721964ed20308c67da653e87c8d9ded220e2d547c2ab4fa8103cda6ab57ea"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_release_protocol.py",
+      "sha256": "0eebe8db817c2017cb8e1c9cfe4a768cfffc4e4e7f1ef8d90b6e5fcffc0ddb8d"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_sabr_client_fallback.py",
+      "sha256": "709c2be4d4cfbdcb58be2e2017822a18efac930705ecb5b75b426965a9356597"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_sabr_diagnosis.py",
+      "sha256": "18e5e508d2584c5ebb6807d4c087ee477e20891475489d63bf875f51680e39ec"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_section_download.py",
+      "sha256": "8e9984fcb341e66ce26cba00d43424669ccea5add3b8690667cbf0b05b8b71f3"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_standalone_window.py",
+      "sha256": "b3879c118da191cb084db75c6528534647e43696a323fe4e7267d5a4f65d0d22"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_subtitle_deferred_resolution.py",
+      "sha256": "4f7821de1e514248d9739ae3ea87d5fe4fbf4186e7d94ce627a4b45f21b5d5ee"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_subtitle_display_names.py",
+      "sha256": "57a8f085e8e89654a77b898583349b95ef3e846c7b4092c54f450b1c74e1a372"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_subtitle_lang_match.py",
+      "sha256": "a6580ff458d1344f306a37641e724fe708541572039885bd2cffeb76f407f2b1"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_subtitle_output_signals.py",
+      "sha256": "5fae586dd5439c155d53099e0d9ae6d475f80f13bc08e8f4e3fb5641dd22335b"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_subtitle_processor_validation.py",
+      "sha256": "eb2310b5013d1ec619e9fa3eadf3e4bcba003bff2400f04032f776b4ce0b3752"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_subtitle_selector_ux.py",
+      "sha256": "f9faa2273c6fb803ce3d5a15713724a6957b13b5fa6b99c115cb88d8c4c7950b"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_subtitle_service_resolution.py",
+      "sha256": "2950db8476d5ea1863e26ca9b7851f92933e1617d04b123c8ca4d89f780b3b0d"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_subtitle_success_scan.py",
+      "sha256": "e3fd1cfaf45e81724c36034025bd9e6b5a87ed176fc7962c7ac82f1eb03c0bc7"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_task_db_pagination.py",
+      "sha256": "df84fb602b2a1c01ada21ba11034e7c35daba01b41b81caf612218c153244272"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_task_filter_buckets.py",
+      "sha256": "a70acadeddad936e1d4a7ee1952058ba4ad004f54cabede9f1e3ea79953c7487"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_task_header_layout.py",
+      "sha256": "be263ea714dfb9991c34df108d65ef9a1ad4873c448093a22cd30282bed299de"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_task_list_right_click.py",
+      "sha256": "9e288c011853f16b44e1f7e2a3f2fc0227246fb15a7e67b85a3fc73cddb40b32"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_task_list_tooltip.py",
+      "sha256": "5c06a6f78c3e9b04e11ed11b99dd963a0525664d6091bf45d39772db1d8fc5e4"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_task_row_model.py",
+      "sha256": "6d4807b9d8b09b1d567a205cff2d80cb50fe42ed7345e25a7467263bad8c1c1f"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_update_transport.py",
+      "sha256": "1d901ce2a315c1e9d3ab754731dbe5af09c2b1c0494e9d8b1bec544b20c8eec0"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_updater.py",
+      "sha256": "bb50cae8be216855443177fb3ff5fcaafb9b0e53e665de5724aea07ccad99e4f"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_url_validator.py",
+      "sha256": "547ac8f073dc8d33530a7893acc43e62ca7823bbb6cf97b66661415ed55735fa"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_video_analyzer.py",
+      "sha256": "b195ab5333b561e0d0c5a2b36ad4f837135a2f0626d11097072f6e1493b82ae6"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_video_info_mapper.py",
+      "sha256": "1953c38c4c82d0925104eda2c9a485a4908ca5c02518392a70ef5dfc5096e145"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_webview2_failures.py",
+      "sha256": "b93b9b1636db8a506233936fa37f22ef9f7dd61c8e98b1bd3c2945f223b75efc"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_worker_error_dialog.py",
+      "sha256": "1ecc7806749a78b2205000b47a19159a75c92f18ca96b5c4097e13cac6e4e2a3"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_youtube_cookie_mode.py",
+      "sha256": "3e490e8aff493faad3bad2619432d9d7bcfdce469e1d49bf53bc13d020aea974"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\tests\\test_ytdlp_runtime.py",
+      "sha256": "ee20a127359e9e12ee7f37fcfa7bdfc10759b668041081a2b0a35ffdc50c28e9"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\uv.lock",
+      "sha256": "0d52ea2ecf7af5a9b2fa7d75ac9b85f8398a2f33a1076ef16263d737d510bb49"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\VERSION",
+      "sha256": "6f58068529bc3bc8f28895f9149279e58d41945d2a6c1d0a5154fc05ac86dad6"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL-ControlCenter\\apps\\admin\\src\\App.vue",
+      "sha256": "2afc8e6eba89431ca2a60865012afebd27698f03370fe41301da0f29175426e3"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL-ControlCenter\\apps\\admin\\src\\components\\ui\\Button.vue",
+      "sha256": "2b2306ff9d828b505089a4dd3aee5fd6f8da041ad6fd9a3dd057eea93d6b333c"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL-ControlCenter\\apps\\admin\\src\\components\\ui\\Card.vue",
+      "sha256": "499efdd31a0a6bf08bd9c98b70cd1210daaeff0fb6a55ae3e2572bf8efa510ba"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL-ControlCenter\\apps\\admin\\src\\main.ts",
+      "sha256": "376d6b79d3eb52d0193d316f5b32e23251fc6d54ff0fa84094a3552e28e1286b"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL-ControlCenter\\apps\\admin\\vite.config.ts",
+      "sha256": "901ccc63b321c9b4d17607197d07b4b669203a161e2ee7c0c96f440b04471e5f"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL-ControlCenter\\apps\\worker\\src\\announcements.ts",
+      "sha256": "ec9e3043677604dbd5718b31d8d179e334715819f3a4d152db157aaf09e0f85a"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL-ControlCenter\\apps\\worker\\src\\assets.generated.ts",
+      "sha256": "87bd60049829445c7f93656230c1a2c18afe0b01b8bfb04771f8516513cb9e41"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL-ControlCenter\\apps\\worker\\src\\index.ts",
+      "sha256": "98fd7f7c12389bd34673091460a708763f5e3a9439152c859d41a97fc26f8201"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL-ControlCenter\\apps\\worker\\src\\types.ts",
+      "sha256": "3fba4f6319f4aad8bb08dc86d8a79d1629bb6f149c431bbf039edcfe407db98b"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL-ControlCenter\\apps\\worker\\src\\updates.ts",
+      "sha256": "7898a7cd1ee4b20f55ff35d7d020f9aa0ee353ba1ae1643b1baa79678f270e54"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL-ControlCenter\\migrations\\0001.sql",
+      "sha256": "cd5088b4e39dc11f38284971fb1f24e0ad9e6c791e67b350d788a6a5250f0602"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL-ControlCenter\\package-lock.json",
+      "sha256": "0bbe654f0d99908112742d76e274e7c7d0dcdc8494202e7942c09fbc8f560ea5"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL-ControlCenter\\package.json",
+      "sha256": "0623df9860fcdcb8dc07295bd1e06dbb329d793b558ab7b90935c156375c94c2"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL-ControlCenter\\packages\\shared\\src\\index.ts",
+      "sha256": "ddc3d2d63bba77e3cc86af7c66817f3e87d50ebf58e20ac2590e320a246df6e4"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL-ControlCenter\\scripts\\bootstrap-snapshots.py",
+      "sha256": "2f17bd115de6452d4730a8bb636e1bbe522b63087974280bb08aef9ce1f53f54"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL-ControlCenter\\scripts\\bundle-assets.mjs",
+      "sha256": "cca4b19cd41ab1274cff13520a6a5725976cae7c21f0762cf2140e669862437d"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL-ControlCenter\\tests\\worker.test.ts",
+      "sha256": "5aae281afd8237a9cac4ae547335dfb2b24d58145905c4d8b1ff18a475e76e1c"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL-ControlCenter\\tsconfig.json",
+      "sha256": "3f2f2cb66f516abd6a7b2e2b66d933374a787b1897d73c5a1acba9e121738498"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL-ControlCenter\\wrangler.toml",
+      "sha256": "21d623106db1623202819c62b5a4bbe63b6cdc6fc28925c4adf47c21ad061608"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\docs\\architecture-v2\\00-system-overview.md",
+      "sha256": "1dfcdf149ce042bfef77c210ed162cc456064cc365c0271134b9c8eb1eec095d"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\docs\\architecture-v2\\01-repository-map.md",
+      "sha256": "00d9f5e5557a9fb41ce187a26ed1160a1d6184cd7b299bb42a5df69178728e04"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\docs\\architecture-v2\\02-module-map.md",
+      "sha256": "74768d9fc3724be805636c3a1ac2534af064342dadf911d6a2e457beb7e96953"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\docs\\architecture-v2\\03-runtime-architecture.md",
+      "sha256": "61d78764013a12bd0b6e9a868048ccea287933fe2cce08c2aa9260005a6a3d92"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\docs\\architecture-v2\\04-data-flow.md",
+      "sha256": "fb42e77d7cc83dc1baf789843649a9694a9dd8a0418556b9ab855c81f0b666b9"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\docs\\architecture-v2\\05-control-flow.md",
+      "sha256": "222af6a3082105ae75bf4d0bc0c9da1dde641b8826b4ca34873cf1ba08e85aca"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\docs\\architecture-v2\\06-state-machines.md",
+      "sha256": "fec9f9b3f2140e9dd6d1bd8acdc4b29d9269f5800951673d892efab45274b46d"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\docs\\architecture-v2\\07-resource-model.md",
+      "sha256": "e043a0b13f7c6224010a2a2fb5fd0417815813cc65b24cd19cf52c87f5486e26"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\docs\\architecture-v2\\08-dependency-model.md",
+      "sha256": "ebdfc951738fb0537ca241aba43e198fde5292541ebd0c892e2333c898b5084e"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\docs\\architecture-v2\\09-concurrency-model.md",
+      "sha256": "3ec48c55695495a1ed4dae0ffd63a78c1fde50e9c3063bed09c9b8af97bf29dd"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\docs\\architecture-v2\\10-error-recovery.md",
+      "sha256": "f4450bdefb7fea01c3ae3c49204425eed35178c18181286e33117a442e4f1ea0"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\docs\\architecture-v2\\11-security-boundaries.md",
+      "sha256": "e2d6f0449fc9a7cb570e0a91c9f12b0d86c80c26cf0c008e7172685bf15c5e74"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\docs\\architecture-v2\\12-deployment.md",
+      "sha256": "d6591a5616306787eb4e1157a2066fe1a6a94f929f5d7323a15d77fdccbd5446"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\docs\\architecture-v2\\13-known-risks.md",
+      "sha256": "42a8d11ef4cb3eb7fa2b2f7cb2f98ca726ccc40c19e2ddb2d2d3c7207a900ba5"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\docs\\architecture-v2\\14-code-index.md",
+      "sha256": "544e1a3a97313687a9415205e03b0965ab66885b961b3125ee24a0583b738cc3"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\docs\\architecture-v2\\evidence\\coverage-review.md",
+      "sha256": "0e3f35d12882803d67494f730683b094c2592f0d9386a3bcf82d44b013c27d7b"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\docs\\architecture-v2\\evidence\\review-boundaries.md",
+      "sha256": "edca469c385e0981d48239f1f6e64d6d598b42d2e184b6661259e3f79b3747ad"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\docs\\architecture-v2\\evidence\\review-deployment-modules.md",
+      "sha256": "f1f5d32c455835a27972d4673f944cb258d8e93fcb7e1022aaeb451354070e10"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\docs\\architecture-v2\\evidence\\review-runtime-resources.md",
+      "sha256": "74a1529e082d204962ec6588c0f6a9d1914dd81f0c3d2c080474589ff73fce6a"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\docs\\architecture-v2\\evidence\\source-baseline.md",
+      "sha256": "609dd69b0fed824bc792c3e698a53776d555873760380ab6b36586f9be64ae76"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\docs\\architecture-v2\\evidence\\verification.md",
+      "sha256": "bd7a43aba3d5cbe825b356fe938d106c820b91ed46cc6a669e5a6b3576e8073e"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\docs\\architecture-v2\\NEW_ARCHITECTURE_REFERENCE.md",
+      "sha256": "6d646cefc5e85cf16591f123a9af9eb473cbea080e88fb4117966d43dd6a742a"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\docs\\architecture-v2\\README.md",
+      "sha256": "33e27d7d43774b79f889f614a2febb6bd667034510ff4a3ec0c7056afc05e2b5"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\docs\\architecture-v2\\vertical-slices\\VS-01-startup-shutdown.md",
+      "sha256": "1b315587023a4bffe78ba0fbf807a6e89792b5cce4cc3a5cb2cf589456e4147f"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\docs\\architecture-v2\\vertical-slices\\VS-02-video.md",
+      "sha256": "c83005281510af2e803bff0503c2b361cf9b71513e2751ac2c94790fcf08f2f8"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\docs\\architecture-v2\\vertical-slices\\VS-03-vr.md",
+      "sha256": "2251b455feb68b838a6ed12779adc8424a02f5333692a8bc1fb9afb39f941cda"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\docs\\architecture-v2\\vertical-slices\\VS-04-channel.md",
+      "sha256": "eb7b2add74165fe46762ff4adaac5c7785f27692693347b02565a8b2bb7dd99b"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\docs\\architecture-v2\\vertical-slices\\VS-05-playlist.md",
+      "sha256": "20e3bf726d9eec320fe3efeb6102b612bc9805fb582a719d91ad37f889e419e5"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\docs\\architecture-v2\\vertical-slices\\VS-06-subtitle.md",
+      "sha256": "a2bcd58e65e48a37649f0288fbbb35600b4ef3976c62eb0de0fcfeddb0f1aeb3"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\docs\\architecture-v2\\vertical-slices\\VS-07-cover.md",
+      "sha256": "24096bd2d73dc46a50db16b22061fe4d7e7ca300015f48db229ba43117f007b9"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\docs\\architecture-v2\\vertical-slices\\VS-08-quick-audio-section.md",
+      "sha256": "eff0129912bb03d5624aed408a014513fd7bfaaaf383259e45d8f4e56e4c11ff"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\docs\\architecture-v2\\vertical-slices\\VS-09-pause-resume.md",
+      "sha256": "0d034cc30904acaabeae7e29e83d7a45a2f6bffb7cf0c339aa0f713d2c363809"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\docs\\architecture-v2\\vertical-slices\\VS-10-retry.md",
+      "sha256": "9c734100ec9f8eca82a7e36d0e2016b29119961e42ed7c05ec1abb6962ddf5d4"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\docs\\architecture-v2\\vertical-slices\\VS-11-cancel-recovery.md",
+      "sha256": "e1d530f387e36c76474288151fa1d61f08499949f48464f168898205fbd2a1d1"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\docs\\architecture-v2\\vertical-slices\\VS-12-authentication.md",
+      "sha256": "33398a3f48d659ba35b9375e7d8a096bee6d6f320751613e63ec547fa9229edf"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\docs\\architecture-v2\\vertical-slices\\VS-13-cookie-context.md",
+      "sha256": "7978275c09f29775ebfe8fe4a08a3cde2e92bbf00c4eb81e208efc79001072e3"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\docs\\architecture-v2\\vertical-slices\\VS-14-pot-runtime.md",
+      "sha256": "1294d83e46ee338c3c476e7959ec2f5ab9c2233c1cdcb1faaf8f6a8651cd79ba"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\docs\\architecture-v2\\vertical-slices\\VS-15-diagnostics.md",
+      "sha256": "503962f55f110e5e61ea863a6be1b8bed76aaef4182c0ee4c992e24f5dec6f51"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\docs\\architecture-v2\\vertical-slices\\VS-16-app-update.md",
+      "sha256": "ec66b5a36e5b61157df0552513d1e831788b1a4ea6da6bb1f6ac75fbf37fef6c"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\docs\\architecture-v2\\vertical-slices\\VS-17-component-update.md",
+      "sha256": "2c75b20552a53bd01887a3339fde80769a590dd33f2733f281e21a9384c8eefe"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\docs\\architecture-v2\\vertical-slices\\VS-18-announcements.md",
+      "sha256": "0c5401e0c6b6bacca09c6a08ff1e775641336eab1e6c3cb5e11342aad169ff59"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\docs\\architecture-v2\\vertical-slices\\VS-19-install-uninstall.md",
+      "sha256": "336b7c7e145755a167ee4d9ae1a61f581ee6b78a77c232fab2dafc62d63b2e3b"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\docs\\architecture-v2\\vertical-slices\\VS-20-build-release.md",
+      "sha256": "7a7454ce46f2b66019b87bfe4a24458f78133b2f5523a2828eadafe573551dfb"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\specs\\media-metadata\\design.md",
+      "sha256": "d518f5baf3b3083801e2972daaaa7fdfe7fc26bd457e79698b2cbf2ba67eb7be"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\specs\\media-metadata\\requirements.md",
+      "sha256": "c0a6f9bdd1bff4477a16e1ccaa1fe98df91bf496d00322c3221cb780e7e67a18"
+    },
+    {
+      "path": "D:\\ALL Projects\\YouTube\\FluentYTDL\\specs\\media-metadata\\research.md",
+      "sha256": "b8db93bac90b2b336d79b1cf4a190e5d97043971f825fb75dc4f895edf5bcd4e"
+    }
+  ],
+  "architecture_drift": [],
+  "limits": "Inherited 366-source-file whitelist plus V2 Markdown and existing metadata spec; new unlisted files are not detected. No user data read."
+}
