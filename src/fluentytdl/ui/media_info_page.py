@@ -1,81 +1,42 @@
-"""Read-only media inspection view; file operations belong to the service."""
+"""Media cards; raw evidence and export settings are opened only on demand."""
 
 from __future__ import annotations
 
 import json
 
-from PySide6.QtCore import QSortFilterProxyModel, Qt, Signal
-from PySide6.QtGui import QStandardItem, QStandardItemModel
-from PySide6.QtWidgets import QApplication, QFileDialog, QHBoxLayout, QVBoxLayout
+from PySide6.QtCore import QEvent, Qt, Signal
+from PySide6.QtGui import QColor
+from PySide6.QtWidgets import (
+    QApplication,
+    QFileDialog,
+    QHBoxLayout,
+    QSizePolicy,
+    QVBoxLayout,
+    QWidget,
+)
 from qfluentwidgets import (
+    Action,
+    CaptionLabel,
     CardWidget,
     CheckBox,
-    ComboBox,
-    LineEdit,
-    Pivot,
+    FluentIcon,
+    IconWidget,
+    InfoBarPosition,
+    MessageBoxBase,
     PlainTextEdit,
     PrimaryPushButton,
     PushButton,
+    RoundMenu,
+    ScrollArea,
     StrongBodyLabel,
     SubtitleLabel,
-    TableView,
+    TransparentDropDownToolButton,
+    TransparentToolButton,
 )
 
 from ..utils.ui_text import tr_text
-
-
-def display(value):
-    if value is None or value == "" or value == []:
-        return "—"
-    if isinstance(value, list) and all(isinstance(item, str) for item in value):
-        return "\n".join(value)
-    if isinstance(value, dict) and set(value) == {"fraction", "fps"}:
-        return f"{value['fps']:.6g} fps ({value['fraction']})"
-    if isinstance(value, (dict, list)):
-        return json.dumps(value, ensure_ascii=False, indent=2)
-    return str(value)
-
-
-def field_names():
-    return {
-        "container": tr_text("容器"),
-        "size": tr_text("文件大小"),
-        "duration": tr_text("时长"),
-        "total_bitrate": tr_text("总平均码率"),
-        "title": tr_text("标题"),
-        "artist": tr_text("作者 / 艺术家"),
-        "album_artist": tr_text("专辑艺术家"),
-        "album": tr_text("专辑"),
-        "date": tr_text("日期"),
-        "year": tr_text("年份"),
-        "genre": tr_text("流派"),
-        "comment": tr_text("备注"),
-        "description": tr_text("描述"),
-        "authors_json": tr_text("作者列表"),
-        "channel": tr_text("频道"),
-        "uploader": tr_text("上传者"),
-        "webpage_url": tr_text("来源链接"),
-        "codec_name": tr_text("编码"),
-        "width": tr_text("宽度"),
-        "height": tr_text("高度"),
-        "average_rate": tr_text("平均帧率"),
-        "reference_rate": tr_text("参考帧率"),
-        "reported_frames": tr_text("容器报告帧数"),
-        "reported_bitrate": tr_text("轨道码率"),
-        "sample_rate": tr_text("采样率"),
-        "channels": tr_text("声道数"),
-        "channel_layout": tr_text("声道布局"),
-        "frame_rate_mode": tr_text("恒定或可变帧率"),
-    }
-
-
-def source_name(source):
-    return {
-        "probe": "FFprobe",
-        "native_tag": tr_text("原生标签"),
-        "filesystem": tr_text("文件系统"),
-        "derived": tr_text("按文件大小和时长估算（含容器开销）"),
-    }.get(source, source)
+from .components.common.custom_info_bar import InfoBar
+from .media_info_presenter import MediaCardData, filename, present_media
 
 
 def issue_text(code):
@@ -100,7 +61,129 @@ def issue_text(code):
     }.get(code, tr_text("读取失败，请检查文件或重试。") + f" ({code})")
 
 
-class MediaInfoPage(CardWidget):
+def caption(text, parent):
+    label = CaptionLabel(text, parent)
+    label.setTextColor(QColor(96, 96, 96), QColor(210, 210, 210))
+    label.setTextFormat(Qt.TextFormat.PlainText)
+    return label
+
+
+class MediaDetailsDialog(MessageBoxBase):
+    def __init__(self, title, text, parent):
+        super().__init__(parent)
+        self.viewLayout.addWidget(SubtitleLabel(title, self))
+        self.text = PlainTextEdit(self)
+        self.text.setReadOnly(True)
+        self.text.setPlainText(text)
+        self.text.setMinimumHeight(320)
+        self.viewLayout.addWidget(self.text)
+        copy = PushButton(tr_text("复制"), self)
+        copy.clicked.connect(lambda: QApplication.clipboard().setText(text))
+        self.viewLayout.addWidget(copy, alignment=Qt.AlignmentFlag.AlignRight)
+        self.yesButton.setText(tr_text("关闭"))
+        self.cancelButton.hide()
+        self.widget.setMinimumWidth(min(720, max(360, parent.width() - 80)))
+
+
+class MediaExportDialog(MessageBoxBase):
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.viewLayout.addWidget(SubtitleLabel(tr_text("导出媒体信息"), self))
+        self.include_path = CheckBox(tr_text("报告包含完整路径"), self)
+        self.include_raw = CheckBox(tr_text("报告包含原始结果"), self)
+        self.viewLayout.addWidget(self.include_path)
+        self.viewLayout.addWidget(self.include_raw)
+        self.yesButton.setText(tr_text("选择保存位置"))
+        self.cancelButton.setText(tr_text("取消"))
+        self.widget.setMinimumWidth(360)
+
+    def options(self):
+        return {
+            "include_path": self.include_path.isChecked(),
+            "include_raw": self.include_raw.isChecked(),
+        }
+
+
+class MediaDataCard(CardWidget):
+    def __init__(self, data: MediaCardData, parent):
+        super().__init__(parent)
+        self.data = data
+        self.setObjectName("mediaCard_" + data.key.replace(":", "_"))
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 16, 20, 18)
+        layout.setSpacing(12)
+        header = QHBoxLayout()
+        kind = data.key.split(":")[0]
+        icon = {
+            "content": FluentIcon.INFO,
+            "video": FluentIcon.VIDEO,
+            "audio": FluentIcon.MUSIC,
+            "file": FluentIcon.FOLDER,
+            "source": FluentIcon.LINK,
+            "tags": FluentIcon.TAG,
+            "description": FluentIcon.DOCUMENT,
+            "subtitles": FluentIcon.FONT,
+            "collection": FluentIcon.MUSIC,
+            "attachments": FluentIcon.PHOTO,
+        }.get(kind, FluentIcon.DOCUMENT)
+        image = IconWidget(icon, self)
+        image.setFixedSize(18, 18)
+        header.addWidget(image)
+        header.addSpacing(4)
+        header.addWidget(StrongBodyLabel(data.title, self))
+        header.addStretch()
+        copy = TransparentToolButton(FluentIcon.COPY, self)
+        copy.setToolTip(tr_text("复制此卡片"))
+        copy.setAccessibleName(tr_text("复制此卡片"))
+        copy.clicked.connect(lambda: QApplication.clipboard().setText(data.summary()))
+        header.addWidget(copy)
+        layout.addLayout(header)
+        if data.hero:
+            hero = SubtitleLabel(data.hero[:300], self)
+            self._configure_text(hero)
+            layout.addWidget(hero)
+        row_limit = 12 if data.key in {"chapters", "subtitles", "attachments"} else len(data.rows)
+        for label, value in data.rows[:row_limit]:
+            line = QHBoxLayout()
+            line.setSpacing(16)
+            name = caption(label, self)
+            name.setWordWrap(True)
+            name.setFixedWidth(112)
+            line.addWidget(name, 0, Qt.AlignmentFlag.AlignTop)
+            text = StrongBodyLabel(value[:240] + ("…" if len(value) > 240 else ""), self)
+            self._configure_text(text)
+            text.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignTop)
+            text.setToolTip(value[:2000])
+            line.addWidget(text, 1)
+            layout.addLayout(line)
+        if data.body:
+            excerpt = "\n".join(data.body.splitlines()[:5])[:500]
+            body = StrongBodyLabel(excerpt + ("…" if excerpt != data.body else ""), self)
+            self._configure_text(body)
+            layout.addWidget(body)
+        if (
+            data.body
+            or len(data.rows) > row_limit
+            or len(data.hero) > 300
+            or any(len(v) > 240 for _, v in data.rows)
+        ):
+            more = PushButton(tr_text("查看完整内容"), self)
+            more.clicked.connect(self.show_complete)
+            layout.addWidget(more, alignment=Qt.AlignmentFlag.AlignLeft)
+
+    @staticmethod
+    def _configure_text(label):
+        label.setTextFormat(Qt.TextFormat.PlainText)
+        label.setWordWrap(True)
+        label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+
+    def show_complete(self):
+        MediaDetailsDialog(self.data.title, self.data.summary(), self.window()).exec()
+
+
+class MediaInfoPage(QWidget):
     inspect_requested = Signal(str)
     cancel_requested = Signal()
     export_requested = Signal(object, str, dict)
@@ -110,121 +193,98 @@ class MediaInfoPage(CardWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("mediaInfoPage")
+        self.setStyleSheet("#mediaInfoPage { background: transparent; }")
         self.setAcceptDrops(True)
         self.result = None
         self.path = ""
-        self.tab = "overview"
         self.final = False
         self.export_running = False
         self.export_snapshot = None
+        self.cards = []
+        self.card_data = []
+        self._columns = 0
+        self._layout_width = 0
+        self._groups = []
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(24, 24, 24, 24)
+        layout.setContentsMargins(24, 18, 24, 12)
         layout.setSpacing(12)
-        layout.addWidget(SubtitleLabel(tr_text("媒体信息"), self))
-        self.context = StrongBodyLabel(
-            tr_text("选择或拖入一个本地音视频文件，只读取，不修改。"), self
-        )
-        self.context.setWordWrap(True)
-        self.context.setTextFormat(Qt.TextFormat.PlainText)
-        layout.addWidget(self.context)
         toolbar = QHBoxLayout()
-        self.choose_button = PrimaryPushButton(tr_text("选择文件"), self)
-        self.choose_button.clicked.connect(self.choose_file)
-        self.retry_button = PushButton(tr_text("重新识别"), self)
-        self.retry_button.clicked.connect(lambda: self.open_file(self.path, keep_context=True))
-        self.cancel_button = PushButton(tr_text("取消"), self)
-        self.cancel_button.clicked.connect(self.cancel_requested)
-        self.back_button = PushButton(tr_text("返回下载列表"), self)
+        self.back_button = TransparentToolButton(FluentIcon.RETURN, self)
+        self.back_button.setToolTip(tr_text("返回下载列表"))
+        self.back_button.setAccessibleName(tr_text("返回下载列表"))
         self.back_button.clicked.connect(self.back_requested)
         self.back_button.hide()
+        toolbar.addWidget(self.back_button)
+        self.choose_button = PrimaryPushButton(FluentIcon.FOLDER, tr_text("选择文件"), self)
+        self.choose_button.clicked.connect(self.choose_file)
+        toolbar.addWidget(self.choose_button)
+        self.file_label = caption("", self)
+        self.file_label.setMinimumWidth(0)
+        self.file_label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+        toolbar.addWidget(self.file_label, 1)
+        self.cancel_button = PushButton(tr_text("取消"), self)
+        self.cancel_button.clicked.connect(self.cancel_requested)
+        toolbar.addWidget(self.cancel_button)
         self.settings_button = PushButton(tr_text("打开设置"), self)
         self.settings_button.clicked.connect(self.settings_requested)
         self.settings_button.hide()
-        for button in (
-            self.choose_button,
-            self.retry_button,
-            self.cancel_button,
-            self.back_button,
-            self.settings_button,
-        ):
-            toolbar.addWidget(button)
-        toolbar.addStretch()
+        toolbar.addWidget(self.settings_button)
+        self.more_button = TransparentDropDownToolButton(FluentIcon.MORE, self)
+        self.more_button.setToolTip(tr_text("更多操作"))
+        self.more_button.setAccessibleName(tr_text("更多操作"))
+        menu = RoundMenu(parent=self)
+        self.retry_action = Action(FluentIcon.SYNC, tr_text("重新识别"), self)
+        self.retry_action.triggered.connect(lambda: self.open_file(self.path, keep_context=True))
+        self.copy_action = Action(FluentIcon.COPY, tr_text("复制摘要"), self)
+        self.copy_action.triggered.connect(self.copy_summary)
+        self.path_action = Action(FluentIcon.FOLDER, tr_text("复制文件路径"), self)
+        self.path_action.triggered.connect(lambda: QApplication.clipboard().setText(self.path))
+        self.details_action = Action(FluentIcon.INFO, tr_text("查看读取详情"), self)
+        self.details_action.triggered.connect(self.show_details)
+        self.export_action = Action(FluentIcon.SAVE, tr_text("导出 JSON"), self)
+        self.export_action.triggered.connect(self.save_report)
+        menu.addActions([self.retry_action, self.copy_action, self.path_action])
+        menu.addSeparator()
+        menu.addActions([self.details_action, self.export_action])
+        self.more_button.setMenu(menu)
+        toolbar.addWidget(self.more_button)
         layout.addLayout(toolbar)
-        self.path_label = StrongBodyLabel(self)
-        self.path_label.setWordWrap(True)
-        self.path_label.setTextFormat(Qt.TextFormat.PlainText)
-        self.path_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-        layout.addWidget(self.path_label)
-        self.status = StrongBodyLabel(tr_text("尚未选择文件"), self)
+        self.status = StrongBodyLabel(self)
         self.status.setWordWrap(True)
         self.status.setTextFormat(Qt.TextFormat.PlainText)
+        self.status.hide()
         layout.addWidget(self.status)
-        self.pivot = Pivot(self)
-        for key, title in (
-            ("overview", tr_text("概览")),
-            ("video", tr_text("视频")),
-            ("audio", tr_text("音频")),
-            ("metadata", tr_text("元数据")),
-            ("chapters", tr_text("章节与附件")),
-            ("raw", tr_text("原始读取结果")),
-        ):
-            self.pivot.addItem(routeKey=key, text=title, onClick=lambda k=key: self.set_tab(k))
-        self.pivot.setCurrentItem("overview")
-        layout.addWidget(self.pivot)
-        self.stream_choice = ComboBox(self)
-        self.stream_choice.currentIndexChanged.connect(self.render)
-        self.stream_choice.hide()
-        layout.addWidget(self.stream_choice)
-        self.search = LineEdit(self)
-        self.search.setPlaceholderText(tr_text("筛选当前视图的字段、值或来源"))
-        layout.addWidget(self.search)
-        self.table = TableView(self)
-        self.table.setEditTriggers(TableView.EditTrigger.NoEditTriggers)
-        self.table.setSelectionBehavior(TableView.SelectionBehavior.SelectRows)
-        self.table.setSelectionMode(TableView.SelectionMode.SingleSelection)
-        self.model = QStandardItemModel(self)
-        self.proxy = QSortFilterProxyModel(self)
-        self.proxy.setSourceModel(self.model)
-        self.proxy.setFilterKeyColumn(-1)
-        self.proxy.setFilterRole(Qt.ItemDataRole.UserRole)
-        self.proxy.setFilterCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
-        self.table.setModel(self.proxy)
-        self.table.horizontalHeader().setStretchLastSection(True)
-        self.table.verticalHeader().hide()
-        self.table.clicked.connect(self.show_detail)
-        self.table.selectionModel().currentChanged.connect(self.show_detail)
-        self.search.textChanged.connect(self.proxy.setFilterFixedString)
-        layout.addWidget(self.table, 1)
-        self.detail = PlainTextEdit(self)
-        self.detail.setReadOnly(True)
-        self.detail.setMaximumHeight(110)
-        self.detail.setPlaceholderText(tr_text("选中一行查看完整值；可选中文字复制。"))
-        layout.addWidget(self.detail)
-        options = QHBoxLayout()
-        self.include_path = CheckBox(tr_text("报告包含完整路径"), self)
-        self.include_raw = CheckBox(tr_text("报告包含原始结果"), self)
-        self.copy_button = PushButton(tr_text("复制摘要"), self)
-        self.copy_button.clicked.connect(self.copy_summary)
-        self.export_button = PushButton(tr_text("导出 JSON"), self)
-        self.export_button.clicked.connect(self.save_report)
-        for widget in (self.include_path, self.include_raw):
-            options.addWidget(widget)
-        options.addStretch()
-        layout.addLayout(options)
-        report_actions = QHBoxLayout()
-        report_note = StrongBodyLabel(tr_text("报告包含文件中的描述、备注等标签内容。"), self)
-        report_note.setWordWrap(True)
-        report_actions.addWidget(report_note, 1)
-        report_actions.addWidget(self.copy_button)
-        report_actions.addWidget(self.export_button)
-        layout.addLayout(report_actions)
+        self.scroll = ScrollArea(self)
+        self.scroll.setWidgetResizable(True)
+        self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.scroll.setStyleSheet("ScrollArea { background: transparent; border: none; }")
+        self.canvas = QWidget()
+        self.canvas.setObjectName("mediaCardsCanvas")
+        self.canvas.setStyleSheet("#mediaCardsCanvas { background: transparent; }")
+        self.grid = QVBoxLayout(self.canvas)
+        self.grid.setContentsMargins(0, 0, 8, 12)
+        self.grid.setSpacing(14)
+        self.grid.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self.scroll.setWidget(self.canvas)
+        layout.addWidget(self.scroll, 1)
+        self.empty = StrongBodyLabel(tr_text("拖入音视频文件"), self.canvas)
+        self.empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.empty.setMinimumHeight(220)
+        self.grid.addWidget(self.empty)
+        self.scroll.viewport().installEventFilter(self)
         self.set_busy(False)
 
+    def _set_status(self, text):
+        self.status.setText(text)
+        self.status.setVisible(bool(text))
+
     def set_busy(self, busy):
-        self.cancel_button.setEnabled(busy)
-        self.retry_button.setEnabled(bool(self.path) and not busy)
-        self.copy_button.setEnabled(self.result is not None)
-        self.export_button.setEnabled(
+        self.cancel_button.setVisible(busy)
+        self.retry_action.setEnabled(bool(self.path) and not busy)
+        self.path_action.setEnabled(bool(self.path))
+        self.copy_action.setEnabled(self.result is not None)
+        self.details_action.setEnabled(self.result is not None)
+        self.export_action.setEnabled(
             self.result is not None and self.final and not busy and not self.export_running
         )
 
@@ -239,22 +299,19 @@ class MediaInfoPage(CardWidget):
         self.path = path
         self.result = None
         self.final = False
-        self.path_label.setText(path)
-        self.detail.clear()
         self.settings_button.hide()
+        self.file_label.setToolTip(path)
+        self._update_filename()
         if not keep_context:
             self.back_button.setVisible(task_title is not None)
-            self.context.setText(
-                tr_text("来自下载任务的主成品：{0}", task_title)
-                if task_title is not None
-                else tr_text("选择或拖入一个本地音视频文件，只读取，不修改。")
-            )
         self.render()
+        self.scroll.verticalScrollBar().setValue(0)
         self.set_busy(True)
+        self._set_status(tr_text("正在检查文件…"))
         self.inspect_requested.emit(path)
 
     def set_progress(self, stage):
-        self.status.setText(
+        self._set_status(
             {
                 "validating": tr_text("正在检查文件…"),
                 "switching": tr_text("正在切换文件…"),
@@ -264,16 +321,13 @@ class MediaInfoPage(CardWidget):
         )
 
     def show_result(self, result, final):
-        self.result = result
-        self.final = final
-        self.set_tab(self.tab)
+        position = self.scroll.verticalScrollBar().value()
+        self.result, self.final = result, final
+        self.render()
+        self.scroll.verticalScrollBar().setValue(position)
         self.set_busy(not final)
         if final:
-            notes = [issue_text(code) for code in result.issues]
-            notes.append(tr_text("FFprobe 展示读取器可识别的字段；原始视图不代表文件的全部字节。"))
-            if result.coverage.get("native") == "unsupported":
-                notes.append(tr_text("此容器暂不支持独立原生标签读取。"))
-            self.status.setText(tr_text("读取完成") + " · " + " ".join(notes))
+            self._set_status(" ".join(issue_text(code) for code in result.issues))
 
     def show_error(self, code):
         self.final = False
@@ -282,192 +336,114 @@ class MediaInfoPage(CardWidget):
             if code not in self.result.issues:
                 self.result.issues.append(code)
         self.set_busy(False)
-        self.status.setText(issue_text(code))
+        self._set_status(issue_text(code))
         self.settings_button.setVisible(code in {"tool_unavailable", "configured_probe_missing"})
 
-    def set_tab(self, key):
-        self.tab = key
-        self.pivot.setCurrentItem(key)
-        self.stream_choice.blockSignals(True)
-        previous = self.stream_choice.currentData()
-        self.stream_choice.clear()
-        if self.result and key in {"video", "audio"}:
-            for stream in self.result.streams:
-                if stream.get("codec_type") == key and not stream.get("disposition", {}).get(
-                    "attached_pic"
-                ):
-                    self.stream_choice.addItem(
-                        f"#{stream['index']} · {stream.get('codec_name', '—')}",
-                        userData=stream["index"],
-                    )
-            index = self.stream_choice.findData(previous)
-            if index >= 0:
-                self.stream_choice.setCurrentIndex(index)
-        self.stream_choice.blockSignals(False)
-        self.stream_choice.setVisible(key in {"video", "audio"})
-        self.render()
+    def render(self):
+        for card in self.cards:
+            self.grid.removeWidget(card)
+            card.hide()
+            card.deleteLater()
+        self.cards = []
+        self.card_data = present_media(self.result) if self.result else []
+        self.empty.setVisible(not self.card_data and self.result is None)
+        for data in self.card_data:
+            self.cards.append(MediaDataCard(data, self.canvas))
+        self._layout_cards(force=True)
 
-    def render(self, *_):
-        self.model.clear()
-        self.detail.clear()
-        self.model.setHorizontalHeaderLabels(
-            [tr_text("字段"), tr_text("值"), tr_text("来源 / 范围")]
-        )
-        if not self.result:
+    def _layout_cards(self, *, force=False):
+        width = self.scroll.viewport().width()
+        columns = 2 if width >= 760 else 1
+        if columns == self._columns and abs(width - self._layout_width) < 24 and not force:
             return
-        result, rows, names = self.result, [], field_names()
-        if self.tab in {"overview", "metadata"}:
-            fields = result.fields[:4] if self.tab == "overview" else result.fields[4:]
-            if self.tab == "metadata":
-                fields = list(fields)
-                for key in (
-                    "title",
-                    "artist",
-                    "authors_json",
-                    "channel",
-                    "uploader",
-                    "date",
-                    "webpage_url",
-                ):
-                    if not any(f["key"] == key for f in fields):
-                        fields.append({"key": key, "value": None, "source": "", "scope": ""})
-            for item in fields:
-                value = display(item["value"])
-                if item["value"] is None:
-                    value = tr_text("未读取到（不代表文件中一定不存在）")
-                annotation = ""
-                if item.get("state") == "conflict":
-                    annotation = tr_text("候选值存在差异")
-                if item.get("role"):
-                    annotation += " · " + (
-                        tr_text("角色未标注")
-                        if item["role"] == "unspecified"
-                        else tr_text("角色由文件声明")
-                    )
-                if item.get("unit") and item["value"] is not None:
-                    value += " " + item["unit"]
-                rows.append(
-                    (
-                        names.get(item["key"], item["key"]),
-                        value,
-                        " · ".join(
-                            filter(
-                                None,
-                                (
-                                    source_name(item["source"]),
-                                    item["scope"],
-                                    item.get("native_key", ""),
-                                    annotation,
-                                ),
-                            )
-                        ),
-                    )
-                )
-            if self.tab == "overview":
-                rows += [
-                    (tr_text("读取时间"), result.read_at, ""),
-                    (tr_text("读取器版本"), display(result.reader_versions), ""),
-                    (tr_text("字段覆盖范围"), display(result.coverage), ""),
-                ]
-                rows += [
-                    (
-                        f"stream:{s.get('index')}",
-                        display(
-                            {
-                                k: s[k]
-                                for k in ("codec_type", "codec_name", "disposition", "tags")
-                                if k in s
-                            }
-                        ),
-                        "FFprobe",
-                    )
-                    for s in result.streams
-                ]
-        elif self.tab in {"video", "audio"}:
-            stream = next(
-                (s for s in result.streams if s.get("index") == self.stream_choice.currentData()),
-                {},
-            )
-            keys = ["codec_name", "duration", "reported_bitrate"]
-            keys += (
-                [
-                    "width",
-                    "height",
-                    "average_rate",
-                    "reference_rate",
-                    "reported_frames",
-                    "frame_rate_mode",
-                    "pix_fmt",
-                    "color_space",
-                    "color_transfer",
-                ]
-                if self.tab == "video"
-                else ["sample_rate", "channels", "channel_layout", "sample_fmt"]
-            )
-            for key in keys:
-                value = stream.get(key)
-                if key == "frame_rate_mode" and stream:
-                    value = tr_text("未进行逐帧分析")
-                unit = {"duration": " s", "reported_bitrate": " bps", "sample_rate": " Hz"}.get(
-                    key, ""
-                )
-                rows.append(
-                    (
-                        names.get(key, key),
-                        display(value) + (unit if value is not None else ""),
-                        "FFprobe",
-                    )
-                )
-        elif self.tab == "chapters":
-            rows += [(f"chapter:{c.get('id')}", display(c), "FFprobe") for c in result.chapters]
-            rows += [
-                (f"stream:{s.get('index')}", display(s), "FFprobe")
-                for s in result.streams
-                if s.get("codec_type") == "attachment"
-                or s.get("disposition", {}).get("attached_pic")
-            ]
-            rows += [
-                (t["key"], display(t["values"]), tr_text("原生标签"))
-                for t in result.tags
-                if t.get("binary")
-            ]
-        else:
-            rows += [
-                (t["key"], display(t["values"]), f"{t['reader']} · {t['scope']}")
-                for t in result.tags
-            ]
-            rows.append((tr_text("FFprobe 原始 JSON"), display(result.raw), "FFprobe"))
-        if not rows:
-            rows.append((tr_text("无可展示的信息"), "—", ""))
-        for row in rows:
-            items = []
-            for text in row:
-                item = QStandardItem(
-                    text[:500].replace("\n", " ") + ("…" if len(text) > 500 else "")
-                )
-                item.setData(text, Qt.ItemDataRole.UserRole)
-                item.setToolTip(text[:2048])
-                items.append(item)
-            self.model.appendRow(items)
-        self.table.setColumnWidth(0, 170)
-        self.table.setColumnWidth(1, 360)
+        self._columns, self._layout_width = columns, width
+        # Move cards out before retiring the old column containers. Only layout
+        # ownership changes here; the data and current selection remain intact.
+        for card in self.cards:
+            card.setParent(self.canvas)
+        while self.grid.count():
+            self.grid.takeAt(0)
+        for group in self._groups:
+            group.hide()
+            group.deleteLater()
+        self._groups = []
+        self.grid.addWidget(self.empty)
+        pending = []
 
-    def show_detail(self, index, *_):
-        if not index.isValid():
-            return
-        source = self.proxy.mapToSource(index)
-        column = 2 if source.column() == 2 else 1
-        self.detail.setPlainText(
-            self.model.item(source.row(), column).data(Qt.ItemDataRole.UserRole)
+        def flush():
+            if not pending:
+                return
+            group = QWidget(self.canvas)
+            group.setObjectName("mediaCardColumns")
+            group.setStyleSheet("#mediaCardColumns { background: transparent; }")
+            line = QHBoxLayout(group)
+            line.setContentsMargins(0, 0, 0, 0)
+            line.setSpacing(14)
+            stacks = [QVBoxLayout() for _ in range(columns)]
+            heights = [0] * columns
+            card_width = max(1, (width - 8 - 14 * (columns - 1)) // columns)
+            for stack in stacks:
+                stack.setSpacing(14)
+                stack.setAlignment(Qt.AlignmentFlag.AlignTop)
+                line.addLayout(stack, 1)
+            for card in pending:
+                column = min(range(columns), key=lambda i: heights[i])
+                stacks[column].addWidget(card)
+                hint = card.layout().heightForWidth(card_width)
+                heights[column] += max(hint, card.minimumSizeHint().height()) + 14
+                card.show()
+            self.grid.addWidget(group)
+            self._groups.append(group)
+            group.show()
+            pending.clear()
+
+        for card in self.cards:
+            if card.data.wide:
+                flush()
+                self.grid.addWidget(card)
+                card.show()
+            else:
+                pending.append(card)
+        flush()
+
+    def _update_filename(self):
+        self.file_label.setText(
+            self.file_label.fontMetrics().elidedText(
+                filename(self.path), Qt.TextElideMode.ElideMiddle, max(0, self.file_label.width())
+            )
         )
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._update_filename()
+
+    def eventFilter(self, watched, event):
+        if watched is self.scroll.viewport() and event.type() == QEvent.Type.Resize:
+            self._layout_cards()
+            self._update_filename()
+        return super().eventFilter(watched, event)
 
     def copy_summary(self):
         if self.result:
-            text = json.dumps(self.result.report(), ensure_ascii=False, indent=2)
+            text = "\n\n".join(card.summary(include_path=False) for card in self.card_data)
+            if not self.final or self.result.issues:
+                text = self.status.text() + "\n\n" + text
             QApplication.clipboard().setText(text)
 
+    def show_details(self):
+        if self.result:
+            text = json.dumps(
+                self.result.report(include_path=True, include_raw=True),
+                ensure_ascii=False,
+                indent=2,
+            )
+            MediaDetailsDialog(tr_text("读取详情"), text, self.window()).exec()
+
     def save_report(self):
-        if not self.result or not self.final:
+        if not self.result or not self.final or self.export_running:
+            return
+        options = MediaExportDialog(self.window())
+        if not options.exec():
             return
         destination, _ = QFileDialog.getSaveFileName(
             self, tr_text("导出媒体信息"), "media-info.json", "JSON (*.json)"
@@ -475,21 +451,23 @@ class MediaInfoPage(CardWidget):
         if destination:
             self.export_running = True
             self.export_snapshot = self.result
-            self.export_button.setEnabled(False)
-            self.export_requested.emit(
-                self.result,
-                destination,
-                {
-                    "include_path": self.include_path.isChecked(),
-                    "include_raw": self.include_raw.isChecked(),
-                },
-            )
+            self.export_action.setEnabled(False)
+            self.export_requested.emit(self.result, destination, options.options())
 
     def export_finished(self, error):
         self.export_running = False
-        self.export_button.setEnabled(self.result is not None and self.final)
+        self.export_action.setEnabled(self.result is not None and self.final)
         if self.result is self.export_snapshot:
-            self.status.setText(issue_text(error) if error else tr_text("报告已导出"))
+            if error:
+                self._set_status(issue_text(error))
+            else:
+                InfoBar.success(
+                    title=tr_text("报告已导出"),
+                    content="",
+                    duration=2000,
+                    position=InfoBarPosition.TOP_RIGHT,
+                    parent=self,
+                )
         self.export_snapshot = None
 
     def dragEnterEvent(self, event):
@@ -497,7 +475,7 @@ class MediaInfoPage(CardWidget):
         if len(urls) == 1 and urls[0].isLocalFile():
             event.acceptProposedAction()
         else:
-            self.status.setText(issue_text("not_file"))
+            self._set_status(issue_text("not_file"))
 
     def dropEvent(self, event):
         urls = event.mimeData().urls()

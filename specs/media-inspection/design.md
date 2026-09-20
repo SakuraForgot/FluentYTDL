@@ -1,3 +1,5 @@
+> 2026-09-21 界面修订：原六页签/表格布局已由用户要求的类型卡片替代。当前页面行为以 requirements.md 的 R4 和 implementation.md 的卡片修订为准；下文后台读取/报告合同继续适用。
+
 # 页面与技术设计
 
 设计草案，依据 [需求](requirements.md) 与 [源码研究](research.md)。

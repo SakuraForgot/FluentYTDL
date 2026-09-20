@@ -342,15 +342,79 @@ def test_page_navigation_missing_values_and_export_options(qapp):
         },
     )
     page.show_result(result, True)
-    page.set_tab("audio")
-    assert page.stream_choice.count() == 2
-    page.set_tab("metadata")
-    assert any("未读取到" in page.model.item(i, 1).text() for i in range(page.model.rowCount()))
-    assert not page.include_path.isChecked() and not page.include_raw.isChecked()
+    assert [
+        c.key for c in page.card_data if c.key.startswith("audio")
+    ] == []  # No meaningful audio values, no empty cards.
+    assert not page.status.isVisible()
+    assert not hasattr(page, "table")
+    assert not hasattr(page, "include_path")
     page.show_error("cancelled")
     assert page.result.report()["status"] == "cancelled"
     assert "cancelled" in page.result.report()["issues"]
     page.open_file("b.mp3")
     assert page.result is None and page.back_button.isHidden()
-    assert not page.export_button.isEnabled()
+    assert not page.export_action.isEnabled()
+    page.close()
+
+
+def test_cards_reflow_without_table_or_export_controls(qapp):
+    from PySide6.QtCore import QRect
+    from qfluentwidgets import CheckBox, TableView
+
+    from fluentytdl.ui.media_info_page import MediaExportDialog, MediaInfoPage
+
+    result = build_result(
+        "C:/Videos/test.mp4",
+        {"size": 123456},
+        {
+            "format": {
+                "format_name": "mov,mp4",
+                "duration": "70",
+                "tags": {"title": "Example", "artist": "Author"},
+            },
+            "streams": [
+                {
+                    "index": 0,
+                    "codec_type": "video",
+                    "width": 1920,
+                    "height": 1080,
+                    "codec_name": "h264",
+                },
+                {
+                    "index": 1,
+                    "codec_type": "audio",
+                    "codec_name": "aac",
+                    "sample_rate": "48000",
+                    "channels": 2,
+                },
+            ],
+        },
+    )
+    page = MediaInfoPage()
+    page.resize(1000, 760)
+    page.show()
+    page.open_file(result.path, task_title="Example")
+    page.show_result(result, True)
+    for width, columns in ((1000, 2), (650, 1), (1000, 2)):
+        page.resize(width, 760)
+        for _ in range(10):
+            qapp.processEvents()
+        assert page._columns == columns
+        rectangles = [
+            QRect(card.mapTo(page.canvas, card.rect().topLeft()), card.size())
+            for card in page.cards
+        ]
+        assert all(rect.right() <= page.canvas.width() for rect in rectangles)
+        assert all(
+            not a.intersects(b) for i, a in enumerate(rectangles) for b in rectangles[i + 1 :]
+        )
+    assert not page.findChildren(TableView)
+    assert not page.findChildren(CheckBox)
+    assert page.status.isHidden() and page.cancel_button.isHidden()
+    page.copy_summary()
+    assert "1920" in qapp.clipboard().text()
+    assert "C:\\Videos" not in qapp.clipboard().text()
+    dialog = MediaExportDialog(page)
+    assert dialog.options() == {"include_path": False, "include_raw": False}
+    dialog.deleteLater()
     page.close()
