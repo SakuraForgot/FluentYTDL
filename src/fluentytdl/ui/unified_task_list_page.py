@@ -249,6 +249,7 @@ class UnifiedTaskListPage(QWidget):
     # 右键菜单的「重新解析」。承接原历史页的同名信号 →
     # MainWindow.show_selection_dialog(url, smart_detect=True)
     reparse_requested = Signal(str)
+    inspect_media_requested = Signal(int, str, str)
 
     # 各桶计数（`bucket_counts()` 的返回值）。导航项上的活跃数徽标靠它刷新 ——
     # 页面自己有全部数据，MainWindow 不该再伸手进 model / task_db 数一遍。
@@ -904,6 +905,12 @@ class UnifiedTaskListPage(QWidget):
         act_folder.triggered.connect(lambda: self._emit_folder(resolve()))
         menu.addAction(act_folder)
 
+        act_inspect = Action(FluentIcon.INFO, self.tr("查看媒体信息"), self)
+        act_inspect.setEnabled(single and states == {"completed"})
+        db_id = row_objs[0].db_id if single and row_objs else None
+        act_inspect.triggered.connect(lambda: self._emit_media_info(resolve(), db_id))
+        menu.addAction(act_inspect)
+
         act_copy = Action(FluentIcon.COPY, self.tr("复制链接"), self)
         act_copy.setEnabled(bool(urls))
         # url 是字符串快照，不随行号平移，可以放心在建菜单时就取好
@@ -944,6 +951,14 @@ class UnifiedTaskListPage(QWidget):
         self.list_view.set_context_row(proxy_row)
         menu.closedSignal.connect(lambda: self.list_view.set_context_row(-1))
         menu.exec(global_pos)
+
+    def _emit_media_info(self, rows: list[int], expected_db_id: int | None) -> None:
+        row = self.task_row(rows[0]) if len(rows) == 1 else None
+        if row is None or row.db_id != expected_db_id or row.effective_state != "completed":
+            return
+        self.inspect_media_requested.emit(
+            row.db_id, row.effective_output_path or "", row.effective_title or ""
+        )
 
     def _copy_urls(self, urls: list[str]) -> None:
         clipboard = QGuiApplication.clipboard()

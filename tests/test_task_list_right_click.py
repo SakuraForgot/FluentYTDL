@@ -139,6 +139,66 @@ def _checked(page) -> list[int]:
     return page._selected_proxy_rows()
 
 
+@requires_qt
+@pytest.mark.parametrize("historical", [False, True])
+def test_inspect_completed_task_survives_insert(page, qapp, historical):
+    target = page._row_at(2)
+    target.output_path = "D:/成品/main.webm"
+    target.title = "主成品"
+    if historical:
+        target.worker = None
+        target.state = "completed"
+    else:
+        target.worker.effective_state = "completed"
+    selected_before = _checked(page)
+    emitted = []
+    page.inspect_media_requested.connect(lambda *args: emitted.append(args))
+    page._on_context_menu(2, page.mapToGlobal(QPoint(20, 20)))
+    action = next(a for a in page._context_menu.actions() if a.text() == "查看媒体信息")
+    assert action.isEnabled()
+    newcomer = FakeWorker(db_id=99)
+    page._workers.append(newcomer)
+    page.add_task(newcomer, title="插队", thumbnail="")
+    _pump(qapp)
+    action.trigger()
+    assert emitted == [(target.db_id, "D:/成品/main.webm", "主成品")]
+    assert _checked(page) == selected_before
+
+
+@requires_qt
+@pytest.mark.parametrize("change", ["deleted", "restarted"])
+def test_inspect_menu_revalidates_target(page, qapp, change):
+    target = page._row_at(2)
+    target.worker.effective_state = "completed"
+    emitted = []
+    page.inspect_media_requested.connect(lambda *args: emitted.append(args))
+    page._on_context_menu(2, page.mapToGlobal(QPoint(20, 20)))
+    action = next(a for a in page._context_menu.actions() if a.text() == "查看媒体信息")
+    if change == "deleted":
+        page.model.remove_task(2)
+    else:
+        target.worker.effective_state = "downloading"
+    _pump(qapp)
+    action.trigger()
+    assert not emitted
+
+
+@requires_qt
+def test_inspect_disabled_for_multiple_or_unfinished(page, qapp):
+    page._on_context_menu(0, page.mapToGlobal(QPoint(20, 20)))
+    assert not next(
+        a for a in page._context_menu.actions() if a.text() == "查看媒体信息"
+    ).isEnabled()
+    page._context_menu.close()
+    for row in (0, 1):
+        page._row_at(row).worker.effective_state = "completed"
+        _click(page, qapp, row, Qt.MouseButton.LeftButton)
+    page._on_context_menu(0, page.mapToGlobal(QPoint(20, 20)))
+    assert not next(
+        a for a in page._context_menu.actions() if a.text() == "查看媒体信息"
+    ).isEnabled()
+
+
 # === 1. 右键绝不动选中集合 ===
 
 
