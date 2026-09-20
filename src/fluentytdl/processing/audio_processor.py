@@ -240,8 +240,7 @@ class AudioProcessor:
 
         # 元数据嵌入
         embed_metadata = custom_opts.get("embed_metadata", preset.embed_metadata)
-        if embed_metadata:
-            postprocessors.append({"key": "FFmpegMetadata"})
+        ydl_opts["addmetadata"] = bool(embed_metadata)
 
         # 封面嵌入
         embed_thumbnail = custom_opts.get("embed_thumbnail", preset.embed_thumbnail)

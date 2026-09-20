@@ -1,4 +1,6 @@
-# FluentYTDL Architecture Document
+# FluentYTDL Architecture Document (Legacy / Historical Reference)
+
+> **Legacy notice (2026-09-19):** This document has not kept pace with the implementation. Some call paths, staging, state and recovery descriptions are outdated and must not be used as current implementation guidance. Read the independently reconstructed [Architecture V2 (Chinese)](architecture-v2/NEW_ARCHITECTURE_REFERENCE.md), following its source evidence and stated verification limits. The original content below is retained for historical comparison.
 
 > [中文版](ARCHITECTURE_CN.md)
 >
@@ -366,7 +368,7 @@ flowchart LR
 ```python
 self.features = [
     SponsorBlockFeature(),   # 1. configure() only — inject sponsorblock_remove/mark
-    MetadataFeature(),       # 2. configure() only — append FFmpegMetadata postprocessor
+    MetadataFeature(),       # 2. configure() only — frozen intent, explicit text/chapter switches
     SubtitleFeature(),       # 3. Both hooks — language resolution, format compat fix, embed
     ThumbnailFeature(),      # 4. on_post_process() only — embed via AtomicParsley/FFmpeg/mutagen
     VRFeature(),             # 5. on_post_process() only — EAC→Equi conversion + spatial metadata
@@ -379,7 +381,7 @@ The execution order is fixed and cannot be changed — later features depend on 
 flowchart TD
     subgraph configure["configure() — before yt-dlp"]
         SB1["SponsorBlockFeature<br/>injects sponsorblock_remove/mark"]
-        MF1["MetadataFeature<br/>appends FFmpegMetadata postprocessor"]
+        MF1["MetadataFeature<br/>frozen intent and independent chapter policy"]
     end
 
     subgraph on_start["on_download_start() — before yt-dlp"]
@@ -394,12 +396,14 @@ flowchart TD
 
     SB1 --> MF1 --> SF1
     SF1 --> C["yt-dlp subprocess"]
-    C --> SF2 --> TF1 --> VF1
+    C --> SF2 --> TF1 --> VF1 --> META["Metadata finalizer<br/>native tags → verify candidate → atomic adoption"]
 ```
 
 
 
 ### 5.3 DownloadContext Facade
+
+The metadata finalizer reads only the current attempt's internal whitelist JSONL. It processes every deliverable media artifact after the feature chain, writes a staging candidate with a container-specific adapter, and verifies tags plus protected content before replacement. Task policy is persisted by `DownloadManager.create_worker`; metadata failures retain playable media and contribute field-level expected/actual evidence. See `specs/media-metadata/design.md` and `tasks.md` for implementation scope and acceptance evidence.
 
 `DownloadContext` wraps the `DownloadWorker` and provides a controlled interface for features:
 - `output_path` property (getter/setter)

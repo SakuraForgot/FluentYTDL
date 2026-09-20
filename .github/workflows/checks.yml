@@ -51,6 +51,7 @@ jobs:
         env:
           FLUENTYTDL_DATA_DIR_OVERRIDE: ${{ runner.temp }}/fluentytdl-tests
           FLUENTYTDL_TEST_YTDLP: ${{ github.workspace }}/build/test-components/bin/yt-dlp/yt-dlp.exe
+          FLUENTYTDL_TEST_COMPONENTS: ${{ github.workspace }}/build/test-components
           FLUENTYTDL_7ZIP_DIR: ${{ github.workspace }}/build/test-components/7zip
         run: uv run --locked --no-sync pytest tests -q --tb=short --junitxml=build/tests.xml
       - name: Pyright (advisory)

@@ -233,10 +233,13 @@ The startup refresh is **silent**. `get_startup_health()` returns per-platform `
 ## 7. Post-Processing Pipeline Order
 
 1. `SponsorBlockFeature` — sponsorblock_remove/mark
-2. `MetadataFeature` — FFmpegMetadata postprocessor
+2. `MetadataFeature` — freeze task intent; disable upstream text tags while retaining independent chapters
 3. `SubtitleFeature` — language resolution, embed, cleanup
 4. `ThumbnailFeature` — embed via AtomicParsley (MP4) > FFmpeg (MKV) > mutagen (audio)
 5. `VRFeature` — EAC→Equi conversion + spatial metadata (VR mode only)
+6. `finalize_metadata` — last media mutation, verified native tags via staging candidates before commit
+
+Metadata policy is persisted in `__fluentytdl_metadata_policy` at task creation; explicit task False wins over global defaults and presets. Read only the current attempt's whitelist JSONL from staging control files. MP4/M4A uses AtomicParsley, audio uses the declared Mutagen dependency, and Matroska uses a guarded FFmpeg stream copy. Do not infer music genres from categories, copy playlist indices into track numbers, or accept a candidate solely on tool exit code. Preserve unowned tags, artwork, chapters, streams and spatial atoms. Metadata failures preserve the original media and are reported through the existing expected/actual and outcome boundary.
 
 ## 8. Testing Rules
 

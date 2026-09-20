@@ -27,6 +27,7 @@ from fluentytdl.utils.paths import find_bundled_executable, is_frozen
 from fluentytdl.utils.ui_text import tr_text
 
 from ..core.config_manager import config_manager
+from ..models.errors import YtDlpExecutionError
 from ..utils.youtube_request import (
     COOKIE_MODE,
     SABR_SCOPE,
@@ -707,8 +708,6 @@ class YoutubeService:
         embed_metadata = config_manager.get("embed_metadata", True)
 
         if download_thumbnail or embed_thumbnail or embed_metadata:
-            postprocessors = ydl_opts.setdefault("postprocessors", [])
-
             # 封面嵌入或下载
             if download_thumbnail or embed_thumbnail:
                 ydl_opts["writethumbnail"] = True
@@ -719,8 +718,7 @@ class YoutubeService:
                 # 注意：不再添加 EmbedThumbnail 后处理器，由外部 thumbnail_embedder 处理
 
             # 元数据嵌入
-            if embed_metadata:
-                postprocessors.append({"key": "FFmpegMetadata"})
+            ydl_opts["addmetadata"] = bool(embed_metadata)
 
         # === SponsorBlock 广告跳过 ===
         sponsorblock_enabled = config_manager.get("sponsorblock_enabled", False)
@@ -1897,7 +1895,7 @@ class YoutubeService:
                 )
                 return cast(dict[str, Any], info)
 
-            if self._should_retry_with_youtubetab_skip_authcheck(msg):
+            if self._should_retry_with_youtubetab_skip_authcheck(exc):
                 retry_opts = self._with_youtubetab_skip_authcheck(tuned)
                 if retry_opts is not tuned:
                     self._emit_log(
@@ -2161,7 +2159,7 @@ class YoutubeService:
                 if isinstance(exc, YtDlpCancelled):
                     raise
                 msg = str(exc)
-                if self._should_retry_with_youtubetab_skip_authcheck(msg):
+                if self._should_retry_with_youtubetab_skip_authcheck(exc):
                     retry_opts = self._with_youtubetab_skip_authcheck(ydl_opts)
                     if retry_opts is not ydl_opts:
                         self._emit_log(
@@ -2429,12 +2427,15 @@ class YoutubeService:
         return total
 
     @staticmethod
-    def _should_retry_with_youtubetab_skip_authcheck(error_text: str) -> bool:
+    def _should_retry_with_youtubetab_skip_authcheck(error: str | Exception) -> bool:
         """Detect yt-dlp's official hint for playlist authcheck.
 
         yt-dlp error usually contains: "pass --extractor-args youtubetab:skip=authcheck".
         """
 
+        # The CLI exception's message contains only the exit code; recovery hints
+        # live in stderr. Keep plain-text callers working as well.
+        error_text = error.stderr if isinstance(error, YtDlpExecutionError) else str(error)
         lower = (error_text or "").lower()
         return "youtubetab:skip=authcheck" in lower or (
             "authcheck" in lower and "youtubetab" in lower
@@ -2581,7 +2582,7 @@ class YoutubeService:
                 if isinstance(exc, YtDlpCancelled):
                     raise
                 msg = str(exc)
-                if self._should_retry_with_youtubetab_skip_authcheck(msg):
+                if self._should_retry_with_youtubetab_skip_authcheck(exc):
                     retry_opts = self._with_youtubetab_skip_authcheck(ydl_opts)
                     if retry_opts is not ydl_opts:
                         self._emit_log(

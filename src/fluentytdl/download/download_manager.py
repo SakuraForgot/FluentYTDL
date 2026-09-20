@@ -413,6 +413,13 @@ class DownloadManager(QObject):
         from ..utils.youtube_request import COOKIE_MODE
 
         opts = dict(opts)
+        from ..models.metadata import METADATA_POLICY
+        from ..processing.metadata_policy import freeze_metadata_policy
+
+        migrated_metadata = METADATA_POLICY not in opts
+        freeze_metadata_policy(opts, bool(config_manager.get("embed_metadata", True)))
+        if restore_db_id > 0 and migrated_metadata:
+            task_db.update_task_opts(restore_db_id, opts)
         from ..utils.url_router import UrlRouter
 
         if UrlRouter.detect_platform(url) == "youtube" and COOKIE_MODE not in opts:
