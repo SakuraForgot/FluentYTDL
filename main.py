@@ -4,6 +4,12 @@ import os
 import sys
 from pathlib import Path
 
+# Read-only native tag IPC must exit before GUI/single-instance/account setup.
+if sys.argv[1:] == ["--media-tags-worker"]:
+    from fluentytdl.processing.media_tags_worker import main as media_tags_main
+
+    raise SystemExit(media_tags_main())
+
 # Frozen build verification exits before importing services or touching real accounts.
 if len(sys.argv) == 3 and sys.argv[1] == "--build-self-test":
     from fluentytdl.utils.build_selftest import run_selftest

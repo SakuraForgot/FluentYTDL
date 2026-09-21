@@ -39,6 +39,25 @@ def run_selftest(output: Path) -> int:
         if read_id3(str(tag_file), values) != values:
             raise RuntimeError("Metadata tag roundtrip failed")
         report["checks"].append("Metadata normalization and bundled Mutagen ID3 roundtrip")
+        from ..processing.media_inspection_process import run_reader
+        from ..processing.media_inspector import native_command
+
+        native = json.loads(
+            run_reader(
+                native_command(),
+                lambda: False,
+                request=json.dumps({"path": str(tag_file.resolve()), "kind": "mp3"}).encode(
+                    "utf-8"
+                ),
+                timeout=15,
+            )
+        )
+        if native.get("status") != "ready" or not any(
+            row["key"] == "TIT2" and row["values"] == ["Metadata roundtrip"]
+            for row in native.get("tags", [])
+        ):
+            raise RuntimeError("Native tag helper pipe roundtrip failed")
+        report["checks"].append("Native tag helper process and inherited pipes")
         from PySide6.QtCore import QTranslator
         from PySide6.QtGui import QIcon
         from PySide6.QtWidgets import QApplication

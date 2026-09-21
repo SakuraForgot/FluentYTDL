@@ -41,12 +41,14 @@ from fluentytdl.utils.localized_log import log_text
 from fluentytdl.utils.ui_text import tr_text
 
 from ..core.config_manager import config_manager
+from ..core.media_inspection_service import MediaInspectionService
 from ..download.download_manager import download_manager
 from ..utils.icons import load_app_icon
 from ..utils.logger import logger
 from .channel_parse_page import ChannelParsePage
 from .cover_download_page import CoverDownloadPage
 from .help_window import HelpWindow
+from .media_info_page import MediaInfoPage
 from .models.task_row import TaskRow
 from .parse_page import ParsePage
 from .quick_add_panel import QuickAddPanel
@@ -226,6 +228,21 @@ class MainWindow(FluentWindow):
         # === 初始化页面 ===
         # 统一任务列表页面（下载中 + 历史记录合流，替代原有的四个分页与「下载历史」页）
         self.task_page = UnifiedTaskListPage(self)
+        self.media_info_page = MediaInfoPage(self)
+        self.media_inspection = MediaInspectionService(self)
+        self.media_info_page.inspect_requested.connect(self.media_inspection.inspect)
+        self.media_info_page.cancel_requested.connect(self.media_inspection.cancel)
+        self.media_info_page.export_requested.connect(self.media_inspection.export)
+        self.media_inspection.progress.connect(self.media_info_page.set_progress)
+        self.media_inspection.result.connect(self.media_info_page.show_result)
+        self.media_inspection.failed.connect(self.media_info_page.show_error)
+        self.media_inspection.export_finished.connect(self.media_info_page.export_finished)
+        self.media_info_page.back_requested.connect(lambda: self.switchTo(self.task_page))
+        self.media_info_page.settings_requested.connect(
+            lambda: self.switchTo(self.settings_interface)
+        )
+        self.task_page.inspect_media_requested.connect(self._inspect_task_media)
+        QApplication.instance().aboutToQuit.connect(self.media_inspection.wait_for_shutdown)
 
         self.parse_page = ParsePage(self)
         self.quick_parse_page = QuickAddPanel(self)
@@ -438,6 +455,7 @@ class MainWindow(FluentWindow):
             position=NavigationItemPosition.TOP,
         )
         self._init_task_nav_badge()
+        self.addSubInterface(self.media_info_page, FluentIcon.INFO, self.tr("媒体信息"))
 
         self.addSubInterface(
             self.settings_interface,
@@ -599,6 +617,9 @@ class MainWindow(FluentWindow):
             self.hide()
             event.ignore()
         else:
+            if self._wait_for_media_exit():
+                event.ignore()
+                return
             self._stop_theme_listener()
             download_manager.shutdown(grace_ms=2000)
             super().closeEvent(event)
@@ -616,9 +637,27 @@ class MainWindow(FluentWindow):
         self.themeListener = None
 
     def quit_app(self):
+        if self._wait_for_media_exit():
+            return
         self._stop_theme_listener()
         download_manager.shutdown(grace_ms=2000)
         QApplication.quit()
+
+    def _wait_for_media_exit(self):
+        service = getattr(self, "media_inspection", None)
+        if service is None or not service.busy:
+            return False
+        if not getattr(self, "_media_exit_pending", False):
+            self._media_exit_pending = True
+            service.stopped.connect(self.quit_app)
+            service.shutdown()
+        return True
+
+    def _inspect_task_media(self, db_id, path, title):
+        # The list validated stable task identity immediately before this signal.
+        # Navigation preserves the existing task page, filters and selection.
+        self.switchTo(self.media_info_page)
+        self.media_info_page.open_file(path, task_title=title)
 
     def init_clipboard_monitor(self):
         enabled = bool(config_manager.get("clipboard_auto_detect") or False)

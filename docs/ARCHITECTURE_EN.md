@@ -1176,3 +1176,12 @@ sequenceDiagram
     DM->>W: start() [QThread]
     W->>W: run() → DownloadExecutor → yt-dlp
 ```
+
+
+## Read-only Media Inspection
+
+`ui/media_info_page.py` is registered after Tasks. The task list emits a stable, revalidated completed-task id and effective output path; the main window navigates to the same page used by the local file picker. No directory guessing or download record mutation occurs.
+
+`core/media_inspection_service.py` arbitrates one active request and the latest pending request with generation-filtered signals. `processing/media_inspector.py` runs bounded FFprobe reads and the isolated `--media-tags-worker` early entry in `main.py`; the worker enumerates native tags with Mutagen without initializing the application. Metadata writes remain in the existing download finalizer and are not used by inspection. Normal exits cancel asynchronously; `aboutToQuit` also waits for owned workers during restart.
+
+Reports preserve reader provenance, scopes, multi-values and uncertainty. Native binary pictures are summarized; full-file frame counting and per-track bitrate scans are outside this feature. See [implementation and evidence](../specs/media-inspection/implementation.md) and [requirements](../specs/media-inspection/requirements.md).
