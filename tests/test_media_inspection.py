@@ -342,6 +342,7 @@ def test_page_navigation_missing_values_and_export_options(qapp):
         },
     )
     page.show_result(result, True)
+    assert page.mode_combo.currentIndex() == 0
     assert [
         c.key for c in page.card_data if c.key.startswith("audio")
     ] == []  # No meaningful audio values, no empty cards.
@@ -395,6 +396,14 @@ def test_cards_reflow_without_table_or_export_controls(qapp):
     page.show()
     page.open_file(result.path, task_title="Example")
     page.show_result(result, True)
+    assert [c.key for c in page.card_data] == ["video:0", "audio:1"]
+    requested = []
+    page.inspect_requested.connect(requested.append)
+    page.mode_combo.setCurrentIndex(1)
+    assert {c.key for c in page.card_data} >= {"content", "file", "video:0", "audio:1"}
+    assert page.result is result and requested == []
+    page.mode_combo.setCurrentIndex(0)
+    assert [c.key for c in page.card_data] == ["video:0", "audio:1"]
     for width, columns in ((1000, 2), (650, 1), (1000, 2)):
         page.resize(width, 760)
         for _ in range(10):

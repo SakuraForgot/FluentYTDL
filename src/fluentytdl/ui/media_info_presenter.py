@@ -486,5 +486,90 @@ def present_media(result):
     return cards
 
 
+def chroma_depth(stream):
+    """Decode recognized pixel layouts, never infer depth from codec/profile."""
+    pixel = str(stream.get("pix_fmt") or "").lower()
+    sampling, pixel_depth = "", None
+    planar = re.fullmatch(r"yuva?j?(420|422|444|440|411|410)p(?:(9|10|12|14|16)(?:le|be))?", pixel)
+    if planar:
+        sampling = ":".join(planar[1])
+        pixel_depth = int(planar[2] or 8)
+    elif pixel in {"nv12", "nv21", "nv16", "nv24", "nv42", "yuyv422", "uyvy422"}:
+        sampling = {
+            "nv12": "4:2:0",
+            "nv21": "4:2:0",
+            "nv16": "4:2:2",
+            "nv24": "4:4:4",
+            "nv42": "4:4:4",
+            "yuyv422": "4:2:2",
+            "uyvy422": "4:2:2",
+        }[pixel]
+        pixel_depth = 8
+    elif packed := re.fullmatch(r"p(0|2|4)(10|12|16)(?:le|be)", pixel):
+        sampling = {"0": "4:2:0", "2": "4:2:2", "4": "4:4:4"}[packed[1]]
+        pixel_depth = int(packed[2])
+    depth = (
+        positive(stream.get("bits_per_raw_sample"))
+        or positive(stream.get("bits_per_sample"))
+        or pixel_depth
+    )
+    return " · ".join(filter(None, (sampling, f"{int(depth)} bit" if depth else "")))
+
+
+def present_compact_media(result):
+    """The default view contains only the requested audio/video properties."""
+    cards = []
+    for full in present_media(result):
+        kind = full.key.split(":")[0]
+        if kind not in {"video", "audio"}:
+            continue
+        stream, rows = full.evidence, dict(full.rows)
+        card = MediaCardData(full.key, full.title, evidence=stream)
+        if kind == "video":
+            width, height = positive(stream.get("width")), positive(stream.get("height"))
+            resolution = f"{int(width)} × {int(height)}" if width and height else ""
+            # Gamut is described by primaries, not by the YCbCr matrix or HDR transfer.
+            primaries = " · ".join(clean_values(stream.get("color_primaries")))
+            gamut = {
+                "bt709": "BT.709",
+                "bt2020": "BT.2020",
+                "smpte431": "DCI-P3",
+                "smpte432": "Display P3",
+            }.get(primaries, primaries)
+            video_duration = duration(stream.get("duration")) or next(
+                (
+                    duration(f.get("value"))
+                    for f in result.fields
+                    if f["key"] == "duration" and positive(f.get("value"))
+                ),
+                "",
+            )
+            card.rows = [
+                (tr_text("分辨率"), resolution),
+                (tr_text("色度采样和位深"), chroma_depth(stream)),
+                (
+                    tr_text("编码格式"),
+                    rows.get(tr_text("编码"), "") or (full.hero if not resolution else ""),
+                ),
+                (tr_text("码率"), rows.get(tr_text("视频码率"), "")),
+                (tr_text("时长"), video_duration),
+                (tr_text("色域"), gamut),
+            ]
+        else:
+            card.rows = [
+                (label, rows.get(label, ""))
+                for label in (
+                    tr_text("采样率"),
+                    tr_text("声道"),
+                    tr_text("音频码率"),
+                    tr_text("轨道时长"),
+                )
+            ]
+        card.rows = [(label, value) for label, value in card.rows if value]
+        if card.rows:
+            cards.append(card)
+    return cards
+
+
 def filename(path):
     return PureWindowsPath(path).name if path else ""

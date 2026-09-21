@@ -19,6 +19,7 @@ from qfluentwidgets import (
     CaptionLabel,
     CardWidget,
     CheckBox,
+    ComboBox,
     FluentIcon,
     IconWidget,
     InfoBarPosition,
@@ -36,7 +37,7 @@ from qfluentwidgets import (
 
 from ..utils.ui_text import tr_text
 from .components.common.custom_info_bar import InfoBar
-from .media_info_presenter import MediaCardData, filename, present_media
+from .media_info_presenter import MediaCardData, filename, present_compact_media, present_media
 
 
 def issue_text(code):
@@ -222,6 +223,11 @@ class MediaInfoPage(QWidget):
         self.file_label.setMinimumWidth(0)
         self.file_label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         toolbar.addWidget(self.file_label, 1)
+        self.mode_combo = ComboBox(self)
+        self.mode_combo.addItems([tr_text("精简模式"), tr_text("完整模式")])
+        self.mode_combo.setAccessibleName(tr_text("显示模式"))
+        self.mode_combo.currentIndexChanged.connect(self._change_mode)
+        toolbar.addWidget(self.mode_combo)
         self.cancel_button = PushButton(tr_text("取消"), self)
         self.cancel_button.clicked.connect(self.cancel_requested)
         toolbar.addWidget(self.cancel_button)
@@ -345,11 +351,17 @@ class MediaInfoPage(QWidget):
             card.hide()
             card.deleteLater()
         self.cards = []
-        self.card_data = present_media(self.result) if self.result else []
-        self.empty.setVisible(not self.card_data and self.result is None)
+        presenter = present_compact_media if self.mode_combo.currentIndex() == 0 else present_media
+        self.card_data = presenter(self.result) if self.result else []
+        self.empty.setText(tr_text("暂无音视频参数") if self.result else tr_text("拖入音视频文件"))
+        self.empty.setVisible(not self.card_data)
         for data in self.card_data:
             self.cards.append(MediaDataCard(data, self.canvas))
         self._layout_cards(force=True)
+
+    def _change_mode(self, _index):
+        self.render()
+        self.scroll.verticalScrollBar().setValue(0)
 
     def _layout_cards(self, *, force=False):
         width = self.scroll.viewport().width()

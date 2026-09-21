@@ -5,9 +5,11 @@ from datetime import datetime
 
 from fluentytdl.models.media_inspection import InspectionResult
 from fluentytdl.ui.media_info_presenter import (
+    chroma_depth,
     clean_values,
     date_text,
     duration,
+    present_compact_media,
     present_media,
     scaled,
 )
@@ -158,3 +160,55 @@ def test_all_reference_properties_and_extra_technical_data_have_card_locations()
     assert video["视频码率"] == "11.48 Mbit/s"
     assert video["位深"] == "10 bit" and video["动态范围"] == "HDR · PQ"
     assert "C:\\Videos" not in cards["file"].summary(include_path=False)
+
+
+def test_compact_view_exact_properties_and_unchanged_evidence():
+    result = fixture()
+    result.streams[0].update(
+        pix_fmt="yuv420p10le", color_primaries="bt2020", reported_bitrate=5_000_000, duration=60
+    )
+    result.streams[1].update(reported_bitrate=128_000, duration=61)
+    before = deepcopy(result)
+    cards = present_compact_media(result)
+    assert [c.key for c in cards] == ["video:0", "audio:1"]
+    assert cards[0].rows == [
+        ("分辨率", "1920 × 1080"),
+        ("色度采样和位深", "4:2:0 · 10 bit"),
+        ("编码格式", "H.264 / AVC"),
+        ("码率", "5 Mbit/s"),
+        ("时长", "01:00"),
+        ("色域", "BT.2020"),
+    ]
+    assert cards[1].rows == [
+        ("采样率", "48 kHz"),
+        ("声道", "2 声道 · 立体声"),
+        ("音频码率", "128 kbit/s"),
+        ("轨道时长", "01:01"),
+    ]
+    assert result == before
+
+
+def test_compact_missing_values_do_not_invent_gamut_depth_or_track_duration():
+    result = fixture()
+    result.streams[0].update(pix_fmt="unknown", color_space="bt709", color_transfer="smpte2084")
+    video, audio = present_compact_media(result)
+    assert dict(video.rows)["时长"] == "23:04.500"
+    assert not {"色域", "色度采样和位深", "码率"}.intersection(dict(video.rows))
+    assert "轨道时长" not in dict(audio.rows)
+    result.streams = [{"index": 0, "codec_type": "audio", "codec_name": "aac"}]
+    assert present_compact_media(result) == []
+
+
+def test_chroma_layouts_and_explicit_depth():
+    for pixel, expected in {
+        "yuv420p": "4:2:0 · 8 bit",
+        "yuv422p10le": "4:2:2 · 10 bit",
+        "yuva444p12be": "4:4:4 · 12 bit",
+        "nv12": "4:2:0 · 8 bit",
+        "p010le": "4:2:0 · 10 bit",
+        "p210be": "4:2:2 · 10 bit",
+        "unknown": "",
+        "rgb24": "",
+    }.items():
+        assert chroma_depth({"pix_fmt": pixel}) == expected
+    assert chroma_depth({"pix_fmt": "yuv420p10le", "bits_per_raw_sample": "9"}) == "4:2:0 · 9 bit"
