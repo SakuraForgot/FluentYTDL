@@ -4096,6 +4096,7 @@ class DownloadConfigWindow(TaskWindowSurface, FramelessWindow):
         不丢内容）。冲突类型由 container_compat 的兼容性谓词判定 —— 它与
         `resolve_output_container` 同源，故这里弹的取舍与 resolver 记 `overridden` 的判据一致。
         """
+        from PySide6.QtCore import QCoreApplication
         from qfluentwidgets import BodyLabel, MessageBoxBase, PushButton, SubtitleLabel
 
         from ....utils.container_compat import (
@@ -4128,8 +4129,9 @@ class DownloadConfigWindow(TaskWindowSurface, FramelessWindow):
         class _ContainerChoiceDialog(MessageBoxBase):
             """两个取舍并列作主按钮；`取消` 仅在允许放弃任务时才给。
 
-            所有文案由外部注入 —— 让 `self.tr()` 全部落在 DownloadConfigWindow 的翻译
-            上下文里，别在这个嵌套类里新开一个 Qt 翻译 context（否则 .ts 得多维护一段）。
+            所有文案由外部注入（调用方用显式 DownloadConfigWindow context 翻译好再传进来），
+            这个嵌套类里不出现任何 tr()/translate() —— 免得 lupdate 给它单开一个 Qt 翻译
+            context 要多维护一段 .ts。
             """
 
             def __init__(
@@ -4173,17 +4175,23 @@ class DownloadConfigWindow(TaskWindowSurface, FramelessWindow):
                 self.result_action = "abort"
                 super().reject()
 
-        prompt = self.tr("\n\n请选择解决方案：")
+        # 文案用显式 context 的 QCoreApplication.translate 而非 self.tr()：lupdate 的线性
+        # 解析会把「嵌套类之后」的 self.tr() 误挂到 _ContainerChoiceDialog 名下（见记忆
+        # i18n-lupdate-nested-class-context），与 AST 审计判定的 DownloadConfigWindow context
+        # 对不上。显式 context 让两者一致，运行时 context 与原 self.tr() 完全相同。
+        prompt = QCoreApplication.translate("DownloadConfigWindow", "\n\n请选择解决方案：")
 
         # 1. 多音轨冲突先判 —— 它会把 container 抬成 mkv，直接影响后面的字幕判定。
         audio_count = ydl_opts.get("__audio_track_count", 1)
         audio_conflict = check_audio_multistream_container_compat(container, audio_count)
         if audio_conflict:
             dialog = _ContainerChoiceDialog(
-                self.tr("多音轨容器兼容性"),
+                QCoreApplication.translate("DownloadConfigWindow", "多音轨容器兼容性"),
                 audio_conflict + prompt,
-                self.tr("用 MKV（保留全部音轨）"),
-                self.tr("保持 {0}（多音轨兼容性差）").format(container.upper()),
+                QCoreApplication.translate("DownloadConfigWindow", "用 MKV（保留全部音轨）"),
+                QCoreApplication.translate(
+                    "DownloadConfigWindow", "保持 {0}（多音轨兼容性差）"
+                ).format(container.upper()),
                 "keep",
                 parent=self,
             )
@@ -4204,12 +4212,14 @@ class DownloadConfigWindow(TaskWindowSurface, FramelessWindow):
             return True
 
         dialog = _ContainerChoiceDialog(
-            self.tr("字幕容器兼容性"),
+            QCoreApplication.translate("DownloadConfigWindow", "字幕容器兼容性"),
             conflict_msg + prompt,
-            self.tr("用 MKV（保留内嵌字幕）"),
-            self.tr("用 {0} + 字幕外置").format(container.upper()),
+            QCoreApplication.translate("DownloadConfigWindow", "用 MKV（保留内嵌字幕）"),
+            QCoreApplication.translate("DownloadConfigWindow", "用 {0} + 字幕外置").format(
+                container.upper()
+            ),
             "external",
-            abort_label=self.tr("取消"),
+            abort_label=QCoreApplication.translate("DownloadConfigWindow", "取消"),
             parent=self,
         )
         dialog.exec()
