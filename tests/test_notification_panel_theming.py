@@ -21,6 +21,7 @@
 需要 QApplication，走 offscreen。
 """
 
+import gc
 import os
 import sys
 import tempfile
@@ -67,6 +68,13 @@ def light_theme():
     """每个用例都从浅色开场 —— 主题是全局状态，会漏到下一个用例里。"""
     setTheme(Theme.LIGHT)
     yield
+    # 用例可能刚 close() 掉一扇 WA_DeleteOnClose 的 NotificationWindow：deleteLater 已排队
+    # 但事件循环还没回来销毁它。先把延迟销毁跑完、再回收 Python 侧的窗口/卡片包装器，让
+    # 下面 setTheme 遍历 qfluentwidgets 的 styleSheetManager（WeakKeyDictionary）时注册表
+    # 是稳定的 —— 否则遍历途中有子控件注册/注销，会抛
+    # "RuntimeError: dictionary changed size during iteration"。
+    QApplication.processEvents()
+    gc.collect()
     setTheme(Theme.LIGHT)
 
 

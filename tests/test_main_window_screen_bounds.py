@@ -26,7 +26,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 HAS_PYSIDE6 = True
 try:
-    from PySide6.QtCore import QRect  # noqa: E402
+    from PySide6.QtCore import QEvent, QRect  # noqa: E402
     from PySide6.QtGui import QGuiApplication  # noqa: E402
     from PySide6.QtWidgets import QApplication  # noqa: E402
 except ImportError:
@@ -87,6 +87,13 @@ def make_window(qapp, monkeypatch):
         # 解释器 finalize 会让 Python 3.10 段错误。先显式停掉再关。
         window._stop_theme_listener()
         window.close()
+        # `close()` 只是隐藏到托盘、并不销毁窗口：合批跑 windows_gui 时这扇类名为
+        # "MainWindow" 的窗口会留在 topLevelWidgets() 里，后面 test_standalone_window
+        # 的 `find_main_window() is None`（按类名认，见 standalone_window.py）就会撞见它
+        # 而失败。deleteLater 排一个 DeferredDelete，但**没跑 app.exec() 时** processEvents
+        # 不投递顶层栈上的 DeferredDelete —— 得显式 sendPostedEvents 冲一下才真正销毁。
+        window.deleteLater()
+    QApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
     _pump(qapp)
 
 

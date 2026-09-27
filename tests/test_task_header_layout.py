@@ -41,7 +41,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 HAS_PYSIDE6 = True
 try:
-    from PySide6.QtCore import QEventLoop, QPropertyAnimation, QTimer
+    from PySide6.QtCore import QEvent, QEventLoop, QPropertyAnimation, QTimer
     from PySide6.QtWidgets import QApplication
 except ImportError:
     HAS_PYSIDE6 = False
@@ -103,6 +103,12 @@ def window(qapp):
         # 所以这条只在 3.10 的 CI 上炸）。显式停掉它再退出，别把活线程丢给进程终结。
         w._stop_theme_listener()
         w.close()
+        # `close()` 只隐藏到托盘、不销毁窗口；合批跑 windows_gui 时这扇类名为 "MainWindow"
+        # 的窗口会漏进 topLevelWidgets()，污染后面按类名找主窗口的用例。deleteLater 排一个
+        # DeferredDelete，但**没跑 app.exec() 时** processEvents 不投递顶层栈上的
+        # DeferredDelete —— 得显式 sendPostedEvents 冲一下才真正销毁。
+        w.deleteLater()
+        QApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
         _pump(qapp)
     finally:
         MainWindow.check_first_run = original_check
