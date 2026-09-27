@@ -574,6 +574,9 @@ def test_column_zero_indent_formula_matches_where_qt_puts_the_row(view):
     assert seen == 6  # flow / task / run / attempt / [stage] 五级分组 + 叶子
 
 
+# 第 0 列宽度按 Consolas / DemiBold 的字宽逐行量取最大值；Linux 离屏缺这些字体，
+# QFontMetrics 退化，精确像素对不上（132+8 vs 150）。字体相关几何走 Windows lane。
+@pytest.mark.windows_gui
 def test_column_zero_hugs_the_widest_row(view):
     """第 0 列的宽度 = 最宽那一行的内容 + 一点呼吸位，不多留。
 
