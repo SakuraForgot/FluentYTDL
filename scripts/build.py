@@ -22,6 +22,8 @@ import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 
+from hashing import sha256_file
+
 # 修复 Windows 控制台 GBK 编码问题
 if sys.platform == "win32":
     try:
@@ -167,14 +169,6 @@ def _dist_version(name: str) -> str:
         return importlib.metadata.version(name)
     except Exception:
         return "unknown"
-
-
-def sha256_file(file_path: Path) -> str:
-    sha256 = hashlib.sha256()
-    with open(file_path, "rb") as f:
-        for chunk in iter(lambda: f.read(65536), b""):
-            sha256.update(chunk)
-    return sha256.hexdigest()
 
 
 VERSION_INFO_TEMPLATE = """# UTF-8
@@ -342,12 +336,10 @@ class Builder:
         self,
         override_version: str | None = None,
         skip_hygiene: bool = False,
-        strict_tools: bool = False,
         replay_snapshot: Path | None = None,
     ):
         self.arch = "win64" if sys.maxsize > 2**32 else "win32"
         self.skip_hygiene = skip_hygiene
-        self.strict_tools = strict_tools
         self.replay_snapshot = replay_snapshot
         self.snapshot = {}
         self.config = self._load_config()
@@ -880,10 +872,6 @@ class Builder:
         failures = [message for failed, message in preflight(target) if failed]
         if failures:
             raise RuntimeError("\n".join(failures))
-        if self.strict_tools:
-            raise ValueError(
-                "--strict-tools retired: builds fetch latest; use --snapshot for diagnostics"
-            )
         self.source_hash = source_fingerprint()
         self.dirty = bool(subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT))
         self.work_dir = ROOT / "build" / "runs" / uuid.uuid4().hex
@@ -1264,18 +1252,12 @@ def main():
         "--snapshot", type=Path, help="Replay a verified snapshot for diagnostics only"
     )
     parser.add_argument("--skip-hygiene", action="store_true", help="强制无视黑名单环境污染告警")
-    parser.add_argument(
-        "--strict-tools",
-        action="store_true",
-        help="已废弃；诊断重现请显式使用 --snapshot，正式构建始终获取最新组件",
-    )
 
     args = parser.parse_args()
 
     builder = Builder(
         override_version=args.version,
         skip_hygiene=args.skip_hygiene,
-        strict_tools=args.strict_tools,
         replay_snapshot=args.snapshot,
     )
 

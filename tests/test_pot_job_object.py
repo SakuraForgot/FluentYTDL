@@ -20,7 +20,10 @@ import pytest
 # Resolve src/ for direct execution
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-pytestmark = pytest.mark.skipif(sys.platform != "win32", reason="Job Object 是 Windows 专有机制")
+pytestmark = [
+    pytest.mark.windows_only,
+    pytest.mark.skipif(sys.platform != "win32", reason="Job Object 是 Windows 专有机制"),
+]
 
 win32job = pytest.importorskip("win32job")
 

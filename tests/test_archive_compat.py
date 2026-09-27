@@ -124,3 +124,7 @@ def test_cli_real_dlls_and_marker(tmp_path):
         [str(tool), "a", *CLI_OPTIONS, str(archive), str(marker)], check=True, capture_output=True
     )
     verify_archive(archive, source, {"portable.txt": marker})
+
+
+# CI 分层标记（见 pyproject [tool.pytest.ini_options] markers）；本地全量 pytest 不受影响，仅 CI 的 -m 过滤用到
+pytestmark = pytest.mark.needs_components

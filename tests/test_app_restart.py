@@ -4,6 +4,8 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from fluentytdl.utils import app_restart
@@ -24,6 +26,9 @@ def test_wait_rejects_self_and_invalid_pid():
     assert not app_restart.wait_for_parent_exit(-1, timeout=0)
 
 
+# Linux 不主动回收已退出的子进程：子进程变僵尸后 os.kill(pid, 0) 仍报"存活"，
+# 轮询于是一直等到超时。Windows 没有僵尸回收语义，这条只在 Windows 上成立。
+@pytest.mark.windows_only
 def test_wait_blocks_until_real_process_exits():
     child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(0.2)"])
     try:

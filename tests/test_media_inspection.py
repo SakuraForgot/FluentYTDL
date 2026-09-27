@@ -427,3 +427,7 @@ def test_cards_reflow_without_table_or_export_controls(qapp):
     assert dialog.options() == {"include_path": False, "include_raw": False}
     dialog.deleteLater()
     page.close()
+
+
+# CI 分层标记（见 pyproject [tool.pytest.ini_options] markers）；本地全量 pytest 不受影响，仅 CI 的 -m 过滤用到
+pytestmark = pytest.mark.needs_components

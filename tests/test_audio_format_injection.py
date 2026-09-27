@@ -293,3 +293,7 @@ def test_real_ytdlp_accepts_the_generated_format_string(strategy: str) -> None:
     )
     combined = proc.stdout + proc.stderr
     assert "Invalid filter specification" not in combined, combined[:600]
+
+
+# CI 分层标记（见 pyproject [tool.pytest.ini_options] markers）；本地全量 pytest 不受影响，仅 CI 的 -m 过滤用到
+pytestmark = pytest.mark.needs_components

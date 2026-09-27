@@ -48,6 +48,10 @@ except ImportError:
 
 requires_qt = pytest.mark.skipif(not HAS_PYSIDE6, reason="PySide6 required for layout tests")
 
+# 整行几何全靠真实字体的 QFontMetrics（pivot 计数文字宽度、CommandBar 降级阈值）。
+# Linux 离屏缺 Segoe UI/Consolas，字宽退化 → 像素预留对不上（84 vs 85 等）。走 Windows lane。
+pytestmark = pytest.mark.windows_gui
+
 # `UnifiedTaskListPage.v_layout` 的左右边距，各 20px
 PAGE_MARGIN = 20
 

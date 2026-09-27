@@ -6,10 +6,16 @@ import sys
 from pathlib import Path
 from unittest.mock import Mock
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from fluentytdl.auth.providers import webview2_provider as module  # noqa: E402
 
 
+# pythonnet(clr) 先于 pywebview 被探测，所以 CLR 缺失时先冒出 pythonnet_load_failed。
+# Linux 上没有 pythonnet 这条链，import 走到 pywebview 才失败 → pywebview_load_failed，
+# 断言的错误码顺序只在 Windows 运行时成立。
+@pytest.mark.windows_only
 def test_bridge_failure_returned_before_window_creation(tmp_path, monkeypatch):
     original = builtins.__import__
 

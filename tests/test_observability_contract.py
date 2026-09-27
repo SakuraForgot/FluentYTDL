@@ -837,6 +837,9 @@ def test_outcome_set_is_closed():
 # ── 脱敏 ────────────────────────────────────────────────────
 
 
+# fixture 写死了含 Windows 用户名的输出路径（C:\Users\alice\...），而按用户目录折叠
+# 脱敏只在 Windows 上触发；Linux 认不出这条路径 → "alice" 不会被涂掉。属路径语义假设。
+@pytest.mark.windows_only
 def test_argv_sanitization_drops_credentials_but_keeps_diagnostics():
     """`executor` 那句 `cmd={}` 会把整条 argv 原样落盘。
 

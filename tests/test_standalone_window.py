@@ -220,3 +220,7 @@ def test_escape_closes_the_window(qt_app, anchor):
         window, QKeyEvent(QEvent.Type.KeyPress, Qt.Key.Key_Escape, Qt.KeyboardModifier.NoModifier)
     )
     assert _Probe.singleton() is None
+
+
+# CI 分层标记（见 pyproject [tool.pytest.ini_options] markers）；本地全量 pytest 不受影响，仅 CI 的 -m 过滤用到
+pytestmark = pytest.mark.windows_gui

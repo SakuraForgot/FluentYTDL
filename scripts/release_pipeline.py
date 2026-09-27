@@ -10,7 +10,8 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from build import release_names, sha256_file
+from build import TARGET_ALIASES, TARGET_OUTPUTS, release_names
+from hashing import sha256_bytes, sha256_file
 from version_manager import parse_version, tag_for
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -39,7 +40,7 @@ def resolve() -> dict:
     )
     _, channel = parse_version(version)
     target = "all" if tagged else os.environ.get("IN_TARGET", "all")
-    if target not in ("all", "7z", "full", "app-core", "setup"):
+    if target not in set(TARGET_OUTPUTS) | set(TARGET_ALIASES):
         raise ValueError(f"Unsupported release target: {target}")
     publish = tagged or os.environ.get("IN_PUBLISH") == "true"
     tag = tag_for(version)
@@ -172,6 +173,29 @@ def render_release_notes(
     )
 
 
+def _existing_release(repository: str, tag: str) -> dict | None:
+    """查这个 tag 现有的 release；没有则返回 None。
+
+    以前用 `gh api --paginate --slurp .../releases?per_page=100` 把整个仓库的
+    release 列表全拉下来再线性查找 —— release 一多就是纯浪费。GitHub 有按 tag
+    直接取的端点，改用它。其他错误（鉴权/网络）必须抛出，绝不能当成"无既有
+    release"往下走 —— 那会在一次瞬时故障后错误地新建 release，绕过下面的
+    "非草稿→拒绝 / 草稿→字节一致才恢复"判定。
+    """
+    probe = subprocess.run(
+        ["gh", "api", f"repos/{repository}/releases/tags/{tag}"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    )
+    if probe.returncode == 0:
+        return json.loads(probe.stdout)
+    if "404" in probe.stderr or "Not Found" in probe.stderr:
+        return None
+    raise RuntimeError(f"无法查询既有 release ({tag}): {probe.stderr.strip()}")
+
+
 def publish() -> None:
     result = validate_result(ROOT / "build/latest-result.json", "all")
     if result["dirty"] or result["component_policy"] != "latest":
@@ -183,10 +207,7 @@ def publish() -> None:
         raise ValueError("Publication not authorized by release policy")
     repository = os.environ["GITHUB_REPOSITORY"]
     tag = policy["tag"]
-    releases = json.loads(
-        command("gh", "api", "--paginate", "--slurp", f"repos/{repository}/releases?per_page=100")
-    )
-    existing = next((r for page in releases for r in page if r["tag_name"] == tag), None)
+    existing = _existing_release(repository, tag)
     if existing:
         if not existing["draft"]:
             raise ValueError("A public release already exists; use a new version")
@@ -240,20 +261,18 @@ def publish() -> None:
         url = f"https://github.com/{repository}/releases/latest/download/update-manifest.json"
         with urllib.request.urlopen(url, timeout=60) as response:
             payload = response.read()
-        import hashlib
-
         expected = next(a for a in result["artifacts"] if a["name"] == "update-manifest.json")
         if (
             json.loads(payload)["release_tag"] != tag
             or len(payload) != expected["size"]
-            or hashlib.sha256(payload).hexdigest() != expected["sha256"]
+            or sha256_bytes(payload) != expected["sha256"]
         ):
             raise ValueError("Public latest updater endpoint does not point to this release")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("action", choices=["resolve", "stage", "publish", "verify"])
+    parser.add_argument("action", choices=["resolve", "stage", "publish"])
     action = parser.parse_args().action
     if action == "resolve":
         output(resolve())
@@ -261,5 +280,3 @@ if __name__ == "__main__":
         stage()
     elif action == "publish":
         publish()
-    else:
-        validate_result(ROOT / "build/latest-result.json")

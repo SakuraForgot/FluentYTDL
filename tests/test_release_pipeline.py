@@ -144,20 +144,27 @@ def test_existing_public_release_cannot_be_overwritten(monkeypatch):
         release, "resolve", lambda: {"publish": "true", "version": "3.7.1", "tag": "v3.7.1"}
     )
     monkeypatch.setenv("GITHUB_REPOSITORY", "example/test")
+    # 既有 release 探测走 subprocess.run（按 tag 直查、用退出码区分 404 与鉴权/网络错误），
+    # 不再走 command()。这里伪造成"已存在且非草稿"的公开 release。
+    monkeypatch.setattr(
+        release.subprocess,
+        "run",
+        lambda cmd, *a, **k: release.subprocess.CompletedProcess(
+            cmd, 0, json.dumps({"draft": False}), ""
+        ),
+    )
     calls = []
 
     def command(*args):
         calls.append(args)
         if args[0] == "git":
             return "a" * 40
-        if args[:2] == ("gh", "api"):
-            return json.dumps([[{"tag_name": "v3.7.1", "draft": False}]])
         raise AssertionError("Release mutation should never be reached")
 
     monkeypatch.setattr(release, "command", command)
     with pytest.raises(ValueError, match="public release already exists"):
         release.publish()
-    assert len(calls) == 2
+    assert len(calls) == 1
 
 
 @pytest.mark.parametrize("scope", ["user", "machine"])
@@ -306,3 +313,7 @@ def test_release_template_keeps_changelog_visible(channel):
 def test_release_template_requires_changelog():
     with pytest.raises(ValueError, match="changelog"):
         release.render_release_notes("3.7.3", "stable", "abcdef", "example/repo", "")
+
+
+# CI 分层标记（见 pyproject [tool.pytest.ini_options] markers）；本地全量 pytest 不受影响，仅 CI 的 -m 过滤用到
+pytestmark = pytest.mark.windows_only

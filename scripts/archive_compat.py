@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 import subprocess
 import tempfile
 from pathlib import Path
+
+from hashing import sha256_file
 
 CLI_OPTIONS = ["-t7z", "-mx=7", "-m0=LZMA2", "-mf=off", "-md=32m", "-mhc=off", "-mmt=on"]
 
@@ -22,11 +23,7 @@ def file_hashes(root: Path) -> dict[str, str]:
     result = {}
     for path in sorted(root.rglob("*")):
         if path.is_file():
-            digest = hashlib.sha256()
-            with path.open("rb") as stream:
-                for chunk in iter(lambda: stream.read(1024 * 1024), b""):
-                    digest.update(chunk)
-            result[path.relative_to(root).as_posix()] = digest.hexdigest()
+            result[path.relative_to(root).as_posix()] = sha256_file(path)
     return result
 
 
@@ -36,7 +33,7 @@ def verify_archive(archive: Path, source: Path, extra: dict[str, Path] | None = 
 
     expected = file_hashes(source)
     for name, path in (extra or {}).items():
-        expected[name] = hashlib.sha256(path.read_bytes()).hexdigest()
+        expected[name] = sha256_file(path)
     with py7zr.SevenZipFile(archive, "r") as reader:
         methods = reader.archiveinfo().method_names
         if set(methods) - {"LZMA2", "COPY"}:

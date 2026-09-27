@@ -1,5 +1,6 @@
 """Tests for the build-time manifest generator."""
 
+import ast
 import hashlib
 import sys
 from pathlib import Path
@@ -18,6 +19,21 @@ from version_manager import (  # noqa: E402
     strip_v_prefix,
     tag_for,
 )
+
+
+def _load_runtime_repositories() -> dict[str, str]:
+    """从 update_transport.py 静态取出运行时 REPOSITORIES 表（不 import 整个 fluentytdl 包）。
+
+    直接 import src 会拉起 fluentytdl 的重量级导入链（Qt 等），在 Linux 逻辑
+    lane 上既慢又可能失败。用 ast 抽取模块级字面量即可，无需任何运行时依赖。
+    """
+    src = (ROOT / "src" / "fluentytdl" / "core" / "update_transport.py").read_text(encoding="utf-8")
+    for node in ast.parse(src).body:
+        if isinstance(node, ast.Assign) and any(
+            isinstance(target, ast.Name) and target.id == "REPOSITORIES" for target in node.targets
+        ):
+            return ast.literal_eval(node.value)
+    raise AssertionError("update_transport.py 里找不到 REPOSITORIES 表")
 
 
 class TestParseVersion:
@@ -228,9 +244,21 @@ class TestBinComponentArtifacts:
         assert entry["sha256"] == ""
 
     def test_repo_matches_runtime_source(self):
-        """清单声明的仓库必须与 dependency_manager 实际查询的一致。"""
-        defs = gm.detect_component_versions.__doc__  # 仅确认函数存在
-        assert defs is not None
-        src = (ROOT / "scripts" / "generate_manifest.py").read_text(encoding="utf-8")
-        assert "yt-dlp/FFmpeg-Builds" in src
-        assert "BtbN/FFmpeg-Builds" not in src
+        """清单声明的仓库必须与运行时更新源实际查询的一致。
+
+        仓库表已下沉到 scripts/fetch_tools.REPOSITORIES（构建期单一事实源），
+        generate_manifest 从那里取值；运行时源是 update_transport.py 里按通道
+        分键的 REPOSITORIES（dependency_manager 走它做失效切换）。两张表**故意
+        分开**——运行时额外带 nightly/master 通道——但每个共有组件的 stable 通道
+        必须逐字一致，否则清单声明的来源和运行时查询的来源对不上。
+        """
+        runtime = _load_runtime_repositories()
+        for component, repo in gm.REPOSITORIES.items():
+            if component == "7zip":
+                continue  # 7zip 只在构建期用来解包，运行时不做在线更新
+            assert runtime[f"{component}:stable"] == repo, (
+                f"{component}: 清单={repo!r} 运行时={runtime.get(f'{component}:stable')!r}"
+            )
+        # ffmpeg 必须来自 yt-dlp 的修复版构建，不是 BtbN 的
+        assert gm.REPOSITORIES["ffmpeg"] == "yt-dlp/FFmpeg-Builds"
+        assert not any("BtbN" in value for value in gm.REPOSITORIES.values())

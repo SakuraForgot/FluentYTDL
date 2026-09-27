@@ -1,17 +1,22 @@
 name: Set up locked build environment
-description: Read the shared toolchain contract and install locked build dependencies
+description: Read the shared toolchain contract, restore the uv cache, and install locked build dependencies
 runs:
   using: composite
   steps:
     - id: versions
       shell: bash
       run: python scripts/build_environment.py
+    - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e  # v6.8
+      with:
+        version: ${{ steps.versions.outputs.uv }}
+        python-version: ${{ steps.versions.outputs.python }}
+        enable-cache: true
+        cache-dependency-glob: uv.lock
     - shell: bash
       env:
-        UV_VERSION: ${{ steps.versions.outputs.uv }}
         BUILD_PYTHON: ${{ steps.versions.outputs.python }}
-      run: |
-        python -m pip install "uv==$UV_VERSION"
-        uv python install "$BUILD_PYTHON"
-        uv sync --python "$BUILD_PYTHON" --locked --extra dev --extra build
-        uv run --locked --no-sync python scripts/build_environment.py --check
+      run: uv sync --python "$BUILD_PYTHON" --locked --extra dev --extra build
+    - name: Windows build preflight
+      if: runner.os == 'Windows'
+      shell: bash
+      run: uv run --locked --no-sync python scripts/build_environment.py --check
