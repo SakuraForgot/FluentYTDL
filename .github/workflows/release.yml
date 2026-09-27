@@ -59,6 +59,7 @@ jobs:
         env:
           BUILD_VERSION: ${{ steps.policy.outputs.version }}
           BUILD_TARGET: ${{ steps.policy.outputs.target }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: uv run --locked --no-sync python scripts/build.py --target $env:BUILD_TARGET --version $env:BUILD_VERSION
       - name: Installer lifecycle verification (isolated runner)
         if: steps.policy.outputs.target == 'all' || steps.policy.outputs.target == 'setup'

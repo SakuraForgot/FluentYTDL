@@ -290,15 +290,22 @@ def fetch_upstream_sha256(url: str, needle: str, tmp_dir: Path, *, download=down
 
 
 def github_api(endpoint: str, timeout: int = 30) -> dict:
-    """调用 GitHub API"""
+    """调用 GitHub API。
+
+    带上环境里的 token（``GITHUB_TOKEN`` / ``GH_TOKEN``）走认证请求：未认证的
+    api.github.com 限额是每 IP 每小时 60 次、且 CI runner 全池共享，仅解析 6 个组件的
+    ``releases/latest`` 就会撞 ``HTTP 403 rate limit exceeded``；认证后限额升到每仓库
+    每小时 5000 次。本地无 token 时保持匿名（够开发者偶尔跑一次），不强制要求。
+    """
     url = f"https://api.github.com{endpoint}"
-    req = Request(
-        url,
-        headers={
-            "User-Agent": "FluentYTDL-Builder/1.0",
-            "Accept": "application/vnd.github.v3+json",
-        },
-    )
+    headers = {
+        "User-Agent": "FluentYTDL-Builder/1.0",
+        "Accept": "application/vnd.github.v3+json",
+    }
+    token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    req = Request(url, headers=headers)
     ctx = create_ssl_context()
     try:
         with urlopen(req, context=ctx, timeout=timeout) as resp:

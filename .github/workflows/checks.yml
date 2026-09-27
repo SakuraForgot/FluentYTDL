@@ -76,6 +76,8 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/setup-build
       - name: Prepare latest components for integration tests
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: uv run --locked --no-sync python scripts/fetch_tools.py --destination build/test-components
       - name: Windows-only, component and GUI tests
         env:
