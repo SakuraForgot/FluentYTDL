@@ -5031,23 +5031,23 @@ Unified file: {}</translation>
     </message>
     <message>
         <location filename="../../src/fluentytdl/ui/components/dialogs/log_viewer_window.py" line="103"/>
-        <location filename="../../src/fluentytdl/ui/components/dialogs/log_viewer_window.py" line="390"/>
-        <location filename="../../src/fluentytdl/ui/components/dialogs/log_viewer_window.py" line="581"/>
+        <location filename="../../src/fluentytdl/ui/components/dialogs/log_viewer_window.py" line="399"/>
+        <location filename="../../src/fluentytdl/ui/components/dialogs/log_viewer_window.py" line="590"/>
         <source>全部</source>
         <translation>All</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/components/dialogs/log_viewer_window.py" line="370"/>
+        <location filename="../../src/fluentytdl/ui/components/dialogs/log_viewer_window.py" line="379"/>
         <source>📋 运行日志</source>
         <translation>📋 Application Logs</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/components/dialogs/log_viewer_window.py" line="375"/>
+        <location filename="../../src/fluentytdl/ui/components/dialogs/log_viewer_window.py" line="384"/>
         <source>全部日志</source>
         <translation>All logs</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/components/dialogs/log_viewer_window.py" line="376"/>
+        <location filename="../../src/fluentytdl/ui/components/dialogs/log_viewer_window.py" line="385"/>
         <source>任务时间线</source>
         <translation>Task timeline</translation>
     </message>
@@ -5060,42 +5060,42 @@ Unified file: {}</translation>
         <translation type="vanished">Export a bug bundle for the selected task</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/components/dialogs/log_viewer_window.py" line="405"/>
+        <location filename="../../src/fluentytdl/ui/components/dialogs/log_viewer_window.py" line="414"/>
         <source>导出所选任务的诊断包</source>
         <translation>Export Diagnostic Bundle for Selected Task</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/components/dialogs/log_viewer_window.py" line="414"/>
+        <location filename="../../src/fluentytdl/ui/components/dialogs/log_viewer_window.py" line="423"/>
         <source>清屏</source>
         <translation>Clear Screen</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/components/dialogs/log_viewer_window.py" line="422"/>
+        <location filename="../../src/fluentytdl/ui/components/dialogs/log_viewer_window.py" line="431"/>
         <source>打开日志目录</source>
         <translation>Open log directory</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/components/dialogs/log_viewer_window.py" line="485"/>
+        <location filename="../../src/fluentytdl/ui/components/dialogs/log_viewer_window.py" line="494"/>
         <source>日志目录: {}</source>
         <translation>Log directory: {}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/components/dialogs/log_viewer_window.py" line="490"/>
+        <location filename="../../src/fluentytdl/ui/components/dialogs/log_viewer_window.py" line="499"/>
         <source>0 行</source>
         <translation>0 lines</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/components/dialogs/log_viewer_window.py" line="633"/>
+        <location filename="../../src/fluentytdl/ui/components/dialogs/log_viewer_window.py" line="642"/>
         <source>{} 条事件</source>
         <translation>{} events</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/components/dialogs/log_viewer_window.py" line="637"/>
+        <location filename="../../src/fluentytdl/ui/components/dialogs/log_viewer_window.py" line="646"/>
         <source>{} 行</source>
         <translation>{} lines</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/components/dialogs/log_viewer_window.py" line="664"/>
+        <location filename="../../src/fluentytdl/ui/components/dialogs/log_viewer_window.py" line="673"/>
         <source>请先选中一个任务</source>
         <translation>Select a task first</translation>
     </message>
@@ -5104,7 +5104,7 @@ Unified file: {}</translation>
         <translation type="vanished">Select a task or one of its events in the timeline.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/components/dialogs/log_viewer_window.py" line="693"/>
+        <location filename="../../src/fluentytdl/ui/components/dialogs/log_viewer_window.py" line="702"/>
         <source>诊断包已导出</source>
         <translation>Diagnostic Bundle Exported</translation>
     </message>
@@ -5113,12 +5113,12 @@ Unified file: {}</translation>
         <translation type="vanished">Click a task node in the timeline, or any event beneath it</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/components/dialogs/log_viewer_window.py" line="684"/>
+        <location filename="../../src/fluentytdl/ui/components/dialogs/log_viewer_window.py" line="693"/>
         <source>导出失败</source>
         <translation>Export failed</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/components/dialogs/log_viewer_window.py" line="685"/>
+        <location filename="../../src/fluentytdl/ui/components/dialogs/log_viewer_window.py" line="694"/>
         <source>详情见日志</source>
         <translation>See the log for details</translation>
     </message>
@@ -5127,68 +5127,68 @@ Unified file: {}</translation>
         <translation type="vanished">Bug bundle exported</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/components/dialogs/log_viewer_window.py" line="156"/>
+        <location filename="../../src/fluentytdl/ui/components/dialogs/log_viewer_window.py" line="165"/>
         <source>时间格式：YYYY-MM-DD HH:MM:SS</source>
         <translation>Time format: YYYY-MM-DD HH:MM:SS</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/components/dialogs/log_viewer_window.py" line="184"/>
+        <location filename="../../src/fluentytdl/ui/components/dialogs/log_viewer_window.py" line="193"/>
         <source>已加载部分历史：{} 条；日志目录：{}</source>
         <translation>Partial history: {} records; log directory: {}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/components/dialogs/log_viewer_window.py" line="187"/>
+        <location filename="../../src/fluentytdl/ui/components/dialogs/log_viewer_window.py" line="196"/>
         <source>历史读取失败：{}</source>
         <translation>Could not read history: {}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/components/dialogs/log_viewer_window.py" line="259"/>
+        <location filename="../../src/fluentytdl/ui/components/dialogs/log_viewer_window.py" line="268"/>
         <source>日志系统异常 {} 次：{}</source>
         <translation>Logging errors: {}. {}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/components/dialogs/log_viewer_window.py" line="397"/>
+        <location filename="../../src/fluentytdl/ui/components/dialogs/log_viewer_window.py" line="406"/>
         <source>搜索任务 / run / 错误码 / 日志</source>
         <translation>Search task / run / error code / log</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/components/dialogs/log_viewer_window.py" line="246"/>
-        <location filename="../../src/fluentytdl/ui/components/dialogs/log_viewer_window.py" line="431"/>
+        <location filename="../../src/fluentytdl/ui/components/dialogs/log_viewer_window.py" line="255"/>
+        <location filename="../../src/fluentytdl/ui/components/dialogs/log_viewer_window.py" line="440"/>
         <source>当前会话</source>
         <translation>Current session</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/components/dialogs/log_viewer_window.py" line="431"/>
+        <location filename="../../src/fluentytdl/ui/components/dialogs/log_viewer_window.py" line="440"/>
         <source>全部历史</source>
         <translation>All history</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/components/dialogs/log_viewer_window.py" line="433"/>
+        <location filename="../../src/fluentytdl/ui/components/dialogs/log_viewer_window.py" line="442"/>
         <source>加载更早记录</source>
         <translation>Load older records</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/components/dialogs/log_viewer_window.py" line="435"/>
+        <location filename="../../src/fluentytdl/ui/components/dialogs/log_viewer_window.py" line="444"/>
         <source>开始时间 YYYY-MM-DD HH:MM:SS</source>
         <translation>Start time YYYY-MM-DD HH:MM:SS</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/components/dialogs/log_viewer_window.py" line="437"/>
+        <location filename="../../src/fluentytdl/ui/components/dialogs/log_viewer_window.py" line="446"/>
         <source>结束时间 YYYY-MM-DD HH:MM:SS</source>
         <translation>End time YYYY-MM-DD HH:MM:SS</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/components/dialogs/log_viewer_window.py" line="665"/>
+        <location filename="../../src/fluentytdl/ui/components/dialogs/log_viewer_window.py" line="674"/>
         <source>选择任务或解析流程后导出</source>
         <translation>Select a task or parsing flow to export</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/components/dialogs/log_viewer_window.py" line="693"/>
+        <location filename="../../src/fluentytdl/ui/components/dialogs/log_viewer_window.py" line="702"/>
         <source>诊断包部分导出</source>
         <translation>Diagnostic bundle partially exported</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/components/dialogs/log_viewer_window.py" line="676"/>
+        <location filename="../../src/fluentytdl/ui/components/dialogs/log_viewer_window.py" line="685"/>
         <source>正在导出诊断包：{} 个文件</source>
         <translation>Exporting diagnostic bundle: {} files</translation>
     </message>
