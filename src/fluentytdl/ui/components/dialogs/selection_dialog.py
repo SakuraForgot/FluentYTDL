@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QLayout,
     QSizePolicy,
     QStyleOptionViewItem,
     QVBoxLayout,
@@ -38,6 +39,12 @@ from qfluentwidgets import (
 )
 from qframelesswindow import FramelessDialog
 
+from fluentytdl.ui.components.common.adaptive_layout import (
+    TaskScrollArea,
+    TaskWindowSurface,
+    WindowGeometryGuard,
+    bounded_geometry,
+)
 from fluentytdl.ui.components.common.themed_title_bar import ThemedTitleBar
 from fluentytdl.ui.components.home.playlist_item_card import PlaylistItemCard
 from fluentytdl.ui.components.platforms.cover import CoverSelectorWidget
@@ -671,7 +678,7 @@ def _clean_audio_formats(info: Any) -> list[dict[str, Any]]:
     return out
 
 
-class PlaylistFormatDialog(FramelessDialog):
+class PlaylistFormatDialog(TaskWindowSurface, FramelessDialog):
     """用于播放列表单项的「高级格式选择」独立弹窗 (复用各类 SelectorWidget)
 
     以前继承 MessageBoxBase（遮罩式对话框）：它会把自己嵌进父窗口里、蒙一层遮罩，
@@ -704,9 +711,15 @@ class PlaylistFormatDialog(FramelessDialog):
         rootLayout.setContentsMargins(24, 48, 24, 24)  # 顶部给无边框标题栏让位
         rootLayout.setSpacing(16)
 
-        self.viewLayout = QVBoxLayout()
+        self.scrollArea = TaskScrollArea(self, show_scroll_bars=False)
+        self.scrollWidget = QWidget()
+        self.viewLayout = QVBoxLayout(self.scrollWidget)
+        self.viewLayout.setContentsMargins(0, 0, 0, 0)
         self.viewLayout.setSpacing(12)
-        rootLayout.addLayout(self.viewLayout, 1)
+        self.viewLayout.setSizeConstraint(QLayout.SizeConstraint.SetMinAndMaxSize)
+        self.scrollArea.setWidget(self.scrollWidget)
+        self.scrollArea.enableTransparentBackground()
+        rootLayout.addWidget(self.scrollArea, 1)
 
         self.titleLabel = SubtitleLabel(self.tr("选择格式"), self)
         self.viewLayout.addWidget(self.titleLabel)
@@ -751,9 +764,11 @@ class PlaylistFormatDialog(FramelessDialog):
         self.yesButton.clicked.connect(self.accept)
         self.yesButton.setFocus()
 
-        self.setMinimumSize(720, 560)
+        self.setMinimumSize(360, 240)
         self.resize(880, 760)
         self._center_on_parent()
+        self._geometry_guard = WindowGeometryGuard(self)
+        self.titleBar.raise_()
 
         from qfluentwidgets import qconfig
 
@@ -781,9 +796,9 @@ class PlaylistFormatDialog(FramelessDialog):
         y = anchor.y() + (anchor.height() - self.height()) // 2
 
         avail = screen.availableGeometry()
-        x = max(avail.x(), min(x, avail.right() - self.width()))
-        y = max(avail.y(), min(y, avail.bottom() - self.height()))
-        self.move(x, y)
+        rect = self.geometry()
+        rect.moveTopLeft(QPoint(x, y))
+        self.setGeometry(bounded_geometry(rect, avail))
 
     def _setup_subtitle_override_section(self, info: dict[str, Any]):
         from qfluentwidgets import CheckBox

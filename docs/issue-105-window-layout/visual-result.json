@@ -1,0 +1,50 @@
+[
+  {
+    "lang": "zh_CN",
+    "theme": "Light",
+    "window": [
+      0,
+      0,
+      640,
+      480
+    ],
+    "horizontal_max": 0,
+    "title_hit": true
+  },
+  {
+    "lang": "zh_CN",
+    "theme": "Dark",
+    "window": [
+      0,
+      0,
+      640,
+      480
+    ],
+    "horizontal_max": 0,
+    "title_hit": true
+  },
+  {
+    "lang": "en_US",
+    "theme": "Light",
+    "window": [
+      0,
+      0,
+      640,
+      480
+    ],
+    "horizontal_max": 0,
+    "title_hit": true
+  },
+  {
+    "lang": "en_US",
+    "theme": "Dark",
+    "window": [
+      0,
+      0,
+      640,
+      480
+    ],
+    "horizontal_max": 0,
+    "title_hit": true
+  }
+]

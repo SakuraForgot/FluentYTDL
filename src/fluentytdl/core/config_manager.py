@@ -7,7 +7,13 @@ from typing import Any
 from PySide6.QtCore import QObject, Signal
 
 from ..models.subtitle_config import SubtitleConfig
-from ..utils.paths import _migrate_file, config_path, legacy_config_path, old_user_data_dir
+from ..utils.paths import (
+    _migrate_file,
+    config_path,
+    data_dir_override,
+    legacy_config_path,
+    old_user_data_dir,
+)
 
 
 class ConfigManager(QObject):
@@ -241,14 +247,20 @@ class ConfigManager(QObject):
             self.save()
 
     def _load_config(self) -> dict[str, Any]:
+        # 数据目录被显式钉死（updater 降权启动 / 测试 conftest）时，数据目录必须完全自洽：
+        # 既不迁移旧 ~/Documents，也不回退仓库根 legacy config.json —— 否则开发机仓库根那份
+        # 私有 config.json 会漏进测试，让"跑测试看到的是开发者本机偏好"这类隔离泄漏反复出现。
+        overridden = bool(data_dir_override())
+
         # One-time migration: old Documents location -> new location
-        old_docs_config = old_user_data_dir() / "config.json"
-        _migrate_file(old_docs_config, self.config_file)
+        if not overridden:
+            old_docs_config = old_user_data_dir() / "config.json"
+            _migrate_file(old_docs_config, self.config_file)
 
         # Backward-compat: if new location doesn't exist but legacy exists, load legacy.
         candidates = [self.config_file]
         legacy = legacy_config_path()
-        if legacy != self.config_file:
+        if not overridden and legacy != self.config_file:
             candidates.append(legacy)
 
         existing = next((p for p in candidates if p.exists()), None)

@@ -9,7 +9,6 @@ from PySide6.QtWidgets import (
     QButtonGroup,
     QHBoxLayout,
     QHeaderView,
-    QStackedWidget,
     QTableWidgetItem,
     QVBoxLayout,
     QWidget,
@@ -22,11 +21,16 @@ from qfluentwidgets import (
     IconWidget,
     RadioButton,
     SegmentedWidget,
-    SmoothScrollArea,
     TableWidget,
 )
 
+from fluentytdl.ui.components.common.adaptive_layout import (
+    CurrentPageStack,
+    TaskScrollArea,
+    configure_scrolling,
+)
 from fluentytdl.ui.components.common.badges import QualityCellWidget
+from fluentytdl.ui.components.common.transitions import RegionFader
 
 from ....utils.container_compat import choose_lossless_merge_container
 
@@ -166,6 +170,7 @@ def _get_table_selection_qss() -> str:
     return f"""
 QTableWidget {{
     background-color: transparent;
+    alternate-background-color: transparent;
     selection-background-color: transparent;
     outline: none;
     border: none;
@@ -280,7 +285,7 @@ class VRPresetWidget(QWidget):
         main_layout.setSpacing(0)
         main_layout.setContentsMargins(0, 0, 0, 0)
 
-        self.preset_scroll = SmoothScrollArea(self)
+        self.preset_scroll = TaskScrollArea(self)
         self.preset_scroll.setStyleSheet(_get_split_scroll_qss())
         self.preset_scroll.setWidgetResizable(True)
         self.preset_scroll.setMaximumHeight(450)
@@ -380,6 +385,11 @@ class VRFormatTableWidget(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(8)
 
+        # 下载类型切换给整块专业表区做快照交叉淡化（与 youtube 专业表同款）。目标取 self——
+        # 本控件正是外层 stack 的「专业模式」页；快照含未变的下拉/过滤器（渲染一致故淡化中
+        # 不可见）与真正在换的表格区，一层交叉淡化盖住表格重排与高度突变。
+        self._mode_fader = RegionFader(self)
+
         # 模式下拉
         self.mode_combo = ComboBox(self)
         self.mode_combo.addItems(
@@ -444,14 +454,11 @@ class VRFormatTableWidget(QWidget):
         self.audio_container.set_content(self.audio_table)
         split_layout.addWidget(self.audio_container)
 
-        self.video_container.toggle()
-        self.audio_container.toggle()
-
         split_layout.addStretch(1)
 
-        # Wrap in a scroll area so both accordions can expand without
-        # forcing the parent dialog to grow.
-        self.split_scroll = SmoothScrollArea(self)
+        # Wrap in a scroll area so the always-open stream lists don't force
+        # the parent dialog to grow.
+        self.split_scroll = TaskScrollArea(self)
         self.split_scroll.setWidget(self.split_container)
         self.split_scroll.setWidgetResizable(True)
         self.split_scroll.setMaximumHeight(480)
@@ -499,6 +506,7 @@ class VRFormatTableWidget(QWidget):
 
     def _build_video_table(self):
         self.video_table = TableWidget(self.video_container)
+        configure_scrolling(self.video_table)
         self.video_table.setColumnCount(len(self._VCOLS))
         self.video_table.setHorizontalHeaderLabels([self.tr(c) for c in self._VCOLS])
         self.video_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
@@ -532,11 +540,13 @@ class VRFormatTableWidget(QWidget):
             self.video_table.setColumnWidth(3, 80)
         except Exception:
             pass
-        self.video_table.setMaximumHeight(220)
+        self.video_table.setMinimumHeight(128)
+        self.video_table.setMaximumHeight(296)
         self.video_table.itemSelectionChanged.connect(self._on_video_selected)
 
     def _build_audio_table(self):
         self.audio_table = TableWidget(self.audio_container)
+        configure_scrolling(self.audio_table)
         self.audio_table.setColumnCount(len(self._ACOLS))
         self.audio_table.setHorizontalHeaderLabels([self.tr(c) for c in self._ACOLS])
         self.audio_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
@@ -562,11 +572,13 @@ class VRFormatTableWidget(QWidget):
             self.audio_table.setColumnWidth(1, 130)
         except Exception:
             pass
-        self.audio_table.setMaximumHeight(180)
+        self.audio_table.setMinimumHeight(128)
+        self.audio_table.setMaximumHeight(296)
         self.audio_table.itemSelectionChanged.connect(self._on_audio_selected)
 
     def _build_single_table(self):
         self.single_table = TableWidget(self)
+        configure_scrolling(self.single_table)
         self.single_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.single_table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.single_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
@@ -715,11 +727,15 @@ class VRFormatTableWidget(QWidget):
             detail_text = f"{ext} • {acodec} • {sz} • {fid}"
             detail_badges = _analyze_format_tags(f)
 
+            # Detail is the Stretch column: anchor left and elide (…) rather than
+            # centering, so long "ext • codec • size • id" strings never spill past
+            # the visible cell edge (matches youtube.py's detail cells).
             d_w = QualityCellWidget(
                 detail_badges,
                 detail_text,
                 parent=self.audio_table,
-                alignment=Qt.AlignmentFlag.AlignCenter,
+                elide=True,
+                alignment=Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
             )
 
             item = QTableWidgetItem("")
@@ -870,12 +886,14 @@ class VRFormatTableWidget(QWidget):
             detail_text = f"{ext} • {vcodec} • {sz} • {fid}"
             detail_badges = _analyze_format_tags(f)
 
-            # Use Left alignment for details as it can be long
+            # Detail is the Stretch column and can be long: anchor left and elide (…)
+            # instead of centering, so it never spills past the visible cell edge.
             d_w = QualityCellWidget(
                 detail_badges,
                 detail_text,
                 parent=self.video_table,
-                alignment=Qt.AlignmentFlag.AlignCenter,
+                elide=True,
+                alignment=Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
             )
 
             item = QTableWidgetItem("")
@@ -912,9 +930,12 @@ class VRFormatTableWidget(QWidget):
 
     def _on_mode_changed(self, index: int) -> None:
         # 0=可组装, 1=整合流, 2=仅视频, 3=仅音频
-        self._refresh_mode_tables()
-        self._update_label()
-        self.selectionChanged.emit()
+        def apply() -> None:
+            self._refresh_mode_tables()
+            self._update_label()
+            self.selectionChanged.emit()
+
+        self._mode_fader.run(apply)
 
     def _refresh_mode_tables(self) -> None:
         mode = self.mode_combo.currentIndex()
@@ -1136,7 +1157,8 @@ class VRFormatTableWidget(QWidget):
                         detail_tags,
                         detail_text,
                         parent=self.single_table,
-                        alignment=Qt.AlignmentFlag.AlignCenter,
+                        elide=True,
+                        alignment=Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
                     ),
                 )
             else:
@@ -1148,7 +1170,8 @@ class VRFormatTableWidget(QWidget):
                         detail_tags,
                         detail_text,
                         parent=self.single_table,
-                        alignment=Qt.AlignmentFlag.AlignCenter,
+                        elide=True,
+                        alignment=Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
                     ),
                 )
 
@@ -1318,14 +1341,15 @@ class VRFormatSelectorWidget(QWidget):
 
         # 模式切换标签
         self.mode_seg = SegmentedWidget(self)
-        self.mode_seg.addItem("simple", self.tr("简易模式"))
+        self.mode_seg.addItem("simple", self.tr("标准模式"))
         self.mode_seg.addItem("pro", self.tr("专业模式"))
         self.mode_seg.setCurrentItem("simple")
         self.mode_seg.currentItemChanged.connect(self._on_mode_switch)
         layout.addWidget(self.mode_seg)
 
-        self.stack = QStackedWidget(self)
+        self.stack = CurrentPageStack(self)
         layout.addWidget(self.stack)
+        self._stack_fader = RegionFader(self.stack)
 
         # 简易模式
         self.preset_widget = VRPresetWidget(self)
@@ -1338,8 +1362,12 @@ class VRFormatSelectorWidget(QWidget):
         self.stack.addWidget(self.pro_widget)
 
     def _on_mode_switch(self, key: str) -> None:
-        self.stack.setCurrentIndex(0 if key == "simple" else 1)
-        self.selectionChanged.emit()
+        def apply() -> None:
+            self.stack.setCurrentIndex(0 if key == "simple" else 1)
+            self.stack.updateGeometry()
+            self.selectionChanged.emit()
+
+        self._stack_fader.run(apply)
 
     def get_selection_result(self) -> dict[str, Any]:
         """返回当前选择：{format: str, extra_opts: dict}"""

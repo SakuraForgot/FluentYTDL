@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QEvent, QItemSelectionModel, Qt, QTimer, Signal
 from PySide6.QtGui import QBrush, QColor
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -23,40 +23,89 @@ from qfluentwidgets import (
     ComboBox,
     FluentIcon,
     IconWidget,
+    InfoBarPosition,
     PushButton,
     RadioButton,
     SegmentedWidget,
-    SmoothScrollArea,
     StrongBodyLabel,
-    TransparentToolButton,
+    TableWidget,
 )
 
+from fluentytdl.ui.components.common.adaptive_layout import (
+    CurrentPageStack,
+    TaskScrollArea,
+    TaskWindowSurface,
+    configure_scrolling,
+)
 from fluentytdl.ui.components.common.badges import QualityCellWidget
+from fluentytdl.ui.components.common.custom_info_bar import InfoBar
+from fluentytdl.ui.components.common.transitions import RegionFader
 from fluentytdl.utils.ui_text import tr_text
 
 from ....core.config_manager import config_manager
 from ....observability import FlowTrace, emit_event
 from ....utils.bcp47 import TIER_MACRO
 from ....utils.bcp47 import matches as bcp47_matches
-from ....utils.container_compat import choose_lossless_merge_container
+from ....utils.container_compat import (
+    choose_lossless_merge_container,
+    resolve_output_container,
+)
 from ....utils.format_scorer import (
     STRATEGY_ORIGINAL_FIRST,
     ScoringContext,
     audio_track_kind,
-    decide_merge_container,
     format_ranking,
     rank_audio_formats,
 )
+
+
+class _StreamTable(TableWidget):
+    """专业模式的流表：点空白不清选、拖拽不框选，只保留「按下即切换单行」。
+
+    三种专业模式的表格都用 QSizePolicy.Expanding 撑满各自卡片整高，行不多时下方一大片
+    是空视口；左右分栏时两张卡之间的留白同样落在 audio_table 视口的空白区。两类误触都要挡：
+
+    1. **点空白清空**：Qt/qfluentwidgets 基类对「无修饰键单击一个无效 index」会算出 Clear ——
+       单选视频表的原生高亮带整条消失、多选音频表更经 itemSelectionChanged →
+       _on_audio_selection_changed 把 _selected_audio_ids 一次清空。
+
+    2. **拖拽框选**：MultiSelection 下 Qt 把「按住左键的移动」解成 ToggleCurrent 框选，连同
+       _sync_native_selection 的原生选中回写一起，会把用户逐个点好的整批勾选清成一团、甚至
+       全部清空 —— 正是用户所说「连续选择音轨，突然全部都取消了」。用户在这两张表里从不需要
+       框选，逐行点选即可，故直接砍掉 MouseMove 带来的选择变化。
+
+    合法 index 的按下（切换单行）、带修饰键的单击、以及 event 为 None（键盘导航/程序化选择）
+    一律交回基类，选择语义分毫不变。与下载列表 task_list_view 的同名修复同源。
+    """
+
+    def selectionCommand(self, index, /, event=None):  # noqa: N802
+        if event is not None:
+            etype = event.type()
+            # 拖拽移动一律不改选择：只留「按下即切换」，杜绝框选清空整批勾选。
+            if etype == QEvent.Type.MouseMove:
+                return QItemSelectionModel.SelectionFlag.NoUpdate
+            # 点空白（无效 index）+ 无修饰键：按下/松开/双击都拦成 NoUpdate。
+            if (
+                not index.isValid()
+                and etype
+                in (
+                    QEvent.Type.MouseButtonPress,
+                    QEvent.Type.MouseButtonRelease,
+                    QEvent.Type.MouseButtonDblClick,
+                )
+                and event.modifiers() == Qt.KeyboardModifier.NoModifier
+            ):
+                return QItemSelectionModel.SelectionFlag.NoUpdate
+        return super().selectionCommand(index, event)
 
 
 def _get_table_selection_qss() -> str:
     from qfluentwidgets import isDarkTheme
 
     is_dark = isDarkTheme()
-    sel_bg = "rgba(255, 255, 255, 0.08)" if is_dark else "#E8E8E8"
+    # 选中态改由「连续强调色填充 + 左侧强调色指示条」承载，见下方 ::item:selected 注释。
     sel_fg = "#ffffff" if is_dark else "#000000"
     norm_fg = "#ffffff" if is_dark else "#000000"
-    sel_bd = "rgba(255, 255, 255, 0.15)" if is_dark else "#C0C0C0"
     hov_bg = "rgba(255, 255, 255, 0.04)" if is_dark else "#F3F3F3"
     border = "rgba(255, 255, 255, 0.06)" if is_dark else "rgba(0, 0, 0, 0.06)"
     hover_border = "rgba(255, 255, 255, 0.1)" if is_dark else "rgba(0, 0, 0, 0.1)"
@@ -68,6 +117,7 @@ def _get_table_selection_qss() -> str:
     return f"""
 QTableWidget {{
     background-color: transparent;
+    alternate-background-color: transparent;
     selection-background-color: transparent;
     outline: none;
     border: none;
@@ -89,14 +139,25 @@ QTableWidget::item {{
     border: 1px solid {border};
     margin-top: 3px;
     margin-bottom: 3px;
-    margin-right: 4px;
+    /* Symmetric side margins: the rounded per-cell "block" must share a center
+       with its cell widget, which is laid out at the full cell rect (setCellWidget
+       ignores ::item margins). A lone margin-right shifted every pill 2px left of
+       its centered content. 2+2 keeps the old block width (W-4) and the 4px
+       inter-column gap, only re-centering the pill under the content. */
+    margin-left: 2px;
+    margin-right: 2px;
     border-radius: 6px;
     color: {norm_fg};
 }}
 QTableWidget::item:selected {{
-    background-color: {sel_bg};
+    /* 不给选中行的三块药丸各描一圈边——2px 药丸间距会把边框断成三段带 4px 缝隙的独立圆
+       角框，读起来是「碎成三块」而非「整行选中」。选中态改由委托层承载：_highlight_table_rows
+       给整行设 BackgroundRole → TableItemDelegate 跨药丸铺出一条连续的淡强调色带，再加左侧
+       一根强调色指示条，整行遂读作一个整体。这里只留一圈透明 1px 边，让选中行不因边框有无
+       相对普通行的淡边发生 1px 回流。 */
+    background-color: transparent;
     color: {sel_fg};
-    border: 1px solid {sel_bd};
+    border: 1px solid transparent;
     border-radius: 6px;
     font-weight: 600;
 }}
@@ -108,7 +169,7 @@ QTableWidget::item:hover {{
 """
 
 
-# 专业模式下表格区（可组装的手风琴 / 整表模式的表格）的高度下限。
+# 专业模式下表格区（固定常开的流列表 / 整表模式的表格）的高度下限。
 # 四种模式共用同一个下限，切换时窗口高度恒定，不随格式条目数变化；
 # 页面里多出来的高度由伸缩因子全部交给表格区，不设上限——否则超出上限的
 # 部分会沉淀成「已选」与「输出容器」之间的底部留白。
@@ -116,7 +177,7 @@ _ADV_TABLE_AREA_H = 288
 
 
 def _get_split_scroll_qss() -> str:
-    """Theme-aware QSS for the advanced-mode accordion scroll area."""
+    """Theme-aware QSS for the advanced-mode split scroll area."""
     from qfluentwidgets import isDarkTheme
 
     is_dark = isDarkTheme()
@@ -268,7 +329,7 @@ class SimplePresetWidget(QWidget):
         main_layout.addLayout(type_layout)
 
         # 滚动区域
-        self.preset_scroll = SmoothScrollArea(self)
+        self.preset_scroll = TaskScrollArea(self)
         self.preset_scroll.setStyleSheet(_get_split_scroll_qss())
         self.preset_scroll.setWidgetResizable(True)
         self.preset_scroll.setMaximumHeight(450)
@@ -282,6 +343,10 @@ class SimplePresetWidget(QWidget):
 
         self.preset_scroll.setWidget(self.content_widget)
         main_layout.addWidget(self.preset_scroll)
+
+        # 切「下载类型」时预设列表整段重建（数量、内容都变）——给预设滚动区套一层快照
+        # 交叉淡化，遮住重建的突兀跳变。只淡快照、活动控件原生渲染，文字保持锐利。
+        self._preset_fader = RegionFader(self.preset_scroll)
 
         self.btn_group = QButtonGroup(self)
         self.btn_group.buttonClicked.connect(self.presetSelected)
@@ -391,9 +456,16 @@ class SimplePresetWidget(QWidget):
     def _on_type_changed(self, index: int):
         types = ["video_audio", "video_only", "audio_only"]
         selected_type = types[index]
-        self._rebuild_presets(selected_type)
-        self.typeChanged.emit(selected_type)
-        self.presetSelected.emit()
+
+        # 快照淡化包住重建 + 两条信号：run() 会先抓旧列表快照，再**同步**跑这段（信号时序
+        # 与不加动画时完全一致），最后把旧快照淡出，露出下方新列表。首帧 / 未显示时 run()
+        # 直接执行、不动画（见 RegionFader）。
+        def apply() -> None:
+            self._rebuild_presets(selected_type)
+            self.typeChanged.emit(selected_type)
+            self.presetSelected.emit()
+
+        self._preset_fader.run(apply)
 
     def _get_max_available_height(self) -> int:
         formats = self.info.get("formats", [])
@@ -508,20 +580,22 @@ class _ContainerFormatBar(QFrame):
     """分享于简易与专业模式的输出格式控制栏"""
 
     formatChanged = Signal()
+    #: 用户显式点选的容器被硬约束（多音轨 / 多语言内嵌字幕 / WebM 不容字幕）改掉时发出，
+    #: 携带 `(reason, before, after)`。真值由持有完整上下文的页面（`VideoFormatSelectorWidget`，
+    #: 它才知道字幕语言数 / 音轨数 / 流 ext）计算后代为 emit —— 本栏只有下拉框，算不出。
+    #: 放在栏上而不是页面上，是让「格式控制栏」保持自足的公共 API：任何宿主页面都能订阅
+    #: 「用户选的容器被改了」而不必知道 `VideoFormatSelectorWidget` 的内部。仅 `overridden==True`
+    #: 才 emit；programmatic set（config 恢复 / 初始构建）期间被页面的 `_suppress_infobar` 挡住。
+    containerOverridden = Signal(str, str, str)
 
     def __init__(self, config_prefix: str | None = None, parent=None):
         super().__init__(parent)
         self.config_prefix = config_prefix
 
-        from qfluentwidgets import isDarkTheme
-
-        bg = "rgba(255, 255, 255, 0.03)" if isDarkTheme() else "rgba(0, 0, 0, 0.03)"
-        self.setStyleSheet(
-            f"._ContainerFormatBar {{ background-color: {bg}; border-radius: 6px; padding: 5px; }}"
-        )
-
+        # 输出容器/格式栏不再画灰白底色条：那层半透明背景既丑又吃掉纵向空间。栏内容直接透明
+        # 融入页面即可，纵向外边距压到最小回收空间（横向留 10 保持与两侧对齐）。
         main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(10, 10, 10, 10)
+        main_layout.setContentsMargins(10, 2, 10, 2)
 
         row_layout = QHBoxLayout()
         row_layout.setContentsMargins(0, 0, 0, 0)
@@ -553,10 +627,28 @@ class _ContainerFormatBar(QFrame):
         self.container_combo.currentIndexChanged.connect(self._on_container_changed)
         self.audio_combo.currentIndexChanged.connect(self._on_audio_changed)
 
-        row_layout.addWidget(self.container_label)
-        row_layout.addWidget(self.container_combo)
-        row_layout.addWidget(self.audio_label)
-        row_layout.addWidget(self.audio_combo)
+        # §2.2：容器下拉与音频格式下拉是「按下载类型二选一」的关系，用 QStackedWidget 分页
+        # 而非逐个 setVisible——两页 sizeHint 取 max，切换 audio_only↔其余时栏宽零跳动；非当前
+        # 页由 stack 自动隐藏，但其 combo 的 currentIndex 仍可读，故 get_*_override 按 mode 取值
+        # 不受影响。stack 保持默认透明容器（无边框、无背景），不注入任何硬编码色（§3）。
+        self.format_stack = QStackedWidget(self)
+        self.format_stack.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Preferred)
+
+        container_page = QWidget()
+        container_page_layout = QHBoxLayout(container_page)
+        container_page_layout.setContentsMargins(0, 0, 0, 0)
+        container_page_layout.addWidget(self.container_label)
+        container_page_layout.addWidget(self.container_combo)
+
+        audio_page = QWidget()
+        audio_page_layout = QHBoxLayout(audio_page)
+        audio_page_layout.setContentsMargins(0, 0, 0, 0)
+        audio_page_layout.addWidget(self.audio_label)
+        audio_page_layout.addWidget(self.audio_combo)
+
+        self.format_stack.addWidget(container_page)  # index 0：容器（video_only / video_audio）
+        self.format_stack.addWidget(audio_page)  # index 1：音频格式（audio_only）
+        row_layout.addWidget(self.format_stack)
 
         # 「已选：...」摘要并排放在输出格式旁边。
         # 原先它单独占一行贴在表格区底部，和上方滚动区糊在一起，显示效果很差。
@@ -564,8 +656,9 @@ class _ContainerFormatBar(QFrame):
         row_layout.addSpacing(16)
         self.selection_label = CaptionLabel("", self)
         self.selection_label.setTextColor(QColor(96, 96, 96), QColor(210, 210, 210))
+        self.selection_label.setWordWrap(True)
         self.selection_label.hide()
-        row_layout.addWidget(self.selection_label)
+        row_layout.addWidget(self.selection_label, 1)
 
         row_layout.addStretch(1)
 
@@ -595,21 +688,12 @@ class _ContainerFormatBar(QFrame):
         self.formatChanged.emit()
 
     def set_mode(self, mode_str: str):
-        if mode_str == "audio_only":
-            self.container_label.hide()
-            self.container_combo.hide()
-            self.audio_label.show()
-            self.audio_combo.show()
-        elif mode_str == "video_only":
-            self.container_label.show()
-            self.container_combo.show()
-            self.audio_label.hide()
-            self.audio_combo.hide()
-        else:
-            self.container_label.show()
-            self.container_combo.show()
-            self.audio_label.show()
-            self.audio_combo.show()
+        # 容器选择只对含视频的下载有意义（video_only / video_audio）；音频格式
+        # （MP3/FLAC/…）走 --extract-audio，只有「仅音频」用得上——视频+音频是把音轨
+        # 合并进容器、保持内嵌，选它没有意义（其值也只在 audio_only 装配路径被读取，
+        # 见 _compute_selection_result）。§2.2：翻 QStackedWidget 而非 setVisible，切换不跳栏。
+        audio_only = mode_str == "audio_only"
+        self.format_stack.setCurrentIndex(1 if audio_only else 0)
 
     def set_hint(self, text: str):
         if text:
@@ -629,16 +713,23 @@ class _ContainerFormatBar(QFrame):
         return self.audio_combo.currentText().lower()
 
 
-class FormatExpandCard(CardWidget):
+class FormatExpandCard(TaskWindowSurface, CardWidget):
+    """固定常开的流列表卡（原手风琴已下线）。
+
+    过去它靠 `ExpandButton` + `maximumHeight` 补间折叠/展开，但两侧流列表本就默认展开、
+    用户从不折叠——手风琴只带来掉帧与「点头部会脉冲整卡」的噪音。现在直接常开：头部只剩
+    图标 + 标题 + 摘要，`body_widget` 始终可见，无开关、无动画、无 eventFilter。仍保留
+    `_hoverBackgroundColor`/`_pressedBackgroundColor` 覆写，让这张纯容器卡不随指针脉冲底色。
+    """
+
     def __init__(self, icon: FluentIcon, title: str, parent=None):
         super().__init__(parent)
         self.v_layout = QVBoxLayout(self)
         self.v_layout.setContentsMargins(8, 8, 8, 8)
         self.v_layout.setSpacing(0)
 
-        # Header
+        # Header：图标 + 标题 + 摘要（不再可点击，无 chevron）。
         self.header_widget = QWidget(self)
-        self.header_widget.setCursor(Qt.CursorShape.PointingHandCursor)
         self.header_layout = QHBoxLayout(self.header_widget)
         self.header_layout.setContentsMargins(4, 4, 4, 4)
 
@@ -647,11 +738,8 @@ class FormatExpandCard(CardWidget):
 
         self.title_label = StrongBodyLabel(title, self)
         self.summary_label = CaptionLabel(self.tr("未选择"), self)
-        self.summary_label.setStyleSheet("color: #808080;")
-
-        self.toggle_btn = TransparentToolButton(FluentIcon.DOWN, self)
-        self.toggle_btn.setFixedSize(30, 30)
-        self.toggle_btn.clicked.connect(self.toggle)
+        self.summary_label.setTextColor(QColor(96, 96, 96), QColor(210, 210, 210))
+        self.summary_label.setWordWrap(True)
 
         self.header_layout.addWidget(self.icon_widget)
         self.header_layout.addSpacing(10)
@@ -659,40 +747,31 @@ class FormatExpandCard(CardWidget):
         self.header_layout.addSpacing(10)
         self.header_layout.addWidget(self.summary_label)
         self.header_layout.addStretch(1)
-        self.header_layout.addWidget(self.toggle_btn)
 
         self.v_layout.addWidget(self.header_widget)
 
-        # Content body
+        # Content body：始终可见。
         self.body_widget = QWidget(self)
         self.body_layout = QVBoxLayout(self.body_widget)
         self.body_layout.setContentsMargins(0, 8, 0, 0)
         self.body_layout.setSpacing(0)
 
-        self.v_layout.addWidget(self.body_widget)
+        # body_widget 吃伸缩因子：卡片被拉高时（并排双表铺满 split_scroll），多出来的高度
+        # 全部流进 body（流列表），而不是沉淀成 header↔body 之间、或卡片底部的死白。
+        self.v_layout.addWidget(self.body_widget, 1)
 
-        self.is_expanded = False
-        self.body_widget.hide()
+    def _hoverBackgroundColor(self):
+        # 纯容器卡：不随指针悬停脉冲整张流列表的底色。
+        return self._normalBackgroundColor()
 
-        self.header_widget.mouseReleaseEvent = self._on_header_clicked
-
-        self.header_widget.mouseReleaseEvent = self._on_header_clicked
-
-    def _on_header_clicked(self, e):
-        if e.button() == Qt.MouseButton.LeftButton:
-            self.toggle()
-
-    def toggle(self):
-        self.is_expanded = not self.is_expanded
-        if self.is_expanded:
-            self.toggle_btn.setIcon(FluentIcon.UP)
-            self.body_widget.show()
-        else:
-            self.toggle_btn.setIcon(FluentIcon.DOWN)
-            self.body_widget.hide()
+    def _pressedBackgroundColor(self):
+        # 同理，按下也不脉冲——卡内没有可点击的开关，点头部/子标签都不该染色。
+        return self._normalBackgroundColor()
 
     def set_content(self, widget: QWidget):
-        self.body_layout.addWidget(widget)
+        # stretch=1：内容（流列表表格）铺满 body，卡片长高时表格跟着长高、多显几行；
+        # 行数不够时下方是表格自身的主题底色——与单表模式「可接受的列表留白」同类。
+        self.body_layout.addWidget(widget, 1)
 
     def set_summary(self, text: str):
         self.summary_label.setText(text)
@@ -717,6 +796,14 @@ class VideoFormatSelectorWidget(QWidget):
         #: 同一个选择重复问不是新决策 —— 只在指纹变化时才落事件。
         self._last_decision_sig: tuple | None = None
 
+        #: Phase 3g 覆盖提示的状态：`_last_resolution` 由 `_compute_selection_result()` 在
+        #: 视频+音频分支写入最近一次 `ContainerResolution`（其余路径写 None）；`_last_infobar_key`
+        #: 是「已提示过的覆盖」指纹，去重防刷屏；`_suppress_infobar` 在初始构建期间置真，挡掉
+        #: config 恢复触发的假覆盖提示 —— 真正的提示只应回应用户的改动，不该在开窗时就弹。
+        self._last_resolution: Any = None
+        self._last_infobar_key: tuple | None = None
+        self._suppress_infobar = True
+
         # State for advanced mode
         self._rows: list[dict[str, Any]] = []
         self._selected_video_id: str | None = None
@@ -733,6 +820,15 @@ class VideoFormatSelectorWidget(QWidget):
         from qfluentwidgets import qconfig
 
         qconfig.themeChanged.connect(self._update_style)
+
+        # Phase 3g：把「用户选的容器被硬约束改掉」变成一条即时的暗黑 InfoBar 提示。
+        # 真值在本页面算（`_refresh_container_override_hint`，它握有字幕语言数 / 音轨数 / 流 ext），
+        # 经栏上的 `containerOverridden` 公共信号回到本页面显示 —— 这一跳让宿主页面 / 未来的
+        # 装配预览也能订阅同一事件，而不必知道本控件内部。连接放在 __init__ 末尾且此前
+        # `_suppress_infobar` 恒真，初始构建期间即便 selectionChanged 误触也不会弹。
+        self.selectionChanged.connect(self._refresh_container_override_hint)
+        self.format_bar.containerOverridden.connect(self._show_container_override_infobar)
+        self._suppress_infobar = False
 
     def _update_style(self):
         qss = _get_table_selection_qss()
@@ -754,13 +850,20 @@ class VideoFormatSelectorWidget(QWidget):
 
         # Mode Switcher
         self.view_switcher = SegmentedWidget(self)
-        self.view_switcher.addItem("simple", self.tr("简易模式"))
+        self.view_switcher.addItem("simple", self.tr("标准模式"))
         self.view_switcher.addItem("advanced", self.tr("专业模式"))
         layout.addWidget(self.view_switcher)
 
         # Stack
-        self.stack = QStackedWidget(self)
-        layout.addWidget(self.stack)
+        self.stack = CurrentPageStack(self)
+        # stack 吃 stretch=1：窗口固定高的余量顺着 选择器→分页栈 下沉到当前页（专业单表模式即
+        # table_scroll），format_bar / 装配预览留在栈下方紧贴，不被余量顶开。
+        layout.addWidget(self.stack, 1)
+
+        # 标准↔专业切页、以及专业模式内切「下载模式」时，都对整个分页栈做一次快照交叉淡化。
+        # 两种切换都改变栈当前页的可见内容，抓 self.stack 即抓当前页；只淡快照、活动控件
+        # 原生渲染，文字锐利。构建期栈尚未显示，run() 会直接落地、不做首帧动画。
+        self._stack_fader = RegionFader(self.stack)
 
         # Page 1: Simple
         self.simple_widget = SimplePresetWidget(self.info, self)
@@ -785,7 +888,9 @@ class VideoFormatSelectorWidget(QWidget):
                 self.tr("仅音频"),
             ]
         )
-        self.mode_combo.currentIndexChanged.connect(self._refresh_table)
+        # 用户切「下载模式」经 _on_pro_mode_changed 走快照淡化；构建期的首刷仍是 __init__ 里
+        # 对 _refresh_table 的直接调用（不经此路径、不动画）。
+        self.mode_combo.currentIndexChanged.connect(self._on_pro_mode_changed)
         form_layout.addWidget(self.mode_combo, 1)
         adv_layout.addLayout(form_layout)
 
@@ -799,51 +904,57 @@ class VideoFormatSelectorWidget(QWidget):
 
         # 1. Single Table (for modes 1, 2, 3) - wrapped in scroll area
         self.table = self._create_table()
-        # 外层滚动区负责滚动，表格自身完整撑开，避免行被从中间截断
-        self.table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        # Tables share bounded, pixel-scrolled viewports in all professional modes.
+        self.table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self.table.cellClicked.connect(self._on_table_clicked)
 
-        self.table_scroll = SmoothScrollArea(self.advanced_widget)
+        self.table_scroll = TaskScrollArea(self.advanced_widget)
         self.table_scroll.setStyleSheet(_get_split_scroll_qss())
         self.table_scroll.setWidget(self.table)
         self.table_scroll.setWidgetResizable(True)
-        self.table_scroll.setMinimumHeight(_ADV_TABLE_AREA_H)
-        # 伸缩因子 1：页面里多出来的高度全部归表格区，而不是沉淀成底部留白
+        # 单表（仅视频/仅音频/整合流）模式：table_scroll 吃 stretch=1（不设 288 高地板）。内层
+        # table 在 _populate_table 里只钉「内容高」作下限、放开上限，配合这里的 setWidgetResizable
+        # 铺满 table_scroll 整高——窗口固定高多出来的余量直接划进表格（多显几行/行少时是表格主题
+        # 底色），不再表现为表格下方那截闲置留白。选项栏 / 下载位置页脚仍紧贴内容，不被余量顶出
+        # 「下载选项↔下载位置」的中缝空档。split_scroll（并排双表）另带 288 地板 + stretch=1；两者
+        # 互斥显示，隐藏那个的 stretch 自动失效，故余量恒流向当前可见的表格区。
         adv_layout.addWidget(self.table_scroll, 1)
 
         # Split Container (for mode 0) - wrapped in scroll area
+        # 左视频流 · 右音频流：两卡横向并排（用户既定的「顶层 视频|音频」排布），
+        # 等宽 stretch=1，默认双双展开——并排的意义就是一眼同时看到视频与音频轨。
         self.split_container = QWidget(self.advanced_widget)
-        split_layout = QVBoxLayout(self.split_container)
+        split_layout = QHBoxLayout(self.split_container)
         split_layout.setContentsMargins(0, 0, 0, 0)
         split_layout.setSpacing(10)
 
-        # Video Section
+        # Video Section（左）
         self.video_card = FormatExpandCard(
             FluentIcon.VIDEO, self.tr("视频流"), self.split_container
         )
+        self.video_card.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.video_table = self._create_table()
         self.video_table.setMinimumHeight(120)
-        self.video_table.setMaximumHeight(280)  # 适当放开高度限制以显示更多元素
         self.video_table.cellClicked.connect(self._on_video_table_clicked)
         self.video_card.set_content(self.video_table)
-        self.video_card.toggle()  # 默认展开视频流
-        split_layout.addWidget(self.video_card)
+        # 不设 AlignTop：并排双卡各自铺满 split_scroll 的整高（等宽 stretch=1、等高铺满），
+        # 两卡下方原本的死白被划进流列表本身——表格纵向可伸展，_populate_table 只钉「内容高」
+        # 作下限、放开上限，行多时多显几行、行少时下方是表格主题底色。
+        split_layout.addWidget(self.video_card, 1)
 
-        # Audio Section
+        # Audio Section（右）
         self.audio_card = FormatExpandCard(
             FluentIcon.MUSIC, self.tr("音频流 (可多选)"), self.split_container
         )
+        self.audio_card.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.audio_table = self._create_table(multi_select=True)
         self.audio_table.setMinimumHeight(120)
-        self.audio_table.setMaximumHeight(280)  # 同上
         self.audio_table.itemSelectionChanged.connect(self._on_audio_selection_changed)
         self.audio_card.set_content(self.audio_table)
-        split_layout.addWidget(self.audio_card)
-
-        split_layout.addStretch(1)
+        split_layout.addWidget(self.audio_card, 1)
 
         # Wrap split container in a scroll area to prevent window expansion
-        self.split_scroll = SmoothScrollArea(self.advanced_widget)
+        self.split_scroll = TaskScrollArea(self.advanced_widget)
         self.split_scroll.setStyleSheet(_get_split_scroll_qss())
         self.split_scroll.setWidget(self.split_container)
         self.split_scroll.setWidgetResizable(True)
@@ -861,6 +972,11 @@ class VideoFormatSelectorWidget(QWidget):
         self.format_bar.formatChanged.connect(self.selectionChanged)
         layout.addWidget(self.format_bar)
 
+        # §2.2 语义分流：专业模式切「仅音频」时格式栏也要翻到音频格式页（容器对仅音频
+        # 无意义）。mode_combo 原本只连 _refresh_table，故在此补一条到 _update_format_bar_visibility；
+        # 放在 format_bar 建好之后再连，避开构建期 self.format_bar 尚未存在的时序坑。
+        self.mode_combo.currentIndexChanged.connect(self._update_format_bar_visibility)
+
         # 「已选：...」摘要现在住在格式栏里（输出格式旁边），而不是表格区底部。
         # 保留 self.selection_label 这个名字，_update_label / get_summary_text 无需改动。
         self.selection_label = self.format_bar.selection_label
@@ -870,8 +986,23 @@ class VideoFormatSelectorWidget(QWidget):
 
         self.simple_widget.typeChanged.connect(self._on_simple_type_changed)
 
+    def mount_assembly_preview(self, card: QWidget) -> None:
+        """把常驻「装配预览」卡片挂到输出容器栏（format_bar）正上方。
+
+        预览与容器栏同处选择器主列（在 简易/专业 分页栈之外），故两种模式下都常驻可见。
+        插到 format_bar 前一格即可；卡片随之成为本选择器的子控件，每次重解析会与选择器
+        一起销毁重建（宿主侧的 `_assembly_preview` 由 `_clear_content_layout` 同步置空）。
+        """
+        layout = self.layout()
+        card.setParent(self)
+        layout.insertWidget(layout.indexOf(self.format_bar), card)
+
     def _create_table(self, multi_select: bool = False):
-        t = QTableWidget(self.advanced_widget)
+        t = _StreamTable(self.advanced_widget)
+        configure_scrolling(t)
+        # 纵向可伸展：三种专业模式的表格都要铺满各自的滚动区/卡片整高（配合外层
+        # setWidgetResizable），把列表下方原本闲置的空间划给列表本身。
+        t.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         t.setStyleSheet(_get_table_selection_qss())
         t.setColumnCount(3)
         t.setHorizontalHeaderLabels([self.tr("类型"), self.tr("质量"), self.tr("详情")])
@@ -919,12 +1050,88 @@ class VideoFormatSelectorWidget(QWidget):
     def get_audio_format_override(self) -> str:
         return self.format_bar.get_audio_override()
 
+    def _refresh_container_override_hint(self) -> None:
+        """selectionChanged 时重算容器决策，仅在「用户显式选的容器被硬约束改掉」时提示一次。
+
+        Phase 3g 的触发闸门。真值来自 `_compute_selection_result()` 落在 `self._last_resolution`
+        里的 `ContainerResolution`：`overridden==True` 意味着用户点了具体容器（如 MP4）却被
+        多音轨 / 多语言内嵌字幕 / WebM 不容字幕升级成了别的（如 MKV）。纯自动推断
+        （用户没显式选容器）`overridden` 恒 False —— 永不打扰。
+
+        用 `(reason, before, after)` 做去重指纹（`_last_infobar_key`）：`get_selection_result()`
+        会被字幕选择器等处反复拉取，但那些不发 selectionChanged、不进这里；这里只应对用户的
+        改动，同一覆盖重复触发不再弹第二次。清空提示（切到纯音频 / 取消 override）时把指纹归零，
+        以便同一覆盖稍后再次出现时还能提示。观测是 best-effort，重算异常一律吞掉、不影响选择。
+        """
+        if getattr(self, "_suppress_infobar", False):
+            return
+        try:
+            self._compute_selection_result()
+        except Exception:
+            return
+        res = self._last_resolution
+        if res is None or not getattr(res, "overridden", False):
+            self._last_infobar_key = None
+            return
+        key = (res.reason, res.user_requested, res.container)
+        if key == self._last_infobar_key:
+            return
+        self._last_infobar_key = key
+        self.format_bar.containerOverridden.emit(
+            res.reason or "", res.user_requested or "", res.container or ""
+        )
+
+    def _show_container_override_infobar(self, reason: str, before: str, after: str) -> None:
+        """把一次容器覆盖渲染成暗黑合规的 `InfoBar.warning`（自动推断路径永不到这）。
+
+        文案按 `reason` 分流，全部走 `self.tr()`、不含硬编码颜色（暗黑 InfoBar 子类自带主题色）。
+        这是即时「抬头」提示；提交下载时窗口的 `_handle_container_conflict` 仍会就同一冲突给出
+        「保留 / 改用」二选一弹窗 —— 两者互补：改配置时先知道，提交时再定夺。
+        """
+        b = (before or "").upper()
+        a = (after or "").upper()
+        if reason == "audio_multistream":
+            content = self.tr("已将容器从 {0} 升级为 {1}，以保留多条音轨。").format(b, a)
+        elif reason == "subtitle_multi_lang":
+            content = self.tr("已将容器从 {0} 升级为 {1}，以保留多语言内嵌字幕。").format(b, a)
+        elif reason == "subtitle_webm_incompatible":
+            content = self.tr("已将容器从 {0} 升级为 {1}：WebM 不支持内嵌字幕。").format(b, a)
+        else:
+            content = self.tr("已将容器从 {0} 调整为 {1}。").format(b, a)
+
+        InfoBar.warning(
+            title=self.tr("输出容器已调整"),
+            content=content,
+            orient=Qt.Orientation.Horizontal,
+            isClosable=True,
+            duration=6000,
+            position=InfoBarPosition.TOP,
+            parent=self,
+        )
+
     def _on_mode_changed(self, routeKey: str):
-        self._current_mode = routeKey
-        is_advanced = routeKey != "simple"
-        self.stack.setCurrentIndex(1 if is_advanced else 0)
-        # 「已选」摘要只在专业模式下有意义：简易模式的预设单选项本身就自述了选择内容
-        self.selection_label.setVisible(is_advanced)
+        # 标准↔专业整页切换：快照淡化包住换页动作。run() 先抓旧页快照，再同步换页 + 发信号
+        # （时序不变），最后淡出旧页露出新页。构建期 setCurrentItem("simple") 也会走到这里，
+        # 但那时栈未显示，run() 直接落地、不做首帧动画。
+        def apply() -> None:
+            self._current_mode = routeKey
+            is_advanced = routeKey != "simple"
+            self.stack.setCurrentIndex(1 if is_advanced else 0)
+            self.stack.updateGeometry()
+            # 「已选」摘要只在专业模式下有意义：简易模式的预设单选项本身就自述了选择内容
+            self.selection_label.setVisible(is_advanced)
+            # `_compute_selection_result()` 的第一行就按 `_current_mode` 分流——标准/专业算的是
+            # 两套完全不同的 format。模式一换，选择结果就变了，必须发信号让宿主重算装配预览
+            # （否则预览停留在切换前那一模式的旧结果，即「切到标准模式不重新识别」）。
+            self.selectionChanged.emit()
+
+        self._stack_fader.run(apply)
+
+    def _on_pro_mode_changed(self, _index: int = 0):
+        # 专业模式内切「下载模式」（可组装/整合流/仅视频/仅音频）：表格区在单表↔并排双表间
+        # 切换并重排。快照淡化盖住这次跳变；_refresh_table 里既有的延迟 doItemsLayout() 定时器
+        # 在淡出途中照常触发，把 cell widget 的 12px 错位修正也一并藏在快照之下。
+        self._stack_fader.run(self._refresh_table)
 
     def _build_rows(self, info: dict[str, Any]):
         formats = info.get("formats") or []
@@ -989,13 +1196,34 @@ class VideoFormatSelectorWidget(QWidget):
                 }
             )
 
-        # Sort: muxed first, then video, then audio. Within kind, by height desc.
-        candidates.sort(
-            key=lambda x: (
-                0 if x["kind"] == "muxed" else 1 if x["kind"] == "video" else 2,
-                -int(x.get("height") or 0),
+        # Sort: muxed first, then video, then audio. 视频/整合流仍按 height 降序（原样不动）。
+        # 音频没有 height（恒 0），旧实现让整组音频落在同一档、保留 yt-dlp 默认的「码率升序」，
+        # 于是最高音质沉到列表底部——用户报的「音频流没优化到位，最高质量该置顶」。改为音频档内
+        # 按码率（abr→tbr）降序置顶最高音质；同码率再按音轨类型（原音>默认>配音>描述）→ 体积 →
+        # format_id 稳定收敛（多音轨视频里同码率的原音排在配音前）。前两个键对非音频行恒等，
+        # 稳定排序保证视频/整合流的既有次序丝毫不变（不会因新键把 2160p AV1/VP9 对调）。
+        # 注意这里是纯「展示顺序」：自动选中仍由 rank_audio_formats 判（含 mp4 亲和补偿），故被
+        # 勾选的那条不一定恰在顶端——列表如实按码率排，符合「质量最高在最上面」的字面诉求。
+        audio_kind_order = {"original": 0, "default": 1, "dub": 2, "unknown": 2, "descriptive": 3}
+
+        def _sort_key(x: dict) -> tuple:
+            kind_rank = 0 if x["kind"] == "muxed" else 1 if x["kind"] == "video" else 2
+            height_key = -int(x.get("height") or 0)
+            if x["kind"] != "audio":
+                return (kind_rank, height_key, 0.0, 0, 0, "")
+            abr = float(x.get("abr") or x.get("tbr") or 0)
+            kind_slot = audio_kind_order.get(audio_track_kind(x), 2)
+            filesize = int(x.get("filesize") or 0)
+            return (
+                kind_rank,
+                height_key,
+                -abr,
+                kind_slot,
+                -filesize,
+                str(x.get("format_id") or ""),
             )
-        )
+
+        candidates.sort(key=_sort_key)
         self._rows = candidates
 
     def _refresh_table_selection_state(self):
@@ -1177,31 +1405,65 @@ class VideoFormatSelectorWidget(QWidget):
             elif mode == 3:
                 sel_id = self._selected_audio_id
 
-            self._populate_table(self.table, view_rows, sel_id, fill_content=True)
+            self._populate_table(self.table, view_rows, sel_id)
 
         self._update_label()
         self.selectionChanged.emit()
+
+        # After a mode switch we hid one view and show()ed another; the newly shown
+        # QTableView's viewport resize is still queued. QTableView only repositions its
+        # cell widgets (the per-row icon / quality / detail containers) from that resize,
+        # so populating before it flushes leaves them latched to stale row rects and
+        # rendering ~12px too low — the "从视频+音频切到仅视频就错位" bug, which then
+        # sticks on every re-entry until a genuine resize clears it. Defer a one-shot
+        # relayout to the next event-loop tick, once the resize has settled (a
+        # synchronous call here runs before it and does nothing). The timer is parented
+        # to self and fires a bound slot, so it can never outlive this widget — a stray
+        # fire on a torn-down table is a hard C++ crash, not a catchable error.
+        timer = getattr(self, "_relayout_timer", None)
+        if timer is None:
+            timer = QTimer(self)
+            timer.setSingleShot(True)
+            timer.timeout.connect(self._relayout_visible_tables)
+            self._relayout_timer = timer
+        timer.start(0)
+
+    def _relayout_visible_tables(self):
+        # Re-lay-out the tables currently on screen: doItemsLayout() repositions their
+        # cell widgets against the now-final row geometry. Idempotent and cheap on these
+        # ≤10-row tables, so a redundant call on an already-aligned table is harmless.
+        # Each table is a child of self, hence alive whenever this slot can run.
+        for tbl in (
+            getattr(self, "table", None),
+            getattr(self, "video_table", None),
+            getattr(self, "audio_table", None),
+        ):
+            if tbl is not None and tbl.isVisible():
+                tbl.doItemsLayout()
 
     def _populate_table(
         self,
         table: QTableWidget,
         rows: list[dict],
         selected_id: str | None,
-        fill_content: bool = False,
     ):
         table.setRowCount(len(rows))
         table.setProperty("_rows", rows)
 
-        # 高度策略与可组装模式保持一致：外层滚动区填满可用空间（下限
-        # _ADV_TABLE_AREA_H），窗口高度不随行数变化；表格自身按内容完整
-        # 撑开，超出部分由滚动区消化，行不会被从中间截断。
+        # Leave room for both accordion headers in the normal window. The
+        # standalone table can use six rows; stacked stream cards use four.
         row_height = 42
         header_height = 42 if not table.horizontalHeader().isHidden() else 0
         row_count = max(len(rows), 1)
-        visible_rows = row_count if fill_content else min(row_count, 2)
+        is_split = table in (self.video_table, self.audio_table)
+        visible_rows = min(row_count, 4 if is_split else 6)
         total_height = header_height + visible_rows * row_height + 2
         table.setMinimumHeight(total_height)
-        table.setMaximumHeight(total_height)
+        # 三种专业模式统一：只钉「内容高」作下限、放开上限，让表格铺满其滚动区（table_scroll）
+        # 或卡片（split 双卡）的整高——把列表下方原本闲置的空间划给列表本身。行多时多显几行、
+        # 超出可视高度走表格内部滚动；行少时下方是表格自身的主题底色。窗口固定高不受影响
+        # （下限＝内容高，未变；余量的吸收方式没变，只是从「表格下方留白」变成「表格铺满」）。
+        table.setMaximumHeight(16777215)  # QWIDGETSIZE_MAX：等同「不设上限」
 
         for i, r in enumerate(rows):
             kind = r["kind"]
@@ -1212,7 +1474,13 @@ class VideoFormatSelectorWidget(QWidget):
             container = QWidget()
             container.setStyleSheet("background: transparent;")
             layout = QHBoxLayout(container)
-            layout.setContentsMargins(0, 0, 0, 0)
+            # qfluentwidgets' TableItemDelegate.updateEditorGeometry hard-insets the
+            # *first* column's cell widget: x = max(8, rect.x()) and w -= 8, so col0's
+            # widget rect becomes [8, colW] (8px gap on the left, flush on the right).
+            # AlignCenter would then land the icon 4px right of the per-cell pill center
+            # (the QSS ::item block, which is symmetric — see _get_table_selection_qss).
+            # A matching 8px right margin restores symmetry so the icon centers in its pill.
+            layout.setContentsMargins(0, 0, 8, 0)
             layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
             iw = IconWidget(icon)
             iw.setFixedSize(16, 16)
@@ -1231,6 +1499,11 @@ class VideoFormatSelectorWidget(QWidget):
             q_w = QualityCellWidget(
                 q_badges, q_text, parent=table, alignment=Qt.AlignmentFlag.AlignCenter
             )
+            # 中列也建一个空 item：否则 table.item(i, 1) 为 None，_highlight_table_rows 无处安放
+            # BackgroundRole，委托便对中列退回默认的淡灰选中底，于是选中行成了「强调色 | 灰 | 强调色」
+            # 三段——首/末列有色带、中列一截灰缝。补上 item 后整行三块同色，连成一条完整的强调色带。
+            item1 = QTableWidgetItem("")
+            table.setItem(i, 1, item1)
             table.setCellWidget(i, 1, q_w)
 
             # Detail Column: Tags + Size/Ext
@@ -1242,13 +1515,17 @@ class VideoFormatSelectorWidget(QWidget):
             # Construct main text for details
             detail_text = f"{ext} • {sz}"
 
-            # Use QualityCellWidget for Details too
-            # We want left alignment generally for details but user requested centered visuals earlier.
-            # However, for badges flow, Left or Center?
-            # User said "center alignment to achieve visual optimization" previously.
-            # Let's keep Center for consistency.
+            # Detail column is the Stretch column, and its header is center-aligned
+            # (Qt's default) — so center the content too, to match the header and the
+            # 类型/质量 columns. QualityCellWidget's center-elide mode centers the block
+            # with flanking stretches when the column is roomy, and lets the label elide
+            # (…) instead of spilling once the column is squeezed narrower than the text.
             d_w = QualityCellWidget(
-                detail_tags, detail_text, parent=table, alignment=Qt.AlignmentFlag.AlignCenter
+                detail_tags,
+                detail_text,
+                parent=table,
+                elide=True,
+                alignment=Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter,
             )
 
             item2 = QTableWidgetItem("")
@@ -1258,13 +1535,18 @@ class VideoFormatSelectorWidget(QWidget):
         self._highlight_table_rows(table, {selected_id} if selected_id else set())
 
     def _highlight_table_rows(self, table: QTableWidget, selected_ids: set[str]):
-        from qfluentwidgets import isDarkTheme
+        from qfluentwidgets import isDarkTheme, themeColor
 
         is_dark = isDarkTheme()
-        sel_bg = QColor(255, 255, 255, 20) if is_dark else QColor("#E8E8E8")
+        # 选中填充用淡强调色（青），经 BackgroundRole 交给 TableItemDelegate 跨三块药丸铺成
+        # 一条连续的整行色带（委托的 _drawBackground 首列圆左、末列圆右、中列相接），与左侧
+        # 强调色指示条一起把整行读作「被选中」，不再是几乎看不见的灰、也不再是三块碎片。
+        tc = themeColor()
+        sel_bg = QColor(tc.red(), tc.green(), tc.blue(), 46 if is_dark else 36)
         sel_fg = QColor(255, 255, 255) if is_dark else QColor(0, 0, 0)
 
         rows = table.property("_rows") or []
+        selected_row_indices: list[int] = []
         for i in range(table.rowCount()):
             # Reset style
             for j in range(3):
@@ -1277,11 +1559,47 @@ class VideoFormatSelectorWidget(QWidget):
             if i < len(rows):
                 fid = rows[i]["format_id"]
                 if fid in selected_ids and fid:
+                    selected_row_indices.append(i)
                     for j in range(3):
                         it = table.item(i, j)
                         if it:
                             it.setBackground(sel_bg)
                             it.setForeground(sel_fg)
+
+        # 让原生选中态与应用层选中态永远落在同一行。初次填充时预选的「最佳」行原本只设了
+        # BackgroundRole 填充、没有原生选中，于是左侧指示条（委托仅对原生选中行、且第 0 列绘制）
+        # 不出现——「填充在、指示条不在」看起来残缺。这里把原生选中同步成应用层选中，指示条与
+        # 填充遂始终同步；单选表恒为一行，音频多选表则让用户勾选的每一行都拿到同一条色带 + 指示条。
+        self._sync_native_selection(table, selected_row_indices)
+
+    def _sync_native_selection(self, table: QTableWidget, rows_to_select: list[int]):
+        """把表格的原生选中同步成给定行集合，且不回弹选择信号。
+
+        用委托层重写过的选择路径之外的 selectionModel().select() 直接落选，故需显式
+        updateSelectedRows() 刷新委托的 selectedRows（指示条来源）；期间阻断表格信号，避免
+        反过来触发 itemSelectionChanged → _on_audio_selection_changed 的递归。
+        """
+        from PySide6.QtCore import QItemSelection, QItemSelectionModel
+
+        sm = table.selectionModel()
+        if sm is None:
+            return
+        model = table.model()
+        last_col = table.columnCount() - 1
+        selection = QItemSelection()
+        for i in rows_to_select:
+            if 0 <= i < table.rowCount():
+                selection.select(model.index(i, 0), model.index(i, last_col))
+        flags = (
+            QItemSelectionModel.SelectionFlag.ClearAndSelect
+            | QItemSelectionModel.SelectionFlag.Rows
+        )
+        was_blocked = table.blockSignals(True)
+        try:
+            sm.select(selection, flags)
+        finally:
+            table.blockSignals(was_blocked)
+        table.updateSelectedRows()
 
     def _on_table_clicked(self, row, col):
         rows = self.table.property("_rows")
@@ -1327,6 +1645,10 @@ class VideoFormatSelectorWidget(QWidget):
                 self._selected_audio_ids.append(rows_data[r_idx]["format_id"])
 
         self._selected_audio_id = self._selected_audio_ids[0] if self._selected_audio_ids else None
+        # 多选音频：给当前每一行勾选都补上同一条强调色填充带（委托默认只给原生选中行铺一层
+        # 几乎看不见的灰，正是用户嫌弃的「很差」标记）。此调用会经 _sync_native_selection 幂等
+        # 地重设同一批原生选中（信号已阻断，不会递归回本槽）。
+        self._highlight_table_rows(self.audio_table, set(self._selected_audio_ids))
         self._update_label()
         self.selectionChanged.emit()
 
@@ -1608,6 +1930,10 @@ class VideoFormatSelectorWidget(QWidget):
 
     def _compute_selection_result(self) -> dict:
         """算出 {format, extra_opts}；观测由 `get_selection_result()` 统一负责。"""
+        # Phase 3g：先清空最近一次容器决策；只有下面的「视频+音频」分支跑了 resolver
+        # 才会写回真值。其余路径（纯音频 / 降级整合流 / 兜底 / 专业模式）留 None，
+        # `_refresh_container_override_hint()` 读到 None 即视作「无覆盖」清掉提示。
+        self._last_resolution = None
         if getattr(self, "_current_mode", "simple") == "simple":
             sel = self.simple_widget.get_current_selection()
             if not sel:
@@ -1641,6 +1967,20 @@ class VideoFormatSelectorWidget(QWidget):
                 }
                 return {"format": best_aud or "bestaudio/best", "extra_opts": extra}
 
+            # --- 仅视频模式 ---
+            # video_only 意图此前无支路，会掉进下面「含视频模式」并被无条件配一条音频，
+            # 于是「仅视频」实际下成视频+音频、预览也误判为「视频 + 音频」。这里显式短路：
+            # 只挑视频流、不带音频，让结果反推为 KIND_VIDEO_ONLY（与实际装配一致）。
+            if intent.get("type") == "video_only":
+                best_vid = self._pick_best_video(video_rows, intent)
+                if best_vid:
+                    return {"format": best_vid, "extra_opts": {}}
+                # 没有分离视频流 → 退回整合流（含音频，但已是能拿到的最接近「视频」的东西）
+                best_muxed = self._pick_best_muxed(muxed_rows, intent)
+                if best_muxed:
+                    return {"format": best_muxed, "extra_opts": {}}
+                return {"format": "best", "extra_opts": {}}
+
             # --- 含视频模式：用打分引擎挑选最优视频+音频 ---
             best_vid = self._pick_best_video(video_rows, intent)
             best_aud = self._get_best_audio_id(audio_rows, ctx) if audio_rows else None
@@ -1648,32 +1988,47 @@ class VideoFormatSelectorWidget(QWidget):
             extra_opts: dict = {}
 
             if best_vid and best_aud:
-                # 正常组装：视频+音频，容器由统一决策函数确定
+                # 正常组装：视频+音频，容器由单一 resolver 确定
                 vid_ext = next(
                     (r.get("ext") for r in video_rows if r["format_id"] == best_vid), "mp4"
                 )
                 aud_ext = next(
                     (r.get("ext") for r in audio_rows if r["format_id"] == best_aud), "m4a"
                 )
-                merge_fmt = decide_merge_container(vid_ext, aud_ext, ctx)
                 override_fmt = self.get_container_override()
-                extra_opts["merge_output_format"] = override_fmt or merge_fmt
 
                 fmt_str = f"{best_vid}+{best_aud}"
+                track_count = 1
                 audio_pick = getattr(self.simple_widget, "get_audio_pick_result", lambda: None)()
                 if audio_pick and getattr(audio_pick, "format_ids", []):
                     # 用户通过音轨选择器做了明确选择 → 尊重用户选择
                     picked_ids = audio_pick.format_ids
-                    if len(picked_ids) > 1:
+                    track_count = len(picked_ids)
+                    if track_count > 1:
                         extra_opts["audio_multistreams"] = True
-                    extra_opts["__audio_track_count"] = len(picked_ids)
+                    extra_opts["__audio_track_count"] = track_count
                     fmt_str = f"{best_vid}+" + "+".join(picked_ids)
-                    # 重新推断 aud_ext 以用于容器决策（取第一条选中音轨的 ext）
-                    first_picked_ext = next(
+                    # 容器决策按第一条选中音轨的 ext 走
+                    aud_ext = next(
                         (r.get("ext") for r in audio_rows if r["format_id"] == picked_ids[0]), "m4a"
                     )
-                    merge_fmt = decide_merge_container(vid_ext, first_picked_ext, ctx)
-                    extra_opts["merge_output_format"] = override_fmt or merge_fmt
+
+                res = resolve_output_container(
+                    user_container=override_fmt,
+                    video_ext=vid_ext,
+                    audio_ext=aud_ext,
+                    embed_subtitles=ctx.embed_subtitles,
+                    subtitle_lang_count=ctx.subtitle_lang_count,
+                    audio_track_count=track_count,
+                    audio_multistreams=bool(extra_opts.get("audio_multistreams")),
+                )
+                # 存下这次决策供 Phase 3g 覆盖提示读取（`res.overridden` / `res.reason`）。
+                self._last_resolution = res
+                # auto 路径（无 override）直接用 resolver 终值；有 override 时透传用户原值——
+                # 真正的冲突升级交给窗口的 `_handle_container_conflict`（保留用户选择、不静默改）。
+                # 窗口的 ensure_* 会对 auto 终值做幂等复核，与旧 decide+运行时兜底管线逐格等价
+                # （tests/test_container_resolver_equivalence.py 锁死）。
+                extra_opts["merge_output_format"] = override_fmt or res.container
 
                 return {"format": fmt_str, "extra_opts": extra_opts}
 
@@ -1693,10 +2048,26 @@ class VideoFormatSelectorWidget(QWidget):
             # 兜底
             return {"format": "best", "extra_opts": extra_opts}
         else:
-            # Advanced 模式：用户手动选定 format_id，容器仍用无损推断
-            v = self._selected_video_id
-            a_ids = getattr(self, "_selected_audio_ids", [])
-            m = self._selected_muxed_id
+            # Advanced 模式：用户手动选定 format_id，容器仍用无损推断。
+            # 「下载模式」(mode_combo) 才是「下什么」的唯一权威——compute 必须按它分流，否则切到
+            # 「仅视频 / 仅音频」后，上一模式（分屏多选）遗留的复数 `_selected_audio_ids` 会漏进来：
+            # `_refresh_table` 切模式时只清了单数 `_selected_video/audio/muxed_id`，从不清复数，于是
+            # 「仅视频」被算成 v+整批音轨（→视频+音频）、「仅音频」的单表点击（只写单数
+            # `_selected_audio_id`）被那批复数整批盖掉（→列出全部音轨、格式取排序首条）。按模式各取
+            # 其真值，与 `_update_label` 的分流完全同源，守住「标签所说 == 预览所示 == 实际装配」。
+            mode = self.mode_combo.currentIndex()
+            if mode == 1:  # 整合流：只认整合流，不带独立视频/音频
+                v, a_ids, m = None, [], self._selected_muxed_id
+            elif mode == 2:  # 仅视频：只认视频流，绝不配音轨
+                v, a_ids, m = self._selected_video_id, [], None
+            elif mode == 3:  # 仅音频：单表点击只写单数；复数是别模式遗留，绝不采纳
+                v, m = None, None
+                a_ids = [self._selected_audio_id] if self._selected_audio_id else []
+            else:  # mode 0 分屏：视频 + 多选音轨（复数为准，回落单数）
+                v, m = self._selected_video_id, None
+                a_ids = self._selected_audio_ids or (
+                    [self._selected_audio_id] if self._selected_audio_id else []
+                )
 
             opts = {}
             extra_opts = {}
@@ -1887,8 +2258,20 @@ def _resolve_global_format(candidates: list[dict], override: Any) -> tuple[str, 
         vid_ext = next((r.get("ext") for r in video_rows if r["format_id"] == best_vid), "mp4")
         aud_ext = next((r.get("ext") for r in audio_rows if r["format_id"] == best_aud), "m4a")
 
-        merge_fmt = decide_merge_container(vid_ext, aud_ext, ctx)
-        extra_opts["merge_output_format"] = override.container_override or merge_fmt
+        # 播放列表逐行：单一 best_aud（无多音轨多选），故 track_count=1 / 不设 multistreams。
+        # override 透传用户全局容器；auto 用 resolver 终值。逐行 embed 修正（webm/unset→mkv）
+        # 由 `ctx.embed_subtitles`（全局字幕配置）在此处一次算清，与旧 decide 逐格等价
+        # （运行时 SubtitleFeature 仍作最终安全网）。
+        res = resolve_output_container(
+            user_container=override.container_override,
+            video_ext=vid_ext,
+            audio_ext=aud_ext,
+            embed_subtitles=ctx.embed_subtitles,
+            subtitle_lang_count=ctx.subtitle_lang_count,
+            audio_track_count=1,
+            audio_multistreams=False,
+        )
+        extra_opts["merge_output_format"] = override.container_override or res.container
         return f"{best_vid}+{best_aud}", extra_opts
 
     elif best_vid:

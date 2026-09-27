@@ -1810,6 +1810,50 @@
 <context>
     <name>DownloadConfigWindow</name>
     <message>
+        <location filename="../../src/fluentytdl/ui/components/dialogs/download_config_window.py" line="2396"/>
+        <source>视频裁切</source>
+        <translation>视频裁切</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/ui/components/dialogs/download_config_window.py" line="4075"/>
+        <source>
+
+请选择解决方案：</source>
+        <translation>
+
+请选择解决方案：</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/ui/components/dialogs/download_config_window.py" line="4082"/>
+        <source>多音轨容器兼容性</source>
+        <translation>多音轨容器兼容性</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/ui/components/dialogs/download_config_window.py" line="4084"/>
+        <source>用 MKV（保留全部音轨）</source>
+        <translation>用 MKV（保留全部音轨）</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/ui/components/dialogs/download_config_window.py" line="4085"/>
+        <source>保持 {0}（多音轨兼容性差）</source>
+        <translation>保持 {0}（多音轨兼容性差）</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/ui/components/dialogs/download_config_window.py" line="4106"/>
+        <source>字幕容器兼容性</source>
+        <translation>字幕容器兼容性</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/ui/components/dialogs/download_config_window.py" line="4108"/>
+        <source>用 MKV（保留内嵌字幕）</source>
+        <translation>用 MKV（保留内嵌字幕）</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/ui/components/dialogs/download_config_window.py" line="4109"/>
+        <source>用 {0} + 字幕外置</source>
+        <translation>用 {0} + 字幕外置</translation>
+    </message>
+    <message>
         <location filename="../../src/fluentytdl/ui/components/dialogs/download_config_window.py" line="376"/>
         <source>新建任务</source>
         <translation>新建任务</translation>
@@ -5761,6 +5805,131 @@
 </context>
 <context>
     <name>RuntimeText</name>
+    <message>
+        <location filename="../../src/fluentytdl/models/download_plan.py" line="46"/>
+        <source>原声</source>
+        <translation>原声</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/models/download_plan.py" line="47"/>
+        <source>默认音轨</source>
+        <translation>默认音轨</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/models/download_plan.py" line="48"/>
+        <source>配音</source>
+        <translation>配音</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/models/download_plan.py" line="49"/>
+        <source>音频描述</source>
+        <translation>音频描述</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/models/download_plan.py" line="174"/>
+        <source>视频 + 音频</source>
+        <translation>视频 + 音频</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/models/download_plan.py" line="175"/>
+        <source>仅音频</source>
+        <translation>仅音频</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/models/download_plan.py" line="176"/>
+        <source>仅视频</source>
+        <translation>仅视频</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/models/download_plan.py" line="177"/>
+        <source>整合流</source>
+        <translation>整合流</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/models/download_plan.py" line="178"/>
+        <source>自动（yt-dlp 兜底）</source>
+        <translation>自动（yt-dlp 兜底）</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/models/download_plan.py" line="183"/>
+        <source>保留多条音轨</source>
+        <translation>保留多条音轨</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/models/download_plan.py" line="184"/>
+        <source>保留多语言内嵌字幕</source>
+        <translation>保留多语言内嵌字幕</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/models/download_plan.py" line="185"/>
+        <source>WebM 不支持内嵌字幕</source>
+        <translation>WebM 不支持内嵌字幕</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/models/download_plan.py" line="186"/>
+        <source>字幕嵌入需要明确容器</source>
+        <translation>字幕嵌入需要明确容器</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/models/download_plan.py" line="78"/>
+        <source>未知分辨率</source>
+        <translation>未知分辨率</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/models/download_plan.py" line="150"/>
+        <source>不下载</source>
+        <translation>不下载</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/models/download_plan.py" line="153"/>
+        <source>内嵌</source>
+        <translation>内嵌</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/models/download_plan.py" line="155"/>
+        <source>外挂文件</source>
+        <translation>外挂文件</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/models/download_plan.py" line="208"/>
+        <source>自动</source>
+        <translation>自动</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/models/download_plan.py" line="219"/>
+        <source>已从 {0} 升级为 {1}</source>
+        <translation>已从 {0} 升级为 {1}</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/models/download_plan.py" line="228"/>
+        <source>输出格式</source>
+        <translation>输出格式</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/models/download_plan.py" line="230"/>
+        <source>输出容器</source>
+        <translation>输出容器</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/models/download_plan.py" line="240"/>
+        <source>保存到</source>
+        <translation>保存到</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/models/download_plan.py" line="349"/>
+        <source>封面</source>
+        <translation>封面</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/ui/components/dialogs/assembly_preview.py" line="44"/>
+        <source>装配预览</source>
+        <translation>装配预览</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/ui/components/dialogs/assembly_preview.py" line="56"/>
+        <source>尚未选择</source>
+        <translation>尚未选择</translation>
+    </message>
     <message>
         <location filename="../../src/fluentytdl/utils/ui_text.py" line="35"/>
         <source>
@@ -17306,8 +17475,8 @@
     <name>VRFormatSelectorWidget</name>
     <message>
         <location filename="../../src/fluentytdl/ui/components/platforms/vr.py" line="1321"/>
-        <source>简易模式</source>
-        <translation>简易模式</translation>
+        <source>标准模式</source>
+        <translation>标准模式</translation>
     </message>
     <message>
         <location filename="../../src/fluentytdl/ui/components/platforms/vr.py" line="1322"/>
@@ -17637,10 +17806,35 @@
 <context>
     <name>VideoFormatSelectorWidget</name>
     <message>
+        <location filename="../../src/fluentytdl/ui/components/platforms/youtube.py" line="1070"/>
+        <source>已将容器从 {0} 升级为 {1}，以保留多条音轨。</source>
+        <translation>已将容器从 {0} 升级为 {1}，以保留多条音轨。</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/ui/components/platforms/youtube.py" line="1072"/>
+        <source>已将容器从 {0} 升级为 {1}，以保留多语言内嵌字幕。</source>
+        <translation>已将容器从 {0} 升级为 {1}，以保留多语言内嵌字幕。</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/ui/components/platforms/youtube.py" line="1074"/>
+        <source>已将容器从 {0} 升级为 {1}：WebM 不支持内嵌字幕。</source>
+        <translation>已将容器从 {0} 升级为 {1}：WebM 不支持内嵌字幕。</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/ui/components/platforms/youtube.py" line="1076"/>
+        <source>已将容器从 {0} 调整为 {1}。</source>
+        <translation>已将容器从 {0} 调整为 {1}。</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/ui/components/platforms/youtube.py" line="1079"/>
+        <source>输出容器已调整</source>
+        <translation>输出容器已调整</translation>
+    </message>
+    <message>
         <location filename="../../src/fluentytdl/ui/components/platforms/youtube.py" line="757"/>
-        <source>简易模式</source>
+        <source>标准模式</source>
         <extracomment>上一条已 emit 的决策指纹。`get_selection_result()` 不只在&quot;确定下载&quot;时被调用， 也被字幕选择器拿去问容器（`selection_dialog._open_subtitle_picker`）， 同一个选择重复问不是新决策 —— 只在指纹变化时才落事件。</extracomment>
-        <translation>简易模式</translation>
+        <translation>标准模式</translation>
     </message>
     <message>
         <location filename="../../src/fluentytdl/ui/components/platforms/youtube.py" line="758"/>

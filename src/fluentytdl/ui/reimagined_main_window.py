@@ -5,7 +5,7 @@ from enum import Enum
 from functools import partial
 from typing import Any
 
-from PySide6.QtCore import QEvent, QPoint, QSize, Qt, QTimer
+from PySide6.QtCore import QEvent, QPoint, QRect, QSize, Qt, QTimer
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
     QApplication,
@@ -30,6 +30,10 @@ from qfluentwidgets import (
     TransparentToolButton,
 )
 
+from fluentytdl.ui.components.common.adaptive_layout import (
+    WindowGeometryGuard,
+    bounded_geometry,
+)
 from fluentytdl.ui.components.common.clipboard_monitor import ClipboardMonitor
 from fluentytdl.ui.components.common.custom_info_bar import InfoBar
 from fluentytdl.ui.components.common.interruptible_navigation import (
@@ -65,6 +69,11 @@ TITLE_BAR_BADGE_POSITION = "fluentytdl.titleBarBadge"
 # 反弹回去，表现就是控件互相错叠（见 `unified_task_list_page._reserve_pivot_widths`）。
 # 顶栏那一行的回归覆盖在 `tests/test_task_header_layout.py`。
 MIN_WINDOW_WIDTH = 1150
+
+# 最小高度。初始高度 780 在高 DPI 小屏上会超出逻辑可用高（例如 1920×1080@150%
+# 可用高只有 ~688、@200% 只有 ~500），所以初始几何和这个下限都要按可用区夹一次。
+# 屏幕放得下时窗口最矮能缩到这里；放不下时 WindowGeometryGuard 会把下限降到可用高。
+MIN_WINDOW_HEIGHT = 600
 
 
 @InfoBadgeManager.register(TITLE_BAR_BADGE_POSITION)
@@ -191,16 +200,33 @@ class MainWindow(FluentWindow):
             log_text(logger, "warning", "应用图标资源缺失，标题栏与启动图将没有图标")
 
         self.resize(MIN_WINDOW_WIDTH, 780)
-        # 锁定最小宽度，防止两个 bug 导致的自动变宽：
-        # 1. 切换到英文时文本变宽触发的布局最小宽度增长
-        # 2. NavigationPanel 展开/收起动画触发的 setFixedWidth 棘轮效应
-        # 用户仍可手动拖拽边缘把窗口拉宽，只阻止自动增长
-        self.setMinimumWidth(MIN_WINDOW_WIDTH)
-
-        # 居中
-        desktop = QApplication.screens()[0].availableGeometry()
-        w, h = desktop.width(), desktop.height()
-        self.move(w // 2 - self.width() // 2, h // 2 - self.height() // 2)
+        # 最小宽度锁在 1150，防两个自动变宽的 bug：(1) 切英文文本变宽触发布局最小宽增长；
+        # (2) NavigationPanel 展开/收起动画的 setFixedWidth 棘轮效应。用户仍可手动拖宽。
+        # 但高 DPI 小屏的逻辑可用宽可能 < 1150（1920×1080@200% 只有 ~960 逻辑宽），硬钉
+        # setMinimumWidth(1150) 会让窗口比屏幕还宽又缩不回去；同理初始高 780 也会超出可用高、
+        # 居中算出负 y 把标题栏顶到屏外（非无边框窗口下就再也抓不到标题栏拖动）。
+        # 所以：最小宽高先按可用区夹一次，初始几何居中后过一遍 bounded_geometry（先夹尺寸
+        # 再夹位置），再挂 WindowGeometryGuard 在换屏/缩放/工作区变化时持续维护同一套约束。
+        screen = self.screen() or QApplication.primaryScreen()
+        available = (
+            screen.availableGeometry()
+            if screen is not None
+            else QRect(0, 0, MIN_WINDOW_WIDTH, MIN_WINDOW_HEIGHT)
+        )
+        self.setMinimumSize(
+            min(MIN_WINDOW_WIDTH, available.width()),
+            min(MIN_WINDOW_HEIGHT, available.height()),
+        )
+        centered = QRect(
+            available.center().x() - self.width() // 2,
+            available.center().y() - self.height() // 2,
+            self.width(),
+            self.height(),
+        )
+        self.setGeometry(bounded_geometry(centered, available))
+        self._geometry_guard = WindowGeometryGuard(
+            self, min_size=(MIN_WINDOW_WIDTH, MIN_WINDOW_HEIGHT)
+        )
 
         # === 启动图：必须在建页面之前 show 出来 ===
         #

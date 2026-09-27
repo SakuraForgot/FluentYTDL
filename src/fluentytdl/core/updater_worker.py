@@ -62,22 +62,22 @@ def kill_locking_processes(file_path: Path):
             pass
         return
 
+    # **绝不枚举 open_files。** psutil 的 open_files() 在 Windows 上走未公开的
+    # NtQueryObject 去解析每个进程的文件句柄，遇到某些系统句柄会触发原生访问违规
+    # （0xC0000005）—— 那不是 Python 异常，try/except 拦不住，整个 worker 进程当场
+    # 被带走，父进程只看到 ProcessError.Crashed。这正是"组件更新每次都失败"的真凶
+    # （psutil 7.2.2 / Py3.12 实测：process_iter(['open_files']) 必段错误）。
+    #
+    # 而且它对要解决的问题也没用：Windows 上真正挡住替换的是"该 .exe 正在运行"
+    # （镜像节被占用），比对 proc.exe() 就能命中，根本不需要句柄枚举。只取安全字段
+    # （pid/name/exe），彻底绕开崩溃码路；safe_install 的 rename→.old + 重试 + taskkill
+    # 兜底仍在，覆盖面不受影响。
     file_path_str = str(file_path.resolve()).lower()
-    for proc in psutil.process_iter(["pid", "name", "open_files"]):
+    for proc in psutil.process_iter(["pid", "name", "exe"]):
         try:
-            open_files = proc.info.get("open_files")
-            if open_files:
-                for f in open_files:
-                    if f.path and str(Path(f.path).resolve()).lower() == file_path_str:
-                        proc.kill()
-                        break
-
-            try:
-                exe = proc.exe()
-                if exe and str(Path(exe).resolve()).lower() == file_path_str:
-                    proc.kill()
-            except (psutil.AccessDenied, psutil.NoSuchProcess):
-                pass
+            exe = proc.info.get("exe")
+            if exe and str(Path(exe).resolve()).lower() == file_path_str:
+                proc.kill()
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             continue
 

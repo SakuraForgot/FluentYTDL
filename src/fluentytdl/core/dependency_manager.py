@@ -987,6 +987,19 @@ class DownloaderWorker(QObject):
         if exitStatus == QProcess.ExitStatus.CrashExit:
             # 看门狗 kill 掉的进程也走这里，但那时 `_error_emitted` 已经是 True，
             # `_emit_error` 会自动让位给更具体的 ERR_DOWNLOAD_STALLED。
+            #
+            # 崩溃退出码 + stderr 尾巴是定位原生崩溃的唯一线索（例如 psutil 句柄枚举
+            # 触发的 0xC0000005）。CrashExit 时 exitCode 往往就是那个 NTSTATUS，务必
+            # 记下来 —— 否则日志里只剩一句无信息量的 "Crashed"，真凶查不出来。
+            err = self.process.readAllStandardError().data().decode("utf-8", errors="replace")
+            log_text(
+                logger,
+                "error",
+                "更新 worker 崩溃退出 code={0} hex={1}: {2}",
+                exitCode,
+                hex(exitCode & 0xFFFFFFFF),
+                err.strip()[:500],
+            )
             self._emit_error(ERR_WORKER_CRASHED)
         elif exitCode != 0:
             err = self.process.readAllStandardError().data().decode("utf-8", errors="replace")
@@ -998,8 +1011,19 @@ class DownloaderWorker(QObject):
                 self._is_finished_emitted = True
 
     def _on_error(self, error):
-        log_text(logger, "error", "更新 worker 进程错误: {0}", error)
-        self._emit_error(ERR_WORKER_START_FAILED)
+        from PySide6.QtCore import QProcess
+
+        # **只有 FailedToStart 才是"没跑起来"**：此时 finished 信号不会再来，必须在这
+        # 里定论。其余情形（尤其 Crashed）finished 一定会跟着触发，且那里能拿到退出码
+        # 和 stderr —— 让位给它，别在这里用笼统的 START_FAILED 把真正的错误码盖掉。
+        # （这正是 psutil 原生崩溃长期被误报成 component_worker_start_failed 的原因：
+        #  errorOccurred(Crashed) 先到，抢先 emit 了 START_FAILED 并置 _error_emitted，
+        #  把随后 CrashExit 里更具体的信息全挡在门外。）
+        if error == QProcess.ProcessError.FailedToStart:
+            log_text(logger, "error", "更新 worker 无法启动: {0}", self.process.errorString())
+            self._emit_error(ERR_WORKER_START_FAILED)
+        else:
+            log_text(logger, "warning", "更新 worker 进程错误(交由 finished 定论): {0}", error)
 
 
 # Global instance

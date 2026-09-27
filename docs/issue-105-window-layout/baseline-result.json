@@ -1,0 +1,575 @@
+[
+  {
+    "case": "short",
+    "expanded": false,
+    "available": [
+      0,
+      0,
+      1280,
+      680
+    ],
+    "geometry": [
+      259,
+      0,
+      760,
+      846
+    ],
+    "minimum": [
+      760,
+      846
+    ],
+    "minimum_hint": [
+      739,
+      846
+    ],
+    "download_button": [
+      941,
+      790,
+      54,
+      32
+    ],
+    "download_inside_available": false,
+    "main_widget": [
+      0,
+      0,
+      100,
+      30
+    ],
+    "title_hits": [
+      {
+        "x": 20,
+        "type": "QWidget",
+        "is_title": false,
+        "is_main_widget": true
+      },
+      {
+        "x": 50,
+        "type": "QWidget",
+        "is_title": false,
+        "is_main_widget": true
+      },
+      {
+        "x": 99,
+        "type": "QWidget",
+        "is_title": false,
+        "is_main_widget": true
+      },
+      {
+        "x": 101,
+        "type": "ThemedTitleBar",
+        "is_title": true,
+        "is_main_widget": false
+      },
+      {
+        "x": 200,
+        "type": "ThemedTitleBar",
+        "is_title": true,
+        "is_main_widget": false
+      },
+      {
+        "x": 400,
+        "type": "ThemedTitleBar",
+        "is_title": true,
+        "is_main_widget": false
+      }
+    ],
+    "selector_minimum": [
+      396,
+      469
+    ],
+    "stack_minimum": [
+      396,
+      356
+    ],
+    "simple_minimum": [
+      179,
+      96
+    ],
+    "advanced_minimum": [
+      396,
+      356
+    ],
+    "options_minimum": [
+      691,
+      32
+    ]
+  },
+  {
+    "case": "short",
+    "expanded": true,
+    "available": [
+      0,
+      0,
+      1280,
+      680
+    ],
+    "geometry": [
+      259,
+      0,
+      760,
+      975
+    ],
+    "minimum": [
+      760,
+      975
+    ],
+    "minimum_hint": [
+      739,
+      975
+    ],
+    "download_button": [
+      941,
+      919,
+      54,
+      32
+    ],
+    "download_inside_available": false,
+    "main_widget": [
+      0,
+      0,
+      100,
+      30
+    ],
+    "title_hits": [
+      {
+        "x": 20,
+        "type": "QWidget",
+        "is_title": false,
+        "is_main_widget": true
+      },
+      {
+        "x": 50,
+        "type": "QWidget",
+        "is_title": false,
+        "is_main_widget": true
+      },
+      {
+        "x": 99,
+        "type": "QWidget",
+        "is_title": false,
+        "is_main_widget": true
+      },
+      {
+        "x": 101,
+        "type": "ThemedTitleBar",
+        "is_title": true,
+        "is_main_widget": false
+      },
+      {
+        "x": 200,
+        "type": "ThemedTitleBar",
+        "is_title": true,
+        "is_main_widget": false
+      },
+      {
+        "x": 400,
+        "type": "ThemedTitleBar",
+        "is_title": true,
+        "is_main_widget": false
+      }
+    ],
+    "selector_minimum": [
+      396,
+      469
+    ],
+    "stack_minimum": [
+      396,
+      356
+    ],
+    "simple_minimum": [
+      179,
+      96
+    ],
+    "advanced_minimum": [
+      396,
+      356
+    ],
+    "options_minimum": [
+      691,
+      32
+    ],
+    "after_raise_left_hit_is_title": true
+  },
+  {
+    "case": "portrait",
+    "expanded": false,
+    "available": [
+      0,
+      0,
+      720,
+      1240
+    ],
+    "geometry": [
+      -21,
+      179,
+      760,
+      880
+    ],
+    "minimum": [
+      760,
+      846
+    ],
+    "minimum_hint": [
+      739,
+      846
+    ],
+    "download_button": [
+      661,
+      1003,
+      54,
+      32
+    ],
+    "download_inside_available": true,
+    "main_widget": [
+      0,
+      0,
+      100,
+      30
+    ],
+    "title_hits": [
+      {
+        "x": 20,
+        "type": "QWidget",
+        "is_title": false,
+        "is_main_widget": true
+      },
+      {
+        "x": 50,
+        "type": "QWidget",
+        "is_title": false,
+        "is_main_widget": true
+      },
+      {
+        "x": 99,
+        "type": "QWidget",
+        "is_title": false,
+        "is_main_widget": true
+      },
+      {
+        "x": 101,
+        "type": "ThemedTitleBar",
+        "is_title": true,
+        "is_main_widget": false
+      },
+      {
+        "x": 200,
+        "type": "ThemedTitleBar",
+        "is_title": true,
+        "is_main_widget": false
+      },
+      {
+        "x": 400,
+        "type": "ThemedTitleBar",
+        "is_title": true,
+        "is_main_widget": false
+      }
+    ],
+    "selector_minimum": [
+      396,
+      469
+    ],
+    "stack_minimum": [
+      396,
+      356
+    ],
+    "simple_minimum": [
+      179,
+      96
+    ],
+    "advanced_minimum": [
+      396,
+      356
+    ],
+    "options_minimum": [
+      691,
+      32
+    ]
+  },
+  {
+    "case": "portrait",
+    "expanded": true,
+    "available": [
+      0,
+      0,
+      720,
+      1240
+    ],
+    "geometry": [
+      -21,
+      131,
+      760,
+      975
+    ],
+    "minimum": [
+      760,
+      975
+    ],
+    "minimum_hint": [
+      739,
+      975
+    ],
+    "download_button": [
+      661,
+      1050,
+      54,
+      32
+    ],
+    "download_inside_available": true,
+    "main_widget": [
+      0,
+      0,
+      100,
+      30
+    ],
+    "title_hits": [
+      {
+        "x": 20,
+        "type": "QWidget",
+        "is_title": false,
+        "is_main_widget": true
+      },
+      {
+        "x": 50,
+        "type": "QWidget",
+        "is_title": false,
+        "is_main_widget": true
+      },
+      {
+        "x": 99,
+        "type": "QWidget",
+        "is_title": false,
+        "is_main_widget": true
+      },
+      {
+        "x": 101,
+        "type": "ThemedTitleBar",
+        "is_title": true,
+        "is_main_widget": false
+      },
+      {
+        "x": 200,
+        "type": "ThemedTitleBar",
+        "is_title": true,
+        "is_main_widget": false
+      },
+      {
+        "x": 400,
+        "type": "ThemedTitleBar",
+        "is_title": true,
+        "is_main_widget": false
+      }
+    ],
+    "selector_minimum": [
+      396,
+      469
+    ],
+    "stack_minimum": [
+      396,
+      356
+    ],
+    "simple_minimum": [
+      179,
+      96
+    ],
+    "advanced_minimum": [
+      396,
+      356
+    ],
+    "options_minimum": [
+      691,
+      32
+    ],
+    "after_raise_left_hit_is_title": true
+  },
+  {
+    "case": "large",
+    "expanded": false,
+    "available": [
+      0,
+      0,
+      1920,
+      1040
+    ],
+    "geometry": [
+      579,
+      79,
+      760,
+      880
+    ],
+    "minimum": [
+      760,
+      846
+    ],
+    "minimum_hint": [
+      739,
+      846
+    ],
+    "download_button": [
+      1261,
+      903,
+      54,
+      32
+    ],
+    "download_inside_available": true,
+    "main_widget": [
+      0,
+      0,
+      100,
+      30
+    ],
+    "title_hits": [
+      {
+        "x": 20,
+        "type": "QWidget",
+        "is_title": false,
+        "is_main_widget": true
+      },
+      {
+        "x": 50,
+        "type": "QWidget",
+        "is_title": false,
+        "is_main_widget": true
+      },
+      {
+        "x": 99,
+        "type": "QWidget",
+        "is_title": false,
+        "is_main_widget": true
+      },
+      {
+        "x": 101,
+        "type": "ThemedTitleBar",
+        "is_title": true,
+        "is_main_widget": false
+      },
+      {
+        "x": 200,
+        "type": "ThemedTitleBar",
+        "is_title": true,
+        "is_main_widget": false
+      },
+      {
+        "x": 400,
+        "type": "ThemedTitleBar",
+        "is_title": true,
+        "is_main_widget": false
+      }
+    ],
+    "selector_minimum": [
+      396,
+      469
+    ],
+    "stack_minimum": [
+      396,
+      356
+    ],
+    "simple_minimum": [
+      179,
+      96
+    ],
+    "advanced_minimum": [
+      396,
+      356
+    ],
+    "options_minimum": [
+      691,
+      32
+    ]
+  },
+  {
+    "case": "large",
+    "expanded": true,
+    "available": [
+      0,
+      0,
+      1920,
+      1040
+    ],
+    "geometry": [
+      579,
+      31,
+      760,
+      975
+    ],
+    "minimum": [
+      760,
+      975
+    ],
+    "minimum_hint": [
+      739,
+      975
+    ],
+    "download_button": [
+      1261,
+      950,
+      54,
+      32
+    ],
+    "download_inside_available": true,
+    "main_widget": [
+      0,
+      0,
+      100,
+      30
+    ],
+    "title_hits": [
+      {
+        "x": 20,
+        "type": "QWidget",
+        "is_title": false,
+        "is_main_widget": true
+      },
+      {
+        "x": 50,
+        "type": "QWidget",
+        "is_title": false,
+        "is_main_widget": true
+      },
+      {
+        "x": 99,
+        "type": "QWidget",
+        "is_title": false,
+        "is_main_widget": true
+      },
+      {
+        "x": 101,
+        "type": "ThemedTitleBar",
+        "is_title": true,
+        "is_main_widget": false
+      },
+      {
+        "x": 200,
+        "type": "ThemedTitleBar",
+        "is_title": true,
+        "is_main_widget": false
+      },
+      {
+        "x": 400,
+        "type": "ThemedTitleBar",
+        "is_title": true,
+        "is_main_widget": false
+      }
+    ],
+    "selector_minimum": [
+      396,
+      469
+    ],
+    "stack_minimum": [
+      396,
+      356
+    ],
+    "simple_minimum": [
+      179,
+      96
+    ],
+    "advanced_minimum": [
+      396,
+      356
+    ],
+    "options_minimum": [
+      691,
+      32
+    ],
+    "after_raise_left_hit_is_title": true
+  }
+]

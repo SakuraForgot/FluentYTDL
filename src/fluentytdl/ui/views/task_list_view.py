@@ -360,7 +360,11 @@ class TaskListView(ListView):
 
         Shift / Ctrl / 键盘一律交回基类：Shift 是 `SelectCurrent`（带 `Current` 位，锚点不动
         且只增不减），Ctrl 原生就是 `Toggle`。
-        点空白处仍然清空，这是唯一还会清掉整批勾选的手势，与批量条的「取消选择」互补。
+        点空白处（卡片之间的 8px 间隙、列表下方的留白）**不再清空**：那道间隙视觉上就是
+        列表的一部分，误点它把整批勾选一次清光是最短的误触路径。取消整批只走显式手势 ——
+        批量条的「取消选择」、逐张再点一次、Ctrl 点选。基类对无修饰键单击无效 index 会算出
+        `Clear`（且 `noSelectionOnMousePress` 因 index 无效而置位，松开时再问一次仍是 `Clear`），
+        这里在按下和松开两条路上都把它拦成 `NoUpdate`。
 
         **右键（以及中键）在任何情况下都返回 `NoUpdate`**，选中集合一动不动。这一条和
         `setSelectRightClickedRow(False)` 各自单独就够拦住那个 bug（实测拆掉任意一道另一道
@@ -399,8 +403,11 @@ class TaskListView(ListView):
 
         if etype not in (QEvent.Type.MouseButtonPress, QEvent.Type.MouseButtonRelease):
             return super().selectionCommand(index, event)
-        if not index.isValid() or not no_modifier or event.button() != Qt.MouseButton.LeftButton:
+        if not no_modifier or event.button() != Qt.MouseButton.LeftButton:
             return super().selectionCommand(index, event)
+        # 空白处（间隙 / 留白）左键单击 → 一动不动，别把整批勾选清掉（见 docstring 末段）
+        if not index.isValid():
+            return QItemSelectionModel.SelectionFlag.NoUpdate
         if self._press_on_control:
             return QItemSelectionModel.SelectionFlag.NoUpdate
 

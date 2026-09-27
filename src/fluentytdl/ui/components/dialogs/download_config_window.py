@@ -7,13 +7,24 @@ from enum import Enum
 from functools import partial
 from typing import Any
 
-from PySide6.QtCore import QModelIndex, QPoint, Qt, QThread, QTimer, Signal
-from PySide6.QtGui import QColor, QCursor
+from PySide6.QtCore import (
+    QEasingCurve,
+    QModelIndex,
+    QPoint,
+    QPropertyAnimation,
+    QRect,
+    Qt,
+    QThread,
+    QTimer,
+    Signal,
+)
+from PySide6.QtGui import QColor, QCursor, QGuiApplication
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QFileDialog,
     QHBoxLayout,
     QLabel,
+    QLayout,
     QListView,
     QStyleOptionViewItem,
     QTableWidget,
@@ -24,6 +35,7 @@ from qfluentwidgets import (
     CaptionLabel,
     CardWidget,
     ComboBox,
+    FlowLayout,
     ImageLabel,
     IndeterminateProgressRing,
     LineEdit,
@@ -37,6 +49,12 @@ from qfluentwidgets import (
 )
 from qframelesswindow import FramelessWindow
 
+from fluentytdl.ui.components.common.adaptive_layout import (
+    TaskScrollArea,
+    TaskWindowSurface,
+    WindowGeometryGuard,
+    bounded_geometry,
+)
 from fluentytdl.ui.components.common.themed_title_bar import ThemedTitleBar
 from fluentytdl.ui.components.dialogs.section_range_selector import SectionRangeSelector
 from fluentytdl.ui.components.dialogs.selection_dialog import (
@@ -60,6 +78,7 @@ from fluentytdl.utils.ui_text import tr_text
 from ....core.section_download import build_section_opts, section_filename_suffix
 from ....download.extract_manager import AsyncExtractManager
 from ....download.workers import EntryDetailWorker, InfoExtractWorker, VRInfoExtractWorker
+from ....models.download_plan import SubtitlePlan
 from ....models.mappers import VideoInfoMapper
 from ....models.subtitle_config import PlaylistSubtitleOverride
 from ....models.video_info import VideoInfo
@@ -310,7 +329,7 @@ def _section_stream_metadata(
     return layout, int(source_bytes * section_duration / full_duration) if source_bytes else 0
 
 
-class DownloadConfigWindow(FramelessWindow):
+class DownloadConfigWindow(TaskWindowSurface, FramelessWindow):
     """
     独立非模态下载配置窗口
     """
@@ -367,6 +386,8 @@ class DownloadConfigWindow(FramelessWindow):
         except Exception:
             self._download_dir = ""
         self._download_dir_edit: LineEdit | None = None
+        # 目录条现固定在底部页脚（v_layout），不随 contentLayout 滚动/清空；存引用以便幂等重建。
+        self._download_dir_bar: QWidget | None = None
 
         # 换成跟随主题的标题栏，否则深色模式下最小化/最大化/关闭按钮是黑图标
         self.setTitleBar(ThemedTitleBar(self))
@@ -374,26 +395,40 @@ class DownloadConfigWindow(FramelessWindow):
 
         # === UI Init ===
         self.setWindowTitle(self.tr("新建任务"))
-        init_w, init_h = 600, 400
+        # 先按「小加载窗」开窗（缩略图占位 + 标题 + spinner 的舒适尺寸），
+        # 解析成功后再淡出/长大到该模式的结果尺寸；不再一上来就撑到 960x920
+        # 的结果尺寸留一大片黑框飘个小转圈。
+        init_w, init_h, y_offset, x_offset = self._loading_window_metrics()
 
-        # 解除硬限制，完全由几何动画或手动设定控制
+        # Content scrolls independently; the geometry guard sets screen-aware limits.
         self.setMinimumSize(0, 0)
         self.setMaximumSize(16777215, 16777215)
 
         # 初始居中（计算独立的目标几何图形）
-        target_geo = self._get_target_geometry(init_w, init_h, 40)
+        target_geo = self._get_target_geometry(init_w, init_h, y_offset, x_offset)
         self.setGeometry(target_geo)
 
-        # 主布局容器
-        self.main_widget = QWidget(self)
-        self.v_layout = QVBoxLayout(self.main_widget)
-        self.v_layout.setContentsMargins(24, 48, 24, 24)  # 顶部留出标题栏空间
+        # Only the scroll viewport contributes to the outer window minimum.
+        self.v_layout = QVBoxLayout(self)
+        self.v_layout.setContentsMargins(24, 48, 24, 24)
         self.v_layout.setSpacing(16)
-
-        # 内容区域 (View Layout)
-        self.viewLayout = QVBoxLayout()
+        self.scrollArea = TaskScrollArea(self, show_scroll_bars=False)
+        self.main_widget = QWidget()
+        self.viewLayout = QVBoxLayout(self.main_widget)
+        self.viewLayout.setContentsMargins(0, 0, 0, 0)
         self.viewLayout.setSpacing(10)
-        self.v_layout.addLayout(self.viewLayout)
+        self.viewLayout.setSizeConstraint(QLayout.SizeConstraint.SetMinAndMaxSize)
+        self.scrollArea.setWidget(self.main_widget)
+        self.scrollArea.enableTransparentBackground()
+        self.v_layout.addWidget(self.scrollArea, 1)
+        self._geometry_before_content = self.geometry()
+        self._content_geometry_applied = False
+        self._parse_fade: QPropertyAnimation | None = None
+        self._parse_fade_ms = 150
+        self._geometry_guard = WindowGeometryGuard(self)
+        self._section_scroll_timer = QTimer(self)
+        self._section_scroll_timer.setSingleShot(True)
+        self._section_scroll_timer.timeout.connect(self._reveal_section_options)
 
         # 底部按钮区域
         self.buttonLayout = QHBoxLayout()
@@ -417,9 +452,6 @@ class DownloadConfigWindow(FramelessWindow):
         self.buttonLayout.addWidget(self.yesButton)
 
         self.v_layout.addLayout(self.buttonLayout)
-
-        # 布局设置到窗口
-        self.setLayout(self.v_layout)
 
         # 连接按钮
         self.cancelButton.clicked.connect(self.close)
@@ -445,7 +477,6 @@ class DownloadConfigWindow(FramelessWindow):
         self._subtitle_choice_made = False
         self._subtitle_pick_result: SubtitlePickerResult | None = None
         self._section_selector: SectionRangeSelector | None = None
-        self._section_collapsed_min_h: int | None = None
         self._subtitle_state_before_section: tuple[bool, bool] | None = None
         self._playlist_sub_override: PlaylistSubtitleOverride | None = None
 
@@ -796,7 +827,17 @@ class DownloadConfigWindow(FramelessWindow):
         self.start_extraction()
 
     def _ensure_download_dir_bar(self) -> None:
-        wrap = QWidget(self.contentWidget)
+        # 目录条固定在底部页脚（v_layout，紧贴 重新解析/取消/下载 一排之上），不随
+        # contentLayout 滚动，也不被 _clear_content_layout 清掉——故须幂等：重解析会再次
+        # 调到这里，先丢弃旧条再重建，避免 footer 里堆叠出多条目录栏。
+        old = self._download_dir_bar
+        if old is not None:
+            self.v_layout.removeWidget(old)
+            old.deleteLater()
+            self._download_dir_bar = None
+            self._download_dir_edit = None
+
+        wrap = QWidget(self)
         row = QHBoxLayout(wrap)
         row.setContentsMargins(0, 0, 0, 0)
         row.setSpacing(10)
@@ -811,6 +852,7 @@ class DownloadConfigWindow(FramelessWindow):
 
         def _on_text_changed(text: str) -> None:
             self._download_dir = str(text or "").strip()
+            self._refresh_assembly_preview()
 
         edit.textChanged.connect(_on_text_changed)
 
@@ -822,7 +864,12 @@ class DownloadConfigWindow(FramelessWindow):
         row.addWidget(pick_btn)
 
         self._download_dir_edit = edit
-        self.contentLayout.addWidget(wrap)
+        self._download_dir_bar = wrap
+        # 插在 buttonLayout（footer 最后一项）之前 → 目录条固定在下载按钮排的正上方。
+        self.v_layout.insertWidget(self.v_layout.count() - 1, wrap)
+        # 目录条只在结果页可见（与「重新解析」同步，见 _switch_to_state）；加载/错误态藏起，
+        # 免得空目录条飘在加载小窗里。
+        wrap.setVisible(self._window_state == WindowState.CONTENT)
 
     def _add_labeled_toggle(
         self,
@@ -846,6 +893,30 @@ class DownloadConfigWindow(FramelessWindow):
         row.addWidget(toggle)
         layout.addWidget(wrap)
         return toggle
+
+    def _add_labeled_switch(
+        self,
+        layout: FlowLayout,
+        container: QWidget,
+        text: str,
+        switch: SwitchButton,
+    ) -> None:
+        """把一个**已存在**的 SwitchButton 连同标签塞进选项 FlowLayout（复用其原有接线）。
+
+        与 `_add_labeled_toggle` 的区别：不新建开关，而是收编外部控件（这里是裁切选择器的
+        `enable_switch`），让「视频裁切」开关与「嵌入元数据」并列同处「下载选项」一行；
+        开关搬家后其 checkedChanged/enabledChanged 接线不受影响，展开面板仍留在下方。
+        """
+        wrap = QWidget(container)
+        row = QHBoxLayout(wrap)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(8)
+        row.addWidget(CaptionLabel(text, wrap))
+        switch.setParent(wrap)
+        switch.setOnText("")
+        switch.setOffText("")
+        row.addWidget(switch)
+        layout.addWidget(wrap)
 
     def _on_pick_download_dir(self) -> None:
         start_dir = self._download_dir or ""
@@ -909,9 +980,13 @@ class DownloadConfigWindow(FramelessWindow):
         from ....core.config_manager import config_manager
 
         container = QWidget(self.contentWidget)
-        layout = QHBoxLayout(container)
+        layout = FlowLayout(container, isTight=True)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(18)
+        layout.setHorizontalSpacing(18)
+        layout.setVerticalSpacing(10)
+        # 存下这条 FlowLayout：单视频默认模式随后要把「视频裁切」开关补进同一行（见
+        # setup_default_mode_ui 里的 _add_labeled_switch）。
+        self._single_options_layout = layout
 
         title = CaptionLabel(self.tr("下载选项"), container)
         layout.addWidget(title)
@@ -960,16 +1035,16 @@ class DownloadConfigWindow(FramelessWindow):
             layout, container, self.tr("嵌入元数据"), meta_enabled
         )
 
-        layout.addStretch(1)
         return container
 
     def _build_playlist_option_switches(self) -> QWidget:
         from ....core.config_manager import config_manager
 
         container = QWidget(self.contentWidget)
-        layout = QHBoxLayout(container)
+        layout = FlowLayout(container, isTight=True)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(18)
+        layout.setHorizontalSpacing(18)
+        layout.setVerticalSpacing(10)
 
         if self._mode == "subtitle":
             title = CaptionLabel(self.tr("字幕下载选项"), container)
@@ -1028,12 +1103,10 @@ class DownloadConfigWindow(FramelessWindow):
             )
 
             layout.addWidget(self.playlist_subtitle_format_combo)
-            layout.addStretch(1)
             return container
 
         if self._mode == "cover":
             # 封面解析模式不需要字幕和视频嵌入选项
-            layout.addStretch(1)
             return container
 
         title = CaptionLabel(self.tr("下载选项"), container)
@@ -1075,12 +1148,12 @@ class DownloadConfigWindow(FramelessWindow):
             layout, container, self.tr("嵌入元数据"), meta_enabled
         )
 
-        layout.addStretch(1)
         return container
 
     # === 窗口逻辑 ===
 
     def closeEvent(self, event) -> None:
+        self._section_scroll_timer.stop()
         self._stop_background_parsing()
         self.windowClosed.emit(self)
         super().closeEvent(event)
@@ -1116,85 +1189,75 @@ class DownloadConfigWindow(FramelessWindow):
                 parent=self,
             )
 
+    def showEvent(self, event):
+        super().showEvent(event)
+        self.titleBar.raise_()
+
     def _apply_dialog_size_for_mode(self) -> None:
-        w, h, y_offset, x_offset = self._mode_window_metrics()
-        target_geo = self._get_target_geometry(w, h, y_offset, x_offset)
-        self._start_geometry_animation(target_geo, 250, lock_width=w)
+        # First result may choose a preferred size. Reparse and later content
+        # changes preserve the user's size/position and maximized state.
+        if not self._content_geometry_applied and not self.isMaximized():
+            if self.geometry() == self._geometry_before_content:
+                w, h, y_offset, x_offset = self._mode_window_metrics()
+                # 先按模式基准尺寸落一次，撑起结果态布局（页脚/滚动区就位），据此量出 chrome。
+                self.setGeometry(self._get_target_geometry(w, h, y_offset, x_offset))
+                # 默认单视频模式：解析时按默认子模式（标准/简易预设页，也是各子模式里最高的一页）
+                # 的自然内容高定一次窗口高，宽度不变；定高后标准↔专业、仅音频等子模式切换一律不再
+                # 改窗口高（用户「切换时高一直变化…不动为好」）。全程在淡出（opacity 0）期间完成，
+                # 用户只看到最终尺寸淡入，既无初始「上下空太多」，切换时也不跳高矮。
+                if self._supports_adaptive_height():
+                    fitted = self._fitted_window_height()
+                    if fitted != h:
+                        self.setGeometry(self._get_target_geometry(w, fitted, y_offset, x_offset))
+        self._content_geometry_applied = True
+        self._geometry_guard.fit()
+
+    def _supports_adaptive_height(self) -> bool:
+        """仅默认单视频模式贴合内容高：VR/播放列表/字幕/封面沿用各自固定基准尺寸（本次不动）。"""
+        return isinstance(getattr(self, "selector_widget", None), VideoFormatSelectorWidget)
+
+    def _content_chrome_height(self) -> int:
+        """窗口高减去外层滚动区视口高——即标题栏 + 页脚 + 外边距，随窗高不变的固定壳高。"""
+        self.viewLayout.activate()
+        self.v_layout.activate()
+        return max(0, self.height() - self.scrollArea.viewport().height())
+
+    def _fitted_window_height(self) -> int:
+        """当前子模式「不滚动、也不留底部空白」的理想窗口高 = 壳高 + 内容自然高。
+
+        内容自然高取 `contentWidget.sizeHint()`（与窗口大小无关、不含任何 stretch 余量的布局
+        理想值）；`scrollArea` 是 `setWidgetResizable`，故窗高定为此值时视口恰好容纳内容，
+        `scroll.max==0`，selector 的 stretch=1 分不到余量，中缝/底部留白同时消失。
+        """
+        self.contentWidget.layout().activate()
+        return self._content_chrome_height() + self.contentWidget.sizeHint().height()
+
+    def _loading_window_metrics(self) -> tuple[int, int, int, int]:
+        """加载态的小窗尺寸：(宽, 高, y 偏移, x 偏移)。
+
+        只承载「缩略图占位 + 标题 + spinner」，不套结果态的大尺寸，避免大黑框。
+        小屏由 _get_target_geometry 统一 clamp。所有模式共用一个小尺寸即可，
+        解析成功后再按 _mode_window_metrics 长到各自的结果尺寸。
+        """
+        return 520, 440, 0, 0
 
     def _mode_window_metrics(self) -> tuple[int, int, int, int]:
         """当前模式的窗口尺寸与相对视觉中心的偏移：(宽, 高, y 偏移, x 偏移)。"""
-        if self._is_playlist:
-            return 980, 760, 30, 25
+        if getattr(self, "_is_playlist", False) or self._mode in ("playlist", "channel"):
+            return 1040, 840, 0, 0
         if self._vr_mode:
-            return 880, 750, 80, 0
+            return 1000, 920, 0, 0
         if self._mode in ("subtitle", "cover"):
-            return 760, 520, 30, 0
-        # 单视频窗口已加高到 880，再上移就会顶到屏幕上沿（被 y<0 钳制），
-        # 所以这里不做垂直偏移，严格按视觉中心摆放。
-        return 760, 880, 0, 0
-
-    def _available_geometry(self):
-        from PySide6.QtGui import QGuiApplication
-
-        screen = self.screen() or QGuiApplication.primaryScreen()
-        return screen.availableGeometry()
-
-    def _start_geometry_animation(
-        self, target_geo, duration: int = 250, lock_width: int | None = None
-    ) -> None:
-        from PySide6.QtCore import QEasingCurve, QPropertyAnimation
-
-        old = getattr(self, "geo_anim", None)
-        if old is not None:
-            old.stop()
-
-        # 动画期间放开尺寸限制
-        self.setMinimumSize(0, 0)
-        self.setMaximumSize(16777215, 16777215)
-
-        # 显式传 parent，否则动画对象只靠 self.geo_anim 这一个引用活着，
-        # 下一次赋值会在动画仍在跑时把它回收掉。
-        anim = QPropertyAnimation(self, b"geometry", self)
-        anim.setDuration(duration)
-        anim.setStartValue(self.geometry())
-        anim.setEndValue(target_geo)
-        anim.setEasingCurve(QEasingCurve.Type.InOutQuad)
-
-        if lock_width is not None:
-
-            def on_anim_finished() -> None:
-                self.setMinimumWidth(lock_width)
-                self.setMaximumWidth(lock_width + 60)
-
-            anim.finished.connect(on_anim_finished)
-
-        self.geo_anim = anim
-        anim.start()
-
-    def _animate_height_keep_center(self, target_h: int, duration: int, min_h: int = 0) -> None:
-        """只改高度，窗口视觉中心保持不动（必要时贴合屏幕可用区域）。"""
-        from PySide6.QtCore import QRect
-
-        geo = self.geometry()
-        avail = self._available_geometry()
-        # 屏幕放不下时贴合可用高度，但绝不低于布局要求的高度：那只会让 Qt 在
-        # 动画结束后又把窗口撑回去，居中白算一遍。
-        target_h = max(1, int(min_h), min(int(target_h), avail.height()))
-        if target_h == geo.height():
-            return
-
-        # 用 round(delta/2) 而不是整除：反复开关时上移/下移的像素量完全对称，
-        # 窗口不会每来回一次就往上/下偏 1px。
-        y = geo.y() + round((geo.height() - target_h) / 2)
-        y = max(avail.top(), min(y, avail.bottom() - target_h + 1))
-        target_geo = QRect(geo.x(), y, geo.width(), target_h)
-        self._start_geometry_animation(
-            target_geo, duration, lock_width=self._mode_window_metrics()[0]
-        )
+            return 840, 600, 0, 0
+        # 结果态的舒适尺寸；小屏由 _get_target_geometry clamp。加载态用
+        # _loading_window_metrics 的小窗，成功后淡出/长大到这里。宽 880 仍容纳专业模式
+        # 「视频流|音频流」左右并排的两张表 + 输出容器栏上方的常驻装配预览；从 960 再收窄
+        # （用户「解析页的宽度再缩小，目前还是太宽」）。注：单视频模式解析后此高度会被
+        # _fitted_window_height 覆盖为「贴合内容」的自适应高；单表模式多出来的余量由 selector
+        # 的 stretch=1 收进表格区（表现为表格下方留白），不再淤积成中缝/底部空档。
+        return 880, 860, 0, 0
 
     def _get_target_geometry(self, w: int, h: int, y_offset: int, x_offset: int = 0):
-        from PySide6.QtCore import QRect
-        from PySide6.QtGui import QGuiApplication
         from PySide6.QtWidgets import QApplication
 
         main_window = None
@@ -1221,11 +1284,7 @@ class DownloadConfigWindow(FramelessWindow):
         # 根据独立的 y_offset 偏移视觉中心
         y = cy - h // 2 - y_offset
 
-        # 贴合屏幕可用区域：高度也要钳，否则窗口底部的按钮会被推到屏幕外面
-        h = min(h, avail.height())
-        y = max(avail.top(), min(y, avail.bottom() - h + 1))
-
-        return QRect(x, y, w, h)
+        return bounded_geometry(QRect(x, y, w, h), avail)
 
     def _stop_background_parsing(self) -> None:
         if self._is_closing:
@@ -1337,6 +1396,9 @@ class DownloadConfigWindow(FramelessWindow):
         self.networkDiagWidget.setVisible(state == WindowState.ERROR_NETWORK)
         # 只有结果页才给"重新解析"：错误态已有各自的重试入口，加载态点它没有意义。
         self.reparseButton.setVisible(state == WindowState.CONTENT)
+        # 页脚目录条与「重新解析」同生共灭：只在结果页可见（它常驻 v_layout，不随内容清空）。
+        if self._download_dir_bar is not None:
+            self._download_dir_bar.setVisible(state == WindowState.CONTENT)
 
         # Generic error uses viewLayout directly, but we hide others
         if state in (
@@ -1368,6 +1430,9 @@ class DownloadConfigWindow(FramelessWindow):
             self.tr("正在使用 VR 模式解析...") if self._vr_mode else self.tr("正在解析链接..."),
             show_ring=True,
         )
+        # 重新解析可能打断上一轮过场：停掉在途淡入淡出，把加载页恢复成全不透明。
+        self._stop_parse_transition()
+        self.setWindowOpacity(1.0)
         self._show_parse_preview()
         self._current_options = freeze_youtube_options()
 
@@ -1602,8 +1667,6 @@ class DownloadConfigWindow(FramelessWindow):
         # 频道检测：通过 URL 模式判断
         self._is_channel = UrlValidator.is_channel_url(self.url)
 
-        self._apply_dialog_size_for_mode()
-
         if self._is_playlist:
             self.titleLabel.show()
             self.yesButton.setEnabled(False)
@@ -1613,8 +1676,64 @@ class DownloadConfigWindow(FramelessWindow):
             self.yesButton.setEnabled(True)
             self.setup_content_ui(info_dict)
 
+        self._begin_content_transition()
+
+    def _settle_content_state(self) -> None:
+        """落地结果态：切态 → 激活布局 → 长到结果尺寸。
+
+        Construct and expose the result before enlarging the native window.
+        Resizing first leaves Windows with newly exposed client pixels while the
+        GUI thread is still busy constructing all format controls.
+        """
         self._switch_to_state(WindowState.CONTENT)
+        self.viewLayout.activate()
+        self._apply_dialog_size_for_mode()
+        self.v_layout.activate()
         self._log_first_paint()
+
+    def _begin_content_transition(self) -> None:
+        """解析成功过场：小加载窗淡出 → 隐身期切结果态并长大 → 淡入。
+
+        尺寸切换发生在 windowOpacity=0 期间，原生窗口不会闪现半构建的结果页，
+        也没有小窗瞬跳大窗的生硬跳变。结果控件此刻已构建完成。
+        """
+        if not self.isVisible():
+            # 窗口尚未 show()（含 offscreen 直接构造的边角场景）：直接同步落地，
+            # 跳过纯装饰的淡入淡出——没有可见帧需要遮掩。
+            self._settle_content_state()
+            return
+
+        self._stop_parse_transition()
+        fade_out = QPropertyAnimation(self, b"windowOpacity", self)
+        fade_out.setDuration(self._parse_fade_ms)
+        fade_out.setStartValue(self.windowOpacity())
+        fade_out.setEndValue(0.0)
+        fade_out.setEasingCurve(QEasingCurve.Type.OutCubic)
+        fade_out.finished.connect(self._on_loading_faded_out)
+        self._parse_fade = fade_out
+        fade_out.start()
+
+    def _on_loading_faded_out(self) -> None:
+        # opacity=0：切态与长大都不可见，规避尺寸跳变闪烁；随后淡入结果页。
+        self._settle_content_state()
+        fade_in = QPropertyAnimation(self, b"windowOpacity", self)
+        fade_in.setDuration(self._parse_fade_ms)
+        fade_in.setStartValue(0.0)
+        fade_in.setEndValue(1.0)
+        fade_in.setEasingCurve(QEasingCurve.Type.OutCubic)
+        fade_in.finished.connect(lambda: self.setWindowOpacity(1.0))
+        self._parse_fade = fade_in
+        fade_in.start()
+
+    def _stop_parse_transition(self) -> None:
+        """停掉在途的过场动画（重新解析/关闭时），并确保窗口不停在半透明态。"""
+        anim = self._parse_fade
+        self._parse_fade = None
+        if anim is not None:
+            try:
+                anim.stop()
+            except RuntimeError:
+                pass
 
     def _log_first_paint(self) -> None:
         """[DialogRender] 首屏可见耗时（P0 基线）：start_extraction → CONTENT 状态。"""
@@ -1642,6 +1761,7 @@ class DownloadConfigWindow(FramelessWindow):
                 child = layout.takeAt(0)
                 w = child.widget()
                 if w:
+                    w.hide()
                     w.deleteLater()
                     continue
                 child_layout = child.layout()
@@ -1651,7 +1771,8 @@ class DownloadConfigWindow(FramelessWindow):
         _clear_layout(self.contentLayout)
         # 裁切控件随内容一起被销毁，别留下悬空引用和上一轮量到的折叠高度
         self._section_selector = None
-        self._section_collapsed_min_h = None
+        # 装配预览卡片同随内容销毁；丢掉引用，避免刷新槽写进已删的 C++ 对象
+        self._assembly_preview = None
 
     def _run_cookie_precheck(self) -> None:
         """窗口打开时本地预检 Cookie 状态（零网络消耗）"""
@@ -2265,14 +2386,27 @@ class DownloadConfigWindow(FramelessWindow):
             self._ensure_download_dir_bar()
 
     def setup_default_mode_ui(self, info: dict[str, Any]) -> None:
+        from fluentytdl.ui.components.dialogs.assembly_preview import AssemblyPreviewCard
         from fluentytdl.ui.components.platforms.youtube import VideoFormatSelectorWidget
 
         from ....utils.url_router import url_router
 
         platform = url_router.detect_platform(self.url) if self.url else "youtube"
-        self.selector_widget = VideoFormatSelectorWidget(info, self.contentWidget, trace=self.trace)
 
-        self.contentLayout.addWidget(self.selector_widget)
+        # 单列纵向排布：选择器 / 选项 FlowLayout / 裁切面板 直接堆进 contentLayout；「视频流|
+        # 音频流」左右并排已下沉到选择器内部（youtube.py 的 split_layout）。「装配预览」不再是
+        # 底栏，而是挂进选择器内部、输出容器栏正上方（见下 mount_assembly_preview）。选择器吃
+        # stretch=1：窗口固定高多出来的余量顺着 选择器→分页栈→专业页→table_scroll 一路下沉到
+        # 表格区，成为表格下方的视频列表留白（用户明确可接受）；选项 / 裁切 / 下载位置页脚因此
+        # 紧贴内容依次堆叠，中间不再出现用户无法接受的「下载选项↔下载位置」离谱空档。
+        self.selector_widget = VideoFormatSelectorWidget(info, self.contentWidget, trace=self.trace)
+        self.contentLayout.addWidget(self.selector_widget, 1)
+
+        # 常驻「装配预览」挂在选择器内部、输出容器栏（format_bar）正上方（用户既定「装配预览
+        # 放在容器上面」）。它是选择器的子控件，随选择器一起销毁重建；_clear_content_layout
+        # 会把 self._assembly_preview 置空。
+        self._assembly_preview = AssemblyPreviewCard(self.selector_widget, bar=True)
+        self.selector_widget.mount_assembly_preview(self._assembly_preview)
 
         self.options_container = self._build_single_option_switches(platform=platform)
         self.contentLayout.addWidget(self.options_container)
@@ -2281,10 +2415,114 @@ class DownloadConfigWindow(FramelessWindow):
         # to normal YouTube videos in this first release.
         duration = float(info.get("duration") or 0.0)
         if platform == "youtube" and duration > 0 and not info.get("is_live"):
-            self._section_selector = SectionRangeSelector(duration, self.contentWidget)
+            # show_header=False：裁切开关本体搬进上面「下载选项」FlowLayout，与「嵌入元数据」
+            # 同排；展开的时间轴/时间框面板仍作为独立块留在下方。
+            self._section_selector = SectionRangeSelector(
+                duration, self.contentWidget, show_header=False
+            )
             self._section_selector.enabledChanged.connect(self._on_section_enabled_changed)
             self._section_selector.selectionChanged.connect(self._on_section_selection_changed)
+            self._add_labeled_switch(
+                self._single_options_layout,
+                self.options_container,
+                self.tr("视频裁切"),
+                self._section_selector.enable_switch,
+            )
             self.contentLayout.addWidget(self._section_selector)
+
+        # 不设末尾 addStretch：窗口余量已由 selector_widget 的 stretch=1 收进选择器内部的表格区
+        # （表格下方留白，用户可接受）。若在此再加 addStretch，余量会被重新拽到底部、页脚上方，
+        # 复现用户无法接受的「下载选项↔下载位置」空档。选项 / 裁切按内容紧贴堆在选择器之下即可。
+
+        # 预览随「选择 / 字幕开关」实时重算（同源 build_download_plan，见 _refresh_assembly_preview）；
+        # 目录变化在 _ensure_download_dir_bar 里也接了同一刷新槽。
+        self.selector_widget.selectionChanged.connect(self._refresh_assembly_preview)
+        if hasattr(self, "subtitle_check"):
+            self.subtitle_check.checkedChanged.connect(
+                lambda _checked=False: self._refresh_assembly_preview()
+            )
+        # 封面开关（嵌入视频 / 独立封面，互斥）变化时也刷新——预览的「封面」条目跟着切
+        # 内嵌 / 外挂文件 / 不下载（见 _current_cover_mode）。getattr 守卫：非单视频模式无这些开关。
+        for _cover_name in ("cover_check", "embed_check"):
+            _toggle = getattr(self, _cover_name, None)
+            if _toggle is not None:
+                _toggle.checkedChanged.connect(
+                    lambda _checked=False: self._refresh_assembly_preview()
+                )
+        self._refresh_assembly_preview()
+
+    def _current_subtitle_plan(self) -> SubtitlePlan:
+        """把「全局字幕配置 × 本窗字幕开关」折成预览用的 `SubtitlePlan`。
+
+        开关关（或裁切模式强制关）→ 全关计划（`describe()` == 不下载）；开关开 → 镜像全局
+        `SubtitleConfig` 的 embed/keep_external/语言（按 max_languages 截断）/目标格式。
+        """
+        toggle_on = bool(getattr(self, "subtitle_check", None) and self.subtitle_check.isChecked())
+        from ....core.config_manager import config_manager
+
+        cfg = config_manager.get_subtitle_config()
+        if not toggle_on:
+            return SubtitlePlan(
+                enabled=False, embed=False, keep_external=False, languages=(), output_format="srt"
+            )
+        langs = tuple(cfg.default_languages[: max(cfg.max_languages, 0)])
+        return SubtitlePlan(
+            enabled=True,
+            embed=cfg.embed,
+            keep_external=cfg.keep_external,
+            languages=langs,
+            output_format=cfg.output_format,
+        )
+
+    def _current_cover_mode(self) -> str:
+        """把「嵌入视频 / 独立封面」两个互斥开关折成预览用的封面处理档。
+
+        两者互斥（见 `_build_single_option_switches` 的联动）：嵌入视频→内嵌进容器，独立封面→
+        另存图片文件，都关→这次不要封面。缺开关（非单视频模式）一律回落「不下载」。
+        """
+        from ....models.download_plan import COVER_EMBED, COVER_EXTERNAL, COVER_NONE
+
+        if getattr(self, "embed_check", None) and self.embed_check.isChecked():
+            return COVER_EMBED
+        if getattr(self, "cover_check", None) and self.cover_check.isChecked():
+            return COVER_EXTERNAL
+        return COVER_NONE
+
+    def _refresh_assembly_preview(self) -> None:
+        """把当前选择实时折成 `ResolvedDownloadPlan` 刷新右栏预览（仅单视频默认模式有预览）。
+
+        与任务装配同源：走 `selector._compute_selection_result()` 拿 `{format, extra_opts}`，容器/
+        流全部由 `build_download_plan` 从中反推，绝不在这里二次判决（预览==实际装配）。重算属
+        best-effort，异常一律吞掉、绝不弹进窗口。
+        """
+        preview = getattr(self, "_assembly_preview", None)
+        if preview is None:
+            return
+        selector = getattr(self, "selector_widget", None)
+        if not isinstance(selector, VideoFormatSelectorWidget):
+            return
+
+        from ....models.download_plan import build_download_plan
+
+        try:
+            result = selector._compute_selection_result() or {}
+        except Exception:
+            result = {}
+        rows = list(getattr(selector, "_rows", None) or [])
+        resolution = getattr(selector, "_last_resolution", None)
+        plan = build_download_plan(
+            result=result,
+            rows=rows,
+            resolution=resolution,
+            subtitle=self._current_subtitle_plan(),
+            output_dir=str(getattr(self, "_download_dir", "") or ""),
+            cover=self._current_cover_mode(),
+        )
+        try:
+            preview.render_plan(plan)
+        except RuntimeError:
+            # 预览控件已随重新解析销毁（悬空 C++ 对象）——丢弃引用即可。
+            self._assembly_preview = None
 
     def _on_section_selection_changed(self) -> None:
         """Do not route a single-video control through playlist button logic."""
@@ -2292,35 +2530,16 @@ class DownloadConfigWindow(FramelessWindow):
         if not self._is_playlist and selector is not None:
             self.yesButton.setEnabled(selector.is_valid())
 
-    def _animate_for_section_expand(self, enabled: bool) -> None:
-        """裁切选项展开会抬高布局的最小高度。
-
-        窗口高度是固定值（单视频 880），布局一旦要求更多高度，Qt 只会保持左上角
-        不动、朝下把窗口撑开，底部的取消/下载按钮就被推出屏幕。这里同步长高并让
-        视觉中心保持不动：展开上移、收起下移，两端都是居中的。
-        """
+    def _reveal_section_options(self) -> None:
         selector = self._section_selector
-        if selector is None or self._is_playlist:
-            return
-
-        base_h = self._mode_window_metrics()[1]
-        if enabled:
-            # 折叠态的布局最小高度只能在选项区仍然收起时量出来，量到就缓存
-            self._section_collapsed_min_h = self.minimumSizeHint().height()
-            extra = selector.options_extra_height()
-        else:
-            extra = 0
-
-        # needed = 展开/收起后布局真正要求的高度，Qt 无论如何都会保证它，
-        # 所以它同时是屏幕钳位的下限，否则动画结束后窗口会被顶回去、丢掉居中。
-        needed = (self._section_collapsed_min_h or 0) + extra
-        self._animate_height_keep_center(
-            max(base_h, needed), SectionRangeSelector.OPTIONS_ANIM_MS, min_h=needed
-        )
+        if selector is not None and selector.is_enabled():
+            self.scrollArea.ensureWidgetVisible(selector.options, 12, 12)
 
     def _on_section_enabled_changed(self, enabled: bool) -> None:
         """Keep subtitles mutually exclusive with v1 clip downloads."""
-        self._animate_for_section_expand(enabled)
+        self._section_scroll_timer.stop()
+        if enabled:
+            self._section_scroll_timer.start(SectionRangeSelector.OPTIONS_ANIM_MS + 20)
         if not hasattr(self, "subtitle_check") or not hasattr(self, "subtitle_pick_btn"):
             return
         if enabled:
@@ -3867,12 +4086,15 @@ class DownloadConfigWindow(FramelessWindow):
     def _handle_container_conflict(self, ydl_opts: dict) -> bool:
         """用户压了容器却和字幕/多音轨冲突时的当面裁决。返回 False 表示放弃建任务。
 
-        三种答案全部落 `kind=decision subsystem=container`，因为三种都会让后面的产物
-        与用户以为的不一样，而**目前一条都不进日志**：
-        `keep` 之后合并可能直接报错、`external` 之后字幕成了独立文件（"字幕怎么没嵌进去"
-        的成因就在这里）、`abort` 则是整个任务压根没建起来 —— 用户只记得"我点了下载但没反应"。
+        全部答案落 `kind=decision subsystem=container`：`keep` 之后合并可能直接报错、
+        `external` 之后字幕成了独立文件（"字幕怎么没嵌进去"的成因就在这里）、`abort` 则是
+        整个任务压根没建起来。记 `resolution` 这个 code，不记对话框里那段中文 —— 文案会随
+        界面语言变，日志得能搜。
 
-        记 `resolution` 这个 code，不记对话框里那段中文 —— 文案会随界面语言变，日志得能搜。
+        对话框统一成"清晰二选一"：主按钮永远是无损的 MKV（保留全部内容），次按钮是用户压的
+        那个容器所对应的取舍（多音轨→保持原容器；字幕→改外挂）。关窗/Esc 落回安全默认（MKV，
+        不丢内容）。冲突类型由 container_compat 的兼容性谓词判定 —— 它与
+        `resolve_output_container` 同源，故这里弹的取舍与 resolver 记 `overridden` 的判据一致。
         """
         from qfluentwidgets import BodyLabel, MessageBoxBase, PushButton, SubtitleLabel
 
@@ -3903,98 +4125,103 @@ class DownloadConfigWindow(FramelessWindow):
                 **extra,
             )
 
-        # 1. Check audio track conflict
-        audio_count = ydl_opts.get("__audio_track_count", 1)
-        audio_conflict = check_audio_multistream_container_compat(container, audio_count)
+        class _ContainerChoiceDialog(MessageBoxBase):
+            """两个取舍并列作主按钮；`取消` 仅在允许放弃任务时才给。
 
-        if audio_conflict:
+            所有文案由外部注入 —— 让 `self.tr()` 全部落在 DownloadConfigWindow 的翻译
+            上下文里，别在这个嵌套类里新开一个 Qt 翻译 context（否则 .ts 得多维护一段）。
+            """
 
-            class AudioConflictDialog(MessageBoxBase):
-                def __init__(self, parent=None):
-                    super().__init__(parent)
-                    self.titleLabel = SubtitleLabel(self.tr("多音轨容器兼容性警告"), self)
-                    self.viewLayout.addWidget(self.titleLabel)
-                    self.msgLabel = BodyLabel(
-                        audio_conflict + self.tr("\n\n请选择解决方案："), self
-                    )
-                    self.msgLabel.setWordWrap(True)
-                    self.viewLayout.addWidget(self.msgLabel)
-                    self.widget.setMinimumWidth(400)
-                    self.yesButton.setText(self.tr("切换为 MKV"))
-                    self.cancelButton.setText(self.tr("保持原格式 (不推荐)"))
-                    self.result_action = "keep"
-
-                def accept(self):
-                    self.result_action = "mkv"
-                    super().accept()
-
-                def reject(self):
-                    self.result_action = "keep"
-                    super().reject()
-
-            dialog = AudioConflictDialog(self)
-            dialog.exec()
-            audio_before = container
-            if dialog.result_action == "mkv":
-                ydl_opts["merge_output_format"] = "mkv"
-                container = "mkv"  # update for following checks
-            # if keep, we do nothing and proceed
-            _emit_conflict(
-                "audio_multistream",
-                dialog.result_action,
-                audio_before,
-                audio_tracks=audio_count,
-            )
-
-        # 2. Check subtitle conflict
-        is_embed = ydl_opts.get("embedsubtitles", False)
-        lang_count = len(ydl_opts.get("subtitleslangs", [])) if is_embed else 0
-
-        conflict_msg = check_subtitle_container_compat(container, is_embed, lang_count)
-        if not conflict_msg:
-            return True
-
-        from qfluentwidgets import MessageBoxBase
-
-        class ConflictDialog(MessageBoxBase):
-            def __init__(self, parent=None):
+            def __init__(
+                self,
+                title,
+                message,
+                mkv_label,
+                alt_label,
+                alt_action,
+                abort_label=None,
+                parent=None,
+            ):
                 super().__init__(parent)
-                self.titleLabel = SubtitleLabel(self.tr("容器格式冲突"), self)
+                self.result_action = "mkv"  # 关窗/Esc = 安全默认（无损保全）
+                self._alt_action = alt_action
+                self.titleLabel = SubtitleLabel(title, self)
                 self.viewLayout.addWidget(self.titleLabel)
-                self.msgLabel = BodyLabel(conflict_msg + self.tr("\n\n请选择解决方案："), self)
+                self.msgLabel = BodyLabel(message, self)
                 self.msgLabel.setWordWrap(True)
                 self.viewLayout.addWidget(self.msgLabel)
-                self.widget.setMinimumWidth(400)
-                self.yesButton.setText(self.tr("切换为 MKV"))
-                self.cancelButton.setText(self.tr("字幕改为外挂"))
-                self.abortBtn = PushButton(self.tr("取消"))
-                self.buttonLayout.insertWidget(0, self.abortBtn)
-                self.abortBtn.clicked.connect(self.reject)
+                self.widget.setMinimumWidth(420)
+                self.yesButton.setText(mkv_label)
+                self.cancelButton.setText(alt_label)
+                # cancelButton 改承接"取舍"，重接信号、不再触发 reject。
                 self.cancelButton.clicked.disconnect()
-                self.cancelButton.clicked.connect(self._accept_external)
-                self.result_action = "abort"
+                self.cancelButton.clicked.connect(self._choose_alt)
+                if abort_label:
+                    self.abortBtn = PushButton(abort_label, self)
+                    self.buttonLayout.insertWidget(0, self.abortBtn)
+                    self.abortBtn.clicked.connect(self._choose_abort)
 
             def accept(self):
                 self.result_action = "mkv"
                 super().accept()
 
-            def _accept_external(self):
-                self.result_action = "external"
+            def _choose_alt(self):
+                self.result_action = self._alt_action
                 super().accept()
 
-        dialog = ConflictDialog(self)
-        if dialog.exec():
+            def _choose_abort(self):
+                self.result_action = "abort"
+                super().reject()
+
+        prompt = self.tr("\n\n请选择解决方案：")
+
+        # 1. 多音轨冲突先判 —— 它会把 container 抬成 mkv，直接影响后面的字幕判定。
+        audio_count = ydl_opts.get("__audio_track_count", 1)
+        audio_conflict = check_audio_multistream_container_compat(container, audio_count)
+        if audio_conflict:
+            dialog = _ContainerChoiceDialog(
+                self.tr("多音轨容器兼容性"),
+                audio_conflict + prompt,
+                self.tr("用 MKV（保留全部音轨）"),
+                self.tr("保持 {0}（多音轨兼容性差）").format(container.upper()),
+                "keep",
+                parent=self,
+            )
+            dialog.exec()
+            audio_before = container
             if dialog.result_action == "mkv":
                 ydl_opts["merge_output_format"] = "mkv"
-                _emit_conflict("subtitle", "mkv", container, sub_langs_n=lang_count)
-                return True
-            elif dialog.result_action == "external":
-                ydl_opts["embedsubtitles"] = False
-                # 记 embed=False：这条就是"字幕怎么变成独立 .srt 了"的唯一答案。
-                _emit_conflict(
-                    "subtitle", "external", container, sub_langs_n=lang_count, embed=False
-                )
-                return True
+                container = "mkv"  # 供后续字幕判定用
+            _emit_conflict(
+                "audio_multistream", dialog.result_action, audio_before, audio_tracks=audio_count
+            )
+
+        # 2. 字幕冲突
+        is_embed = ydl_opts.get("embedsubtitles", False)
+        lang_count = len(ydl_opts.get("subtitleslangs", [])) if is_embed else 0
+        conflict_msg = check_subtitle_container_compat(container, is_embed, lang_count)
+        if not conflict_msg:
+            return True
+
+        dialog = _ContainerChoiceDialog(
+            self.tr("字幕容器兼容性"),
+            conflict_msg + prompt,
+            self.tr("用 MKV（保留内嵌字幕）"),
+            self.tr("用 {0} + 字幕外置").format(container.upper()),
+            "external",
+            abort_label=self.tr("取消"),
+            parent=self,
+        )
+        dialog.exec()
+        if dialog.result_action == "mkv":
+            ydl_opts["merge_output_format"] = "mkv"
+            _emit_conflict("subtitle", "mkv", container, sub_langs_n=lang_count)
+            return True
+        if dialog.result_action == "external":
+            ydl_opts["embedsubtitles"] = False
+            # 记 embed=False：这条就是"字幕怎么变成独立 .srt 了"的唯一答案。
+            _emit_conflict("subtitle", "external", container, sub_langs_n=lang_count, embed=False)
+            return True
 
         # 用户放弃 —— 任务压根不会被创建，除了这条事件外全链路无痕。
         _emit_conflict("subtitle", "abort", container, sub_langs_n=lang_count)

@@ -267,6 +267,99 @@ def test_a_critical_notification_renders_in_the_list(qt_app):
         listWidget.deleteLater()
 
 
+# ── 紧凑档 vs 完整档（浮窗小、窗口全）──────────────────────────
+
+
+def test_compact_card_is_smaller_than_full(qt_app):
+    """浮窗的卡片比窗口的小一圈，且标题单行（省略）而非换行铺开。
+
+    这是"右上角小窗口要精简、独立窗口才完整"这条诉求的钉子：两档不能长一个样。
+    """
+    full = NotificationCard(_notif(), compact=False)
+    compact = NotificationCard(_notif(), compact=True)
+    try:
+        assert compact.titleLabel.font().pixelSize() < full.titleLabel.font().pixelSize()
+        assert compact.msgLabel.font().pixelSize() < full.msgLabel.font().pixelSize()
+        assert not compact.titleLabel.wordWrap()  # 紧凑档：单行省略
+        assert full.titleLabel.wordWrap()  # 完整档：多行铺开
+        assert not compact.msgLabel.wordWrap()
+        assert full.msgLabel.wordWrap()
+    finally:
+        full.deleteLater()
+        compact.deleteLater()
+
+
+def test_compact_title_re_elides_from_full_text_not_elided_text(qt_app):
+    """紧凑档省略必须从完整原文重算 —— 窗口一缩一放不能把字吃没。
+
+    老坑：拿 `label.text()`（已带省略号）再省略一次，每缩一点就再吃掉一截，
+    放大也长不回来。这里先在窄宽度省略、再放宽，断言完整文字能长回来。
+    """
+    long_title = "组件更新可用：yt-dlp 2026.09.16.232951 → master 频道，前往设置即可应用"
+    card = NotificationCard(_notif(title=long_title), compact=True)
+    try:
+        card.titleLabel.resize(50, 20)
+        card._elide_text()
+        narrow = card.titleLabel.text()
+        assert narrow.endswith("…")
+        assert narrow != long_title
+
+        card.titleLabel.resize(4000, 20)
+        card._elide_text()
+        assert card.titleLabel.text() == long_title  # 完整长回来，没有被吃掉
+    finally:
+        card.deleteLater()
+
+
+def test_full_card_never_elides(qt_app):
+    """完整档不省略：换行铺开，原文一字不少。"""
+    long_title = "组件更新可用：yt-dlp 2026.09.16.232951 → master 频道，前往设置即可应用"
+    card = NotificationCard(_notif(title=long_title), compact=False)
+    try:
+        card.titleLabel.resize(50, 20)
+        card._elide_text()  # 完整档里这是空操作
+        assert card.titleLabel.text() == long_title
+    finally:
+        card.deleteLater()
+
+
+def test_flyout_renders_compact_cards(qt_app):
+    """浮窗容器把 `compact=True` 一路传到卡片。"""
+    notification_center.push(_notif())
+    flyout = NotificationFlyoutView()
+    try:
+        QApplication.processEvents()
+        card = _cards(flyout.listWidget)[0]
+        assert card.compact is True
+        assert card.titleLabel.font().pixelSize() == 12
+    finally:
+        flyout.deleteLater()
+
+
+def test_window_renders_full_cards(qt_app):
+    """独立窗口容器保持完整档。"""
+    notification_center.push(_notif())
+    anchor = QWidget()
+    anchor.resize(1000, 700)
+    window = NotificationWindow(anchor)
+    try:
+        card = _cards(window.listWidget)[0]
+        assert card.compact is False
+        assert card.titleLabel.font().pixelSize() == 14
+    finally:
+        window.close()
+        anchor.deleteLater()
+
+
+def test_flyout_is_narrower_than_the_window(qt_app):
+    """浮窗比独立窗口窄 —— 一列精简卡片，不该占满标题栏宽度。"""
+    flyout = NotificationFlyoutView()
+    try:
+        assert flyout.width() < NotificationWindow.SIZE_BOUNDS[0][0]
+    finally:
+        flyout.deleteLater()
+
+
 # ── 列表本体 ────────────────────────────────────────────────
 
 
@@ -398,7 +491,11 @@ def test_mark_all_as_read_clears_every_dot(qt_app):
 
 
 def test_font_weights_come_from_getfont(qt_app):
-    """字号走 `getFont()` 的像素度量，不混磅值 —— 混用会让行高不齐。"""
+    """字号走 `getFont()` 的像素度量，不混磅值 —— 混用会让行高不齐。
+
+    这是完整档（独立窗口）的卡片：标题 14px 舒展。紧凑档的对照在
+    `test_compact_card_is_smaller_than_full` 里。
+    """
     card = NotificationCard(_notif(is_read=False))
     try:
         font = card.titleLabel.font()
