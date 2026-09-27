@@ -85,10 +85,6 @@ def test_draft_protocol(tmp_path, monkeypatch, scenario):
     def command(*args):
         if args[0] == "git":
             return "fixture-commit"
-        if args[:4] == ("gh", "api", "--paginate", "--slurp"):
-            return json.dumps(
-                [[{"tag_name": tag, "draft": remote["draft"]}] if remote["exists"] else []]
-            )
         if args[:3] == ("gh", "release", "create"):
             operations.append("create")
             assert "--draft" in args and "--verify-tag" in args
@@ -133,9 +129,22 @@ def test_draft_protocol(tmp_path, monkeypatch, scenario):
             payload += b"corrupt"
         return io.BytesIO(payload)
 
+    def run(cmd, *args, **kwargs):
+        # _existing_release() 用 subprocess.run 直查按-tag 端点，以便把 404（无既有
+        # release）与鉴权/网络错误区分开——这是它不能走 command()（check_output 对任何
+        # 非零退出都抛 CalledProcessError）的原因。这里按初始 remote 状态伪造探测结果。
+        if cmd[:2] == ["gh", "api"]:
+            if remote["exists"]:
+                return pipeline.subprocess.CompletedProcess(
+                    cmd, 0, json.dumps({"draft": remote["draft"]}), ""
+                )
+            return pipeline.subprocess.CompletedProcess(cmd, 1, "", "release not found (HTTP 404)")
+        # resolve() 的 git merge-base --is-ancestor 血缘校验：非零即视为不在 main 上。
+        return pipeline.subprocess.CompletedProcess(cmd, 0, "", "")
+
     monkeypatch.setattr(pipeline, "ROOT", tmp_path)
     monkeypatch.setattr(pipeline, "command", command)
-    monkeypatch.setattr(pipeline.subprocess, "run", lambda *a, **k: None)
+    monkeypatch.setattr(pipeline.subprocess, "run", run)
     monkeypatch.setattr("urllib.request.urlopen", urlopen)
     for key, value in {
         "GITHUB_REF_TYPE": "tag",

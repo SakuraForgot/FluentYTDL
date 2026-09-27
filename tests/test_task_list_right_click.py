@@ -432,3 +432,7 @@ def test_context_row_cleared_when_rows_shift(page, qapp):
 
     assert page.list_view._context_row == -1
     assert page.delegate._context_row == -1
+
+
+# CI 分层标记（见 pyproject [tool.pytest.ini_options] markers）；本地全量 pytest 不受影响，仅 CI 的 -m 过滤用到
+pytestmark = pytest.mark.windows_gui

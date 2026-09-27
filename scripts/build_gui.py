@@ -358,15 +358,6 @@ class BuildGUI(QMainWindow):
             "开启后，即使环境中安装了黑名单依赖（如 torch, pandas）也将强行打包"
         )
         options_row.addWidget(self.skip_hygiene_cb)
-
-        self.strict_tools_cb = QCheckBox("每次构建获取全部最新组件")
-        self.strict_tools_cb.setChecked(False)
-        self.strict_tools_cb.hide()
-        self.strict_tools_cb.setToolTip(
-            "要求 assets/bin 下的工具版本与 scripts/TOOLS.lock.json 完全一致。\n"
-            "上游发新版会导致构建失败，需先运行 fetch_tools.py --update-lock 确认升级。"
-        )
-        options_row.addWidget(self.strict_tools_cb)
         options_row.addStretch()
         target_layout.addLayout(options_row)
 
@@ -561,7 +552,6 @@ class BuildGUI(QMainWindow):
         self.progress_bar.setVisible(running)
         self.target_combo.setEnabled(not running)
         self.skip_hygiene_cb.setEnabled(not running)
-        self.strict_tools_cb.setEnabled(not running)
         self.clean_release_cb.setEnabled(not running)
         self.version_edit.setEnabled(not running)
         self.btn_env_check.setEnabled(not running)
@@ -623,7 +613,6 @@ class BuildGUI(QMainWindow):
         target = self._get_target()
         version = self.version_edit.text().strip()
         skip_hygiene = self.skip_hygiene_cb.isChecked()
-        strict_tools = self.strict_tools_cb.isChecked()
 
         # 版本格式先在这里拦，别把非法值丢给 build.py 再让用户翻日志
         if version:
@@ -657,8 +646,6 @@ class BuildGUI(QMainWindow):
             self._log(f"   使用 VERSION 文件: {read_version_file()}（不会改写）", "#808080")
         if skip_hygiene:
             self._log("   ! 警告: 已跳过无菌环境体检", "#cca700")
-        if strict_tools:
-            self._log("   外部工具锁定模式: 版本须与 TOOLS.lock.json 一致", "#808080")
         self._log("")
 
         cmd = [sys.executable, str(ROOT / "scripts" / "build.py"), "--target", target]
@@ -666,8 +653,6 @@ class BuildGUI(QMainWindow):
             cmd.extend(["--version", version])
         if skip_hygiene:
             cmd.append("--skip-hygiene")
-        if strict_tools:
-            cmd.append("--strict-tools")
 
         self._is_build = True
         self._run_command(cmd)

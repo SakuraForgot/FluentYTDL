@@ -10,7 +10,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from fetch_tools import sha256_file
+from fetch_tools import REPOSITORIES, sha256_file
 
 CACHE = Path(__file__).resolve().parents[1] / "build" / "tools" / "7zip"
 
@@ -28,7 +28,7 @@ def prepare(cache: Path = CACHE, *, allow_environment: bool = True) -> Path:
 
     from component_snapshot import ReleaseSource
 
-    source = ReleaseSource("ip7z/7zip")
+    source = ReleaseSource(REPOSITORIES["7zip"])
     extra = [name for name in source.assets if re.fullmatch(r"7z\d+-extra\.7z", name)]
     if len(extra) != 1 or "7zr.exe" not in source.assets:
         raise RuntimeError("Latest official 7-Zip release has no unique Extra/bootstrap assets")

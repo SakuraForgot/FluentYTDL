@@ -15,7 +15,6 @@ FluentYTDL 更新清单生成器
 from __future__ import annotations
 
 import argparse
-import hashlib
 import io
 import json
 import os
@@ -36,7 +35,8 @@ if sys.platform == "win32":
 ROOT = Path(__file__).resolve().parent.parent
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from fetch_tools import load_tool_assets  # noqa: E402
+from fetch_tools import REPOSITORIES, load_tool_assets  # noqa: E402
+from hashing import sha256_file  # noqa: E402
 from version_manager import parse_version, strip_v_prefix, tag_for  # noqa: E402
 
 
@@ -66,14 +66,6 @@ def load_app_core_include() -> list[str]:
     return list(items)
 
 
-def sha256_file(file_path: Path) -> str:
-    sha256 = hashlib.sha256()
-    with open(file_path, "rb") as f:
-        for chunk in iter(lambda: f.read(65536), b""):
-            sha256.update(chunk)
-    return sha256.hexdigest()
-
-
 def detect_component_versions(release_dir: Path) -> dict[str, dict]:
     """检测 bin/ 工具版本。从 assets/bin/ 目录的 exe 文件中获取。"""
     snapshot = os.environ.get("FLUENTYTDL_COMPONENT_SNAPSHOT")
@@ -92,7 +84,7 @@ def detect_component_versions(release_dir: Path) -> dict[str, dict]:
         "yt-dlp": {
             "exe": "yt-dlp/yt-dlp.exe",
             "cmd": ["--version"],
-            "repo": "yt-dlp/yt-dlp",
+            "repo": REPOSITORIES["yt-dlp"],
         },
         "ffmpeg": {
             "exe": "ffmpeg/ffmpeg.exe",
@@ -100,22 +92,22 @@ def detect_component_versions(release_dir: Path) -> dict[str, dict]:
             # 必须与 dependency_manager._fetch_remote_from_api() 查的是同一个仓库，
             # 否则清单声明的来源和运行时实际查询的来源对不上。
             # 项目自带的 ffmpeg 来自 yt-dlp 的修复版构建，不是 BtbN 的。
-            "repo": "yt-dlp/FFmpeg-Builds",
+            "repo": REPOSITORIES["ffmpeg"],
         },
         "deno": {
             "exe": "deno/deno.exe",
             "cmd": ["--version"],
-            "repo": "denoland/deno",
+            "repo": REPOSITORIES["deno"],
         },
         "pot-provider": {
             "exe": "pot-provider/bgutil-pot-provider.exe",
             "cmd": ["--version"],
-            "repo": "jim60105/bgutil-ytdlp-pot-provider-rs",
+            "repo": REPOSITORIES["pot-provider"],
         },
         "atomicparsley": {
             "exe": "atomicparsley/AtomicParsley.exe",
             "cmd": ["--version"],
-            "repo": "wez/atomicparsley",
+            "repo": REPOSITORIES["atomicparsley"],
         },
     }
 

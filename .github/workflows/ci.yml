@@ -14,7 +14,6 @@ jobs:
     uses: ./.github/workflows/checks.yml
   build:
     name: Frozen application
-    needs: checks
     runs-on: windows-2022
     timeout-minutes: 40
     steps:

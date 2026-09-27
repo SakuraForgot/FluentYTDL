@@ -471,3 +471,7 @@ def test_clear_all_removes_notifications_and_updates_both_views(qt_app, containe
         notification_center.unread_count_changed.disconnect(counts.append)
         view.close()
         other.deleteLater()
+
+
+# CI 分层标记（见 pyproject [tool.pytest.ini_options] markers）；本地全量 pytest 不受影响，仅 CI 的 -m 过滤用到
+pytestmark = pytest.mark.windows_gui

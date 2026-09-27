@@ -558,3 +558,7 @@ def test_failed_update_restores_bundled_version_and_user_data(
     assert launches == [(exe, app, [])]
     for name in preserved:
         assert (app / name).read_bytes() == b"user data sentinel"
+
+
+# CI 分层标记（见 pyproject [tool.pytest.ini_options] markers）；本地全量 pytest 不受影响，仅 CI 的 -m 过滤用到
+pytestmark = pytest.mark.windows_only

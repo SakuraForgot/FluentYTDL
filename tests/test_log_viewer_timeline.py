@@ -805,3 +805,7 @@ def test_default_level_keeps_the_debug_decision_chain_visible(window):
 
     visible = [lbl for item in _tops(window.timelineView) for _, lbl in _visible_labels(item)]
     assert "decision" in visible
+
+
+# CI 分层标记（见 pyproject [tool.pytest.ini_options] markers）；本地全量 pytest 不受影响，仅 CI 的 -m 过滤用到
+pytestmark = pytest.mark.windows_gui

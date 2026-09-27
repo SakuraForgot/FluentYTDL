@@ -6,5 +6,5 @@
 - build.py: 主构建脚本
 - fetch_tools.py: 外部工具下载
 - collect_licenses.py: 许可证收集
-- checksums.py: SHA256 校验文件生成
+- hashing.py: SHA256 计算（sha256_file / sha256_bytes 单一事实源）
 """

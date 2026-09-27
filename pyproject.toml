@@ -67,6 +67,7 @@ fluentytdl = "fluentytdl.main:main"
 [project.optional-dependencies]
 dev = [
   "pytest>=7.0",
+  "pytest-xdist>=3.0",
   "ruff>=0.12",
   "pyright>=1.1",
   "pyinstaller>=5.9",
@@ -144,3 +145,10 @@ dist_forbidden = ["config.json", "logs", "state", "portable.txt", ".fluent_temp"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# 测试分层标记（CI 用 -m 表达式在 Linux / Windows runner 间分流；见 .github/workflows/checks.yml）。
+# 未打标记的测试是纯逻辑测试，可在 Linux 上 xdist 并行跑。
+markers = [
+    "windows_only: 仅在 Windows 上有意义（win32 API、作业对象、路径语义、冻结 exe）",
+    "needs_components: 需要真实下载的外部工具产物（ffmpeg/yt-dlp/7z 等），只在 Windows 组件 runner 上跑",
+    "windows_gui: 依赖真实窗口几何/字体/show() 的 GUI 测试，xdist 下不安全，走 Windows 串行 lane",
+]

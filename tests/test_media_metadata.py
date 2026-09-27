@@ -731,3 +731,7 @@ def test_worker_commits_verified_tags_or_keeps_media_with_warning(
             "year": "2026",
         }
     assert not (tmp_path / ".fluent_temp").exists()
+
+
+# CI 分层标记（见 pyproject [tool.pytest.ini_options] markers）；本地全量 pytest 不受影响，仅 CI 的 -m 过滤用到
+pytestmark = pytest.mark.needs_components

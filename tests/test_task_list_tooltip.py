@@ -654,3 +654,7 @@ def test_switching_text_restarts_the_fade(page, qapp):
     assert tip.text() == "删除任务"
     assert tip.isVisible()
     assert tip.timer.isActive()
+
+
+# CI 分层标记（见 pyproject [tool.pytest.ini_options] markers）；本地全量 pytest 不受影响，仅 CI 的 -m 过滤用到
+pytestmark = pytest.mark.windows_gui
