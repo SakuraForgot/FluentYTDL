@@ -12,6 +12,9 @@ from threading import Lock
 
 from .paths import find_bundled_executable, get_clean_env, is_frozen, locate_runtime_tool
 
+YTDLP_CHANNELS = ("stable", "nightly", "master", "sabr")
+SABR_REPOSITORY = "SakuraForgot/yt-dlp-sabr-fix"
+
 
 @dataclass(frozen=True)
 class RuntimeIdentity:
@@ -86,10 +89,14 @@ def probe_version(path: Path | None) -> RuntimeVersion:
                 env=get_clean_env(),
                 creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
             )
-            match = re.search(r"yt-dlp version ([\w-]+)@([^\s]+)", result.stdout + result.stderr)
+            output = result.stdout + result.stderr
+            match = re.search(r"yt-dlp version ([^\s@]+)@([^\s]+)", output)
             if not match:
                 return RuntimeVersion()
-            version = RuntimeVersion(match[2], match[1], "ok")
+            channel = match[1]
+            if channel == SABR_REPOSITORY and "(sabr-test" in output:
+                channel = "sabr"
+            version = RuntimeVersion(match[2], channel, "ok")
             _versions.clear()
             _versions[key] = version
             return version

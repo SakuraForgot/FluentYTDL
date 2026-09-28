@@ -194,6 +194,9 @@ class YtDlpOutputParser:
         if not line:
             return ParsedLine(type="unknown")
 
+        # SABR prefixes parallel writers' custom progress templates with a line number.
+        line = re.sub(r"^[1-9][0-9]*: (?=FLUENTYTDL\|)", "", line, count=1)
+
         # 0. Warning / Error
         wm = self._RE_WARNING.match(line)
         if wm:
