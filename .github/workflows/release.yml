@@ -71,14 +71,14 @@ jobs:
           BUILD_TARGET: ${{ steps.policy.outputs.target }}
         run: uv run --locked --no-sync python scripts/release_pipeline.py stage
       - name: Upload verified artifacts
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: FluentYTDL-${{ steps.policy.outputs.tag }}-builds
           path: ${{ steps.stage.outputs.artifacts }}/*
           if-no-files-found: error
       - name: Upload verification reports
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: build-verification-reports
           path: |
