@@ -4,7 +4,13 @@ from __future__ import annotations
 
 from PySide6.QtCore import QEasingCurve, QPoint, QPropertyAnimation, QRect, Qt, Signal
 from PySide6.QtGui import QMouseEvent, QPainter, QPalette
-from PySide6.QtWidgets import QHBoxLayout, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QGraphicsOpacityEffect,
+    QGridLayout,
+    QHBoxLayout,
+    QVBoxLayout,
+    QWidget,
+)
 from qfluentwidgets import CaptionLabel, ComboBox, LineEdit, SwitchButton
 
 from ....core.section_download import SectionCutMode, TimeRange, parse_time_range
@@ -102,15 +108,20 @@ class SectionRangeSelector(QWidget):
     enabledChanged = Signal(bool)
     selectionChanged = Signal()
 
-    # 选项区展开/收起的时长。外层窗口的几何动画必须用同一个时长和缓动曲线，
-    # 否则 Qt 会在动画中途按布局最小高度把窗口顶回去，出现抖动。
-    OPTIONS_ANIM_MS = 220
-    OPTIONS_ANIM_EASING = QEasingCurve.Type.InOutQuad
+    # 选项区淡入/淡出的时长。展开时高度一次性放开（滚动区只重排一次），内容随后
+    # 用透明度补间淡入——opacity 动画只触发重绘、不触发布局，避免逐帧重排掉帧。
+    # 外层窗口用这个时长（+ 余量）安排「展开后滚动到可见」，见
+    # download_config_window._on_section_enabled_changed。
+    OPTIONS_ANIM_MS = 160
+    OPTIONS_ANIM_EASING = QEasingCurve.Type.OutCubic
 
-    def __init__(self, duration: float, parent: QWidget | None = None) -> None:
+    def __init__(
+        self, duration: float, parent: QWidget | None = None, *, show_header: bool = True
+    ) -> None:
         super().__init__(parent)
         self._duration = max(0.0, float(duration))
         self._updating = False
+        self._show_header = show_header
         self._options_anim: QPropertyAnimation | None = None
         self._init_ui()
 
@@ -118,13 +129,17 @@ class SectionRangeSelector(QWidget):
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(8)
-        header = QHBoxLayout()
-        header.addWidget(CaptionLabel(self.tr("视频裁切"), self))
+        # enable_switch 始终创建并接线；表头（「视频裁切」标签 + 开关）只在 show_header 时铺。
+        # 宿主把开关搬进别处的「下载选项」行时传 show_header=False，避免重复的裁切标签，
+        # 展开的选项面板仍留在本控件下方。
         self.enable_switch = SwitchButton(self)
         self.enable_switch.checkedChanged.connect(self._on_enabled_changed)
-        header.addWidget(self.enable_switch)
-        header.addStretch(1)
-        root.addLayout(header)
+        if self._show_header:
+            header = QHBoxLayout()
+            header.addWidget(CaptionLabel(self.tr("视频裁切"), self))
+            header.addWidget(self.enable_switch)
+            header.addStretch(1)
+            root.addLayout(header)
 
         self.options = QWidget(self)
         options = QVBoxLayout(self.options)
@@ -142,18 +157,18 @@ class SectionRangeSelector(QWidget):
         labels.addWidget(self.end_label)
         options.addLayout(labels)
 
-        times = QHBoxLayout()
-        times.addWidget(CaptionLabel(self.tr("开始"), self.options))
+        times = QGridLayout()
+        times.addWidget(CaptionLabel(self.tr("开始"), self.options), 0, 0)
         self.start_edit = LineEdit(self.options)
         self.start_edit.setText("0:00")
         self.start_edit.editingFinished.connect(self._on_text_changed)
-        times.addWidget(self.start_edit)
-        times.addWidget(CaptionLabel(self.tr("结束"), self.options))
+        times.addWidget(self.start_edit, 0, 1)
+        times.addWidget(CaptionLabel(self.tr("结束"), self.options), 0, 2)
         self.end_edit = LineEdit(self.options)
         self.end_edit.setText(_format_time(self._duration))
         self.end_edit.editingFinished.connect(self._on_text_changed)
-        times.addWidget(self.end_edit)
-        times.addWidget(CaptionLabel(self.tr("模式"), self.options))
+        times.addWidget(self.end_edit, 0, 3)
+        times.addWidget(CaptionLabel(self.tr("模式"), self.options), 1, 0)
         self.mode_combo = ComboBox(self.options)
         self.mode_combo.addItem(
             self.tr("粗裁剪（快速，切点可能有偏差）"), userData=SectionCutMode.COARSE.value
@@ -162,54 +177,41 @@ class SectionRangeSelector(QWidget):
             self.tr("细裁剪（精确，需重编码）"), userData=SectionCutMode.PRECISE.value
         )
         self.mode_combo.currentIndexChanged.connect(self.selectionChanged)
-        times.addWidget(self.mode_combo, 1)
+        times.addWidget(self.mode_combo, 1, 1, 1, 3)
         options.addLayout(times)
 
         self.status_label = CaptionLabel("", self.options)
+        self.status_label.setWordWrap(True)
         options.addWidget(self.status_label)
         root.addWidget(self.options)
-        # 收起态用 maximumHeight=0 而不是仅 hide()：展开动画靠这个属性推进，
-        # 布局用 qSmartMinSize 把子控件的最小高度限制在 maximumHeight 内，
-        # 于是外层窗口的最小高度会跟着动画一起长高，而不是一步跳满。
+        # 内容透明度由 graphics effect 驱动淡入/淡出；opacity 只影响重绘，不参与布局，
+        # 所以补间期间滚动区不会逐帧重排。
+        self._options_opacity = QGraphicsOpacityEffect(self.options)
+        self._options_opacity.setOpacity(0.0)
+        self.options.setGraphicsEffect(self._options_opacity)
+        # 收起态用 maximumHeight=0（而不是仅 hide()）：布局用 qSmartMinSize 把子控件的
+        # 最小高度限制在 maximumHeight 内，收起时外层窗口的最小高度才不会把未展开的
+        # 选项区也算进去。展开时一次性放开上限（见 _animate_options）。
         self.options.setMaximumHeight(0)
         self.options.hide()
-
-    def options_extra_height(self) -> int:
-        """选项区完全展开后，外层需要额外腾出的垂直空间（含根布局间距）。"""
-        content = self._options_content_height()
-        if content <= 0:
-            return 0
-        root = self.layout()
-        spacing = root.spacing() if root is not None else 0
-        return content + max(0, spacing)
-
-    def _options_content_height(self) -> int:
-        height = self.options.sizeHint().height()
-        if height <= 0:
-            height = self.options.minimumSizeHint().height()
-        return max(0, height)
 
     def _animate_options(self, expand: bool) -> None:
         if self._options_anim is not None:
             self._options_anim.stop()
             self._options_anim = None
 
-        visible = self.options.isVisible()
-        content_h = self._options_content_height()
         if expand:
-            start = self.options.height() if visible else 0
-            end = content_h
-            self.options.setMaximumHeight(start)
+            # 一次性放开高度上限：滚动区只重排一次，随后内容以透明度淡入。
+            self.options.setMaximumHeight(_QWIDGETSIZE_MAX)
             self.options.show()
-        else:
-            start = self.options.height() if visible else content_h
-            end = 0
+        start = self._options_opacity.opacity()
+        end = 1.0 if expand else 0.0
 
         if start == end:
             self._finish_options_anim(expand)
             return
 
-        anim = QPropertyAnimation(self.options, b"maximumHeight", self)
+        anim = QPropertyAnimation(self._options_opacity, b"opacity", self)
         anim.setDuration(self.OPTIONS_ANIM_MS)
         anim.setStartValue(start)
         anim.setEndValue(end)
@@ -219,10 +221,8 @@ class SectionRangeSelector(QWidget):
         anim.start()
 
     def _finish_options_anim(self, expanded: bool) -> None:
-        if expanded:
-            # 放开上限，之后状态文本换行等自然重排不会被裁掉
-            self.options.setMaximumHeight(_QWIDGETSIZE_MAX)
-        else:
+        if not expanded:
+            # 淡出结束后再释放布局空间，避免收起时的高度骤缩打断淡出。
             self.options.hide()
             self.options.setMaximumHeight(0)
         self._options_anim = None

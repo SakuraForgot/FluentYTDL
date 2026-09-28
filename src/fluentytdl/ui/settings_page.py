@@ -35,6 +35,7 @@ from qfluentwidgets import (
 
 from fluentytdl.ui.components.common.cookie_refresh_worker import CookieRefreshWorker
 from fluentytdl.ui.components.common.custom_info_bar import InfoBar
+from fluentytdl.ui.components.common.transitions import RegionFader
 from fluentytdl.ui.components.settings.app_update_card import AppUpdateSettingCard
 from fluentytdl.ui.components.settings.smart_setting_card import SmartSettingCard
 from fluentytdl.utils.localized_log import log_text
@@ -997,6 +998,12 @@ class SettingsPage(QWidget):
         self.stackedWidget.setStyleSheet("background: transparent;")
         self.mainLayout.addWidget(self.stackedWidget)
 
+        # 分区切换（账号验证 / 下载 / 网络 / 功能 / 更新 / 系统）走快照交叉淡化，与解析页同款。
+        # 目标是分区栈本身：快照盖住换页时的高度突变与内容重排，活动页全程原生渲染保持文字锐利。
+        # 默认底色 task_surface_color()——整条链透明、真背景是 FluentWindow 的云母材质，绝不能把
+        # 底色绑到窗口色（云母下为全透明，会把「闪白」又引回来），深色精确、浅色为云母的平涂近似。
+        self._stack_fader = RegionFader(self.stackedWidget)
+
         # Cookie刷新worker引用（防止垃圾回收）
         self._active_workers = set()
         self._webview2_login_in_progress: str | None = None  # 记录当前正在登录的平台
@@ -1033,32 +1040,44 @@ class SettingsPage(QWidget):
         self.pivot.addItem(
             routeKey="generalInterface",
             text=self.tr("账号验证"),
-            onClick=lambda: self.stackedWidget.setCurrentWidget(self.generalInterface),
+            onClick=lambda: self._stack_fader.run(
+                lambda: self.stackedWidget.setCurrentWidget(self.generalInterface)
+            ),
         )
         self.pivot.addItem(
             routeKey="downloadInterface",
             text=self.tr("下载"),
-            onClick=lambda: self.stackedWidget.setCurrentWidget(self.downloadInterface),
+            onClick=lambda: self._stack_fader.run(
+                lambda: self.stackedWidget.setCurrentWidget(self.downloadInterface)
+            ),
         )
         self.pivot.addItem(
             routeKey="networkInterface",
             text=self.tr("网络"),
-            onClick=lambda: self.stackedWidget.setCurrentWidget(self.networkInterface),
+            onClick=lambda: self._stack_fader.run(
+                lambda: self.stackedWidget.setCurrentWidget(self.networkInterface)
+            ),
         )
         self.pivot.addItem(
             routeKey="featuresInterface",
             text=self.tr("功能"),
-            onClick=lambda: self.stackedWidget.setCurrentWidget(self.featuresInterface),
+            onClick=lambda: self._stack_fader.run(
+                lambda: self.stackedWidget.setCurrentWidget(self.featuresInterface)
+            ),
         )
         self.pivot.addItem(
             routeKey="componentsInterface",
             text=self.tr("更新"),
-            onClick=lambda: self.stackedWidget.setCurrentWidget(self.componentsInterface),
+            onClick=lambda: self._stack_fader.run(
+                lambda: self.stackedWidget.setCurrentWidget(self.componentsInterface)
+            ),
         )
         self.pivot.addItem(
             routeKey="systemInterface",
             text=self.tr("系统"),
-            onClick=lambda: self.stackedWidget.setCurrentWidget(self.systemInterface),
+            onClick=lambda: self._stack_fader.run(
+                lambda: self.stackedWidget.setCurrentWidget(self.systemInterface)
+            ),
         )
 
         self.pivot.setCurrentItem("generalInterface")

@@ -12,8 +12,10 @@ from fluentytdl.utils.message_catalog import english
 # ---------------------------------------------------------------------------
 
 # 跨 Phase 的隐式契约：这个环境变量由 main.py 顶部（--data-dir 摘参处）写入，
-# 只由本模块的 user_data_dir() 消费。updater 降权启动新版时通过 --data-dir 传进来，
-# 让新版的数据目录完全不依赖"被继承的环境"。两边都别当死代码删掉。
+# 经本模块的 data_dir_override() 读取。updater 降权启动新版时通过 --data-dir 传进来，
+# 让新版的数据目录完全不依赖"被继承的环境"。消费者：user_data_dir()（选目录）与
+# config_manager._load_config()（设了 override 就不再回退旧 Documents / 仓库根 config.json，
+# 见 data_dir_override 的 docstring）。两边都别当死代码删掉。
 DATA_DIR_ENV = "FLUENTYTDL_DATA_DIR_OVERRIDE"
 
 #: 便携版标记。只注入 full.7z 归档根，绝不出现在 dist/ 与安装版里。
@@ -78,6 +80,18 @@ def _local_app_data() -> Path:
     return home / ".local" / "share"
 
 
+def data_dir_override() -> str:
+    """读取 ``FLUENTYTDL_DATA_DIR_OVERRIDE`` 覆盖值（未设时返回空串）。
+
+    这是"数据目录被显式钉死"的**单一判定源**。设了它就代表调用方（updater 降权
+    启动、测试 conftest）要求数据目录**完全自洽**：不继承任何环境。除了 user_data_dir()
+    用它选根目录，config_manager 还用 ``bool(data_dir_override())`` 决定是否回退到旧
+    ``~/Documents`` 迁移与仓库根 ``config.json`` —— 设了 override 就一律不回退，缺 config
+    直接吃 DEFAULT_CONFIG，免得开发机仓库根那份私有 config.json 漏进测试。
+    """
+    return os.environ.get(DATA_DIR_ENV, "").strip()
+
+
 def user_data_dir(app_name: str = "FluentYTDL") -> Path:
     """所有运行期数据（config / DB / logs）的根目录。
 
@@ -97,7 +111,7 @@ def user_data_dir(app_name: str = "FluentYTDL") -> Path:
 
     行为变化：开发模式不再有 ``~/Documents`` 回退（那正是分裂的另一半）。
     """
-    override = os.environ.get(DATA_DIR_ENV, "").strip()
+    override = data_dir_override()
     if override:
         target = Path(override)
     elif is_frozen():

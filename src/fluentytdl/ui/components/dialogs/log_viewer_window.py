@@ -132,7 +132,16 @@ class LogViewerWindow(StandaloneWindow):
         self._debounce.setInterval(200)
         self._debounce.timeout.connect(self._query_history)
         self._start_log_capture()
-        QTimer.singleShot(0, self._query_history)
+        # 初始回填用**子对象**定时器（parent=self），而不是 QTimer.singleShot(0, ...)：
+        # 后者建的是一个不挂在窗口下的独立定时器，窗口一旦在它触发前就被销毁（构造完
+        # 立刻 deleteLater、或 WA_DeleteOnClose 立即销毁），这个 0 延迟回调仍会投递到
+        # 已析构的 C++ 对象上 —— `_query_history` 第一句 `self.olderBtn.setEnabled(...)`
+        # 就抛 "Internal C++ object already deleted"。挂成子对象后它随窗口一起析构、
+        # 未触发的 timeout 被 Qt 一并摘除，和上面的 `_debounce`/`_render_timer` 一致。
+        self._initial_query = QTimer(self)
+        self._initial_query.setSingleShot(True)
+        self._initial_query.timeout.connect(self._query_history)
+        self._initial_query.start(0)
 
     def _query_history(self, older=False):
         from datetime import datetime
@@ -762,6 +771,7 @@ class LogViewerWindow(StandaloneWindow):
         """
         self._stop_log_capture()
         self._jobs.cancel()
+        self._initial_query.stop()
         self._debounce.stop()
         self._render_timer.stop()
         super().closeEvent(event)

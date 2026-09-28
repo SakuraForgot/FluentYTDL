@@ -44,6 +44,12 @@ class SubtitlePickerDialog(MessageBoxBase):
         self.selector = SubtitleSelectorWidget(video_info, self)
         if initial_result:
             self.selector.set_initial_state(initial_result.override_languages)
+        # SubtitleSelectorWidget 自带一个「字幕格式」下拉（standalone 字幕页里它是生效的，
+        # 见 subtitle.py 的 formatCombo/get_result）。但在本弹窗里真正进命令的是下面这条
+        # 自己的 _format_combo（→ --convert-subs），内嵌那条只会写 config、不进命令，两条
+        # 并排显示会让人以为要设两次。故仅在本弹窗内隐藏内嵌那条，别处不动它。
+        self.selector.formatLabel.hide()
+        self.selector.formatCombo.hide()
         self.viewLayout.addWidget(self.selector)
 
         # 嵌入选项区域
@@ -77,6 +83,12 @@ class SubtitlePickerDialog(MessageBoxBase):
         else:
             fmt_index = {"srt": 0, "ass": 1, "vtt": 2, "lrc": 3}.get(config.output_format, 0)
             self._format_combo.setCurrentIndex(fmt_index)
+
+        # 内嵌 selector 的 formatCombo 被隐藏后，「记住上次字幕格式」这个持久化副作用
+        # 由本弹窗的 _format_combo 承接（config 存小写：srt/ass/vtt/lrc）。
+        self._format_combo.currentTextChanged.connect(
+            lambda text: config_manager.set("subtitle_output_format", text.lower())
+        )
 
         self._embed_row.addWidget(CaptionLabel(self.tr("字幕格式:"), self))
         self._embed_row.addWidget(self._format_combo)

@@ -17,12 +17,17 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
 from fluentytdl.utils.ui_text import tr_text
 
 # MP4 和 MKV 都支持字幕嵌入，只有 WebM 不支持 SRT/ASS
 _SUBTITLE_COMPATIBLE_CONTAINERS = {"mp4", "mkv", "mov", "m4v"}
+
+# 会因硬约束被强升到 mkv 的候选容器：mp4 / webm / 未指定。mkv、mov、m4v 已能容纳
+# 多音轨/多语言字幕，不在此列 —— 用户显式选了它们就保持，不当成冲突。
+_UPGRADABLE_TO_MKV = {"mp4", "webm", None}
 
 
 def _report_rewrite(trace: Any, *, before: str, after: str, reason: str, **fields: Any) -> None:
@@ -70,6 +75,137 @@ def choose_lossless_merge_container(video_ext: str | None, audio_ext: str | None
     if v in {"mp4", "m4v"} and a in {"m4a", "aac", "mp4"}:
         return "mp4"
     return "mkv"
+
+
+# ── 单一权威 resolver ─────────────────────────────────────────
+# 把散落在 `decide_merge_container`（format_scorer）、两个 `ensure_*`、以及
+# `SubtitleFeature.on_download_start` 里的运行时 webm/unset→mkv 收敛成同一条阶梯。
+# 纯函数、无副作用：既给「装配预览」view-model 用，也给任务装配算最终容器用，
+# 保证"预览说会产出什么"与"真的产出什么"是同一段逻辑算出来的。
+
+
+@dataclass(frozen=True)
+class ContainerResolution:
+    """一次容器/格式决策的完整结论 + 出处（provenance）。
+
+    - `container`：视频路径的最终 `merge_output_format`（`None` = 蓄意不设，交给 yt-dlp）。
+    - `audio_format`：仅音频路径的最终音频格式（视频路径恒 `None`）。
+    - `resolved`：用户实际拿到的最终扩展名（视频取 `container`，纯音频取 `audio_format`）。
+    - `user_requested`：用户/预设显式点名的容器或音频格式（未点名为 `None`）。
+    - `overridden`：是否把用户显式点名的值改掉了（`user_requested is None` 时恒 `False`）。
+    - `reason`：改写理由，取自锁定词表之一或 `None`（见 `resolve_output_container`）。
+    - `needs_audio_multistreams`：是否因多音轨而需要多流封装。
+    """
+
+    container: str | None
+    audio_format: str | None
+    resolved: str | None
+    user_requested: str | None
+    overridden: bool
+    reason: str | None
+    needs_audio_multistreams: bool
+
+
+def resolve_output_container(
+    *,
+    audio_only: bool = False,
+    user_container: str | None = None,
+    video_ext: str | None = None,
+    audio_ext: str | None = None,
+    embed_subtitles: bool = False,
+    subtitle_lang_count: int = 0,
+    audio_track_count: int = 1,
+    audio_multistreams: bool = False,
+    user_audio_format: str | None = None,
+) -> ContainerResolution:
+    """单一权威：给定所有影响容器的因素，算出最终容器/格式与出处。
+
+    视频路径优先级阶梯（与今日 `decide_merge_container` + 两个 `ensure_*` 的**最终容器**
+    逐分支等价，见模块顶注）：
+
+    0. `naive = choose_lossless_merge_container(v, a)`；`candidate = user_container or naive`
+    1. **硬** 多音轨（>1 或 `audio_multistreams`）且 candidate∈{mp4,webm,未设} → mkv，`audio_multistream`
+    2. **硬** embed 且 >1 字幕语言 且 candidate∈{mp4,webm,未设} → mkv，`subtitle_multi_lang`
+    3. **硬** embed 且 candidate==webm → mkv，`subtitle_webm_incompatible`
+    4. **硬** embed 且 candidate 未设 → mkv，`subtitle_container_unset`
+    5. **兜底** candidate 未设但有流 ext → mkv（无 reason，等价 `naive or "mkv"`）；
+       无 ext 的"蓄意不设"（quick）保持不设，绝不凭空升 mkv。
+
+    both-true（多音轨 + 多语言字幕）时记 `audio_multistream`（Rung 1 先命中）——这是相对
+    顺序化 `ensure_*`（字幕先记）的**取舍**：最终容器一致（都 mkv），单一 reason 取先命中者。
+
+    纯音频路径只认 `user_audio_format`，容器恒 `None`。
+    """
+    if audio_only:
+        fmt = _norm(user_audio_format)
+        return ContainerResolution(
+            container=None,
+            audio_format=fmt,
+            resolved=fmt,
+            user_requested=fmt,
+            overridden=False,
+            reason=None,
+            needs_audio_multistreams=False,
+        )
+
+    requested = _norm(user_container)
+    naive = choose_lossless_merge_container(video_ext, audio_ext)
+    candidate = requested or naive
+    needs_multi = audio_track_count > 1 or bool(audio_multistreams)
+
+    final, reason = _resolve_video_container(
+        candidate=candidate,
+        naive=naive,
+        video_ext=video_ext,
+        audio_ext=audio_ext,
+        embed_subtitles=embed_subtitles,
+        subtitle_lang_count=subtitle_lang_count,
+        needs_multi=needs_multi,
+    )
+
+    overridden = bool(requested) and final != requested and reason is not None
+    return ContainerResolution(
+        container=final,
+        audio_format=None,
+        resolved=final,
+        user_requested=requested,
+        overridden=overridden,
+        reason=reason,
+        needs_audio_multistreams=needs_multi,
+    )
+
+
+def _norm(value: str | None) -> str | None:
+    """扩展名归一化：去空白、转小写、空串视作 None（未指定）。"""
+    normalized = str(value or "").strip().lower()
+    return normalized or None
+
+
+def _resolve_video_container(
+    *,
+    candidate: str | None,
+    naive: str | None,
+    video_ext: str | None,
+    audio_ext: str | None,
+    embed_subtitles: bool,
+    subtitle_lang_count: int,
+    needs_multi: bool,
+) -> tuple[str | None, str | None]:
+    """视频路径阶梯的纯谓词：返回 `(final_container, reason)`。"""
+    if needs_multi and candidate in _UPGRADABLE_TO_MKV:
+        return "mkv", "audio_multistream"
+    if embed_subtitles and subtitle_lang_count > 1 and candidate in _UPGRADABLE_TO_MKV:
+        return "mkv", "subtitle_multi_lang"
+    if embed_subtitles and candidate == "webm":
+        return "mkv", "subtitle_webm_incompatible"
+    if embed_subtitles and candidate is None:
+        return "mkv", "subtitle_container_unset"
+    if candidate is None:
+        # ext 守卫：有流 ext（真要合并）才兜底 mkv；无 ext 的蓄意不设保持不设。
+        if _norm(video_ext) or _norm(audio_ext):
+            return "mkv", None
+        return None, None
+    return candidate, None
 
 
 def ensure_subtitle_compatible_container(opts: dict[str, Any], *, trace: Any = None) -> None:

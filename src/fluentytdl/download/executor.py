@@ -34,7 +34,6 @@ from ..observability import (
     sanitize_path,
     should_keep_raw_line,
 )
-from ..utils.container_compat import choose_lossless_merge_container
 from ..utils.disk_space import check_space_for_download
 from ..youtube.yt_dlp_cli import (
     log_pot_from_output,
@@ -205,44 +204,6 @@ class PartsProbe(Protocol):
     """
 
     def __call__(self) -> int: ...
-
-
-# ── 容器决策 ──────────────────────────────────────────────
-
-_SUBTITLE_COMPATIBLE_CONTAINERS = {"mp4", "mkv", "mov", "m4v"}
-
-
-def determine_merge_container(
-    ydl_opts: dict[str, Any],
-    video_ext: str | None = None,
-    audio_ext: str | None = None,
-) -> str:
-    """确定最终输出容器格式。
-
-    优先级:
-    1. ydl_opts["merge_output_format"] — 用户/预设已指定
-    2. 字幕兼容性修正 — webm 不支持 SRT/ASS → mkv
-    3. choose_lossless_merge_container(v_ext, a_ext)
-    4. 兜底 mkv
-    """
-    merge_fmt = (ydl_opts.get("merge_output_format") or "").strip().lower()
-
-    if merge_fmt:
-        # 字幕兼容性检查
-        if ydl_opts.get("embedsubtitles") and merge_fmt == "webm":
-            log_text(logger, "info", "[Executor] 字幕嵌入 + webm → 强制 mkv")
-            return "mkv"
-        return merge_fmt
-
-    # 没有指定容器 → 根据流的 ext 推断
-    computed = choose_lossless_merge_container(video_ext, audio_ext)
-    if computed:
-        if ydl_opts.get("embedsubtitles") and computed not in _SUBTITLE_COMPATIBLE_CONTAINERS:
-            log_text(logger, "info", "[Executor] 字幕嵌入 + {} → 强制 mkv", computed)
-            return "mkv"
-        return computed
-
-    return "mkv"
 
 
 # ── Win32 工具 ────────────────────────────────────────────

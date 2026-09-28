@@ -330,6 +330,13 @@ def decide_merge_container(
     """
     统一容器决策函数，感知字幕嵌入需求。
 
+    ⚠️ 自 Phase 3b 起**全项目零 src 调用点**：所有视频计算点已改调
+    `container_compat.resolve_output_container`（收编本函数 + 两个 `ensure_*` +
+    运行时 `SubtitleFeature` 兜底为单一权威阶梯）。此函数**仅**作为
+    `tests/test_container_resolver_equivalence.py` 的旧管线基准（oracle）保留 ——
+    锁死"迁移到 resolver 没有改变用户拿到的容器"。故意不删：删了那张 240 格等价证明
+    就失去"拿真实出厂函数对比"的意义，收益甚微。改本函数前先看该测试。
+
     优先级：
     1. 多语言字幕嵌入（> 1 语言）→ 强制 mkv（mp4 mov_text 多轨播放支持差）
     2. 单字幕 + WebM → mkv

@@ -49,6 +49,7 @@ from qfluentwidgets import (
 from fluentytdl.utils.localized_log import log_text
 
 from ..utils.logger import logger
+from .components.common.transitions import RegionFader
 from .delegates.download_item_delegate import DownloadItemDelegate
 from .models.download_list_model import DownloadListModel
 from .models.task_row import TaskRow
@@ -592,6 +593,16 @@ class UnifiedTaskListPage(QWidget):
         self.stack.addWidget(self.empty_placeholder)
         self.stack.setCurrentWidget(self.list_view)
 
+        # 筛选切换（主 pivot / 更多筛选菜单 / 清除筛选 chip 三条路径都汇入 _apply_filter）
+        # 给整块列表区做快照交叉淡化，与解析页 / 设置页同款。目标是 self.stack：快照盖住
+        # 重新过滤后的行增删、以及 list↔空占位的整页替换，活动视图全程原生渲染保持文字锐利。
+        # 默认底色 task_surface_color()——本页透明、真背景是主窗的云母材质，深色精确、浅色为
+        # 平涂近似（仅行间距/末行下方的透明缝隙在 ~240ms 淡化里略有差别，绝无闪白）。
+        # 注意：初始 pivot.setCurrentItem("all")（_init_ui 里、本行之前）会回发 _apply_filter，
+        # 那时本 fader 尚未建好——_apply_filter 的 getattr 守卫会当场走无动画的直接落地，首帧
+        # 天然不动画（也不必依赖可见性守卫）。
+        self._stack_fader = RegionFader(self.stack)
+
         # === 悬浮批量操作面板 ===
         from .batch_operation_panel import BatchOperationPanel
 
@@ -1075,12 +1086,29 @@ class UnifiedTaskListPage(QWidget):
 
     def _apply_filter(self, status: str) -> None:
         """真正落地筛选（不动 pivot，避免和它的信号互相触发）。"""
-        self._current_filter = status
-        self.proxy_model.set_filter(status)
-        self._update_empty_state()
-        # 被筛掉的行由 selectionModel 自动剔除（proxy 重新过滤会发 rowsRemoved），
-        # 但「一行都没变」时那条信号不会来，而「总数」照样变了 —— 显式刷一次，计数不会漂。
-        self._refresh_batch_panel()
+
+        def apply() -> None:
+            self._current_filter = status
+            self.proxy_model.set_filter(status)
+            # 在快照遮挡下**同步**把 list↔空占位切到位（按重过滤后的 rowCount 直接判定），
+            # 让整页替换的高度突变一并藏进淡化；否则 _update_empty_state 的 0ms 去抖会把切换
+            # 推到淡出后约 1 帧才发生（虽仍被近满不透明快照盖住，直接切更干净）。随后仍排一次
+            # 原有去抖刷新，_apply_empty_state 幂等，重复应用无害。
+            self._apply_empty_state()
+            self._update_empty_state()
+            # 被筛掉的行由 selectionModel 自动剔除（proxy 重新过滤会发 rowsRemoved），
+            # 但「一行都没变」时那条信号不会来，而「总数」照样变了 —— 显式刷一次，计数不会漂。
+            self._refresh_batch_panel()
+
+        # 构建期回声：初始 `pivot.setCurrentItem("all")`（_init_ui 里）在 self.stack / fader
+        # 建好之前就会回发到这里。此刻没有可淡化的目标，直接落地即可——`_apply_empty_state`
+        # 有 `hasattr(self, "stack")` 守卫会当场跳过，`__init__` 末尾的 `_update_empty_state()`
+        # 稍后再兜一次；首帧本就不该动画。fader 建好后（一切真实交互）才走快照交叉淡化。
+        fader = getattr(self, "_stack_fader", None)
+        if fader is None:
+            apply()
+        else:
+            fader.run(apply)
 
     def _update_filter_chip(self) -> None:
         """二级筛选生效时显示可关闭的 chip；主桶不需要（pivot 自己就是指示）。"""

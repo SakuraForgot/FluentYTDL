@@ -39,6 +39,9 @@ def svc():
     # 分桶/隔离/键指纹这些**机制**，所以显式钉一个非零时长把功能打开。
     # 默认值本身由 `test_default_retention_is_off` 单独守。
     config_manager.config["parse_cache_ttl_seconds"] = 1800
+    # channel_tab 两个用例断言条目上的 cookie-mode 标记为 True，此值来自 DEFAULT_CONFIG。
+    # 数据目录 override 下（conftest 恒设）config_manager 不再回退仓库根 legacy config.json，
+    # 故这里无需再钉——隔离契约由 test_config_isolation.py 单独守。
     s = YoutubeService()
     s.invalidate_parse_cache()
     try:

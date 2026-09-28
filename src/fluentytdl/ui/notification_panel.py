@@ -96,21 +96,36 @@ class NotificationCard(CardWidget):
     底改成 `CardWidget`：原先是 `QFrame` + 一段写死 `rgba(0, 0, 0, 0.05)` 的样式表，
     那个边框和悬停底色是照浅色主题调的，深色模式下在 `#282828` 上完全看不见。
     `CardWidget` 自己按 `isDarkTheme()` 画圆角底和边框，切主题不用管。
+
+    **`compact`**：浮窗（铃铛）和独立窗口回答的不是同一个问题，卡片也就不该长一个样。
+    紧凑档（浮窗）把整条压成两行 —— 标题 + 时间挤在头部一行、正文单行省略号，字号更小、
+    留白更紧，只答"有几条、大概是什么"；完整档（窗口）标题/正文都换行铺开、字号舒展，
+    用来一条条读完。两档只是尺寸与换行策略之别，字色/字重仍走同一条 `setTextColor` /
+    `getFont` 的路（见 `_apply_text_style`），深色模式契约对两档一视同仁。
     """
 
-    def __init__(self, notif: Notification, parent=None):
+    def __init__(self, notif: Notification, parent=None, *, compact: bool = False):
         super().__init__(parent=parent)
         self.notif = notif
+        self.compact = compact
         title, message = display_fields(notif)
+        # 存完整原文：紧凑档每次 resize 都从这里重新算省略，绝不拿已经带省略号的
+        # `label.text()` 再省略一次 —— 那样窗口越缩字越少，再也长不回来。
+        self._title_text = title
+        self._message_text = message
         self.setMinimumWidth(0)
         self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
         self.setBorderRadius(6)
 
         self.vBoxLayout = QVBoxLayout(self)
-        self.vBoxLayout.setContentsMargins(12, 12, 12, 12)
-        self.vBoxLayout.setSpacing(8)
+        if compact:
+            self.vBoxLayout.setContentsMargins(10, 6, 8, 6)
+            self.vBoxLayout.setSpacing(2)
+        else:
+            self.vBoxLayout.setContentsMargins(12, 10, 12, 10)
+            self.vBoxLayout.setSpacing(5)
 
-        # 头部：未读点 + 图标 + 标题 + 时间 + 删除
+        # 头部：未读点 + 图标 + 标题 +（紧凑档：时间）+ 删除
         self.headerLayout = QHBoxLayout()
         self.headerLayout.setContentsMargins(0, 0, 0, 0)
         self.headerLayout.setSpacing(6)
@@ -118,19 +133,22 @@ class NotificationCard(CardWidget):
         self.unreadDot = UnreadDot(self)
         self.unreadDot.setVisible(not notif.is_read)
 
+        icon_size = 12 if compact else 16
         self.iconWidget = IconWidget(self._severity_icon(), self)
-        self.iconWidget.setFixedSize(16, 16)
+        self.iconWidget.setFixedSize(icon_size, icon_size)
 
+        # 紧凑档标题不换行（走 resizeEvent 里的单行省略）；完整档换行铺开。
         self.titleLabel = StrongBodyLabel(title, self)
-        self.titleLabel.setWordWrap(True)
+        self.titleLabel.setWordWrap(not compact)
         self.titleLabel.setTextFormat(Qt.TextFormat.PlainText)
         self.titleLabel.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
 
         dt = datetime.fromtimestamp(notif.timestamp)
         self.timeLabel = CaptionLabel(dt.strftime("%m-%d %H:%M"), self)
 
+        del_size = 20 if compact else 24
         self.deleteBtn = TransparentToolButton(FluentIcon.CLOSE, self)
-        self.deleteBtn.setFixedSize(24, 24)
+        self.deleteBtn.setFixedSize(del_size, del_size)
         self.deleteBtn.setIconSize(self.deleteBtn.iconSize() * 0.8)
         self.deleteBtn.setToolTip(self.tr("删除通知"))
         self.deleteBtn.setAccessibleName(self.tr("删除通知"))
@@ -139,17 +157,22 @@ class NotificationCard(CardWidget):
         self.headerLayout.addWidget(self.unreadDot)
         self.headerLayout.addWidget(self.iconWidget)
         self.headerLayout.addWidget(self.titleLabel, 1)
+        if compact:
+            # 时间挪进头部一行，省掉底部整行 —— 浮窗每条只占两行。
+            self.headerLayout.addWidget(self.timeLabel)
         self.headerLayout.addWidget(self.deleteBtn)
 
         # 内容
         self.msgLabel = BodyLabel(message, self)
-        self.msgLabel.setWordWrap(True)
+        self.msgLabel.setWordWrap(not compact)
         self.msgLabel.setTextFormat(Qt.TextFormat.PlainText)
         self.msgLabel.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+        self.msgLabel.setVisible(bool(message))
 
         self.vBoxLayout.addLayout(self.headerLayout)
         self.vBoxLayout.addWidget(self.msgLabel)
-        self.vBoxLayout.addWidget(self.timeLabel)
+        if not compact:
+            self.vBoxLayout.addWidget(self.timeLabel)
 
         self._apply_text_style()
 
@@ -198,10 +221,39 @@ class NotificationCard(CardWidget):
             self.titleLabel.setTextColor(*_TITLE_COLORS)
 
         weight = QFont.Weight.Bold if not self.notif.is_read else QFont.Weight.DemiBold
-        self.titleLabel.setFont(getFont(14, weight))
+        self.titleLabel.setFont(getFont(12 if self.compact else 14, weight))
 
         self.msgLabel.setTextColor(*_SECONDARY_COLORS)
         self.timeLabel.setTextColor(*_SECONDARY_COLORS)
+        if self.compact:
+            # 紧凑档统一压小；完整档留 `BodyLabel`(14)/`CaptionLabel`(12) 自带度量，
+            # 别去覆写 —— 那正是窗口"完整展示"要的舒展字号。
+            self.msgLabel.setFont(getFont(11))
+            self.timeLabel.setFont(getFont(10))
+
+    def _elide_text(self) -> None:
+        """紧凑档：标题/正文各压成单行省略号；完整档换行铺开，什么都不做。
+
+        永远从 `self._title_text` / `self._message_text` 这两份完整原文重算，而不是
+        拿 `label.text()`（可能已带省略号）再省略 —— 否则窗口每缩一点就再吃掉一截，
+        再放大也长不回来。`!=` 那道判断只为省掉无谓的 `setText`（会触发重排）。
+        """
+        if not self.compact:
+            return
+        for label, full in (
+            (self.titleLabel, self._title_text),
+            (self.msgLabel, self._message_text),
+        ):
+            width = label.width()
+            if width <= 0:
+                continue
+            elided = label.fontMetrics().elidedText(full, Qt.TextElideMode.ElideRight, width)
+            if elided != label.text():
+                label.setText(elided)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._elide_text()
 
     def _on_delete(self):
         notification_center.delete_notification(self.notif.id)
@@ -226,8 +278,9 @@ class NotificationListWidget(QWidget):
 
     MAX_ITEMS = 50
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, *, compact: bool = False):
         super().__init__(parent=parent)
+        self._compact = compact
         self._count = 0
 
         self.vBoxLayout = QVBoxLayout(self)
@@ -243,7 +296,7 @@ class NotificationListWidget(QWidget):
         self.scrollWidget = QWidget()
         self.scrollLayout = QVBoxLayout(self.scrollWidget)
         self.scrollLayout.setContentsMargins(0, 0, 8, 0)
-        self.scrollLayout.setSpacing(8)
+        self.scrollLayout.setSpacing(4 if compact else 6)
         self.scrollLayout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
         self.scrollArea.setWidget(self.scrollWidget)
@@ -289,7 +342,9 @@ class NotificationListWidget(QWidget):
             self.emptyLabel.hide()
             self.scrollArea.show()
             for notif in notifs:
-                self.scrollLayout.addWidget(NotificationCard(notif, self.scrollWidget))
+                self.scrollLayout.addWidget(
+                    NotificationCard(notif, self.scrollWidget, compact=self._compact)
+                )
 
         self.countChanged.emit(self._count)
 
@@ -307,16 +362,17 @@ class NotificationFlyoutView(FlyoutViewBase):
     def __init__(self, parent=None):
         super().__init__(parent=parent)
         self.vBoxLayout = QVBoxLayout(self)
-        self.vBoxLayout.setContentsMargins(16, 16, 16, 16)
-        self.vBoxLayout.setSpacing(12)
-        self.setFixedWidth(min(480, max(280, self.screen().availableGeometry().width() - 48)))
+        self.vBoxLayout.setContentsMargins(12, 12, 12, 12)
+        self.vBoxLayout.setSpacing(8)
+        # 浮窗要窄：一列紧凑卡片，宽了只是让每条中间空出一大片。按屏幕宽兜底，不撑满。
+        self.setFixedWidth(min(360, max(260, self.screen().availableGeometry().width() - 48)))
 
         # 头部
         self.headerLayout = QHBoxLayout()
         self.titleLabel = SubtitleLabel(self.tr("消息中心"), self)
-        # 不要 `font = self.titleLabel.font(); font.setPixelSize(16)`：`SubtitleLabel`
+        # 不要 `font = self.titleLabel.font(); font.setPixelSize(15)`：`SubtitleLabel`
         # 默认是 `getFont(20, DemiBold)`，改磅值/字号会和同屏其它标签的度量对不上。
-        self.titleLabel.setFont(getFont(16, QFont.Weight.DemiBold))
+        self.titleLabel.setFont(getFont(14, QFont.Weight.DemiBold))
 
         self.detachBtn = TransparentToolButton(FluentIcon.BACK_TO_WINDOW, self)
         self.detachBtn.setFixedSize(28, 28)
@@ -334,15 +390,23 @@ class NotificationFlyoutView(FlyoutViewBase):
         self.refreshAnnouncementsBtn.clicked.connect(
             notification_center.announcement_refresh_requested
         )
-        self.clearAllBtn = PushButton(self.tr("全部已读"), self)
-        self.clearAllBtn.setMinimumHeight(32)
+        # 浮窗档：图标按钮 + 悬浮提示，别占标题栏宽度。窗口档才用带字的 `PushButton`。
+        self.clearAllBtn = TransparentToolButton(FluentIcon.ACCEPT, self)
+        self.clearAllBtn.setFixedSize(28, 28)
+        self.clearAllBtn.setToolTip(self.tr("全部已读"))
+        self.clearAllBtn.setAccessibleName(self.tr("全部已读"))
+        self.clearAllBtn.installEventFilter(
+            ToolTipFilter(self.clearAllBtn, showDelay=300, position=ToolTipPosition.BOTTOM)
+        )
         self.clearAllBtn.clicked.connect(notification_center.mark_all_as_read)
-        self.deleteAllBtn = PushButton(self.tr("全部清空"), self)
-        self.deleteAllBtn.setMinimumHeight(32)
+        self.deleteAllBtn = TransparentToolButton(FluentIcon.BROOM, self)
+        self.deleteAllBtn.setFixedSize(28, 28)
+        self.deleteAllBtn.setToolTip(self.tr("全部清空"))
+        self.deleteAllBtn.setAccessibleName(self.tr("全部清空"))
+        self.deleteAllBtn.installEventFilter(
+            ToolTipFilter(self.deleteAllBtn, showDelay=300, position=ToolTipPosition.BOTTOM)
+        )
         self.deleteAllBtn.clicked.connect(notification_center.clear_all)
-        for button in (self.clearAllBtn, self.deleteAllBtn):
-            button.ensurePolished()
-            button.setMinimumWidth(button.sizeHint().width())
 
         self.headerLayout.addWidget(self.titleLabel)
         self.headerLayout.addStretch(1)
@@ -359,7 +423,7 @@ class NotificationFlyoutView(FlyoutViewBase):
             )
         )
 
-        self.listWidget = NotificationListWidget(self)
+        self.listWidget = NotificationListWidget(self, compact=True)
         self.listWidget.countChanged.connect(self._fit_height)
         self.vBoxLayout.addWidget(self.listWidget)
 
@@ -378,7 +442,7 @@ class NotificationFlyoutView(FlyoutViewBase):
         if content_height < 0:
             content_height = self.listWidget.scrollLayout.sizeHint().height()
         maximum = max(160, min(560, self.screen().availableGeometry().height() - 80))
-        self.setFixedHeight(min(maximum, 160 if count == 0 else max(220, 130 + content_height)))
+        self.setFixedHeight(min(maximum, 120 if count == 0 else max(160, 96 + content_height)))
 
 
 class NotificationWindow(StandaloneWindow):

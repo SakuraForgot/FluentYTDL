@@ -3,9 +3,10 @@ from __future__ import annotations
 from collections.abc import Iterable
 from typing import cast
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QSize, Qt
 from PySide6.QtGui import QColor, QFont
-from PySide6.QtWidgets import QHBoxLayout, QLabel, QWidget
+from PySide6.QtWidgets import QHBoxLayout, QLabel, QSizePolicy, QWidget
+from qfluentwidgets import BodyLabel
 
 
 def _rgba(c: QColor) -> str:
@@ -62,11 +63,20 @@ class QualityBadge(QLabel):
     Uses macaron background hex colors for visual consistency.
     """
 
-    def __init__(self, text: str, color_style: str = "gray", parent: QWidget | None = None):
+    def __init__(
+        self,
+        text: str,
+        color_style: str = "gray",
+        parent: QWidget | None = None,
+        *,
+        compact: bool = False,
+    ):
         super().__init__(text, parent)
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.setFixedHeight(18)
-        self.setMinimumWidth(30)
+        # compact 只给「装配预览」的芯片用：更窄的最小宽 + 更小的左右内边距，让预览徽标比
+        # 流表里的药丸更紧凑（流表不传 compact，尺寸不受影响）。
+        self.setMinimumWidth(22 if compact else 30)
 
         font = self.font()
         base_ps = font.pointSize()
@@ -91,9 +101,59 @@ class QualityBadge(QLabel):
             f"color: {_rgba(fg)};"
             f"border: 1px solid {_rgba(border)};"
             "border-radius: 4px;"
-            "padding: 0px 6px;"
+            f"padding: 0px {4 if compact else 6}px;"
             "}"
         )
+
+
+class _ElidingLabel(BodyLabel):
+    """A BodyLabel that elides its text with `…` to the width the layout grants
+    it, instead of overflowing the cell.
+
+    The stream table's detail column is a Stretch column: a centered, non-eliding
+    label there floats in the empty middle (drifts as the window resizes) and, when
+    the column is squeezed (narrow window / the two-column left panel), spills past
+    the visible edge. This label reserves the *full* text width as its preferred
+    size (so it never elides when there is room) but has a zero minimum, so a tight
+    column shrinks it and it elides cleanly rather than pushing text out of the UI.
+    """
+
+    def __init__(self, text: str = "", parent: QWidget | None = None):
+        # qfluentwidgets' FluentLabelBase has an overloaded (singledispatchmethod)
+        # constructor whose str-branch re-enters ``self.__init__(parent)``. From a
+        # subclass that recurses back into THIS __init__ with the parent widget
+        # handed in as ``text`` (TypeError: 1..2 positional args but 3 given). So we
+        # must construct with parent only and assign the text via our own setText().
+        super().__init__(parent)
+        self._full_text = text
+        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
+        self.setMinimumWidth(0)
+        if text:
+            self.setText(text)
+
+    def setText(self, text: str) -> None:  # type: ignore[override]
+        self._full_text = text
+        self.updateGeometry()
+        self._apply_elide()
+
+    def sizeHint(self) -> QSize:
+        # Preferred width == full (un-elided) text, so the layout hands us that
+        # width whenever the column can afford it.
+        return QSize(
+            self.fontMetrics().horizontalAdvance(self._full_text), super().sizeHint().height()
+        )
+
+    def minimumSizeHint(self) -> QSize:
+        return QSize(0, super().minimumSizeHint().height())
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        self._apply_elide()
+
+    def _apply_elide(self) -> None:
+        fm = self.fontMetrics()
+        elided = fm.elidedText(self._full_text, Qt.TextElideMode.ElideRight, max(0, self.width()))
+        super().setText(elided)
 
 
 class QualityCellWidget(QWidget):
@@ -106,6 +166,7 @@ class QualityCellWidget(QWidget):
         parent: QWidget | None = None,
         *,
         bold_text: bool = False,
+        elide: bool = False,
         alignment: Qt.AlignmentFlag = Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
     ):
         super().__init__(parent)
@@ -113,17 +174,34 @@ class QualityCellWidget(QWidget):
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(4)
-        layout.setAlignment(alignment)
+
+        # Does the caller want the content block horizontally centered?
+        is_center = bool(alignment & Qt.AlignmentFlag.AlignHCenter)
+
+        # A horizontal alignment flag on a QHBoxLayout makes it shrink to the content's
+        # size hint and *ignore* stretch — fine for a fixed narrow column, but an eliding
+        # label must stay free to fill-and-shrink. So when eliding we keep the layout
+        # vertical-only and, if centering is asked for, center the block with a stretch on
+        # each side. Those side stretches collapse *before* the label when the column is
+        # squeezed, so the label elides instead of spilling past the edge.
+        layout.setAlignment(Qt.AlignmentFlag.AlignVCenter if elide else alignment)
+
+        if elide and is_center:
+            layout.addStretch(1)
 
         for badge_text, color in badges_data:
             badge = QualityBadge(badge_text, color, self)
             layout.addWidget(badge)
 
         if text:
-            from qfluentwidgets import BodyLabel
-
-            label = BodyLabel(text, self)
-            label.setAlignment(Qt.AlignmentFlag.AlignVCenter)
+            label = _ElidingLabel(text, self) if elide else BodyLabel(text, self)
+            if elide:
+                label.setAlignment(
+                    (Qt.AlignmentFlag.AlignHCenter if is_center else Qt.AlignmentFlag.AlignLeft)
+                    | Qt.AlignmentFlag.AlignVCenter
+                )
+            else:
+                label.setAlignment(Qt.AlignmentFlag.AlignVCenter)
             font = label.font()
             base_ps = font.pointSize()
             if not isinstance(base_ps, int) or base_ps <= 0:
@@ -132,7 +210,12 @@ class QualityCellWidget(QWidget):
             if bold_text:
                 font.setWeight(QFont.Weight.DemiBold)
             label.setFont(font)
-            layout.addWidget(label)
+            # Left-elide: label fills the cell (stretch 1) and shrinks to elide.
+            # Center-elide: label keeps its content width (stretch 0) so the side
+            # stretches can center the block; it still shrinks to elide (min width 0).
+            layout.addWidget(label, 0 if (elide and is_center) else (1 if elide else 0))
 
-        if alignment & Qt.AlignmentFlag.AlignLeft:
+        if elide and is_center:
+            layout.addStretch(1)
+        elif alignment & Qt.AlignmentFlag.AlignLeft and not elide:
             layout.addStretch(1)
