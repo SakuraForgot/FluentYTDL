@@ -34,15 +34,49 @@ def _stabilize_qt_stylesheet_registry(request):
         yield
         return
 
-    from PySide6.QtCore import QEvent
+    from PySide6.QtCore import QEvent, QThread
     from PySide6.QtWidgets import QApplication
+
+    def _quiesce_threads(app) -> None:
+        """投递 DeferredDelete 之前，把还在跑的 QThread（尤其 SystemThemeListener）停干净。
+
+        win32 上 `SystemThemeListener.run()` 直接阻塞在 `darkdetect.listener()` 的原生注册表
+        等待里 —— 既不泵 Qt 事件循环、也不查 `isInterruptionRequested()`，所以
+        `quit()`/`requestInterruption()` 都停不住它。MainWindow 只有 `closeEvent` 真正走到
+        （非托盘、非媒体退出分支）才 `terminate()` 它；GUI 用例里窗口常被 fixture 直接
+        `deleteLater()`/`WA_DeleteOnClose` 回收，listener 于是带着**运行中的 QThread** 被下面
+        的 DeferredDelete 连宿主窗口一起析构 —— 删除一个仍在 `run()` 的 QThread 是未定义行为，
+        在 Windows 上就炸成 access violation（串行 lane ~53% 处 EXIT=139，伴生线程全是
+        darkdetect 的 `<no Python frame>` 原生等待）。所以先把它们 join/terminate 到
+        `isRunning()==False`，让 DeferredDelete 落在已停止的线程上。
+        """
+        seen: dict[int, QThread] = {}
+        for widget in app.topLevelWidgets():
+            for thread in widget.findChildren(QThread):
+                seen[id(thread)] = thread
+        for thread in app.findChildren(QThread):
+            seen[id(thread)] = thread
+        for thread in seen.values():
+            try:
+                if not thread.isRunning():
+                    continue
+            except RuntimeError:
+                continue  # C++ 侧已析构
+            thread.requestInterruption()
+            thread.quit()
+            if not thread.wait(50):
+                thread.terminate()
+                thread.wait(500)
 
     def _drain() -> None:
         app = QApplication.instance()
         if app is None:
             return
-        # 先把顶层栈上排着的 DeferredDelete 真正投递出去（普通 processEvents 不做这件事），
-        # 再泵一轮常规事件，让销毁连锁（子控件注销、弱引用回调）在遍历之外跑完。
+        # 先把还在跑的原生监听线程停干净，否则下一步 DeferredDelete 析构其宿主窗口时会连带
+        # 删除运行中的 QThread → Windows access violation。
+        _quiesce_threads(app)
+        # 再把顶层栈上排着的 DeferredDelete 真正投递出去（普通 processEvents 不做这件事），
+        # 泵一轮常规事件，让销毁连锁（子控件注销、弱引用回调）在遍历之外跑完。
         QApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
         app.processEvents()
 

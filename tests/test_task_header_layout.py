@@ -307,13 +307,19 @@ def test_command_bar_folds_when_squeezed(window, qapp):
     """被压窄时应该把尾部动作收进「更多」菜单，压力不传导给邻居。"""
     bar = window.task_command_bar
     original = bar.width()
+    original_max = bar.maximumWidth()
     try:
         assert not bar._hiddenWidgets, "宽度足够时不该有折叠项"
-        bar.resize(bar.minimumSizeHint().width() + 20, bar.height())
+        # 只 `bar.resize(...)` 是**瞬时**的：CommandBar 在父 header 布局里，`_pump` 里一旦有挂起的
+        # LayoutRequest 重排（CI 上常有），布局就把它反弹回分配宽（≥suitableWidth）从而全部展开——
+        # 于是 `_hiddenWidgets==[]`，这正是本用例在 CI 偶发的根因（父布局重排覆盖了 resize，与字体/
+        # 主题泄漏无关）。改用 maximumWidth 卡死上限，布局无从再把它撑宽，折叠才稳定生效。
+        bar.setMaximumWidth(bar.minimumSizeHint().width() + 20)
         _pump(qapp)
         assert bar._hiddenWidgets, "压到最小宽附近却没有任何动作被折叠"
         assert bar.moreButton.isVisible(), "有折叠项时「更多」按钮必须可见"
     finally:
+        bar.setMaximumWidth(original_max)
         bar.resize(original, bar.height())
         _pump(qapp)
 
