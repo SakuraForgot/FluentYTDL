@@ -26,13 +26,39 @@ def _load_runtime_repositories() -> dict[str, str]:
 
     直接 import src 会拉起 fluentytdl 的重量级导入链（Qt 等），在 Linux 逻辑
     lane 上既慢又可能失败。用 ast 抽取模块级字面量即可，无需任何运行时依赖。
+
+    表里的值不一定是内联字面量——SABR 测试通道就写成模块级常量引用
+    (``"yt-dlp:sabr": SABR_REPOSITORY``)，整表 ``literal_eval`` 会直接抛
+    ``ValueError``。所以先收集模块级 ``NAME = "字符串"`` 常量，再逐项解析：
+    常量引用查表还原，其余非字符串项跳过（本测试只比对 ``:stable`` 通道）。
     """
     src = (ROOT / "src" / "fluentytdl" / "core" / "update_transport.py").read_text(encoding="utf-8")
-    for node in ast.parse(src).body:
+    module = ast.parse(src)
+
+    constants: dict[str, str] = {}
+    for node in module.body:
+        if not isinstance(node, ast.Assign) or not isinstance(node.value, ast.Constant):
+            continue
+        if not isinstance(node.value.value, str):
+            continue
+        for target in node.targets:
+            if isinstance(target, ast.Name):
+                constants[target.id] = node.value.value
+
+    for node in module.body:
         if isinstance(node, ast.Assign) and any(
             isinstance(target, ast.Name) and target.id == "REPOSITORIES" for target in node.targets
         ):
-            return ast.literal_eval(node.value)
+            assert isinstance(node.value, ast.Dict), "REPOSITORIES 必须是字典字面量"
+            table: dict[str, str] = {}
+            for key_node, value_node in zip(node.value.keys, node.value.values, strict=True):
+                if not isinstance(key_node, ast.Constant) or not isinstance(key_node.value, str):
+                    continue
+                if isinstance(value_node, ast.Constant) and isinstance(value_node.value, str):
+                    table[key_node.value] = value_node.value
+                elif isinstance(value_node, ast.Name) and value_node.id in constants:
+                    table[key_node.value] = constants[value_node.id]
+            return table
     raise AssertionError("update_transport.py 里找不到 REPOSITORIES 表")
 
 
