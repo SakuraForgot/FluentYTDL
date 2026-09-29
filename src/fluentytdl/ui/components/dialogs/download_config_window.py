@@ -4334,10 +4334,18 @@ class DownloadConfigWindow(TaskWindowSurface, FramelessWindow):
                             if vr_id in selected_format:
                                 ydl_opts["__fluentytdl_use_android_vr"] = True
                                 ydl_opts["__android_vr_format_ids"] = android_vr_ids
+                                ydl_opts["__vr_only_format_ids"] = list(vr_only_ids)
                                 break
 
                     if self._vr_mode:
                         ydl_opts["__fluentytdl_use_android_vr"] = True
+
+                    # 能力画像随任务下传：下载端据此判断 android_vr 在当前核心下还
+                    # 推不推得动（见 youtube_service.plan_vr_download_client）。
+                    if ydl_opts.get("__fluentytdl_use_android_vr"):
+                        vr_capability = (info or {}).get("__vr_capability")
+                        if vr_capability:
+                            ydl_opts["__vr_capability"] = vr_capability
                 else:
                     ydl_opts["format"] = "bestvideo+bestaudio/best"
                     ydl_opts["__fluentytdl_format_note"] = self.tr("最佳画质")
@@ -4689,6 +4697,10 @@ class DownloadConfigWindow(TaskWindowSurface, FramelessWindow):
                     row_opts["__android_vr_format_ids"] = row_data["detail"].get(
                         "__android_vr_format_ids", []
                     )
+                    # 能力画像供下载端判断 android_vr 在当前核心下是否可交付
+                    vr_capability = row_data["detail"].get("__vr_capability")
+                    if vr_capability:
+                        row_opts["__vr_capability"] = vr_capability
 
             # Determine Base Options (Format/Quality)
             if row_data.get("custom_selection_data"):

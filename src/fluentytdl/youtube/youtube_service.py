@@ -754,6 +754,10 @@ class YoutubeService:
         # 兜底。仅在账号/会话被标记为 SABR-only 时生效，且仅 YouTube（player_client 是
         # youtube 命名空间参数）。这是唯一能同时覆盖解析与下载两条独立 opts 路径的位置。
         # 【待观察】当前只在检测到 SABR 时追加 web_safari，可能需按其他视频的解析情况调整。
+        # TODO(revisit when yt-dlp/yt-dlp#13515 merges to mainline): SABR PR 合入官方主线后，
+        # 官方核心原生支持 SABR，届时 (1) 专用 "sabr" 更新频道、(2) 这条 web_safari SABR-only
+        # 兜底、(3) VR 通道的 android_vr 重钉是否仍必要，需一并复核。见记忆
+        # ytdlp-sabr-native-pr-13515 / vr-channel-bypasses-pot-and-sabr。不在本次删除。
         if not _is_twitter:
             self._maybe_append_sabr_web_safari(ydl_opts)
 
@@ -798,6 +802,144 @@ class YoutubeService:
                 youtube_args["player_client"][0],
             ),
         )
+
+    @staticmethod
+    def apply_android_vr_overlay(ydl_opts: dict[str, Any]) -> None:
+        """在既有 ydl_opts 上就地叠加 VR (android_vr) 覆盖层。
+
+        VR 通道是 CLAUDE.md §4.1「不锁定单一 player_client」的文档化例外：手动钉
+        android_vr 以拿高分辨率 VR 格式，再做 EAC→Equirectangular 投影转换。
+
+        叠加两件事，两者都以「解析==下载」为目标：
+        - **player_client 覆盖为 android_vr**：只改 youtube.player_client 子键，*保留*
+          build_ydl_options 注入的 POT Provider 独立 ie_key（youtubepot-bgutilhttp）与
+          youtube 命名空间下的 fetch_pot / po_token 兄弟键——POT 与 player_client 正交，
+          android_vr 的 GVS_PO_TOKEN_POLICY 对 HTTPS/DASH required=True，有 POT 才能拿回
+          直链（SABR 核心下仍以 protocol=sabr 兜底）。整键 update 会抹掉 POT，故用深合并。
+        - **剥离 cookiefile**：android_vr 不支持 cookies（POT Provider 与 cookie 是两回
+          事，POT 仍注入）。
+
+        解析（_build_vr_ydl_options）与下载（workers 的 VR 重钉）两条独立 opts 路径都调
+        用它，保证 VR 通道两端看到同一份格式列表——否则解析用 android_vr 无 cookie、下载
+        用默认客户端带 cookie，选中的 vr-only / sabr 格式在下载端 -f <id> 会解析不到
+        （Requested format is not available）。
+        """
+        # android_vr 不支持 cookies：剥离真相源副本，避免 --cookies 干扰并对齐解析与下载。
+        ydl_opts.pop("cookiefile", None)
+
+        extractor_args = cast(dict[str, Any], ydl_opts.setdefault("extractor_args", {}))
+        youtube_args = cast(dict[str, Any], extractor_args.setdefault("youtube", {}))
+        # 沿用本项目 player_client 存法（list，见 POT 分支 ["default,mweb"]）；android_vr
+        # 为单客户端。覆盖而非追加：VR 例外只要 android_vr，不要 web_safari 等兜底客户端。
+        youtube_args["player_client"] = ["android_vr"]
+
+    def _build_vr_ydl_options(
+        self,
+        options: YoutubeServiceOptions | None = None,
+        *,
+        url: str = "",
+    ) -> dict[str, Any]:
+        """VR 解析用的 opts：build_ydl_options（POT/网络/代理/FFmpeg/JS runtime 的单一
+        事实源）+ android_vr 覆盖层。
+
+        收口历史裂缝：VR 解析曾手搓 opts、绕过 build_ydl_options，于是永远拿不到 POT
+        Provider 的 extractor_args，android_vr 无 POT 时直链被全部跳过。改走这里后 POT
+        开启即能救回 https 直链，SABR 核心下则以 protocol=sabr 兜底。
+        """
+        vr_opts = self.build_ydl_options(options, url=url)
+        vr_opts["skip_download"] = True
+        self.apply_android_vr_overlay(vr_opts)
+        return vr_opts
+
+    @staticmethod
+    def _probe_vr_capability(formats: list[Any]) -> dict[str, Any]:
+        """探测 VR 解析产物的能力画像，供 UI 决定提示与默认选择——**看协议/能力，不看频道名**。
+
+        这样上游把 SABR PR 合入主线、或 android_vr 行为再变、或来回切核心时都能自适应：
+        - `protocols`：各 protocol 的计数（sabr / https / http / m3u8 ...）。
+        - `has_muxed`：是否存在 combined 格式（SABR 核心下通常为 False → 单文件兜底消失）。
+        - `has_https_direct`：是否有 https/http 直链视频/音频（POT 就绪时能拿回）。
+        - `has_sabr`：是否出现 protocol=sabr（当前核心把 android_vr 变成吐 sabr 的信号）。
+        """
+        protocols: dict[str, int] = {}
+        has_muxed = False
+        has_https_direct = False
+        for f in formats:
+            if not isinstance(f, dict):
+                continue
+            proto = str(f.get("protocol") or "").strip() or "unknown"
+            protocols[proto] = protocols.get(proto, 0) + 1
+            vcodec = f.get("vcodec")
+            acodec = f.get("acodec")
+            has_video = vcodec not in (None, "none")
+            has_audio = acodec not in (None, "none")
+            if has_video and has_audio:
+                has_muxed = True
+            if (has_video or has_audio) and proto in ("https", "http"):
+                has_https_direct = True
+        return {
+            "total": sum(protocols.values()),
+            "protocols": protocols,
+            "has_muxed": has_muxed,
+            "has_https_direct": has_https_direct,
+            "has_sabr": protocols.get("sabr", 0) > 0,
+        }
+
+    @staticmethod
+    def android_vr_download_deliverable(capability: Any) -> bool:
+        """当前核心下 android_vr 还能不能交付**可下载**的流 —— 看协议，不看频道名。
+
+        android_vr 的 `GVS_PO_TOKEN_POLICY` 对直链是 required，而项目注入的 bgutil
+        Provider 只为 web 系客户端签发 GVS POT，签不出 android_vr 的。两个核心因此
+        分叉：
+
+        - **官方核心**：android_vr 回 https 直链、不回 sabr（A/B 实证）→ 就协议而言
+          可交付。注意「可交付」只是必要条件：直链本身仍受 GVS POT 策略约束，缺
+          token 时高码率变体被整批跳过、残留的 itag 18 实测照样 403。所以本判据只
+          用来否决，不足以单独决定钉不钉（见 `plan_vr_download_client`）。
+        - **SABR 测试核心**：android_vr（clientVersion>1.65）改吐 `protocol=sabr`，
+          其 https 变体因缺 GVS POT 被整批跳过，剩下的 sabr 流同样推不动（实测下到
+          17% 停在「Stream stalled; no activity detected」后整任务判失败）→ 不可交付。
+
+        判据取 `has_sabr`：这正是「本核心把 android_vr 变成吐 SABR」的协议级信号，
+        上游把 SABR 合入主线、或 android_vr 行为再变时都能自适应，无需改代码。能力
+        画像缺失（历史任务 / DB 恢复的旧 opts）时保守返回 True，由调用方的必要性
+        判据兜底。
+        """
+        if not isinstance(capability, dict):
+            return True
+        return not bool(capability.get("has_sabr"))
+
+    @classmethod
+    def plan_vr_download_client(cls, opts: dict[str, Any]) -> tuple[bool, str]:
+        """VR 任务下载端是否重钉 android_vr，返回 `(pin, reason)`（reason 是日志用码）。
+
+        **只在非钉不可时才钉。** android_vr 是匿名客户端（覆盖层会 pop 掉 cookiefile）
+        且其直链受 GVS POT 策略约束，而 bgutil 只为 web 系客户端签发 GVS token ——
+        实测两个核心（官方 2026.08.19 / SABR 2026.09.28）× 两个样例，钉住后一律
+        `HTTP Error 403`。默认客户端带 cookie 且拿得到 POT，凡是它也能看见的格式，
+        钉 android_vr 只增加失败面、不带来任何收益。
+
+        于是判据分两层：
+
+        1. **必要性**：所选格式是否落在 `__vr_only_format_ids`（android_vr 独占、默认
+           客户端解析不出来）。不是 → 交给默认客户端。
+        2. **可交付性**：独占格式才继续问 `android_vr_download_deliverable()`。本核心
+           把 android_vr 变成吐 SABR 时推不动，钉了也是白钉，退回默认客户端 +
+           `bv*+ba/b` 兜底；官方核心那边协议上可交付，就钉住让 android_vr 自己去取
+           （拿得到 android_vr GVS POT 的环境——例如用户手配静态 po_token——这条路
+           就是通的；拿不到则由失败诊断说话，比静默换流诚实）。
+
+        VR 后处理（EAC→Equi、空间元数据）只认 `__fluentytdl_use_android_vr` 标志，
+        不受本决策影响。
+        """
+        fmt = str(opts.get("format") or "")
+        vr_only = [str(i) for i in (opts.get("__vr_only_format_ids") or []) if str(i)]
+        if not (fmt and any(vid in fmt for vid in vr_only)):
+            return False, "format_shared_with_default_clients"
+        if not cls.android_vr_download_deliverable(opts.get("__vr_capability")):
+            return False, "sabr_not_deliverable"
+        return True, "vr_only_format"
 
     @staticmethod
     def _youtube_sabr_only_flag() -> bool:
@@ -1293,29 +1435,9 @@ class YoutubeService:
         """
         self._emit_log("info", tr_text("🔄 使用 android_vr 客户端获取 VR 高分辨率格式..."))
 
-        # 构建无 cookies 的 android_vr 解析选项
-        vr_opts: dict[str, Any] = {
-            # 同上：`quiet` / `no_warnings` 没有 CLI 映射，是死配置，已删。
-            "ignoreerrors": False,
-            "skip_download": True,
-            "extractor_args": {
-                "youtube": {
-                    "player_client": ["android_vr"],
-                }
-            },
-        }
-
-        # FFmpeg location (复用主配置)
-        ffmpeg_path = str(config_manager.get("ffmpeg_path") or "").strip()
-        if ffmpeg_path and Path(ffmpeg_path).exists():
-            vr_opts["ffmpeg_location"] = ffmpeg_path
-        elif is_frozen():
-            bundled_ffmpeg = find_bundled_executable("ffmpeg.exe", "ffmpeg/ffmpeg.exe")
-            if bundled_ffmpeg is not None:
-                vr_opts["ffmpeg_location"] = str(bundled_ffmpeg)
-
-        # JS runtime (复用主配置逻辑)
-        self._maybe_configure_youtube_js_runtime(vr_opts)
+        # 与 extract_vr_info_sync 共用同一 VR opts 事实源（build_ydl_options + android_vr
+        # 覆盖层）：拿到 POT/网络/代理/FFmpeg/JS runtime，cookiefile 仍被剥离。
+        vr_opts = self._build_vr_ydl_options(url=url)
 
         try:
             info = run_dump_single_json(
@@ -1382,6 +1504,9 @@ class YoutubeService:
             info["__vr_only_format_ids"] = vr_only_format_ids
             # 记录所有 android_vr 可用格式 ID (用于下载时兼容性检查)
             info["__android_vr_format_ids"] = all_vr_format_ids
+            # 能力画像只描述 android_vr 这一侧的产物（不含主解析的 web 格式），
+            # 下载端据此判断「这批 VR 格式在本核心下到底推不推得动」。
+            info["__vr_capability"] = self._probe_vr_capability(vr_formats)
             self._emit_log(
                 "info",
                 tr_text(
@@ -1977,29 +2102,12 @@ class YoutubeService:
                 tr_text("未找到 yt-dlp.exe。请检查自定义内核路径、应用托管目录或系统 PATH。")
             )
 
-        # 构建 android_vr 专用选项（不使用 cookies）
-        vr_opts: dict[str, Any] = {
-            # 同上：`quiet` / `no_warnings` 没有 CLI 映射，是死配置，已删。
-            "ignoreerrors": False,
-            "skip_download": True,
-            "extractor_args": {
-                "youtube": {
-                    "player_client": ["android_vr"],
-                }
-            },
-        }
-
-        # FFmpeg location
-        ffmpeg_path = str(config_manager.get("ffmpeg_path") or "").strip()
-        if ffmpeg_path and Path(ffmpeg_path).exists():
-            vr_opts["ffmpeg_location"] = ffmpeg_path
-        elif is_frozen():
-            bundled_ffmpeg = find_bundled_executable("ffmpeg.exe", "ffmpeg/ffmpeg.exe")
-            if bundled_ffmpeg is not None:
-                vr_opts["ffmpeg_location"] = str(bundled_ffmpeg)
-
-        # JS runtime
-        self._maybe_configure_youtube_js_runtime(vr_opts)
+        # 构建 android_vr 专用选项：build_ydl_options（POT/网络/代理/FFmpeg/JS runtime
+        # 的单一事实源）+ android_vr 覆盖层。历史上这里手搓 opts、绕过 build_ydl_options，
+        # 于是永远拿不到 POT Provider 的 extractor_args，android_vr 无 POT 时直链被全部跳过；
+        # 顺带也丢了代理/网络配置。改走 helper 后 POT 开启即能救回 https 直链（SABR 核心下
+        # 以 protocol=sabr 兜底），cookiefile 仍被剥离（android_vr 不支持 cookies）。
+        vr_opts = self._build_vr_ydl_options(url=url)
 
         # === TTL 缓存查询（P2.1）===
         # vr_opts 里没有 cookiefile（android_vr 不支持），指纹自然退化为 "-"。
@@ -2061,6 +2169,25 @@ class YoutubeService:
 
             # VR 投影类型检测（逐格式标注 + 整体概览）
             self._detect_vr_projection(info)
+
+            # 能力探测：记录协议分布 / muxed / https 直链，供 UI 条件化提示与默认选择。
+            # 协议驱动而非频道驱动——切核心/上游合入主线后无需改代码即自适应。
+            try:
+                capability = self._probe_vr_capability(formats)
+                info["__vr_capability"] = capability
+                if capability.get("has_sabr"):
+                    self._emit_log(
+                        "info",
+                        tr_text(
+                            "🥽 [VR] 检测到 SABR 流（{0}）；将按纯视频+纯音频组合下载合并。",
+                            "protocols="
+                            + ",".join(
+                                f"{k}:{v}" for k, v in capability.get("protocols", {}).items()
+                            ),
+                        ),
+                    )
+            except Exception:
+                pass
 
             # 缓存写入必须放在全部后处理之后：存的是成品（含 __fluentytdl_vr_mode、
             # __android_vr_format_ids 与逐格式投影标注），否则命中时会缺投影信息。

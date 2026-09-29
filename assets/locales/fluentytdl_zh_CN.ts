@@ -12938,8 +12938,28 @@
     </message>
     <message>
         <location filename="../../src/fluentytdl/utils/ui_text.py" line="1307"/>
+        <source>🥽 [VR] 所选格式仅 android_vr 可见，下载端重钉 android_vr（与解析对齐）</source>
+        <translation>🥽 [VR] 所选格式仅 android_vr 可见，下载端重钉 android_vr（与解析对齐）</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1308"/>
+        <source>🥽 [VR] 所选格式默认客户端同样可见，下载端沿用默认客户端（带 cookie 与 POT，比匿名 android_vr 更稳）</source>
+        <translation>🥽 [VR] 所选格式默认客户端同样可见，下载端沿用默认客户端（带 cookie 与 POT，比匿名 android_vr 更稳）</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1307"/>
         <source>🥽 [VR] 投影检测: {0} / {1} (Equi={2}, Mesh={3}, EAC={4})</source>
         <translation>🥽 [VR] 投影检测: {0} / {1} (Equi={2}, Mesh={3}, EAC={4})</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1309"/>
+        <source>🥽 [VR] 本核心下 android_vr 只回 SABR 流且拿不到 GVS POT，下载端改用默认客户端（VR 后处理不受影响）</source>
+        <translation>🥽 [VR] 本核心下 android_vr 只回 SABR 流且拿不到 GVS POT，下载端改用默认客户端（VR 后处理不受影响）</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1309"/>
+        <source>🥽 [VR] 检测到 SABR 流（{0}）；将按纯视频+纯音频组合下载合并。</source>
+        <translation>🥽 [VR] 检测到 SABR 流（{0}）；将按纯视频+纯音频组合下载合并。</translation>
     </message>
     <message>
         <location filename="../../src/fluentytdl/utils/ui_text.py" line="1308"/>
@@ -16075,10 +16095,10 @@
     </message>
     <message>
         <location filename="../../src/fluentytdl/ui/settings_page.py" line="4234"/>
-        <source>测试核心下只保证普通视频的正常下载，直播和 VR 解析暂时受限。
+        <source>测试核心主要面向普通视频；VR 现已支持（走 android_vr 客户端，自动合并视频与音频流），仅直播解析仍暂时受限。
 
 确认后请点击 yt-dlp 引擎卡片中的“立即更新”，下载并安装测试核心。您可以随时切回官方频道。</source>
-        <translation>测试核心下只保证普通视频的正常下载，直播和 VR 解析暂时受限。
+        <translation>测试核心主要面向普通视频；VR 现已支持（走 android_vr 客户端，自动合并视频与音频流），仅直播解析仍暂时受限。
 
 确认后请点击 yt-dlp 引擎卡片中的“立即更新”，下载并安装测试核心。您可以随时切回官方频道。</translation>
     </message>

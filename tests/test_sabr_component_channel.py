@@ -201,8 +201,9 @@ def test_real_warning_dialog_cancel_and_accept(monkeypatch, accepted):
     dialogs = []
 
     def dialog(title, content, parent):
-        assert "直播和 VR 解析暂时受限" in content
-        assert "只保证普通视频" in content
+        # VR 通道已在 SABR 核心下打通：文案不再无条件说 VR 受限，只留直播受限。
+        assert "VR 现已支持" in content
+        assert "仅直播解析仍暂时受限" in content
         box = MessageBox(title, content, parent)
         dialogs.append(box)
         QTimer.singleShot(0, box.yesButton.click if accepted else box.cancelButton.click)

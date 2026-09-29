@@ -1290,10 +1290,13 @@ class VRFormatTableWidget(QWidget):
         elif mode == 1:
             # 整合流
             muxed = self._selected_muxed_id
-            return {
-                "format": str(muxed) if muxed else "best",
-                "extra_opts": {},
-            }
+            if muxed:
+                return {"format": str(muxed), "extra_opts": {}}
+            # 无 muxed 可选（典型：SABR 核心不提供 combined 格式，itag18/22 单文件兜底消失）。
+            # 退到显式 bv*+ba/b 而非裸 `best`：`best` 在无 combined 时会「Requested format is
+            # not available」直接失败；bv*+ba 走纯视频+纯音频合并，/b 再兜底到有 combined 的
+            # 场景。协议无关——android_vr 已由下载端重钉，sabr 流照样按此选择器下载合并。
+            return {"format": "bv*+ba/b", "extra_opts": {}}
         else:
             # 组合
             vid = self._selected_video_id
