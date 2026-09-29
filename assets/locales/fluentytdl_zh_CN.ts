@@ -7150,6 +7150,11 @@
         <translation>VR 转码失败</translation>
     </message>
     <message>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="242"/>
+        <source>VR 投影未能确证，跳过空间元数据注入</source>
+        <translation>VR 投影未能确证，跳过空间元数据注入</translation>
+    </message>
+    <message>
         <location filename="../../src/fluentytdl/utils/ui_text.py" line="248"/>
         <source>Vivaldi 浏览器</source>
         <translation>Vivaldi 浏览器</translation>
@@ -12928,13 +12933,13 @@
     </message>
     <message>
         <location filename="../../src/fluentytdl/utils/ui_text.py" line="1305"/>
-        <source>🥽 [VR] android_vr 解析完成: {0} 个格式</source>
-        <translation>🥽 [VR] android_vr 解析完成: {0} 个格式</translation>
+        <source>🥽 [VR] 解析 VR 视频: {0}</source>
+        <translation>🥽 [VR] 解析 VR 视频: {0}</translation>
     </message>
     <message>
         <location filename="../../src/fluentytdl/utils/ui_text.py" line="1306"/>
-        <source>🥽 [VR] 使用 android_vr 客户端解析: {0}</source>
-        <translation>🥽 [VR] 使用 android_vr 客户端解析: {0}</translation>
+        <source>🥽 [VR] 解析完成: {0} 个格式</source>
+        <translation>🥽 [VR] 解析完成: {0} 个格式</translation>
     </message>
     <message>
         <location filename="../../src/fluentytdl/utils/ui_text.py" line="1307"/>
@@ -16095,10 +16100,10 @@
     </message>
     <message>
         <location filename="../../src/fluentytdl/ui/settings_page.py" line="4234"/>
-        <source>测试核心主要面向普通视频；VR 现已支持（走 android_vr 客户端，自动合并视频与音频流），仅直播解析仍暂时受限。
+        <source>测试核心主要面向普通视频；VR 现已支持（自动合并视频与音频流），仅直播解析仍暂时受限。
 
 确认后请点击 yt-dlp 引擎卡片中的“立即更新”，下载并安装测试核心。您可以随时切回官方频道。</source>
-        <translation>测试核心主要面向普通视频；VR 现已支持（走 android_vr 客户端，自动合并视频与音频流），仅直播解析仍暂时受限。
+        <translation>测试核心主要面向普通视频；VR 现已支持（自动合并视频与音频流），仅直播解析仍暂时受限。
 
 确认后请点击 yt-dlp 引擎卡片中的“立即更新”，下载并安装测试核心。您可以随时切回官方频道。</translation>
     </message>

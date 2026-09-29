@@ -238,7 +238,7 @@ def test_merge_formats_writes_vr_capability():
     ]
     merged = youtube_service._merge_formats(info, vr_formats)
 
-    cap = merged["__vr_capability"]
+    cap = merged["__vr_capability_android"]
     assert cap["has_sabr"] is True
     # 主解析的 https 格式不得混进画像（否则误判成「有直链可下」）
     assert cap["has_https_direct"] is False
@@ -246,7 +246,11 @@ def test_merge_formats_writes_vr_capability():
     assert merged["__vr_only_format_ids"] == ["sb-v", "sb-a"]
     # 画像立刻可用于下载端决策
     pin, reason = youtube_service.plan_vr_download_client(
-        {"format": "sb-v+sb-a", "__vr_capability": cap, "__vr_only_format_ids": ["sb-v", "sb-a"]}
+        {
+            "format": "sb-v+sb-a",
+            "__vr_capability_android": cap,
+            "__vr_only_format_ids": ["sb-v", "sb-a"],
+        }
     )
     assert (pin, reason) == (False, "sabr_not_deliverable")
 
@@ -257,7 +261,7 @@ def test_merge_formats_no_new_formats_writes_no_capability():
         "formats": [{"format_id": "18", "protocol": "https", "vcodec": "avc1", "acodec": "mp4a"}]
     }
     merged = youtube_service._merge_formats(info, [dict(info["formats"][0])])
-    assert "__vr_capability" not in merged
+    assert "__vr_capability_android" not in merged
 
 
 def test_download_deliverable_true_on_official_core_capability():
@@ -309,7 +313,7 @@ def test_plan_keeps_default_clients_for_shared_format_on_official_core():
     带 cookie 且拿得到 POT，能看见同一批 itag 时钉 android_vr 纯属增加失败面。
     """
     pin, reason = youtube_service.plan_vr_download_client(
-        {"format": "18", "__vr_capability": {"has_sabr": False}}
+        {"format": "18", "__vr_capability_android": {"has_sabr": False}}
     )
     assert pin is False
     assert reason == "format_shared_with_default_clients"
@@ -319,7 +323,7 @@ def test_plan_keeps_default_clients_under_sabr_core():
     pin, reason = youtube_service.plan_vr_download_client(
         {
             "format": "sb-v2+sb-a1",
-            "__vr_capability": {"has_sabr": True},
+            "__vr_capability_android": {"has_sabr": True},
             "__vr_only_format_ids": ["sb-v2", "sb-a1"],
         }
     )
@@ -336,7 +340,7 @@ def test_plan_pins_for_android_vr_exclusive_format_on_deliverable_core():
     pin, reason = youtube_service.plan_vr_download_client(
         {
             "format": "vr-only-1+140",
-            "__vr_capability": {"has_sabr": False},
+            "__vr_capability_android": {"has_sabr": False},
             "__vr_only_format_ids": ["vr-only-1"],
         }
     )
@@ -348,7 +352,7 @@ def test_plan_ignores_empty_vr_only_ids():
     pin, reason = youtube_service.plan_vr_download_client(
         {
             "format": "299+140",
-            "__vr_capability": {"has_sabr": True},
+            "__vr_capability_android": {"has_sabr": True},
             "__vr_only_format_ids": ["", None],
         }
     )
@@ -430,3 +434,312 @@ def test_selection_dialog_single_muxed_selected_returns_id():
     )
     opts = SelectionDialog.get_download_options(fake)
     assert opts["format"] == "22"
+
+
+# ── F. 投影证据分级（projection_confidence）：明写 mesh > 几何 > avc1 捷径 ──────
+#
+# _detect_vr_projection 逐格式写 __vr_projection_confidence ∈ explicit/geometry/inferred，
+# 并在 __vr_projection_summary.projection_confidence 汇总（取最高分辨率那条的置信度）。
+# 整表只有 inferred 时，改用标题 hints 反推 primary_projection，但置信度仍记 inferred。
+
+
+def _summary_for(formats, *, title="", description=""):
+    """跑真实 _detect_vr_projection，回 (info, summary)。"""
+    info = {"title": title, "description": description, "formats": formats}
+    youtube_service._detect_vr_projection(info)
+    return info, info["__vr_projection_summary"]
+
+
+def test_projection_confidence_explicit_on_mesh_format_note():
+    """format_note 明写 mesh → explicit（最强证据，直接采信 mesh）。"""
+    info, summary = _summary_for(
+        [
+            {
+                "format_id": "sb",
+                "vcodec": "vp9",
+                "acodec": "none",
+                "width": 4096,
+                "height": 4096,
+                "format_note": "4096s, mesh",
+            }
+        ]
+    )
+    fmt = info["formats"][0]
+    assert fmt["__vr_projection"] == "mesh"
+    assert fmt["__vr_projection_confidence"] == "explicit"
+    assert summary["primary_projection"] == "mesh"
+    assert summary["projection_confidence"] == "explicit"
+
+
+def test_projection_confidence_geometry_on_aspect_ratio_non_avc1():
+    """纯宽高比判出 equi(2:1) / eac(≈1.5:1) 且非 avc1 → geometry。"""
+    info, summary = _summary_for(
+        [
+            {"format_id": "equi", "vcodec": "vp9", "acodec": "none", "width": 3840, "height": 1920},
+            {"format_id": "eac", "vcodec": "av01", "acodec": "none", "width": 3840, "height": 2560},
+        ]
+    )
+    by_id = {f["format_id"]: f for f in info["formats"]}
+    assert by_id["equi"]["__vr_projection"] == "equirectangular"
+    assert by_id["equi"]["__vr_projection_confidence"] == "geometry"
+    assert by_id["eac"]["__vr_projection"] == "eac"
+    assert by_id["eac"]["__vr_projection_confidence"] == "geometry"
+    # 最高分辨率是 eac(2560) → summary 采信它，属强证据、不触发 hints 兜底
+    assert summary["primary_projection"] == "eac"
+    assert summary["projection_confidence"] == "geometry"
+
+
+def test_projection_confidence_inferred_on_avc1_shortcut():
+    """16:9 avc1（比例落在所有几何带之外）→ 只剩 avc1 捷径 → equirectangular/inferred。"""
+    info, _ = _summary_for(
+        [
+            {
+                "format_id": "18",
+                "vcodec": "avc1.4d401f",
+                "acodec": "mp4a",
+                "width": 1920,
+                "height": 1080,
+            }
+        ]
+    )
+    fmt = info["formats"][0]
+    assert fmt["__vr_projection"] == "equirectangular"
+    assert fmt["__vr_projection_confidence"] == "inferred"
+
+
+def test_all_inferred_with_vr180_sbs_title_falls_back_to_mesh():
+    """整表只有 inferred（avc1 捷径）+ 标题含 VR180/SBS → 标题 hints 反推 mesh，
+    但置信度仍是 inferred（hints 也是猜）。"""
+    info, summary = _summary_for(
+        [
+            {
+                "format_id": "18",
+                "vcodec": "avc1.4d401f",
+                "acodec": "mp4a",
+                "width": 1920,
+                "height": 1080,
+            }
+        ],
+        title="Amazing VR180 SBS Roller Coaster",
+    )
+    # 逐格式仍是 avc1 捷径的 equirectangular/inferred
+    assert info["formats"][0]["__vr_projection_confidence"] == "inferred"
+    # summary 用标题线索纠正 primary_projection，置信度不升级
+    assert summary["primary_projection"] == "mesh"
+    assert summary["projection_confidence"] == "inferred"
+
+
+def test_all_inferred_without_title_hint_stays_unknown():
+    """整表 inferred 且标题无 VR 线索 → primary_projection 退到 unknown（宁缺毋错）。"""
+    info, summary = _summary_for(
+        [
+            {
+                "format_id": "18",
+                "vcodec": "avc1.4d401f",
+                "acodec": "mp4a",
+                "width": 1920,
+                "height": 1080,
+            }
+        ],
+        title="Just a normal clip",
+    )
+    assert summary["primary_projection"] == "unknown"
+    assert summary["projection_confidence"] == "inferred"
+
+
+# ── F2. VRFeature 证据守卫：inferred 不固化空间元数据，但 eac/geometry 转码不受影响 ──
+
+
+def test_vrfeature_inferred_skips_spatial_metadata_but_warns(tmp_path, monkeypatch):
+    """置信度 inferred → 发一条「投影未确证」警告并跳过 _inject_meta（不写错的空间元数据）。"""
+    from fluentytdl.download.features import VRFeature
+
+    media = tmp_path / "clip.mp4"
+    media.write_bytes(b"\x00")
+
+    injected: list = []
+    monkeypatch.setattr(
+        VRFeature,
+        "_inject_meta",
+        staticmethod(lambda ctx, art, proj, opts: injected.append(proj)),
+    )
+
+    warnings: list = []
+    ctx = SimpleNamespace(
+        opts={
+            "__fluentytdl_use_android_vr": True,
+            "__vr_projection": "equirectangular",
+            "__vr_stereo_mode": "stereo_sbs",
+            "__vr_projection_confidence": "inferred",
+        },
+        staging=object(),
+        output_path=None,
+        emit_warning=lambda m: warnings.append(m),
+        emit_status=lambda m: None,
+        primary_media=lambda: SimpleNamespace(path=str(media)),
+    )
+    VRFeature().on_post_process(ctx)
+
+    assert injected == []  # 空间元数据未固化
+    assert len(warnings) == 1  # 但产出了「投影未确证」警告
+    assert ctx.output_path == str(media)
+
+
+def test_vrfeature_geometry_eac_still_injects_metadata(tmp_path, monkeypatch):
+    """geometry 级 eac 不被 inferred 守卫拦截：v360 不可用而降级不转码后，
+    仍抵达 _inject_meta —— 证明守卫只咬 inferred，EAC 招牌路径不受连累。"""
+    from fluentytdl.download.features import VRFeature
+
+    media = tmp_path / "clip.mp4"
+    media.write_bytes(b"\x00")
+
+    monkeypatch.setattr(VRFeature, "_check_ffmpeg_v360", lambda self, exe: False)
+    injected: list = []
+    monkeypatch.setattr(
+        VRFeature,
+        "_inject_meta",
+        staticmethod(lambda ctx, art, proj, opts: injected.append(proj)),
+    )
+
+    warnings: list = []
+    ctx = SimpleNamespace(
+        opts={
+            "__fluentytdl_use_android_vr": True,
+            "__vr_projection": "eac",
+            "__vr_stereo_mode": "stereo_tb",
+            "__vr_projection_confidence": "geometry",
+            "__vr_convert_eac": True,
+            "height": 0,
+        },
+        staging=object(),
+        output_path=None,
+        emit_warning=lambda m: warnings.append(m),
+        emit_status=lambda m: None,
+        primary_media=lambda: SimpleNamespace(path=str(media)),
+    )
+    VRFeature().on_post_process(ctx)
+
+    assert injected == ["eac"]  # geometry 级 eac 仍走元数据注入
+
+
+# ── G. 解析编排：主解析走默认客户端集（A），补充按证据触发（B） ─────────────
+#
+# 这是再设计的中枢：主 parse 用 build_ydl_options（cookie + 默认 player_client），
+# 不再钉 android_vr；只有拿不到 explicit/geometry 级投影证据时才补跑一次 android_vr。
+# 这两条不被前面的 35 条契约覆盖——有人把主 parse 换回 _build_vr_ydl_options（钉死
+# android_vr）时它们全绿，唯独这里会红。
+
+
+def _fresh_default_opts() -> dict:
+    """模拟 build_ydl_options 的默认客户端产物：带 cookie、player_client 不钉 android_vr。"""
+    return {
+        "cookiefile": "/tmp/run/cookies_youtube.txt",
+        "extractor_args": {
+            "youtubepot-bgutilhttp": {"base_url": ["http://127.0.0.1:4416"]},
+            "youtube": {"player_client": ["default", "web_safari"]},
+        },
+    }
+
+
+def _patch_vr_parse(monkeypatch, returns: list):
+    """公共桩：绕开真凭据与真子进程，记录 run_dump_single_json 的调用与入参。"""
+    import sys
+
+    # `fluentytdl.youtube.youtube_service` 属性被 __init__ 的单例 re-export 遮蔽，
+    # 真模块只能从 sys.modules 取（memory: core-package-reexports-shadow-submodule）。
+    yt_mod = sys.modules["fluentytdl.youtube.youtube_service"]
+
+    calls: dict = {"n": 0, "opts": []}
+
+    def fake_run(url, opts, **kw):
+        calls["n"] += 1
+        calls["opts"].append(dict(opts))
+        return returns.pop(0) if returns else {"formats": []}
+
+    monkeypatch.setattr(yt_mod, "resolve_yt_dlp_exe", lambda: "yt-dlp.exe")
+    monkeypatch.setattr(yt_mod, "run_dump_single_json", fake_run)
+    monkeypatch.setattr(youtube_service, "build_ydl_options", lambda *a, **k: _fresh_default_opts())
+    monkeypatch.setattr(youtube_service, "_parse_cache_get", lambda *a, **k: None)
+    monkeypatch.setattr(youtube_service, "_parse_cache_put", lambda *a, **k: None)
+    return calls
+
+
+def test_extract_vr_uses_default_clients_and_skips_supplement_on_explicit(monkeypatch):
+    """明写 mesh（explicit）→ 主 parse 用默认客户端集、带 cookie、不钉 android_vr，
+    且不触发 android_vr 补充（run_dump_single_json 只调一次）。"""
+    main_info = {
+        "title": "VR clip",
+        "formats": [
+            {
+                "format_id": "sb",
+                "protocol": "https",
+                "vcodec": "vp9",
+                "acodec": "none",
+                "width": 4096,
+                "height": 4096,
+                "format_note": "4096s, mesh",
+            }
+        ],
+    }
+    calls = _patch_vr_parse(monkeypatch, [main_info])
+    supplement_calls: list = []
+    monkeypatch.setattr(
+        youtube_service,
+        "_extract_vr_formats",
+        lambda *a, **k: supplement_calls.append(1) or [],
+    )
+
+    info = youtube_service.extract_vr_info_sync("https://www.youtube.com/watch?v=explicitVR")
+
+    # Group A：主 parse 走默认客户端集
+    assert calls["n"] == 1
+    main_opts = calls["opts"][0]
+    assert main_opts.get("skip_download") is True
+    assert "cookiefile" in main_opts
+    assert _yt_pc(main_opts) == "default,web_safari"  # 不是 android_vr
+    # Group B：explicit 证据 → 不补充
+    assert supplement_calls == []
+    assert info["__vr_projection_summary"]["projection_confidence"] == "explicit"
+    assert "__vr_only_format_ids" not in info
+    assert "__vr_capability" in info
+
+
+def test_extract_vr_triggers_supplement_on_inferred_and_fills_vr_only_ids(monkeypatch):
+    """整表 avc1（inferred）→ 触发 android_vr 补充（run_dump_single_json 调两次），
+    android 侧独占 id 落 __vr_only_format_ids，android 侧画像落 __vr_capability_android。"""
+    main_info = {
+        "title": "mystery clip",
+        "formats": [
+            {
+                "format_id": "18",
+                "protocol": "https",
+                "vcodec": "avc1.4d401f",
+                "acodec": "mp4a",
+                "width": 1920,
+                "height": 1080,
+            }
+        ],
+    }
+    android_info = {
+        "formats": [
+            {
+                "format_id": "sb-v",
+                "protocol": "sabr",
+                "vcodec": "vp9",
+                "acodec": "none",
+                "width": 4096,
+                "height": 4096,
+            }
+        ]
+    }
+    calls = _patch_vr_parse(monkeypatch, [main_info, android_info])
+
+    info = youtube_service.extract_vr_info_sync("https://www.youtube.com/watch?v=inferredVR")
+
+    # 主 parse + android 补充各一次
+    assert calls["n"] == 2
+    # android 侧独占 id 与画像各就各位（Group B/C）
+    assert info["__vr_only_format_ids"] == ["sb-v"]
+    assert "__vr_capability_android" in info
+    # 主画像仍在，未被 android 侧覆盖
+    assert "__vr_capability" in info

@@ -3049,6 +3049,10 @@ class SelectionDialog(MessageBoxBase):
                         vr_capability = (info or {}).get("__vr_capability")
                         if vr_capability:
                             ydl_opts["__vr_capability"] = vr_capability
+                        # 可交付性判据要的是 android_vr 那一侧（仅证据触发补充后才存在）
+                        vr_capability_android = (info or {}).get("__vr_capability_android")
+                        if vr_capability_android:
+                            ydl_opts["__vr_capability_android"] = vr_capability_android
                 else:
                     # 修复：即使没有格式选择，也应该使用默认格式
                     logger.debug("get_selected_tasks: No format in selection, using default")
@@ -3342,6 +3346,9 @@ class SelectionDialog(MessageBoxBase):
                     vr_capability = data["detail"].get("__vr_capability")
                     if vr_capability:
                         opts["__vr_capability"] = vr_capability
+                    vr_capability_android = data["detail"].get("__vr_capability_android")
+                    if vr_capability_android:
+                        opts["__vr_capability_android"] = vr_capability_android
 
             # NEW: Advanced selection
             if data.get("custom_selection_data"):

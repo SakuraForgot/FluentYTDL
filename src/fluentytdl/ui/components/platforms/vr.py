@@ -1388,6 +1388,9 @@ class VRFormatSelectorWidget(QWidget):
             extra = res.setdefault("extra_opts", {})
             extra["__vr_projection"] = proj
             extra["__vr_stereo_mode"] = stereo
+            # 证据分级随投影下传：inferred（仅 avc1 捷径 / 标题线索猜出来）时，
+            # VRFeature 不把空间元数据固化进文件，避免把 180 当 360 写错。
+            extra["__vr_projection_confidence"] = summary.get("projection_confidence")
 
         return res
 

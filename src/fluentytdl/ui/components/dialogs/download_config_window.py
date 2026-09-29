@@ -4346,6 +4346,10 @@ class DownloadConfigWindow(TaskWindowSurface, FramelessWindow):
                         vr_capability = (info or {}).get("__vr_capability")
                         if vr_capability:
                             ydl_opts["__vr_capability"] = vr_capability
+                        # 可交付性判据要的是 android_vr 那一侧（仅证据触发补充后才存在）
+                        vr_capability_android = (info or {}).get("__vr_capability_android")
+                        if vr_capability_android:
+                            ydl_opts["__vr_capability_android"] = vr_capability_android
                 else:
                     ydl_opts["format"] = "bestvideo+bestaudio/best"
                     ydl_opts["__fluentytdl_format_note"] = self.tr("最佳画质")
@@ -4701,6 +4705,9 @@ class DownloadConfigWindow(TaskWindowSurface, FramelessWindow):
                     vr_capability = row_data["detail"].get("__vr_capability")
                     if vr_capability:
                         row_opts["__vr_capability"] = vr_capability
+                    vr_capability_android = row_data["detail"].get("__vr_capability_android")
+                    if vr_capability_android:
+                        row_opts["__vr_capability_android"] = vr_capability_android
 
             # Determine Base Options (Format/Quality)
             if row_data.get("custom_selection_data"):
