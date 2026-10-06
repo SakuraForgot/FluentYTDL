@@ -78,7 +78,7 @@ def qapp():
 
 
 @pytest.fixture
-def page(qapp, tmp_path, monkeypatch):
+def page(qapp, tmp_path, monkeypatch, dispose_qt_widget):
     """一个装了 5 行活任务的页面，行号与 source 行号一一对应。
 
     分页和计数都读 `task_db` 单例 —— 必须换成临时库：`migrate_user_data()` 会把真实的
@@ -105,8 +105,7 @@ def page(qapp, tmp_path, monkeypatch):
     _pump(qapp)
     p._workers = workers  # 保住引用，QObject 被 GC 掉这一行就成了野指针
     yield p
-    p.close()
-    _pump(qapp)
+    dispose_qt_widget(p)
 
 
 # __APPEND_3__

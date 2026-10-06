@@ -754,6 +754,10 @@ class YoutubeService:
         # 兜底。仅在账号/会话被标记为 SABR-only 时生效，且仅 YouTube（player_client 是
         # youtube 命名空间参数）。这是唯一能同时覆盖解析与下载两条独立 opts 路径的位置。
         # 【待观察】当前只在检测到 SABR 时追加 web_safari，可能需按其他视频的解析情况调整。
+        # TODO(revisit when yt-dlp/yt-dlp#13515 merges to mainline): SABR PR 合入官方主线后，
+        # 官方核心原生支持 SABR，届时 (1) 专用 "sabr" 更新频道、(2) 这条 web_safari SABR-only
+        # 兜底、(3) VR 通道的 android_vr 重钉是否仍必要，需一并复核。见记忆
+        # ytdlp-sabr-native-pr-13515 / vr-channel-bypasses-pot-and-sabr。不在本次删除。
         if not _is_twitter:
             self._maybe_append_sabr_web_safari(ydl_opts)
 
@@ -798,6 +802,146 @@ class YoutubeService:
                 youtube_args["player_client"][0],
             ),
         )
+
+    @staticmethod
+    def apply_android_vr_overlay(ydl_opts: dict[str, Any]) -> None:
+        """在既有 ydl_opts 上就地叠加 VR (android_vr) 覆盖层。
+
+        VR 通道是 CLAUDE.md §4.1「不锁定单一 player_client」的文档化例外：手动钉
+        android_vr 以拿高分辨率 VR 格式，再做 EAC→Equirectangular 投影转换。
+
+        叠加两件事，两者都以「解析==下载」为目标：
+        - **player_client 覆盖为 android_vr**：只改 youtube.player_client 子键，*保留*
+          build_ydl_options 注入的 POT Provider 独立 ie_key（youtubepot-bgutilhttp）与
+          youtube 命名空间下的 fetch_pot / po_token 兄弟键——POT 与 player_client 正交，
+          android_vr 的 GVS_PO_TOKEN_POLICY 对 HTTPS/DASH required=True，有 POT 才能拿回
+          直链（SABR 核心下仍以 protocol=sabr 兜底）。整键 update 会抹掉 POT，故用深合并。
+        - **剥离 cookiefile**：android_vr 不支持 cookies（POT Provider 与 cookie 是两回
+          事，POT 仍注入）。
+
+        解析（_build_vr_ydl_options）与下载（workers 的 VR 重钉）两条独立 opts 路径都调
+        用它，保证 VR 通道两端看到同一份格式列表——否则解析用 android_vr 无 cookie、下载
+        用默认客户端带 cookie，选中的 vr-only / sabr 格式在下载端 -f <id> 会解析不到
+        （Requested format is not available）。
+        """
+        # android_vr 不支持 cookies：剥离真相源副本，避免 --cookies 干扰并对齐解析与下载。
+        ydl_opts.pop("cookiefile", None)
+
+        extractor_args = cast(dict[str, Any], ydl_opts.setdefault("extractor_args", {}))
+        youtube_args = cast(dict[str, Any], extractor_args.setdefault("youtube", {}))
+        # 沿用本项目 player_client 存法（list，见 POT 分支 ["default,mweb"]）；android_vr
+        # 为单客户端。覆盖而非追加：VR 例外只要 android_vr，不要 web_safari 等兜底客户端。
+        youtube_args["player_client"] = ["android_vr"]
+
+    def _build_vr_ydl_options(
+        self,
+        options: YoutubeServiceOptions | None = None,
+        *,
+        url: str = "",
+    ) -> dict[str, Any]:
+        """VR 解析用的 opts：build_ydl_options（POT/网络/代理/FFmpeg/JS runtime 的单一
+        事实源）+ android_vr 覆盖层。
+
+        收口历史裂缝：VR 解析曾手搓 opts、绕过 build_ydl_options，于是永远拿不到 POT
+        Provider 的 extractor_args，android_vr 无 POT 时直链被全部跳过。改走这里后 POT
+        开启即能救回 https 直链，SABR 核心下则以 protocol=sabr 兜底。
+        """
+        vr_opts = self.build_ydl_options(options, url=url)
+        vr_opts["skip_download"] = True
+        self.apply_android_vr_overlay(vr_opts)
+        return vr_opts
+
+    @staticmethod
+    def _probe_vr_capability(formats: list[Any]) -> dict[str, Any]:
+        """探测 VR 解析产物的能力画像，供 UI 决定提示与默认选择——**看协议/能力，不看频道名**。
+
+        这样上游把 SABR PR 合入主线、或 android_vr 行为再变、或来回切核心时都能自适应：
+        - `protocols`：各 protocol 的计数（sabr / https / http / m3u8 ...）。
+        - `has_muxed`：是否存在 combined 格式（SABR 核心下通常为 False → 单文件兜底消失）。
+        - `has_https_direct`：是否有 https/http 直链视频/音频（POT 就绪时能拿回）。
+        - `has_sabr`：是否出现 protocol=sabr（当前核心把 android_vr 变成吐 sabr 的信号）。
+        """
+        protocols: dict[str, int] = {}
+        has_muxed = False
+        has_https_direct = False
+        for f in formats:
+            if not isinstance(f, dict):
+                continue
+            proto = str(f.get("protocol") or "").strip() or "unknown"
+            protocols[proto] = protocols.get(proto, 0) + 1
+            vcodec = f.get("vcodec")
+            acodec = f.get("acodec")
+            has_video = vcodec not in (None, "none")
+            has_audio = acodec not in (None, "none")
+            if has_video and has_audio:
+                has_muxed = True
+            if (has_video or has_audio) and proto in ("https", "http"):
+                has_https_direct = True
+        return {
+            "total": sum(protocols.values()),
+            "protocols": protocols,
+            "has_muxed": has_muxed,
+            "has_https_direct": has_https_direct,
+            "has_sabr": protocols.get("sabr", 0) > 0,
+        }
+
+    @staticmethod
+    def android_vr_download_deliverable(capability: Any) -> bool:
+        """当前核心下 android_vr 还能不能交付**可下载**的流 —— 看协议，不看频道名。
+
+        android_vr 的 `GVS_PO_TOKEN_POLICY` 对直链是 required，而项目注入的 bgutil
+        Provider 只为 web 系客户端签发 GVS POT，签不出 android_vr 的。两个核心因此
+        分叉：
+
+        - **官方核心**：android_vr 回 https 直链、不回 sabr（A/B 实证）→ 就协议而言
+          可交付。注意「可交付」只是必要条件：直链本身仍受 GVS POT 策略约束，缺
+          token 时高码率变体被整批跳过、残留的 itag 18 实测照样 403。所以本判据只
+          用来否决，不足以单独决定钉不钉（见 `plan_vr_download_client`）。
+        - **SABR 测试核心**：android_vr（clientVersion>1.65）改吐 `protocol=sabr`，
+          其 https 变体因缺 GVS POT 被整批跳过，剩下的 sabr 流同样推不动（实测下到
+          17% 停在「Stream stalled; no activity detected」后整任务判失败）→ 不可交付。
+
+        判据取 `has_sabr`：这正是「本核心把 android_vr 变成吐 SABR」的协议级信号，
+        上游把 SABR 合入主线、或 android_vr 行为再变时都能自适应，无需改代码。能力
+        画像缺失（历史任务 / DB 恢复的旧 opts）时保守返回 True，由调用方的必要性
+        判据兜底。
+        """
+        if not isinstance(capability, dict):
+            return True
+        return not bool(capability.get("has_sabr"))
+
+    @classmethod
+    def plan_vr_download_client(cls, opts: dict[str, Any]) -> tuple[bool, str]:
+        """VR 任务下载端是否重钉 android_vr，返回 `(pin, reason)`（reason 是日志用码）。
+
+        **只在非钉不可时才钉。** android_vr 是匿名客户端（覆盖层会 pop 掉 cookiefile）
+        且其直链受 GVS POT 策略约束，而 bgutil 只为 web 系客户端签发 GVS token ——
+        实测两个核心（官方 2026.08.19 / SABR 2026.09.28）× 两个样例，钉住后一律
+        `HTTP Error 403`。默认客户端带 cookie 且拿得到 POT，凡是它也能看见的格式，
+        钉 android_vr 只增加失败面、不带来任何收益。
+
+        于是判据分两层：
+
+        1. **必要性**：所选格式是否落在 `__vr_only_format_ids`（android_vr 独占、默认
+           客户端解析不出来）。不是 → 交给默认客户端。
+        2. **可交付性**：独占格式才继续问 `android_vr_download_deliverable()`。本核心
+           把 android_vr 变成吐 SABR 时推不动，钉了也是白钉，退回默认客户端 +
+           `bv*+ba/b` 兜底；官方核心那边协议上可交付，就钉住让 android_vr 自己去取
+           （拿得到 android_vr GVS POT 的环境——例如用户手配静态 po_token——这条路
+           就是通的；拿不到则由失败诊断说话，比静默换流诚实）。
+
+        VR 后处理（EAC→Equi、空间元数据）只认 `__fluentytdl_use_android_vr` 标志，
+        不受本决策影响。
+        """
+        fmt = str(opts.get("format") or "")
+        vr_only = [str(i) for i in (opts.get("__vr_only_format_ids") or []) if str(i)]
+        if not (fmt and any(vid in fmt for vid in vr_only)):
+            return False, "format_shared_with_default_clients"
+        # 可交付性问的是 android_vr 那一侧（__vr_capability_android，由 _merge_formats
+        # 写入）。主解析的 __vr_capability 描述默认客户端，用来判它没有意义。
+        if not cls.android_vr_download_deliverable(opts.get("__vr_capability_android")):
+            return False, "sabr_not_deliverable"
+        return True, "vr_only_format"
 
     @staticmethod
     def _youtube_sabr_only_flag() -> bool:
@@ -1116,8 +1260,18 @@ class YoutubeService:
         为每个视频格式注入:
           __vr_projection:  "equirectangular" | "mesh" | "eac" | "unknown"
           __vr_stereo_mode: "mono" | "stereo_tb" | "stereo_sbs" | "unknown"
+          __vr_projection_confidence: "explicit" | "geometry" | "inferred"
 
-        同时在 info["__vr_projection_summary"] 写入整体概览。
+        证据分级（confidence）区分「明写 mesh」与「因为是 avc1 所以猜 equi」这两种
+        强度天差地别的结论：
+          explicit —— format_note/format 里明写 mesh（最强，直接采信）。
+          geometry —— 宽高比落入 2:1 / 1:1 / EAC 区间判出投影（几何证据）。
+          inferred —— 只因 vcodec 是 avc1 而猜 equirectangular，或标题 hints 兜底。
+        整表只有 inferred 时（例如某核心/账号组合下只剩 avc1 的 16:9 HLS 阶梯），
+        改用标题/描述 hints 反推 primary_projection（vr180/sbs→mesh、360→equi），
+        但 confidence 仍记 inferred —— 下游 VRFeature 据此**不固化**可能判错的空间元数据。
+
+        同时在 info["__vr_projection_summary"] 写入整体概览（含 projection_confidence）。
         """
         title = str(info.get("title") or "").lower()
         description = str(info.get("description") or "").lower()
@@ -1151,6 +1305,8 @@ class YoutubeService:
         has_equi = False
         has_eac = False
         has_mesh = False
+        strong_seen = False  # 是否见过 explicit/geometry 级证据
+        video_fmt_count = 0
         max_height_fmt: dict[str, Any] | None = None
         max_height = 0
 
@@ -1165,29 +1321,39 @@ class YoutubeService:
             format_note = str(fmt.get("format_note") or "").lower()
             format_field = str(fmt.get("format") or "").lower()
 
-            # ---- 投影类型检测 ----
+            # ---- 投影类型检测（含证据分级）----
             projection = "unknown"
+            confidence = "inferred"
             if "mesh" in format_note or "mesh" in format_field:
+                # 明写 mesh —— 最强证据
                 projection = "mesh"
+                confidence = "explicit"
             elif width > 0 and height > 0:
                 ratio = width / height
-                # avc1 (H.264) 几乎都是标准 Equirectangular
+                # avc1 (H.264) 常见于标准 Equirectangular，但这只是编码启发式：
+                # 某些核心/账号组合下 VR180 mesh 视频也会整表落成 avc1，所以
+                # 「仅凭 avc1」得到的结论只能记 inferred，不能与几何证据同级。
                 is_legacy_codec = vcodec.startswith("avc1")
-                if is_legacy_codec:
+                if 1.9 <= ratio <= 2.1:
+                    # 2:1 → 标准 Equirectangular（几何证据）
                     projection = "equirectangular"
-                elif 1.9 <= ratio <= 2.1:
-                    # 2:1 → 标准 Equirectangular
-                    projection = "equirectangular"
+                    confidence = "geometry"
                 elif 0.9 <= ratio <= 1.1:
-                    # 1:1 → 通常是 Equirectangular 的 TB 立体
+                    # 1:1 → 通常是 Equirectangular 的 TB 立体（几何证据）
                     projection = "equirectangular"
-                else:
-                    # 非标准比例 + 高端编码 → 可能是 EAC
+                    confidence = "geometry"
+                elif 1.3 <= ratio <= 1.7 and not is_legacy_codec:
+                    # 非标准比例 + 高端编码 → 可能是 EAC（几何证据）
                     # EAC 常见比例: 约 1.5:1 (3840×2560) 或 3:2
-                    if 1.3 <= ratio <= 1.7 and not is_legacy_codec:
-                        projection = "eac"
-                    else:
-                        projection = "unknown"
+                    projection = "eac"
+                    confidence = "geometry"
+                elif is_legacy_codec:
+                    # 只剩 avc1 捷径可用 —— 判 Equirectangular 但标记为最弱证据
+                    projection = "equirectangular"
+                    confidence = "inferred"
+                else:
+                    projection = "unknown"
+                    confidence = "inferred"
 
             # ---- 立体模式检测 ----
             stereo = "unknown"
@@ -1218,6 +1384,10 @@ class YoutubeService:
 
             fmt["__vr_projection"] = projection
             fmt["__vr_stereo_mode"] = stereo
+            fmt["__vr_projection_confidence"] = confidence
+            video_fmt_count += 1
+            if confidence in ("explicit", "geometry"):
+                strong_seen = True
 
             # 统计
             projections[projection] = projections.get(projection, 0) + 1
@@ -1238,9 +1408,22 @@ class YoutubeService:
         # 整体概览
         primary_proj = "unknown"
         primary_stereo = "unknown"
+        primary_confidence = "inferred"
         if max_height_fmt is not None:
             primary_proj = str(max_height_fmt.get("__vr_projection") or "unknown")
             primary_stereo = str(max_height_fmt.get("__vr_stereo_mode") or "unknown")
+            primary_confidence = str(max_height_fmt.get("__vr_projection_confidence") or "inferred")
+
+        # 整表只有 inferred 证据（无 explicit/geometry）时，让标题/描述 hints 反推投影。
+        # 这天然涵盖「完全没有 VR 信号」的情形，也堵住「整表 avc1 → 全判 equi」的错标。
+        if video_fmt_count > 0 and not strong_seen:
+            if title_hints_vr180 or title_hints_sbs:
+                primary_proj = "mesh"
+            elif title_hints_360:
+                primary_proj = "equirectangular"
+            else:
+                primary_proj = "unknown"
+            primary_confidence = "inferred"  # hints 也是猜，证据强度不变
 
         has_stereo_3d = any(k.startswith("stereo") for k in stereo_modes if stereo_modes[k] > 0)
         has_mono = stereo_modes.get("mono", 0) > 0
@@ -1248,6 +1431,7 @@ class YoutubeService:
         summary = {
             "primary_stereo": primary_stereo,
             "primary_projection": primary_proj,
+            "projection_confidence": primary_confidence,
             "has_stereo_3d": has_stereo_3d,
             "has_mono_360": has_mono,
             "has_eac": has_eac,
@@ -1293,29 +1477,9 @@ class YoutubeService:
         """
         self._emit_log("info", tr_text("🔄 使用 android_vr 客户端获取 VR 高分辨率格式..."))
 
-        # 构建无 cookies 的 android_vr 解析选项
-        vr_opts: dict[str, Any] = {
-            # 同上：`quiet` / `no_warnings` 没有 CLI 映射，是死配置，已删。
-            "ignoreerrors": False,
-            "skip_download": True,
-            "extractor_args": {
-                "youtube": {
-                    "player_client": ["android_vr"],
-                }
-            },
-        }
-
-        # FFmpeg location (复用主配置)
-        ffmpeg_path = str(config_manager.get("ffmpeg_path") or "").strip()
-        if ffmpeg_path and Path(ffmpeg_path).exists():
-            vr_opts["ffmpeg_location"] = ffmpeg_path
-        elif is_frozen():
-            bundled_ffmpeg = find_bundled_executable("ffmpeg.exe", "ffmpeg/ffmpeg.exe")
-            if bundled_ffmpeg is not None:
-                vr_opts["ffmpeg_location"] = str(bundled_ffmpeg)
-
-        # JS runtime (复用主配置逻辑)
-        self._maybe_configure_youtube_js_runtime(vr_opts)
+        # 与 extract_vr_info_sync 共用同一 VR opts 事实源（build_ydl_options + android_vr
+        # 覆盖层）：拿到 POT/网络/代理/FFmpeg/JS runtime，cookiefile 仍被剥离。
+        vr_opts = self._build_vr_ydl_options(url=url)
 
         try:
             info = run_dump_single_json(
@@ -1348,6 +1512,8 @@ class YoutubeService:
         - VR 格式优先 (通常包含更高分辨率)
         - 记录 VR 专属格式 ID (仅 android_vr 有，web 没有)
         - 记录所有 android_vr 可用格式 ID (用于兼容性检查)
+        - 能力画像写 __vr_capability_android（android_vr 侧），不覆盖主解析的
+          __vr_capability（默认客户端侧、供 UI 与 muxed 兜底判断）。
         """
         if not vr_formats:
             return info
@@ -1382,6 +1548,10 @@ class YoutubeService:
             info["__vr_only_format_ids"] = vr_only_format_ids
             # 记录所有 android_vr 可用格式 ID (用于下载时兼容性检查)
             info["__android_vr_format_ids"] = all_vr_format_ids
+            # 能力画像只描述 android_vr 这一侧的产物（不含主解析的默认客户端格式），
+            # 下载端据此判断「这批 VR 格式在本核心下到底推不推得动」。存独立键
+            # __vr_capability_android，绝不覆盖主解析写在 __vr_capability 上的默认侧画像。
+            info["__vr_capability_android"] = self._probe_vr_capability(vr_formats)
             self._emit_log(
                 "info",
                 tr_text(
@@ -1963,46 +2133,35 @@ class YoutubeService:
         *,
         cancel_event: threading.Event | None = None,
     ) -> dict[str, Any]:
-        """VR 专用解析：使用纯 android_vr 客户端提取完整 VR 格式。
+        """VR 解析：走**默认客户端集**（与普通解析同源）拿完整格式表。VR 是视频的
+        一个属性，不再靠切到 android_vr 客户端才能拿到。
 
-        与普通解析不同：
-        - 固定使用 android_vr 客户端
-        - 不使用 Cookies（android_vr 不支持）
-        - 返回的格式包含完整的 SBS/OU/Mesh 投影信息
+        与普通解析的唯一差别：
+        - skip_download=True（只探测格式）
+        - 额外做 VR 投影检测（逐格式标注 + 证据分级）与能力探测
+        - 仅当标准解析拿不到 explicit/geometry 级投影证据时，才补跑一次 android_vr
+          并合并（证据触发的补充；明写 mesh / 几何可判的常见 VR 样本不触发）
+
+        默认客户端集带 cookie + POT + web_safari(SABR-only 兜底)，能下 android_vr 能
+        解析出来的同一批 itag（SABR 只是投递协议，format_id 仍是标准 itag）。历史上
+        强钉 android_vr 反丢 muxed 阶梯 / DRC 音频、多一次匿名子进程，且其直链签不出
+        GVS POT → 403/卡死。详见 plan transient-puzzling-rocket。
         """
-        self._emit_log("info", tr_text("🥽 [VR] 使用 android_vr 客户端解析: {0}", url))
+        self._emit_log("info", tr_text("🥽 [VR] 解析 VR 视频: {0}", url))
 
         if resolve_yt_dlp_exe() is None:
             raise FileNotFoundError(
                 tr_text("未找到 yt-dlp.exe。请检查自定义内核路径、应用托管目录或系统 PATH。")
             )
 
-        # 构建 android_vr 专用选项（不使用 cookies）
-        vr_opts: dict[str, Any] = {
-            # 同上：`quiet` / `no_warnings` 没有 CLI 映射，是死配置，已删。
-            "ignoreerrors": False,
-            "skip_download": True,
-            "extractor_args": {
-                "youtube": {
-                    "player_client": ["android_vr"],
-                }
-            },
-        }
-
-        # FFmpeg location
-        ffmpeg_path = str(config_manager.get("ffmpeg_path") or "").strip()
-        if ffmpeg_path and Path(ffmpeg_path).exists():
-            vr_opts["ffmpeg_location"] = ffmpeg_path
-        elif is_frozen():
-            bundled_ffmpeg = find_bundled_executable("ffmpeg.exe", "ffmpeg/ffmpeg.exe")
-            if bundled_ffmpeg is not None:
-                vr_opts["ffmpeg_location"] = str(bundled_ffmpeg)
-
-        # JS runtime
-        self._maybe_configure_youtube_js_runtime(vr_opts)
+        # 与普通解析同一事实源：build_ydl_options 给全 cookie / 默认 player_client
+        # （含 web_safari SABR-only 兜底）/ POT / 代理 / FFmpeg / JS runtime，只把
+        # skip_download 打开。VR 不再是 android_vr 的独占视角。
+        vr_opts = self.build_ydl_options(url=url)
+        vr_opts["skip_download"] = True
 
         # === TTL 缓存查询（P2.1）===
-        # vr_opts 里没有 cookiefile（android_vr 不支持），指纹自然退化为 "-"。
+        # mode="vr" 单独分桶；vr_opts 现在带 cookiefile，指纹与普通解析天然区分。
         _t_total = time.perf_counter()
         cache_key = self._parse_cache_key(url, "vr", vr_opts)
         cached = self._parse_cache_get(cache_key)
@@ -2029,25 +2188,11 @@ class YoutubeService:
             formats = info.get("formats") or []
             self._emit_log(
                 "info",
-                tr_text("🥽 [VR] android_vr 解析完成: {0} 个格式", len(formats)),
+                tr_text("🥽 [VR] 解析完成: {0} 个格式", len(formats)),
             )
 
-            # 统一注入 android_vr 可用格式 ID，供下游兼容性过滤使用。
-            # 某些历史链路只在 merge 阶段写该字段，导致纯 VR 解析路径缺失元信息。
-            try:
-                android_vr_ids: list[str] = []
-                for f in formats:
-                    if not isinstance(f, dict):
-                        continue
-                    fid = str(f.get("format_id") or "")
-                    if fid:
-                        android_vr_ids.append(fid)
-                if android_vr_ids:
-                    info["__android_vr_format_ids"] = android_vr_ids
-            except Exception:
-                pass
-
-            # 标记所有格式为 VR 来源
+            # 标记为 VR 任务（EAC→Equi / 空间元数据只认这个标志，与下载端是否钉
+            # android_vr 无关）。
             info["__fluentytdl_vr_mode"] = True
 
             # 最高分辨率
@@ -2059,11 +2204,63 @@ class YoutubeService:
             elif max_height > 0:
                 self._emit_log("info", tr_text("📺 [VR] 最高可用分辨率: {0}p", max_height))
 
-            # VR 投影类型检测（逐格式标注 + 整体概览）
+            # VR 投影类型检测（逐格式标注 + 整体概览 + 证据分级）
             self._detect_vr_projection(info)
 
+            # 主能力画像：描述**默认客户端**这批格式（真正要下的那批），供 UI 条件化
+            # 提示与 muxed 兜底判断。必须在 android_vr 补充合并之前算，才不会被 android
+            # 侧格式污染（android 侧画像另存 __vr_capability_android，见 _merge_formats）。
+            try:
+                capability = self._probe_vr_capability(formats)
+                info["__vr_capability"] = capability
+                if capability.get("has_sabr"):
+                    self._emit_log(
+                        "info",
+                        tr_text(
+                            "🥽 [VR] 检测到 SABR 流（{0}）；将按纯视频+纯音频组合下载合并。",
+                            "protocols="
+                            + ",".join(
+                                f"{k}:{v}" for k, v in capability.get("protocols", {}).items()
+                            ),
+                        ),
+                    )
+            except Exception:
+                pass
+
+            # === 证据触发的 android_vr 补充 ===
+            # 标准解析拿不到 explicit/geometry 级投影证据时（整表只靠 avc1 捷径猜，或
+            # 完全无 VR 信号），补跑一次 android_vr 并合并——它偶尔独占真格式。明写 mesh
+            # 或几何可判的常见 VR 样本不触发，零额外成本。合并后 __vr_only_format_ids 才
+            # 真正表示「默认客户端看不见的格式」，下载端 plan_vr_download_client 自决钉不钉。
+            summary = info.get("__vr_projection_summary") or {}
+            proj_conf = str(summary.get("projection_confidence") or "inferred")
+            if proj_conf not in ("explicit", "geometry"):
+                vr_formats = self._extract_vr_formats(url, cancel_event)
+                _before = len(info.get("formats") or [])
+                info = self._merge_formats(info, vr_formats)
+                _added = len(info.get("formats") or []) - _before
+                if _added > 0:
+                    # 新并进来的 android_vr 格式补跑投影检测（含证据分级）
+                    self._detect_vr_projection(info)
+                # 观测：只在真正触发补充时发一条 decision（§5 只在真变化时发）
+                try:
+                    from ..observability.trace import current_flow
+
+                    _flow = current_flow()
+                    if _flow is not None:
+                        _flow.emit(
+                            "decision",
+                            stage="parse",
+                            subsystem="vr_probe",
+                            status="android_vr_supplement" if _added > 0 else "skipped",
+                            reason=proj_conf,
+                        )
+                except Exception:
+                    pass
+
             # 缓存写入必须放在全部后处理之后：存的是成品（含 __fluentytdl_vr_mode、
-            # __android_vr_format_ids 与逐格式投影标注），否则命中时会缺投影信息。
+            # 逐格式投影标注 + 证据分级、__vr_capability；B 触发时还含 __vr_only_format_ids
+            # 与 __vr_capability_android），否则命中时会缺这些信息。
             self._parse_cache_put(cache_key, info)
 
             return info

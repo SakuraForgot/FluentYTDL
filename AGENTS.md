@@ -55,7 +55,7 @@ All UI-backend communication MUST use Qt Signal/Slot mechanism. Never call backe
 The project supports 6 distinct parsing modes. See `docs/ARCHITECTURE_EN.md` Section 3 for the complete flow of each mode:
 
 1. **Video** — standard single video download
-2. **VR** — VR video with `android_vr` client, EAC conversion
+2. **VR** — VR video parsed with the default client set; `android_vr` is an evidence-triggered supplement (only when projection evidence is weak), plus EAC→Equi conversion
 3. **Channel** — channel tab listing with lazy loading
 4. **Playlist** — playlist with batch operations
 5. **Subtitle** — standalone subtitle download (lightweight extract)

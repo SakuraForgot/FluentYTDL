@@ -15,6 +15,8 @@ import certifi
 import requests
 from requests.adapters import HTTPAdapter
 
+from ..utils.ytdlp_runtime import SABR_REPOSITORY
+
 CF_BASE = "https://fluentytdl.sakuraforgot.com/v1"
 MANIFEST_URL = (
     "https://github.com/SakuraForgot/FluentYTDL/releases/latest/download/update-manifest.json"
@@ -23,6 +25,7 @@ REPOSITORIES = {
     "yt-dlp:stable": "yt-dlp/yt-dlp",
     "yt-dlp:nightly": "yt-dlp/yt-dlp-nightly-builds",
     "yt-dlp:master": "yt-dlp/yt-dlp-master-builds",
+    "yt-dlp:sabr": SABR_REPOSITORY,
     "deno:stable": "denoland/deno",
     "ffmpeg:stable": "yt-dlp/FFmpeg-Builds",
     "pot-provider:stable": "jim60105/bgutil-ytdlp-pot-provider-rs",
@@ -298,6 +301,35 @@ class CheckSession:
 
     def release(self, component, channel="stable"):
         repo = REPOSITORIES[f"{component}:{channel}"]
+
+        if component == "yt-dlp" and channel == "sabr":
+            # This experimental repository publishes prereleases, so /latest is
+            # unsuitable. The mirror does not serve it; keep batch failover state
+            # unchanged and use the same configured HTTPS/proxy transport.
+            with self._lock:
+                data = self.transport.get_json(
+                    f"https://api.github.com/repos/{repo}/releases?per_page=100",
+                    check_id=self.id,
+                    source="github",
+                    component=component,
+                )
+                if not isinstance(data, list):
+                    raise UpdateError("update_invalid_response")
+                releases = [
+                    r
+                    for r in data
+                    if not r.get("draft")
+                    and str(r.get("tag_name", "")).startswith("sabr-")
+                    and {"yt-dlp.exe", "BUILD_INFO.json", "SHA256SUMS.txt"}
+                    <= {a.get("name") for a in r.get("assets", [])}
+                ]
+                if not releases:
+                    raise UpdateError("update_invalid_response")
+                release = max(releases, key=lambda r: (r.get("published_at") or "", r.get("id", 0)))
+                base = f"https://github.com/{repo}/releases/download/{quote(release['tag_name'], safe='')}/"
+                for asset in release["assets"]:
+                    asset["browser_download_url"] = base + quote(asset["name"], safe="")
+                return release
 
         def normalize(data, source):
             if not isinstance(data.get("assets"), list) or not data.get("tag_name"):

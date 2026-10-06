@@ -494,9 +494,13 @@ class VRInfoExtractWorker(QThread):
                 return
 
             if info is None:
-                # 单视频模式：使用 android_vr 客户端
+                # 单视频模式：使用 android_vr 客户端。
+                # extract_vr_info_sync 不收 options：VR opts 是全局配置事实源
+                # （build_ydl_options + android_vr 覆盖层，cookiefile 被剥离、
+                # player_client 强制 android_vr），per-request options 对 VR 解析
+                # 无影响，与 EntryDetailWorker 的 VR 调用及 _extract_vr_formats 一致。
                 info = youtube_service.extract_vr_info_sync(
-                    self.url, self.options, cancel_event=self._cancel_event
+                    self.url, cancel_event=self._cancel_event
                 )
 
             if self._cancel_event.is_set():
@@ -1184,6 +1188,57 @@ class DownloadWorker(QThread):
 
             # === 防止单个任务变异为播放列表下载造成无限死循环 ===
             merged["noplaylist"] = True
+
+            # === VR 任务：按**当前核心的能力**决定下载端客户端 ===
+            # 解析走 android_vr（extract_vr_info_sync），但 base_opts 用默认客户端 +
+            # POT，self.opts 只带 __fluentytdl_use_android_vr 标志、不带 extractor_args，
+            # 于是 merged 里的 player_client 仍是默认客户端。是否该把两端对齐，只在
+            # **非钉不可**时才成立（见 youtube_service.plan_vr_download_client）：
+            #   · 所选格式默认客户端也看得见 → 不钉。默认客户端带 cookie 且拿得到
+            #     POT；android_vr 是匿名客户端、直链受 GVS POT 策略约束而 bgutil 签不出
+            #     它的 token，实测两个核心 × 两个样例钉住后一律 403 —— 纯增失败面。
+            #   · 格式是 android_vr 独占（默认客户端会「Requested format is not
+            #     available」）→ 再看协议可交付性：本核心把 android_vr 变成吐 sabr 时
+            #     推不动（实测卡 17%），退默认客户端 + bv*+ba/b 兜底；官方核心那边协议上
+            #     可交付就钉住，由 android_vr 自己去取。
+            # 说明：apply_android_vr_overlay 覆盖 player_client 子键而非整键 update，
+            # 故 build_ydl_options 注入的 POT Provider ie_key 不受影响。
+            if merged.get("__fluentytdl_use_android_vr"):
+                pin_android_vr, vr_client_reason = youtube_service.plan_vr_download_client(merged)
+                if pin_android_vr:
+                    youtube_service.apply_android_vr_overlay(merged)
+                    log_text(
+                        logger,
+                        "info",
+                        "🥽 [VR] 所选格式仅 android_vr 可见，下载端重钉 android_vr（与解析对齐）",
+                    )
+                else:
+                    # 不钉：默认客户端集（含 SABR-only 账号的 web_safari 兜底与 web 侧
+                    # POT）去下同一批标准 itag。再挂一层 bv*+ba/b 兜底——万一某个 ID 只
+                    # 在 android_vr 侧存在，降级成可下的组合而不是硬报错。VR 后处理只看
+                    # __fluentytdl_use_android_vr，投影转换不受影响。
+                    fmt = merged.get("format")
+                    if isinstance(fmt, str) and fmt.strip() and "bv*+ba/b" not in fmt:
+                        merged["format"] = f"{fmt}/bv*+ba/b"
+                    if vr_client_reason == "sabr_not_deliverable":
+                        log_text(
+                            logger,
+                            "info",
+                            "🥽 [VR] 本核心下 android_vr 只回 SABR 流且拿不到 GVS POT，下载端改用默认客户端（VR 后处理不受影响）",
+                        )
+                    else:
+                        log_text(
+                            logger,
+                            "info",
+                            "🥽 [VR] 所选格式默认客户端同样可见，下载端沿用默认客户端（带 cookie 与 POT，比匿名 android_vr 更稳）",
+                        )
+                self.trace.emit(
+                    "decision",
+                    stage="preflight",
+                    subsystem="vr_client",
+                    status="pin_android_vr" if pin_android_vr else "keep_default_clients",
+                    reason=vr_client_reason,
+                )
 
             # 保存原始格式选择（用于错误恢复）
             self._original_format = merged.get("format")

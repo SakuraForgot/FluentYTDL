@@ -26,13 +26,42 @@ def _load_runtime_repositories() -> dict[str, str]:
 
     直接 import src 会拉起 fluentytdl 的重量级导入链（Qt 等），在 Linux 逻辑
     lane 上既慢又可能失败。用 ast 抽取模块级字面量即可，无需任何运行时依赖。
+
+    表里的值不一定是内联字面量——SABR 测试通道就写成模块级常量引用
+    (``"yt-dlp:sabr": SABR_REPOSITORY``)，整表 ``literal_eval`` 会直接抛
+    ``ValueError``。所以先收集模块级 ``NAME = "字符串"`` 常量，再逐项解析：
+    常量引用查表还原，其余非字符串项跳过（本测试只比对 ``:stable`` 通道）。
     """
     src = (ROOT / "src" / "fluentytdl" / "core" / "update_transport.py").read_text(encoding="utf-8")
-    for node in ast.parse(src).body:
+    module = ast.parse(src)
+
+    constants: dict[str, str] = {}
+    identity = ast.parse(
+        (ROOT / "src/fluentytdl/utils/ytdlp_runtime.py").read_text(encoding="utf-8")
+    )
+    for node in [*identity.body, *module.body]:
+        if not isinstance(node, ast.Assign) or not isinstance(node.value, ast.Constant):
+            continue
+        if not isinstance(node.value.value, str):
+            continue
+        for target in node.targets:
+            if isinstance(target, ast.Name):
+                constants[target.id] = node.value.value
+
+    for node in module.body:
         if isinstance(node, ast.Assign) and any(
             isinstance(target, ast.Name) and target.id == "REPOSITORIES" for target in node.targets
         ):
-            return ast.literal_eval(node.value)
+            assert isinstance(node.value, ast.Dict), "REPOSITORIES 必须是字典字面量"
+            table: dict[str, str] = {}
+            for key_node, value_node in zip(node.value.keys, node.value.values, strict=True):
+                if not isinstance(key_node, ast.Constant) or not isinstance(key_node.value, str):
+                    continue
+                if isinstance(value_node, ast.Constant) and isinstance(value_node.value, str):
+                    table[key_node.value] = value_node.value
+                elif isinstance(value_node, ast.Name) and value_node.id in constants:
+                    table[key_node.value] = constants[value_node.id]
+            return table
     raise AssertionError("update_transport.py 里找不到 REPOSITORIES 表")
 
 
@@ -249,15 +278,18 @@ class TestBinComponentArtifacts:
         仓库表已下沉到 scripts/fetch_tools.REPOSITORIES（构建期单一事实源），
         generate_manifest 从那里取值；运行时源是 update_transport.py 里按通道
         分键的 REPOSITORIES（dependency_manager 走它做失效切换）。两张表**故意
-        分开**——运行时额外带 nightly/master 通道——但每个共有组件的 stable 通道
+        分开**——运行时额外带 nightly/master 通道——但每个共有组件的默认通道
         必须逐字一致，否则清单声明的来源和运行时查询的来源对不上。
         """
+        from fluentytdl.utils.ytdlp_runtime import DEFAULT_YTDLP_CHANNEL
+
         runtime = _load_runtime_repositories()
         for component, repo in gm.REPOSITORIES.items():
             if component == "7zip":
                 continue  # 7zip 只在构建期用来解包，运行时不做在线更新
-            assert runtime[f"{component}:stable"] == repo, (
-                f"{component}: 清单={repo!r} 运行时={runtime.get(f'{component}:stable')!r}"
+            channel = DEFAULT_YTDLP_CHANNEL if component == "yt-dlp" else "stable"
+            assert runtime[f"{component}:{channel}"] == repo, (
+                f"{component}: 清单={repo!r} 运行时={runtime.get(f'{component}:{channel}')!r}"
             )
         # ffmpeg 必须来自 yt-dlp 的修复版构建，不是 BtbN 的
         assert gm.REPOSITORIES["ffmpeg"] == "yt-dlp/FFmpeg-Builds"

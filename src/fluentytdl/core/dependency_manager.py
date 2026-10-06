@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -23,6 +24,7 @@ except ImportError:
 
 from ..utils.logger import logger
 from ..utils.paths import frozen_app_dir, get_clean_env, is_frozen
+from ..utils.ytdlp_runtime import DEFAULT_YTDLP_CHANNEL, SABR_REPOSITORY, YTDLP_CHANNELS
 from .config_manager import config_manager
 
 #: component_key → 在 PATH 上查找时试的可执行文件名（不含扩展名，交给 ``shutil.which``）。
@@ -270,6 +272,14 @@ class DependencyManager(QObject):
         self.check_started.emit(component_key)
 
     def _on_check_finished(self, key, result):
+        if key == "yt-dlp" and result.get("requested_channel") not in (
+            None,
+            str(config_manager.get("ytdlp_channel", DEFAULT_YTDLP_CHANNEL)).strip(),
+        ):
+            # A channel selection changed while the old check was in flight.
+            self._workers.pop(f"check_{key}", None)
+            self.check_update(key)
+            return
         result["silent"] = key in self._silent_checks
         self._silent_checks.discard(key)
 
@@ -280,7 +290,12 @@ class DependencyManager(QObject):
         # 再点也没用。现在只有版本和频道都对上才算装成功、才抑制。
         installed = self._just_installed.pop(key, None)
         external_active = key == "yt-dlp" and result.get("exe_path") != result.get("install_path")
-        if installed is not None and result.get("update_available") and not external_active:
+        if (
+            installed is not None
+            and result.get("update_available")
+            and not external_active
+            and result.get("current_channel") != "sabr"
+        ):
             want_ver, want_ch = installed
             got_ver = str(result.get("current") or "")
             got_ch = str(result.get("current_channel") or "")
@@ -327,10 +342,23 @@ class DependencyManager(QObject):
                 )
                 self.download_error.emit(key, ERR_URL_UNRESOLVED)
 
+    def is_installing(self, component_key: str) -> bool:
+        worker = self._workers.get(f"install_{component_key}")
+        return bool(worker and worker.isRunning())
+
     def install_component(self, component_key: str):
         """Async download and install."""
         if component_key not in self.components:
             return
+
+        if self.is_installing(component_key):
+            return
+        if component_key == "yt-dlp":
+            info = self.components[component_key]
+            wanted = str(config_manager.get("ytdlp_channel", DEFAULT_YTDLP_CHANNEL)).strip()
+            if info.latest_channel != wanted:
+                # Never install a cached official URL after selecting SABR (or vice versa).
+                info.download_url = None
 
         url = self.components[component_key].download_url
         if not url:
@@ -357,7 +385,7 @@ class DependencyManager(QObject):
         expected_version = self.components[component_key].latest_version or "unknown"
         expected_sha256 = self.components[component_key].expected_sha256 or ""
         expected_channel = (
-            str(config_manager.get("ytdlp_channel", "stable")).strip()
+            str(config_manager.get("ytdlp_channel", DEFAULT_YTDLP_CHANNEL)).strip()
             if component_key == "yt-dlp"
             else ""
         )
@@ -392,7 +420,9 @@ class DependencyManager(QObject):
         info = self.components.get(key)
         self._just_installed[key] = (
             str(info.latest_version or "") if info else "",
-            str(config_manager.get("ytdlp_channel", "stable")).strip() if key == "yt-dlp" else "",
+            str(config_manager.get("ytdlp_channel", DEFAULT_YTDLP_CHANNEL)).strip()
+            if key == "yt-dlp"
+            else "",
         )
 
         # Installed bytes invalidate shared version identity; path resolution is always fresh.
@@ -444,6 +474,9 @@ class UpdateCheckerWorker(QThread):
         super().__init__()
         self.key = key
         self.manager = manager
+        self.requested_channel = str(
+            config_manager.get("ytdlp_channel", DEFAULT_YTDLP_CHANNEL)
+        ).strip()
         from .update_transport import configured_check
 
         self.check_session = check_session or configured_check()
@@ -473,7 +506,7 @@ class UpdateCheckerWorker(QThread):
         # 判据是「本地频道 vs 配置频道」而不是「本地频道 vs 远端频道」：远端频道本身
         # 就是照配置查的，两者恒等，拿它当判据等于什么都没判。
         if self.key == "yt-dlp":
-            wanted_ch = str(config_manager.get("ytdlp_channel", "stable")).strip()
+            wanted_ch = self.requested_channel
             if current_ver != "unknown" and current_ch and wanted_ch and current_ch != wanted_ch:
                 return True, "channel_mismatch"
 
@@ -516,6 +549,12 @@ class UpdateCheckerWorker(QThread):
             remote = self._get_remote_version(self.key)
 
             update_available, decision = self._compare(current_ver, current_ch, remote)
+            if self.key == "yt-dlp" and current_ch == remote.channel == "sabr":
+                # Date-only versions cannot distinguish same-day upstream revisions/rebuilds.
+                with exe_path.open("rb") as stream:
+                    current_hash = hashlib.file_digest(stream, "sha256").hexdigest()
+                update_available = current_hash != remote.sha256
+                decision = "sabr_revision_differs" if update_available else "up_to_date"
 
             _emit(
                 "decision",
@@ -542,6 +581,7 @@ class UpdateCheckerWorker(QThread):
                 "update_available": update_available,
                 "url": remote.url,
                 "expected_sha256": remote.sha256,
+                "requested_channel": self.requested_channel if self.key == "yt-dlp" else None,
                 # "bundled" / "path" / ""：UI 靠它区分「未安装」和「用的是系统里那份」
                 "source": source,
                 "exe_path": str(exe_path),
@@ -710,15 +750,42 @@ class UpdateCheckerWorker(QThread):
     def _get_remote_version(self, key: str) -> RemoteVersion:
         """查上游最新版本，再看清单能不能提供该版本的制品元数据。"""
         remote = self._fetch_remote_from_api(key)
+        if remote.channel == "sabr":
+            return remote
         return self._overlay_manifest(key, remote)
 
     def _fetch_remote_from_api(self, key: str) -> RemoteVersion:
-        channel_label = (
-            str(config_manager.get("ytdlp_channel", "stable")) if key == "yt-dlp" else ""
-        )
-        if channel_label not in {"", "stable", "nightly", "master"}:
-            channel_label = "stable"
+        channel_label = self.requested_channel if key == "yt-dlp" else ""
+        if channel_label not in ("", *YTDLP_CHANNELS):
+            channel_label = DEFAULT_YTDLP_CHANNEL
         data = self.check_session.release(key, channel_label or "stable")
+
+        if key == "yt-dlp" and channel_label == "sabr":
+            from .update_transport import UpdateError
+
+            assets = {a["name"]: a for a in data.get("assets", [])}
+            try:
+                info = self.check_session.transport.get_json(
+                    assets["BUILD_INFO.json"]["browser_download_url"]
+                )
+                digest = info["exe_sha256"]
+                asset_digest = assets["yt-dlp.exe"].get("digest")
+                if (
+                    info.get("release_repository") != SABR_REPOSITORY
+                    or info.get("tag") != data["tag_name"]
+                    or info.get("architecture") != "Windows x64"
+                    or info.get("variant") != "sabr-test"
+                    or not re.fullmatch(r"[0-9a-f]{64}", digest)
+                    or not re.fullmatch(r"[0-9a-f]{40}", info.get("source_sha", ""))
+                    or not re.fullmatch(r"\d{4}\.\d{2}\.\d{2}(?:\.\d+)?", info.get("version", ""))
+                    or (asset_digest and asset_digest != f"sha256:{digest}")
+                ):
+                    raise ValueError("SABR release identity mismatch")
+                return RemoteVersion(
+                    info["version"], "sabr", assets["yt-dlp.exe"]["browser_download_url"], digest
+                )
+            except (KeyError, TypeError, ValueError) as exc:
+                raise UpdateError("update_invalid_response") from exc
 
         if key == "yt-dlp":
             tag = data.get("tag_name", "unknown")

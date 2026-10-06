@@ -532,6 +532,15 @@ class VRFeature(DownloadFeature):
                 context.emit_warning(tr_text("VR 转码失败"))
                 # workfile 从未登记，随沙盒 `rmtree` 消失 —— 这里不需要（也不许）动它
 
+        # 证据分级守卫：投影仅为 inferred（avc1 捷径 / 标题线索猜出）时，不把可能猜错的
+        # 空间元数据固化进文件——宁可不写，也不要把 180 当 360 写死（plan E-5）。EAC 转码
+        # 只在 geometry 级的 proj=="eac" 触发，inferred 永远不是 eac，故转码路径不受影响。
+        confidence = str(opts.get("__vr_projection_confidence") or "").lower()
+        if confidence == "inferred":
+            context.emit_warning(tr_text("VR 投影未能确证，跳过空间元数据注入"))
+            context.output_path = target.path
+            return
+
         self._inject_meta(context, target, proj, opts)
         context.output_path = target.path
 

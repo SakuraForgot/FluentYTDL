@@ -40,6 +40,7 @@ from fluentytdl.ui.components.settings.app_update_card import AppUpdateSettingCa
 from fluentytdl.ui.components.settings.smart_setting_card import SmartSettingCard
 from fluentytdl.utils.localized_log import log_text
 from fluentytdl.utils.ui_text import tr_text
+from fluentytdl.utils.ytdlp_runtime import DEFAULT_YTDLP_CHANNEL, YTDLP_CHANNELS
 
 from ..core.config_manager import config_manager
 from ..core.dependency_manager import dependency_manager
@@ -1842,7 +1843,12 @@ class SettingsPage(QWidget):
             self.tr("yt-dlp 更新频道"),
             self.tr("选择 yt-dlp 版本的更新分支"),
             # 顺序必须与 _on_ytdlp_channel_changed / _load_settings 的 channel_map 一致
-            [self.tr("Stable (稳定版)"), self.tr("Nightly (每夜版)"), self.tr("Master (主线)")],
+            [
+                self.tr("Stable (稳定版)"),
+                self.tr("Nightly (每夜版)"),
+                self.tr("Master (主线)"),
+                self.tr("SABR Test (测试核心)"),
+            ],
             parent=self.coreGroup,
         )
         self.ytDlpChannelCard.comboBox.currentIndexChanged.connect(self._on_ytdlp_channel_changed)
@@ -2781,9 +2787,11 @@ class SettingsPage(QWidget):
         self.updateSourceCard.comboBox.blockSignals(False)
 
         # yt-dlp Update Channel
-        channel_map = ["stable", "nightly", "master"]
-        current_ch = str(config_manager.get("ytdlp_channel", "stable")).strip().lower()
-        ch_idx = channel_map.index(current_ch) if current_ch in channel_map else 0
+        channel_map = YTDLP_CHANNELS
+        current_ch = str(config_manager.get("ytdlp_channel", DEFAULT_YTDLP_CHANNEL)).strip().lower()
+        ch_idx = channel_map.index(
+            current_ch if current_ch in channel_map else DEFAULT_YTDLP_CHANNEL
+        )
         self.ytDlpChannelCard.comboBox.blockSignals(True)
         self.ytDlpChannelCard.comboBox.setCurrentIndex(ch_idx)
         self.ytDlpChannelCard.comboBox.blockSignals(False)
@@ -4202,8 +4210,40 @@ class SettingsPage(QWidget):
         )
 
     def _on_ytdlp_channel_changed(self, index: int) -> None:
-        channel_map = {0: "stable", 1: "nightly", 2: "master"}
-        mode = channel_map.get(index, "stable")
+        mode = YTDLP_CHANNELS[index] if 0 <= index < len(YTDLP_CHANNELS) else DEFAULT_YTDLP_CHANNEL
+        previous = str(config_manager.get("ytdlp_channel", DEFAULT_YTDLP_CHANNEL))
+        if mode == previous:
+            return
+
+        def restore_selection():
+            combo = self.ytDlpChannelCard.comboBox
+            combo.blockSignals(True)
+            combo.setCurrentIndex(
+                YTDLP_CHANNELS.index(
+                    previous if previous in YTDLP_CHANNELS else DEFAULT_YTDLP_CHANNEL
+                )
+            )
+            combo.blockSignals(False)
+
+        if dependency_manager.is_installing("yt-dlp"):
+            restore_selection()
+            InfoBar.warning(
+                self.tr("请稍候"), self.tr("yt-dlp 正在安装，请完成后再切换频道。"), parent=self
+            )
+            return
+        if mode == "sabr":
+            box = MessageBox(
+                self.tr("切换到 SABR 测试核心"),
+                self.tr(
+                    "测试核心主要面向普通视频；VR 现已支持（自动合并视频与音频流），仅直播解析仍暂时受限。\n\n确认后请点击 yt-dlp 引擎卡片中的“立即更新”，下载并安装测试核心。您可以随时切回官方频道。"
+                ),
+                self.window(),
+            )
+            box.yesButton.setText(self.tr("继续切换"))
+            box.cancelButton.setText(self.tr("取消"))
+            if not box.exec():
+                restore_selection()
+                return
         config_manager.set("ytdlp_channel", mode)
         # 立刻重新检查。以前只说一句「下次更新时生效」就完了 —— 而"下次"可能是 24
         # 小时后的启动检查，中间 yt-dlp 卡片一直显示旧频道的比较结果，用户以为没生效。

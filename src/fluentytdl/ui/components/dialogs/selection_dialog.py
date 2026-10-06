@@ -3027,6 +3027,7 @@ class SelectionDialog(MessageBoxBase):
                             if vr_id in selected_format:
                                 ydl_opts["__fluentytdl_use_android_vr"] = True
                                 ydl_opts["__android_vr_format_ids"] = android_vr_ids
+                                ydl_opts["__vr_only_format_ids"] = list(vr_only_ids)
                                 logger.debug(
                                     "get_selected_tasks: VR format {} detected, enabling android_vr client",
                                     vr_id,
@@ -3041,6 +3042,17 @@ class SelectionDialog(MessageBoxBase):
                     if self._vr_mode:
                         ydl_opts["__fluentytdl_use_android_vr"] = True
                         logger.debug("get_selected_tasks: VR mode, forcing android_vr client")
+
+                    # 能力画像随任务下传：下载端据此判断 android_vr 在当前核心下还
+                    # 推不推得动（见 youtube_service.plan_vr_download_client）。
+                    if ydl_opts.get("__fluentytdl_use_android_vr"):
+                        vr_capability = (info or {}).get("__vr_capability")
+                        if vr_capability:
+                            ydl_opts["__vr_capability"] = vr_capability
+                        # 可交付性判据要的是 android_vr 那一侧（仅证据触发补充后才存在）
+                        vr_capability_android = (info or {}).get("__vr_capability_android")
+                        if vr_capability_android:
+                            ydl_opts["__vr_capability_android"] = vr_capability_android
                 else:
                     # 修复：即使没有格式选择，也应该使用默认格式
                     logger.debug("get_selected_tasks: No format in selection, using default")
@@ -3330,6 +3342,13 @@ class SelectionDialog(MessageBoxBase):
                     opts["__android_vr_format_ids"] = data["detail"].get(
                         "__android_vr_format_ids", []
                     )
+                    # 能力画像供下载端判断 android_vr 在当前核心下是否可交付
+                    vr_capability = data["detail"].get("__vr_capability")
+                    if vr_capability:
+                        opts["__vr_capability"] = vr_capability
+                    vr_capability_android = data["detail"].get("__vr_capability_android")
+                    if vr_capability_android:
+                        opts["__vr_capability_android"] = vr_capability_android
 
             # NEW: Advanced selection
             if data.get("custom_selection_data"):
@@ -3668,7 +3687,9 @@ class SelectionDialog(MessageBoxBase):
             elif mode == 1:
                 # muxed-only
                 mid = self._single_selected_muxed_id
-                opts["format"] = str(mid) if mid else "best[acodec!=none][vcodec!=none]/best"
+                # 无 muxed 时不要停在裸 combined 选择器（SABR 核心无 combined，会硬失败）：
+                # 追加 bv*+ba/b 兜底，退到纯视频+纯音频合并。协议无关。
+                opts["format"] = str(mid) if mid else "best[acodec!=none][vcodec!=none]/bv*+ba/b"
             else:
                 # assemble
                 if self._single_selected_video_id and self._single_selected_audio_id:
