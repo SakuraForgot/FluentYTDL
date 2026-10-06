@@ -12,6 +12,26 @@ import gc  # noqa: E402
 import pytest  # noqa: E402
 
 
+@pytest.fixture
+def dispose_qt_widget():
+    """Destroy a test page while its Python owners and mocked services still exist."""
+    from PySide6.QtCore import QAbstractAnimation, QEvent
+    from PySide6.QtWidgets import QApplication, QWidget
+
+    def dispose(widget):
+        for animation in widget.findChildren(QAbstractAnimation):
+            animation.stop()
+        for child in widget.findChildren(QWidget):
+            if child.isWindow():
+                child.close()
+        widget.close()
+        widget.deleteLater()
+        QApplication.sendPostedEvents(widget, QEvent.Type.DeferredDelete)
+        QApplication.processEvents()
+
+    return dispose
+
+
 @pytest.fixture(autouse=True)
 def _stabilize_qt_stylesheet_registry(request):
     """windows_gui 串行 lane 专用：每个用例前后把 Qt 的样式表注册表冲稳。
