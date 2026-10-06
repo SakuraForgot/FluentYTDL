@@ -658,10 +658,23 @@ def _patch_vr_parse(monkeypatch, returns: list):
 
     monkeypatch.setattr(yt_mod, "resolve_yt_dlp_exe", lambda: "yt-dlp.exe")
     monkeypatch.setattr(yt_mod, "run_dump_single_json", fake_run)
-    monkeypatch.setattr(youtube_service, "build_ydl_options", lambda *a, **k: _fresh_default_opts())
-    monkeypatch.setattr(youtube_service, "_parse_cache_get", lambda *a, **k: None)
-    monkeypatch.setattr(youtube_service, "_parse_cache_put", lambda *a, **k: None)
+    # Patch the class: restoring an instance patch leaves a bound method that
+    # shadows later class patches in channel/cache tests sharing this singleton.
+    service_class = type(youtube_service)
+    monkeypatch.setattr(service_class, "build_ydl_options", lambda *a, **k: _fresh_default_opts())
+    monkeypatch.setattr(service_class, "_parse_cache_get", lambda *a, **k: None)
+    monkeypatch.setattr(service_class, "_parse_cache_put", lambda *a, **k: None)
     return calls
+
+
+def test_vr_parse_stubs_leave_later_class_patches_effective(monkeypatch):
+    with pytest.MonkeyPatch.context() as patch:
+        _patch_vr_parse(patch, [])
+        assert youtube_service.build_ydl_options() == _fresh_default_opts()
+    for name in ("build_ydl_options", "_parse_cache_get", "_parse_cache_put"):
+        sentinel = object()
+        monkeypatch.setattr(type(youtube_service), name, lambda *a, result=sentinel, **k: result)
+        assert getattr(youtube_service, name)() is sentinel
 
 
 def test_extract_vr_uses_default_clients_and_skips_supplement_on_explicit(monkeypatch):
@@ -684,7 +697,7 @@ def test_extract_vr_uses_default_clients_and_skips_supplement_on_explicit(monkey
     calls = _patch_vr_parse(monkeypatch, [main_info])
     supplement_calls: list = []
     monkeypatch.setattr(
-        youtube_service,
+        type(youtube_service),
         "_extract_vr_formats",
         lambda *a, **k: supplement_calls.append(1) or [],
     )
