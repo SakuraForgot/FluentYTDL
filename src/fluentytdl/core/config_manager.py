@@ -14,6 +14,7 @@ from ..utils.paths import (
     legacy_config_path,
     old_user_data_dir,
 )
+from ..utils.ytdlp_runtime import DEFAULT_YTDLP_CHANNEL
 
 
 class ConfigManager(QObject):
@@ -199,7 +200,7 @@ class ConfigManager(QObject):
         "rate_limit": "",
         "recent_target_url": "",
         "vr_eac_auto_convert": False,
-        "ytdlp_channel": "stable",
+        "ytdlp_channel": DEFAULT_YTDLP_CHANNEL,
         # === 补充第二批正则挖掘出的活跃配置 ===
         "clipboard_window_to_front": True,
         "failed_task_retention_days": 3,

@@ -15,10 +15,29 @@ from fetch_tools import REPOSITORIES
 
 class ReleaseSource:
     def __init__(self, repository: str):
-        endpoint = f"/repos/{repository}/releases/" + (
-            "tags/latest" if repository == REPOSITORIES["ffmpeg"] else "latest"
-        )
-        self.release = fetch_tools.github_api(endpoint)
+        if repository == fetch_tools.SABR_REPOSITORY:
+            releases = fetch_tools.github_api(f"/repos/{repository}/releases?per_page=100")
+            if not isinstance(releases, list):
+                raise RuntimeError("Invalid SABR release list")
+            candidates = [
+                release
+                for release in releases
+                if not release.get("draft")
+                and str(release.get("tag_name", "")).startswith("sabr-")
+                and {"yt-dlp.exe", "BUILD_INFO.json", "SHA256SUMS.txt"}
+                <= {asset.get("name") for asset in release.get("assets", [])}
+            ]
+            if not candidates:
+                raise RuntimeError("Cannot resolve latest complete SABR release")
+            self.release = max(
+                candidates,
+                key=lambda release: (release.get("published_at") or "", release.get("id", 0)),
+            )
+        else:
+            endpoint = f"/repos/{repository}/releases/" + (
+                "tags/latest" if repository == REPOSITORIES["ffmpeg"] else "latest"
+            )
+            self.release = fetch_tools.github_api(endpoint)
         if not self.release.get("id") or not self.release.get("assets"):
             raise RuntimeError(f"Cannot resolve latest assets: {repository}")
         self.repository = repository
@@ -72,10 +91,12 @@ def _resolve_component(
 ) -> dict:
     """Fetch one component through an isolated ReleaseSource (no shared globals)."""
     source = ReleaseSource(REPOSITORIES[key])
+    extra = {"release_tag": source.release["tag_name"]} if key == "yt-dlp" else {}
     version, files, asset = fetcher(
         destination / "bin" / subdir,
         download=source.download,
         asset_meta=source.asset_meta,
+        **extra,
     )
     if not version or version.lower() in ("unknown", "n/a"):
         raise RuntimeError(f"Cannot probe downloaded {key} version")
@@ -97,6 +118,9 @@ def _resolve_component(
         if key in ("yt-dlp", "deno"):
             asset["verification"] = "upstream-checksum"
         entry["asset"] = asset
+    if key == "yt-dlp":
+        entry["channel"] = "sabr"
+        entry["build_info"] = json.loads(files["BUILD_INFO.json"].read_text(encoding="utf-8"))
     previous = baseline.get(key)
     if previous is None:
         entry["drift"] = "new-component"

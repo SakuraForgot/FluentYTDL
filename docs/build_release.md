@@ -19,6 +19,8 @@ GUI 使用 `scripts/build_gui.cmd`。`--version` 仅覆盖此次构建，不修�
 
 每次非 spec 构建均从现有上游渠道解析最新 yt-dlp、FFmpeg/ffprobe、Deno、AtomicParsley、POT Provider，以及官方 7-Zip Extra。每组件只解析一次发布元数据，整个构建共用对应的字节。
 
+3.7.7-rc.1 默认核心为 SABR Test。yt-dlp 组件从 `SakuraForgot/yt-dlp-sabr-fix` 的公开 Release 列表按发布时间选择最新完整 `sabr-*` 发布；核对资产大小/digest、`SHA256SUMS.txt`、`BUILD_INFO.json` 以及 EXE 实测版本和 SABR 身份。快照记录来源提交、发布标签和文件哈希，包内保留核心构建信息及许可证。无法取得或校验失败时中止，不回退官方核心。其他组件仍沿用原有上游。
+
 `components/snapshot.json` 记录上游 release/tag、资产 ID、URL、版本、大小、SHA256、取得时间，以及落盘文件哈希。上游提供的资产摘要和校验文件必须验证；只有实测哈希时明确标记 observed-sha256。旧 TOOLS.lock.json 只是历史参考，不限制新版本或同版本上游资产刷新。无法取得最新或校验失败直接失败，不使用旧缓存顶替。
 
 ```powershell

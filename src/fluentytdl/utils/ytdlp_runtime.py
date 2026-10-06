@@ -13,6 +13,7 @@ from threading import Lock
 from .paths import find_bundled_executable, get_clean_env, is_frozen, locate_runtime_tool
 
 YTDLP_CHANNELS = ("stable", "nightly", "master", "sabr")
+DEFAULT_YTDLP_CHANNEL = "sabr"
 SABR_REPOSITORY = "SakuraForgot/yt-dlp-sabr-fix"
 
 

@@ -1412,9 +1412,7 @@ class YoutubeService:
         if max_height_fmt is not None:
             primary_proj = str(max_height_fmt.get("__vr_projection") or "unknown")
             primary_stereo = str(max_height_fmt.get("__vr_stereo_mode") or "unknown")
-            primary_confidence = str(
-                max_height_fmt.get("__vr_projection_confidence") or "inferred"
-            )
+            primary_confidence = str(max_height_fmt.get("__vr_projection_confidence") or "inferred")
 
         # 整表只有 inferred 证据（无 explicit/geometry）时，让标题/描述 hints 反推投影。
         # 这天然涵盖「完全没有 VR 信号」的情形，也堵住「整表 avc1 → 全判 equi」的错标。

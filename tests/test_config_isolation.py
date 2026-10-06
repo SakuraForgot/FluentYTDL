@@ -16,6 +16,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+import pytest
+
 os.environ.setdefault("FLUENTYTDL_DATA_DIR_OVERRIDE", tempfile.mkdtemp(prefix="fytdl-cfgiso-"))
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -92,3 +94,13 @@ def test_override_missing_config_yields_pure_defaults(monkeypatch, tmp_path):
 
     for key, default in ConfigManager.DEFAULT_CONFIG.items():
         assert loaded[key] == default, key
+
+
+@pytest.mark.parametrize("saved_channel", [None, "stable", "nightly", "master", "sabr"])
+def test_sabr_default_preserves_existing_channel_choice(monkeypatch, tmp_path, saved_channel):
+    path = tmp_path / "config.json"
+    data = {} if saved_channel is None else {"ytdlp_channel": saved_channel}
+    path.write_text(json.dumps(data), encoding="utf-8")
+    _patch_paths(monkeypatch, tmp_path, override=str(tmp_path), legacy=tmp_path / "legacy.json")
+    loaded = _load(monkeypatch, path)
+    assert loaded["ytdlp_channel"] == (saved_channel or "sabr")

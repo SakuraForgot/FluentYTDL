@@ -36,7 +36,10 @@ def _load_runtime_repositories() -> dict[str, str]:
     module = ast.parse(src)
 
     constants: dict[str, str] = {}
-    for node in module.body:
+    identity = ast.parse(
+        (ROOT / "src/fluentytdl/utils/ytdlp_runtime.py").read_text(encoding="utf-8")
+    )
+    for node in [*identity.body, *module.body]:
         if not isinstance(node, ast.Assign) or not isinstance(node.value, ast.Constant):
             continue
         if not isinstance(node.value.value, str):
@@ -275,15 +278,18 @@ class TestBinComponentArtifacts:
         仓库表已下沉到 scripts/fetch_tools.REPOSITORIES（构建期单一事实源），
         generate_manifest 从那里取值；运行时源是 update_transport.py 里按通道
         分键的 REPOSITORIES（dependency_manager 走它做失效切换）。两张表**故意
-        分开**——运行时额外带 nightly/master 通道——但每个共有组件的 stable 通道
+        分开**——运行时额外带 nightly/master 通道——但每个共有组件的默认通道
         必须逐字一致，否则清单声明的来源和运行时查询的来源对不上。
         """
+        from fluentytdl.utils.ytdlp_runtime import DEFAULT_YTDLP_CHANNEL
+
         runtime = _load_runtime_repositories()
         for component, repo in gm.REPOSITORIES.items():
             if component == "7zip":
                 continue  # 7zip 只在构建期用来解包，运行时不做在线更新
-            assert runtime[f"{component}:stable"] == repo, (
-                f"{component}: 清单={repo!r} 运行时={runtime.get(f'{component}:stable')!r}"
+            channel = DEFAULT_YTDLP_CHANNEL if component == "yt-dlp" else "stable"
+            assert runtime[f"{component}:{channel}"] == repo, (
+                f"{component}: 清单={repo!r} 运行时={runtime.get(f'{component}:{channel}')!r}"
             )
         # ffmpeg 必须来自 yt-dlp 的修复版构建，不是 BtbN 的
         assert gm.REPOSITORIES["ffmpeg"] == "yt-dlp/FFmpeg-Builds"

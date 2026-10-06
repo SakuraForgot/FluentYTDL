@@ -24,7 +24,7 @@ except ImportError:
 
 from ..utils.logger import logger
 from ..utils.paths import frozen_app_dir, get_clean_env, is_frozen
-from ..utils.ytdlp_runtime import SABR_REPOSITORY, YTDLP_CHANNELS
+from ..utils.ytdlp_runtime import DEFAULT_YTDLP_CHANNEL, SABR_REPOSITORY, YTDLP_CHANNELS
 from .config_manager import config_manager
 
 #: component_key → 在 PATH 上查找时试的可执行文件名（不含扩展名，交给 ``shutil.which``）。
@@ -274,7 +274,7 @@ class DependencyManager(QObject):
     def _on_check_finished(self, key, result):
         if key == "yt-dlp" and result.get("requested_channel") not in (
             None,
-            str(config_manager.get("ytdlp_channel", "stable")).strip(),
+            str(config_manager.get("ytdlp_channel", DEFAULT_YTDLP_CHANNEL)).strip(),
         ):
             # A channel selection changed while the old check was in flight.
             self._workers.pop(f"check_{key}", None)
@@ -355,7 +355,7 @@ class DependencyManager(QObject):
             return
         if component_key == "yt-dlp":
             info = self.components[component_key]
-            wanted = str(config_manager.get("ytdlp_channel", "stable")).strip()
+            wanted = str(config_manager.get("ytdlp_channel", DEFAULT_YTDLP_CHANNEL)).strip()
             if info.latest_channel != wanted:
                 # Never install a cached official URL after selecting SABR (or vice versa).
                 info.download_url = None
@@ -385,7 +385,7 @@ class DependencyManager(QObject):
         expected_version = self.components[component_key].latest_version or "unknown"
         expected_sha256 = self.components[component_key].expected_sha256 or ""
         expected_channel = (
-            str(config_manager.get("ytdlp_channel", "stable")).strip()
+            str(config_manager.get("ytdlp_channel", DEFAULT_YTDLP_CHANNEL)).strip()
             if component_key == "yt-dlp"
             else ""
         )
@@ -420,7 +420,9 @@ class DependencyManager(QObject):
         info = self.components.get(key)
         self._just_installed[key] = (
             str(info.latest_version or "") if info else "",
-            str(config_manager.get("ytdlp_channel", "stable")).strip() if key == "yt-dlp" else "",
+            str(config_manager.get("ytdlp_channel", DEFAULT_YTDLP_CHANNEL)).strip()
+            if key == "yt-dlp"
+            else "",
         )
 
         # Installed bytes invalidate shared version identity; path resolution is always fresh.
@@ -472,7 +474,9 @@ class UpdateCheckerWorker(QThread):
         super().__init__()
         self.key = key
         self.manager = manager
-        self.requested_channel = str(config_manager.get("ytdlp_channel", "stable")).strip()
+        self.requested_channel = str(
+            config_manager.get("ytdlp_channel", DEFAULT_YTDLP_CHANNEL)
+        ).strip()
         from .update_transport import configured_check
 
         self.check_session = check_session or configured_check()
@@ -753,7 +757,7 @@ class UpdateCheckerWorker(QThread):
     def _fetch_remote_from_api(self, key: str) -> RemoteVersion:
         channel_label = self.requested_channel if key == "yt-dlp" else ""
         if channel_label not in ("", *YTDLP_CHANNELS):
-            channel_label = "stable"
+            channel_label = DEFAULT_YTDLP_CHANNEL
         data = self.check_session.release(key, channel_label or "stable")
 
         if key == "yt-dlp" and channel_label == "sabr":

@@ -45,6 +45,7 @@ import tempfile
 import zipfile
 from pathlib import Path
 from urllib.error import HTTPError, URLError
+from urllib.parse import quote
 from urllib.request import Request, urlopen
 
 from hashing import sha256_file
@@ -68,8 +69,16 @@ TOOLS_LOCK = ROOT / "scripts" / "TOOLS.lock.json"
 # 组件 → GitHub 仓库的唯一事实源（最低层，供 component_snapshot / generate_manifest /
 # prepare_7zip import，避免各处手抄一份慢慢对不上）。src/ 里 update_transport.py 的
 # nightly/master 表和 collect_licenses.py 的许可证来源是**故意不同**的，不并入这里。
+SABR_REPOSITORY = "SakuraForgot/yt-dlp-sabr-fix"
+SABR_FILES = (
+    "yt-dlp.exe",
+    "BUILD_INFO.json",
+    "SHA256SUMS.txt",
+    "LICENSE",
+    "THIRD_PARTY_LICENSES.txt",
+)
 REPOSITORIES = {
-    "yt-dlp": "yt-dlp/yt-dlp",
+    "yt-dlp": SABR_REPOSITORY,
     "ffmpeg": "yt-dlp/FFmpeg-Builds",
     "deno": "denoland/deno",
     "atomicparsley": "wez/atomicparsley",
@@ -391,6 +400,55 @@ def fetch_yt_dlp(
     return version, {"yt-dlp.exe": dest_dir / "yt-dlp.exe"}, asset
 
 
+def fetch_sabr_yt_dlp(
+    dest_dir: Path,
+    *,
+    release_tag: str,
+    download=download_file,
+    asset_meta=asset_meta,
+) -> tuple[str, dict[str, Path], dict]:
+    """Fetch the resolved SABR release and verify its identity before execution."""
+    base = f"https://github.com/{SABR_REPOSITORY}/releases/download/{quote(release_tag, safe='')}/"
+    with tempfile.TemporaryDirectory() as tmp:
+        staging = Path(tmp)
+        for name in SABR_FILES:
+            download(base + name, staging / name)
+        info = json.loads((staging / "BUILD_INFO.json").read_text(encoding="utf-8"))
+        if (
+            info.get("release_repository") != SABR_REPOSITORY
+            or info.get("tag") != release_tag
+            or info.get("architecture") != "Windows x64"
+            or info.get("variant") != "sabr-test"
+            or not re.fullmatch(r"[0-9a-f]{40}", str(info.get("source_sha", "")))
+            or not re.fullmatch(r"[0-9a-f]{64}", str(info.get("exe_sha256", "")))
+            or not re.fullmatch(r"\d{4}\.\d{2}\.\d{2}(?:\.\d+)?", str(info.get("version", "")))
+        ):
+            raise RuntimeError("SABR release identity mismatch")
+        sums = (staging / "SHA256SUMS.txt").read_text(encoding="utf-8")
+        for name in SABR_FILES:
+            if name == "SHA256SUMS.txt":
+                continue
+            expected = parse_upstream_sha256(sums, name)
+            if not expected:
+                raise RuntimeError(f"SABR checksum missing: {name}")
+            assert_sha256(staging / name, expected, "SABR SHA256SUMS.txt")
+        exe = staging / "yt-dlp.exe"
+        assert_sha256(exe, info["exe_sha256"], "SABR BUILD_INFO.json")
+        version = probe_version(exe, ["--version"])
+        identity = probe_version(
+            exe,
+            ["--ignore-config", "--verbose"],
+            rf"yt-dlp version {re.escape(SABR_REPOSITORY)}@([^\s]+).*\(sabr-test",
+        )
+        if version != info["version"] or identity != version:
+            raise RuntimeError("SABR executable version/variant mismatch")
+        asset = asset_meta(base + "yt-dlp.exe", exe)
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        for name in SABR_FILES:
+            shutil.move(str(staging / name), str(dest_dir / name))
+    return version, {name: dest_dir / name for name in SABR_FILES}, asset
+
+
 def fetch_ffmpeg(
     dest_dir: Path, *, download=download_file, asset_meta=asset_meta
 ) -> tuple[str, dict[str, Path], dict | None]:
@@ -564,7 +622,7 @@ def fetch_pot_provider(
 # ============================================================================
 
 FETCHERS = [
-    ("yt-dlp", "yt-dlp", fetch_yt_dlp, ["yt-dlp.exe"], ("yt-dlp.exe", ["--version"], None)),
+    ("yt-dlp", "yt-dlp", fetch_sabr_yt_dlp, list(SABR_FILES), ("yt-dlp.exe", ["--version"], None)),
     (
         "ffmpeg",
         "ffmpeg",

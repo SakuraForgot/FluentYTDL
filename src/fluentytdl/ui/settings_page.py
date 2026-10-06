@@ -40,7 +40,7 @@ from fluentytdl.ui.components.settings.app_update_card import AppUpdateSettingCa
 from fluentytdl.ui.components.settings.smart_setting_card import SmartSettingCard
 from fluentytdl.utils.localized_log import log_text
 from fluentytdl.utils.ui_text import tr_text
-from fluentytdl.utils.ytdlp_runtime import YTDLP_CHANNELS
+from fluentytdl.utils.ytdlp_runtime import DEFAULT_YTDLP_CHANNEL, YTDLP_CHANNELS
 
 from ..core.config_manager import config_manager
 from ..core.dependency_manager import dependency_manager
@@ -2788,8 +2788,10 @@ class SettingsPage(QWidget):
 
         # yt-dlp Update Channel
         channel_map = YTDLP_CHANNELS
-        current_ch = str(config_manager.get("ytdlp_channel", "stable")).strip().lower()
-        ch_idx = channel_map.index(current_ch) if current_ch in channel_map else 0
+        current_ch = str(config_manager.get("ytdlp_channel", DEFAULT_YTDLP_CHANNEL)).strip().lower()
+        ch_idx = channel_map.index(
+            current_ch if current_ch in channel_map else DEFAULT_YTDLP_CHANNEL
+        )
         self.ytDlpChannelCard.comboBox.blockSignals(True)
         self.ytDlpChannelCard.comboBox.setCurrentIndex(ch_idx)
         self.ytDlpChannelCard.comboBox.blockSignals(False)
@@ -4208,8 +4210,8 @@ class SettingsPage(QWidget):
         )
 
     def _on_ytdlp_channel_changed(self, index: int) -> None:
-        mode = YTDLP_CHANNELS[index] if 0 <= index < len(YTDLP_CHANNELS) else "stable"
-        previous = str(config_manager.get("ytdlp_channel", "stable"))
+        mode = YTDLP_CHANNELS[index] if 0 <= index < len(YTDLP_CHANNELS) else DEFAULT_YTDLP_CHANNEL
+        previous = str(config_manager.get("ytdlp_channel", DEFAULT_YTDLP_CHANNEL))
         if mode == previous:
             return
 
@@ -4217,7 +4219,9 @@ class SettingsPage(QWidget):
             combo = self.ytDlpChannelCard.comboBox
             combo.blockSignals(True)
             combo.setCurrentIndex(
-                YTDLP_CHANNELS.index(previous) if previous in YTDLP_CHANNELS else 0
+                YTDLP_CHANNELS.index(
+                    previous if previous in YTDLP_CHANNELS else DEFAULT_YTDLP_CHANNEL
+                )
             )
             combo.blockSignals(False)
 
