@@ -268,7 +268,7 @@ def local_probe(
     bundle: PotBundle,
     deno: Path,
     *,
-    timeout: float = 12,
+    timeout: float = 60,
     cancel=None,
     on_process=None,
     check=None,
