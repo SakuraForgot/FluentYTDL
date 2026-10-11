@@ -300,12 +300,12 @@ Please select a solution:</translation>
 <context>
     <name>AudioLanguageMultiSelectCard</name>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="790"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="476"/>
         <source>设置首选音轨...</source>
         <translation>Set Preferred Audio Track...</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="799"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="485"/>
         <source>选择语言 (未设置)</source>
         <translation>Select Language (Not Set)</translation>
     </message>
@@ -313,52 +313,52 @@ Please select a solution:</translation>
 <context>
     <name>AudioLanguageSelectionDialog</name>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="619"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="305"/>
         <source>选择并排序首选音轨语言</source>
         <translation>Select and Order Preferred Audio Track Languages</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="620"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="306"/>
         <source>选中的语言越靠前，优先级越高。可拖拽调整顺序。</source>
         <translation>The higher the selected language, the higher the priority. Drag to reorder.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="636"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="322"/>
         <source>可选语言:</source>
         <translation>Available Languages:</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="648"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="334"/>
         <source>添加 &gt;&gt;</source>
         <translation>Add &gt;&gt;</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="649"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="335"/>
         <source>&lt;&lt; 移除</source>
         <translation>&lt;&lt; Remove</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="658"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="344"/>
         <source>已选排序 (拖拽调整):</source>
         <translation>Selected Order (Drag to reorder):</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="670"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="356"/>
         <source>自定义标签，如 pt-BR</source>
         <translation>Custom tag, e.g. pt-BR</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="673"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="359"/>
         <source>添加</source>
         <translation>Add</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="731"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="417"/>
         <source>标签无效</source>
         <translation>Invalid tag</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="732"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="418"/>
         <source>请输入合法的 BCP-47 语言标签，如 pt-BR</source>
         <translation>Enter a valid BCP-47 language tag, such as pt-BR</translation>
     </message>
@@ -825,248 +825,476 @@ If you continue using MP4, it&apos;s recommended for testing only.</translation>
 <context>
     <name>ComponentError</name>
     <message>
-        <location filename="../../src/fluentytdl/ui/components/settings/component_error_text.py" line="35"/>
-        <source>没能解析出下载地址，请检查网络或稍后重试</source>
+        <source>兼容组件包尚未发布，可导入已验证的本地组件包。</source>
         <extracomment>code → 未翻译的中文原文。真正的翻译在 `translate()` 里过 `QCoreApplication.translate`， 这里只用 `QT_TRANSLATE_NOOP` 标记源串 —— 模块级直接调 `tr()` 会在翻译器装好之前求值。</extracomment>
+        <translation type="vanished">A compatible bundle has not been published yet. You can import a verified local bundle.</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/ui/components/settings/component_error_text.py" line="34"/>
+        <source>POT 运行依赖准备失败，请检查网络后重试；详情见日志</source>
+        <extracomment>code → 未翻译的中文原文。真正的翻译在 `translate()` 里过 `QCoreApplication.translate`， 这里只用 `QT_TRANSLATE_NOOP` 标记源串 —— 模块级直接调 `tr()` 会在翻译器装好之前求值。</extracomment>
+        <translation>Could not prepare POT dependencies. Check the network and retry; see logs for details.</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/ui/components/settings/component_error_text.py" line="37"/>
+        <source>POT 运行依赖下载超时，请检查网络后重试</source>
+        <translation>POT dependency download timed out. Check the network and retry.</translation>
+    </message>
+    <message>
+        <source>未找到配套 ZIP，请将组件 JSON 清单与 ZIP 放在同一文件夹</source>
+        <translation type="vanished">Matching ZIP not found. Keep the component JSON and ZIP in the same folder.</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/ui/components/settings/component_error_text.py" line="40"/>
+        <source>未找到 Deno，请安装 Deno 组件或检查自定义路径</source>
+        <translation>Deno was not found. Install the Deno component or check your custom path.</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/ui/components/settings/component_error_text.py" line="43"/>
+        <source>Deno 无法运行，请修复 Deno 组件或检查自定义路径</source>
+        <translation>Deno could not run. Repair the Deno component or check your custom path.</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/ui/components/settings/component_error_text.py" line="46"/>
+        <source>无法写入组件安装目录，请检查目录权限</source>
+        <translation>Cannot write to the component directory. Check its permissions.</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/ui/components/settings/component_error_text.py" line="50"/>
+        <source>没能解析出下载地址，请检查网络或稍后重试</source>
         <translation>Could not resolve a download URL. Check your network or try again later.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/components/settings/component_error_text.py" line="38"/>
+        <location filename="../../src/fluentytdl/ui/components/settings/component_error_text.py" line="53"/>
         <source>无法启动更新进程</source>
         <translation>Could not start the update process.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/components/settings/component_error_text.py" line="39"/>
+        <location filename="../../src/fluentytdl/ui/components/settings/component_error_text.py" line="54"/>
         <source>更新进程异常退出</source>
         <translation>The update process exited unexpectedly.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/components/settings/component_error_text.py" line="40"/>
-        <location filename="../../src/fluentytdl/ui/components/settings/component_error_text.py" line="49"/>
+        <location filename="../../src/fluentytdl/ui/components/settings/component_error_text.py" line="55"/>
+        <location filename="../../src/fluentytdl/ui/components/settings/component_error_text.py" line="81"/>
         <source>更新失败，详情见日志</source>
         <translation>Update failed. See the log for details.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/components/settings/component_error_text.py" line="41"/>
+        <location filename="../../src/fluentytdl/ui/components/settings/component_error_text.py" line="56"/>
         <source>下载长时间无响应，已中止</source>
         <translation>The download stopped responding and was aborted.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/components/settings/component_error_text.py" line="43"/>
+        <location filename="../../src/fluentytdl/ui/components/settings/component_error_text.py" line="58"/>
         <source>更新进程收到了无效参数</source>
         <translation>The update process received invalid arguments.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/components/settings/component_error_text.py" line="44"/>
+        <location filename="../../src/fluentytdl/ui/components/settings/component_error_text.py" line="59"/>
         <source>更新进程缺少必要参数</source>
         <translation>The update process is missing required arguments.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/components/settings/component_error_text.py" line="45"/>
+        <location filename="../../src/fluentytdl/ui/components/settings/component_error_text.py" line="60"/>
         <source>文件校验失败，下载内容可能被篡改或损坏</source>
         <translation>File verification failed. The download may be corrupted or tampered with.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/components/settings/component_error_text.py" line="48"/>
+        <location filename="../../src/fluentytdl/ui/components/settings/component_error_text.py" line="63"/>
         <source>下载失败，请检查网络或代理设置</source>
         <translation>Download failed. Check your network or proxy settings.</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/ui/components/settings/component_error_text.py" line="64"/>
+        <source>组件准备失败，详情见日志</source>
+        <translation>Component preparation failed. See logs for details.</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/ui/components/settings/component_error_text.py" line="65"/>
+        <source>组件文件无效或无法运行，现有组件已保留</source>
+        <translation>The component file is invalid or cannot run. The existing component was kept.</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/ui/components/settings/component_error_text.py" line="68"/>
+        <source>组件替换失败，已尝试恢复原版本，请检查文件占用和目录权限</source>
+        <translation>Component replacement failed and rollback was attempted. Check file locks and directory permissions.</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/ui/components/settings/component_error_text.py" line="71"/>
+        <source>更新进程未确认安装完成，请重试</source>
+        <translation>The updater did not confirm installation. Please retry.</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/ui/components/settings/component_error_text.py" line="74"/>
+        <source>Deno 与 POT 不兼容，现有组件已保留</source>
+        <translation>Deno is incompatible with POT. The existing component was kept.</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/ui/components/settings/component_error_text.py" line="77"/>
+        <source>yt-dlp 与 POT 插件不兼容，现有组件已保留</source>
+        <translation>yt-dlp is incompatible with the POT plugin. The existing component was kept.</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/ui/components/settings/component_error_text.py" line="80"/>
+        <source>POT 组件元数据无效，未安装此更新</source>
+        <translation>POT component metadata is invalid. This update was not installed.</translation>
     </message>
 </context>
 <context>
     <name>ComponentSettingCard</name>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="338"/>
+        <location filename="../../src/fluentytdl/ui/components/settings/component_card.py" line="207"/>
         <source>已是最新</source>
         <translation>Up to Date</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="119"/>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="316"/>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="329"/>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="333"/>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="367"/>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="386"/>
+        <location filename="../../src/fluentytdl/ui/components/settings/component_card.py" line="57"/>
+        <location filename="../../src/fluentytdl/ui/components/settings/component_card.py" line="253"/>
         <source>检查更新</source>
-        <extracomment>音轨策略下拉的项序。存盘的是 code（`original_first` 等），不是下拉的索引 —— 索引会随以后增删选项漂移，而 code 不会。 按钮当前代表的动作。以前 `_on_action_clicked()` 是拿 `actionButton.text()` 去和 `self.tr(&quot;检查更新&quot;)` 之类比字符串来决定干什么 —— 换界面语言、或者 setText 和 点击之间插进一个信号，就会点错动作（甚至什么都不做）。状态显式存下来。</extracomment>
         <translation>Check for Updates</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="122"/>
         <source>手动导入</source>
-        <translation>Manual Import</translation>
+        <translation type="vanished">Manual Import</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="123"/>
         <source>选择本地文件覆盖当前组件</source>
-        <translation>Select local file to overwrite current component</translation>
+        <translation type="vanished">Select local file to overwrite current component</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="130"/>
+        <location filename="../../src/fluentytdl/ui/components/settings/component_card.py" line="251"/>
+        <source>安装组件</source>
+        <translation>Install</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/ui/components/settings/component_card.py" line="69"/>
+        <source>本地导入</source>
+        <translation>Import file</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/ui/components/settings/component_card.py" line="71"/>
         <source>打开所在文件夹</source>
         <translation>Open Containing Folder</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="290"/>
+        <source>选择 POT 组件 JSON 清单（配套 ZIP 须在同一文件夹）</source>
+        <translation type="vanished">Select POT component JSON (keep the matching ZIP in the same folder)</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/ui/components/settings/component_card.py" line="151"/>
+        <source>选择 {0}</source>
+        <translation>Select {0}</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/ui/components/settings/component_card.py" line="165"/>
+        <source>组件目录尚未创建</source>
+        <translation>The component folder has not been created.</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/ui/components/settings/component_card.py" line="168"/>
+        <source>无法打开目录</source>
+        <translation>Cannot open folder</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/ui/components/settings/component_card.py" line="187"/>
+        <source>版本无法读取</source>
+        <translation>Version unavailable</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/ui/components/settings/component_card.py" line="189"/>
+        <source>未安装</source>
+        <translation>Not Installed</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/ui/components/settings/component_card.py" line="191"/>
+        <source>正在读取…</source>
+        <translation>Reading…</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/ui/components/settings/component_card.py" line="203"/>
+        <source>当前：{0}</source>
+        <translation>Installed: {0}</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/ui/components/settings/component_card.py" line="195"/>
+        <source>未检查</source>
+        <translation>Not checked</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/ui/components/settings/component_card.py" line="197"/>
+        <source>暂无可安装包</source>
+        <translation>No package available</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/ui/components/settings/component_card.py" line="214"/>
+        <source>组件包：{0}</source>
+        <translation>Bundle: {0}</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/ui/components/settings/component_card.py" line="62"/>
+        <source>运行状态</source>
+        <translation>Status</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/ui/components/settings/component_card.py" line="77"/>
+        <location filename="../../src/fluentytdl/ui/components/settings/component_card.py" line="237"/>
+        <source>启用 POT</source>
+        <translation>Enable POT</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/ui/components/settings/component_card.py" line="147"/>
+        <source>选择 POT 上游 Release ZIP</source>
+        <translation>Select the upstream POT Release ZIP</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/ui/components/settings/component_card.py" line="216"/>
+        <source>上游版本：{0}</source>
+        <translation>Upstream version: {0}</translation>
+    </message>
+    <message>
+        <source>兼容组件包尚未发布，可导入已验证的本地组件包。</source>
+        <translation type="vanished">A compatible bundle has not been published yet. You can import a verified local bundle.</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/ui/components/settings/component_card.py" line="218"/>
+        <source>需要原版 POT 配套组件；旧 Rust 组件不能用于此版本。</source>
+        <translation>Requires the original POT bundle. The legacy Rust provider is incompatible with this version.</translation>
+    </message>
+    <message>
+        <source>组件包已导入，等待加载验证。</source>
+        <translation type="vanished">Bundle imported. Waiting for loading and verification.</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/ui/components/settings/component_card.py" line="220"/>
+        <source>当前使用自定义路径；更新只写入托管目录。</source>
+        <translation>A custom executable is in use. Updates install to the managed folder.</translation>
+    </message>
+    <message>
+        <source>正在使用 POT 组件包内的 Deno。</source>
+        <translation type="vanished">Using Deno from the POT bundle.</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/ui/components/settings/component_card.py" line="222"/>
+        <source>本地导入时，ffmpeg.exe 与 ffprobe.exe 须在同一文件夹。</source>
+        <translation>For local imports, keep ffmpeg.exe and ffprobe.exe in the same folder.</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/ui/components/settings/component_card.py" line="237"/>
+        <source>停用 POT</source>
+        <translation>Disable POT</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/ui/components/settings/component_card.py" line="247"/>
+        <source>正在检查…</source>
+        <translation>Checking…</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/ui/components/settings/component_card.py" line="249"/>
         <source>立即更新</source>
         <translation>Update Now</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="331"/>
+        <location filename="../../src/fluentytdl/ui/components/settings/component_card.py" line="258"/>
+        <source>正在准备运行依赖…</source>
+        <translation>Preparing runtime dependencies…</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/ui/components/settings/component_card.py" line="259"/>
+        <source>正在验证组件…</source>
+        <translation>Verifying component…</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/ui/components/settings/component_card.py" line="260"/>
+        <source>连接失败，正在重试…</source>
+        <translation>Connection failed. Retrying…</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/ui/components/settings/component_card.py" line="245"/>
+        <location filename="../../src/fluentytdl/ui/components/settings/component_card.py" line="262"/>
+        <source>正在安装…</source>
+        <translation>Installing…</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/ui/components/settings/component_card.py" line="265"/>
+        <source>正在下载：{0}%</source>
+        <translation>Downloading: {0}%</translation>
+    </message>
+    <message>
+        <source>检查中</source>
+        <translation type="vanished">Checking</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/ui/components/settings/component_card.py" line="267"/>
+        <source>操作失败</source>
+        <translation>Operation failed</translation>
+    </message>
+    <message>
+        <source>有可用更新</source>
+        <translation type="vanished">Update available</translation>
+    </message>
+    <message>
+        <source>已安装</source>
+        <translation type="vanished">Installed</translation>
+    </message>
+    <message>
+        <source>待安装</source>
+        <translation type="vanished">Not installed</translation>
+    </message>
+    <message>
+        <source>读取本地版本</source>
+        <translation type="vanished">Reading local version</translation>
+    </message>
+    <message>
+        <source>操作失败：{0}</source>
+        <translation type="vanished">Operation failed: {0}</translation>
+    </message>
+    <message>
         <source>立即安装</source>
-        <translation>Install Now</translation>
+        <translation type="vanished">Install Now</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="201"/>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="227"/>
         <source>错误</source>
-        <translation>Error</translation>
+        <translation type="vanished">Error</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="201"/>
         <source>所选文件为空</source>
-        <translation>Selected file is empty</translation>
+        <translation type="vanished">Selected file is empty</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="207"/>
         <source>导入成功</source>
-        <translation>Import Successful</translation>
+        <translation type="vanished">Import Successful</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="207"/>
         <source>已手动导入 {}</source>
-        <translation>Manually imported {}</translation>
+        <translation type="vanished">Manually imported {}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="213"/>
         <source>导入失败</source>
-        <translation>Import Failed</translation>
+        <translation type="vanished">Import Failed</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="224"/>
         <source>目录不存在</source>
-        <translation>Directory not found</translation>
+        <translation type="vanished">Directory not found</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="224"/>
         <source>{} 尚未创建</source>
-        <translation>{} is not yet created</translation>
+        <translation type="vanished">{} is not yet created</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="232"/>
         <source>正在检查...</source>
-        <translation>Checking...</translation>
+        <translation type="vanished">Checking...</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="265"/>
         <source>版本检测超时</source>
-        <translation>Version detection timed out</translation>
+        <translation type="vanished">Version detection timed out</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="267"/>
         <source>版本未知</source>
-        <translation>Unknown version</translation>
+        <translation type="vanished">Unknown version</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="274"/>
         <source>当前: {}  |  最新: {}</source>
-        <translation>Current: {}  |  Latest: {}</translation>
+        <translation type="vanished">Current: {}  |  Latest: {}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="276"/>
         <source>  |  来源: 自定义路径</source>
-        <translation>  |  Source: custom path</translation>
+        <translation type="vanished">  |  Source: custom path</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="278"/>
         <source>
 实际使用: {}
 托管安装目标: {}</source>
-        <translation>
+        <translation type="vanished">
 Active executable: {}
 Managed installation target: {}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="282"/>
         <source>  |  来源: 系统 PATH</source>
-        <translation>  |  Source: system PATH</translation>
+        <translation type="vanished">  |  Source: system PATH</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="294"/>
         <source>将从 {} 频道切换到 {} 频道（版本 {} → {}）</source>
-        <translation>Will switch from the {} channel to the {} channel (version {} → {})</translation>
+        <translation type="vanished">Will switch from the {} channel to the {} channel (version {} → {})</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="300"/>
         <source>
 更新仅安装到托管目录；当前自定义内核不会被替换或自动切换。</source>
-        <translation>
+        <translation type="vanished">
 Updates are installed only in the managed directory. The active custom executable is not replaced or switched.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="304"/>
         <source>
 当前使用的是系统 PATH 上的版本，更新会在应用自带目录下安装一份并优先使用。</source>
-        <translation>
+        <translation type="vanished">
 Currently using the version found on your system PATH. Updating will install a copy in the app&apos;s own directory and prefer that one.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="307"/>
         <source>切换频道: {}</source>
-        <translation>Switch channel: {}</translation>
+        <translation type="vanished">Switch channel: {}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="309"/>
         <source>发现新版本: {}</source>
-        <translation>New Version Found: {}</translation>
+        <translation type="vanished">New Version Found: {}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="374"/>
+        <location filename="../../src/fluentytdl/ui/components/settings/component_card.py" line="261"/>
+        <source>等待当前任务结束</source>
+        <translation>Waiting for active tasks to finish</translation>
+    </message>
+    <message>
         <source>{} 已成功安装/更新到托管目录；实际使用版本以重新检查结果为准。</source>
-        <translation>{} was installed/updated in the managed directory. The next check will report the active version.</translation>
+        <translation type="vanished">{} was installed/updated in the managed directory. The next check will report the active version.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="298"/>
         <source>版本 {} 可用 (当前: {})</source>
-        <translation>Version {} available (Current: {})</translation>
+        <translation type="vanished">Version {} available (Current: {})</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="320"/>
+        <location filename="../../src/fluentytdl/ui/components/settings/component_card.py" line="66"/>
+        <source>更多</source>
+        <translation>More</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/ui/components/settings/component_card.py" line="68"/>
+        <source>修复组件</source>
+        <translation>Repair component</translation>
+    </message>
+    <message>
+        <source>修复当前组件或导入本地文件</source>
+        <translation type="vanished">Repair the current component or import a local file</translation>
+    </message>
+    <message>
         <source>检查失败</source>
-        <translation>Check Failed</translation>
+        <translation type="vanished">Check Failed</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="321"/>
         <source>无法获取 {} 的最新版本信息，请检查网络连接或更换镜像源。</source>
-        <translation>Could not retrieve the latest version info for {}. Check your network connection or switch the mirror source.</translation>
+        <translation type="vanished">Could not retrieve the latest version info for {}. Check your network connection or switch the mirror source.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="339"/>
         <source>{} 当前版本 {} 已是最新。</source>
-        <translation>{} current version {} is up to date.</translation>
+        <translation type="vanished">{} current version {} is up to date.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="350"/>
         <source>正在下载...</source>
-        <translation>Downloading...</translation>
+        <translation type="vanished">Downloading...</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="360"/>
         <source>正在安装...</source>
-        <translation>Installing...</translation>
+        <translation type="vanished">Installing...</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="373"/>
         <source>安装完成</source>
-        <translation>Installation Complete</translation>
+        <translation type="vanished">Installation Complete</translation>
     </message>
     <message>
         <source>{} 已成功安装/更新。</source>
         <translation type="vanished">{} successfully installed/updated.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="394"/>
         <source>{} 错误</source>
-        <translation>{} Error</translation>
+        <translation type="vanished">{} Error</translation>
     </message>
     <message>
         <source>无法获取 {title_text} 的最新版本信息，请检查网络连接或更换镜像源。</source>
@@ -4957,13 +5185,13 @@ Unified file: {}</translation>
 <context>
     <name>LanguageMultiSelectCard</name>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="565"/>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="576"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="251"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="262"/>
         <source>选择语言</source>
         <translation>Select Language</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="587"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="273"/>
         <source> 等 {} 种语言</source>
         <translation> and {} more languages</translation>
     </message>
@@ -4971,17 +5199,18 @@ Unified file: {}</translation>
 <context>
     <name>LanguageSelectionDialog</name>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="460"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="146"/>
         <source>选择字幕语言</source>
+        <extracomment>音轨策略下拉的项序。存盘的是 code（`original_first` 等），不是下拉的索引 —— 索引会随以后增删选项漂移，而 code 不会。</extracomment>
         <translation>Select Subtitle Languages</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="475"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="161"/>
         <source>请选择字幕语言偏好（可多选）：</source>
         <translation>Select your subtitle language preferences (multiple allowed):</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="483"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="169"/>
         <source>这里选的是偏好，不是精确代码。下载时会匹配视频上真实存在的字幕轨 —— 选「英语 (en)」也能拿到 en-GB、en-US，以及由英语自动生成/翻译的轨道。</source>
         <translation>These are preferences, not exact codes. At download time they are matched against the caption tracks the video actually has — picking &quot;English (en)&quot; also gets you en-GB, en-US, and tracks auto-generated or auto-translated from English.</translation>
     </message>
@@ -5213,32 +5442,32 @@ Unified file: {}</translation>
         <translation type="vanished">Software Update</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="432"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="435"/>
         <source>新建任务</source>
         <translation>New Task</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="440"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="443"/>
         <source>批量快速下载</source>
         <translation>Batch Download</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="448"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="451"/>
         <source>VR 下载</source>
         <translation>VR Download</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="456"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="459"/>
         <source>频道下载</source>
         <translation>Channel Download</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="464"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="467"/>
         <source>字幕下载</source>
         <translation>Subtitle Download</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="472"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="475"/>
         <source>封面下载</source>
         <translation>Cover Download</translation>
     </message>
@@ -5251,22 +5480,22 @@ Unified file: {}</translation>
         <translation type="vanished">Download History</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="489"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="492"/>
         <source>设置</source>
         <translation>Settings</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="557"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="560"/>
         <source>全部开始</source>
         <translation>Start All</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="558"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="561"/>
         <source>全部暂停</source>
         <translation>Pause All</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="559"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="562"/>
         <source>打开下载目录</source>
         <translation>Open Download Directory</translation>
     </message>
@@ -5275,7 +5504,7 @@ Unified file: {}</translation>
         <translation type="vanished">Clear Completed/Failed Records</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1587"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1590"/>
         <source>清空全部任务</source>
         <translation>Clear All Tasks</translation>
     </message>
@@ -5292,121 +5521,121 @@ Unified file: {}</translation>
         <translation type="vanished">Exit Batch</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="620"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="623"/>
         <source>显示主界面</source>
         <translation>Show Main Interface</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="622"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="625"/>
         <source>退出</source>
         <translation>Exit</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="709"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="712"/>
         <source>检测到视频链接</source>
         <translation>Detected Video Link</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="709"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="712"/>
         <source>检测到 YouTube 播放列表</source>
         <translation>YouTube Playlist Detected</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="715"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="718"/>
         <source>点击处理</source>
         <translation>Click to Process</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="724"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="727"/>
         <source>正在准备解析...</source>
         <translation>Preparing to parse...</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="796"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="799"/>
         <source>打开窗口失败</source>
         <translation>Failed to open window</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="920"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="923"/>
         <source>解析中</source>
         <translation>Parsing</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="920"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="923"/>
         <source>正在获取资源信息...</source>
         <translation>Fetching resource info...</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="931"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="934"/>
         <source>解析失败</source>
         <translation>Failed to Load Details</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="936"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="939"/>
         <source>快速下载失败</source>
         <translation>Quick Download Failed</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1053"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1056"/>
         <source>取消下载任务</source>
         <translation>Cancel Download Task</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1054"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1057"/>
         <source>此任务正在下载中。确定要取消该任务吗？</source>
         <translation>This task is downloading. Are you sure you want to cancel it?</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1056"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1059"/>
         <source>确定取消</source>
         <translation>Confirm Cancel</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1057"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1060"/>
         <source>暂不取消</source>
         <translation>Do Not Cancel Yet</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1061"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1064"/>
         <source>同时清理未完成的临时缓存文件</source>
         <translation>Also clean up unfinished temporary cache files</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1073"/>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1490"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1076"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1493"/>
         <source>删除任务</source>
         <translation>Delete Task</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1078"/>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1095"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1081"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1098"/>
         <source>确定要从列表中移除此任务记录吗？</source>
         <translation>Are you sure you want to remove this task record from the list?</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1080"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1083"/>
         <source>删除</source>
         <translation>Delete</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1081"/>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1098"/>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1409"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1084"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1101"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1412"/>
         <source>取消</source>
         <translation>Cancel</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1085"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1088"/>
         <source>同时删除已下载的本地文件</source>
         <translation>Also delete downloaded local files</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1097"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1100"/>
         <source>删除记录</source>
         <translation>Delete Record</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1564"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1567"/>
         <source>清空记录</source>
         <translation>Clear Records</translation>
     </message>
@@ -5417,62 +5646,62 @@ Unified file: {}</translation>
 If tasks are downloading, they will be cancelled. (Local files will not be deleted)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="480"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="483"/>
         <source>任务</source>
         <translation>Tasks</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="484"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="487"/>
         <source>媒体信息</source>
         <translation>Media Info</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="563"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="566"/>
         <source>清空已完成/已失败记录（当前筛选）</source>
         <translation>Clear completed/failed records (current filter)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="566"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="569"/>
         <source>清空全部任务（当前筛选）</source>
         <translation>Clear all tasks (current filter)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1222"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1225"/>
         <source>无法直接重新下载</source>
         <translation>Cannot be re-downloaded directly</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1223"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1226"/>
         <source>这条记录缺少下载参数，请用右键菜单的「重新解析」重建任务</source>
         <translation>This record is missing its download parameters; use &quot;Re-parse&quot; in the context menu to rebuild the task</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1282"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1285"/>
         <source>已选择的 {n} 项</source>
         <translation>the {n} selected</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1283"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1286"/>
         <source>当前筛选「{name}」的 {n} 项</source>
         <translation>the {n} under the current filter &quot;{name}&quot;</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1363"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1366"/>
         <source>{n} 项无法直接重新下载</source>
         <translation>{n} cannot be re-downloaded directly</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1364"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1367"/>
         <source>这些记录缺少下载参数，请用右键菜单的「重新解析」重建任务</source>
         <translation>These records are missing their download parameters; use &quot;Re-parse&quot; in the context menu to rebuild the tasks</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1401"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1404"/>
         <source>降低画质重试</source>
         <translation>Retry at lower quality</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1403"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1406"/>
         <source>即将把{scope}的画质预设降低一档后重新下载。
 
 严格档位（如 1080p 严格）在片源没有该档位时会直接失败，降一档通常就能下成。</source>
@@ -5481,101 +5710,101 @@ If tasks are downloading, they will be cancelled. (Local files will not be delet
 A strict tier (such as 1080p strict) fails outright when the source has no such tier; stepping down one level usually succeeds.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1407"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1410"/>
         <source>自动降档重试</source>
         <translation>Auto-downgrade and Retry</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1409"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1412"/>
         <source>手动调整</source>
         <translation>Manual Adjust</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1442"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1445"/>
         <source>已降档重试 {n} 项</source>
         <translation>Stepped down and retried {n}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1443"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1446"/>
         <source>新档位：{heights}</source>
         <translation>New tier: {heights}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1453"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1456"/>
         <source>无法继续降档</source>
         <translation>Cannot downgrade further</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1454"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1457"/>
         <source>已是最低预设档位，建议用「重新解析」手动调整格式。</source>
         <translation>Already at the lowest preset tier — use &quot;Re-parse&quot; to adjust the format by hand.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1461"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1464"/>
         <source>{n} 项无法降档</source>
         <translation>{n} cannot be stepped down</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1463"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1466"/>
         <source>这些任务不是严格画质档位（或已是最低档），请用「重新解析」手动调整</source>
         <translation>These tasks are not on a strict quality tier (or are already at the lowest); use &quot;Re-parse&quot; to adjust them by hand</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1487"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1490"/>
         <source>即将删除{scope}，并一并删除它们已下载的本地文件。
 此操作不可撤销。</source>
         <translation>About to delete {scope} along with the local files they have already downloaded.
 This cannot be undone.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1489"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1492"/>
         <source>即将删除{scope}的任务记录。
 (不会删除本地文件)</source>
         <translation>About to delete the task records of {scope}.
 (Local files are not deleted)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1499"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1502"/>
         <source>开始</source>
         <translation>Start</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1506"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1509"/>
         <source>暂停</source>
         <translation>Pause</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1515"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1518"/>
         <source>{verb}任务</source>
         <translation>{verb} tasks</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1516"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1519"/>
         <source>作用域：{scope}</source>
         <translation>Scope: {scope}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1544"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1547"/>
         <source>没有可清空的记录</source>
         <translation>No records to clear</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1545"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1548"/>
         <source>当前筛选「{name}」下没有已完成或已失败的任务</source>
         <translation>No completed or failed tasks under the current filter &quot;{name}&quot;</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1556"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1559"/>
         <source>{n} 个已完成</source>
         <translation>{n} completed</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1558"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1561"/>
         <source>{n} 个已失败/已取消</source>
         <translation>{n} failed/cancelled</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1561"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1564"/>
         <source>作用域：{scope}。
 即将清空其中 {parts} 的任务记录。
 (不会删除本地文件)</source>
@@ -5584,7 +5813,7 @@ About to clear the task records of {parts} within it.
 (Local files are not deleted)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1584"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1587"/>
         <source>作用域：{scope}。
 即将清空这些任务的记录，其中正在下载的会被一并取消。
 (不会删除本地文件)</source>
@@ -5593,12 +5822,12 @@ About to clear these task records; any that are still downloading will be cancel
 (Local files are not deleted)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1628"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1631"/>
         <source>帮助中心</source>
         <translation>Help Center</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1637"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1640"/>
         <source>消息中心</source>
         <translation>Message Center</translation>
     </message>
@@ -5615,57 +5844,57 @@ About to clear these task records; any that are still downloading will be cancel
         <translation type="vanished">[AdminMode] Login mode (WebView2), skipping auto-refresh (User interaction required)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1804"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1807"/>
         <source>管理员模式</source>
         <translation>Administrator Mode</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1821"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1824"/>
         <source>Cookie提取成功</source>
         <translation>Cookie Extraction Successful</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1829"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1832"/>
         <source>Cookie提取失败</source>
         <translation>Cookie Extraction Failed</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1885"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1888"/>
         <source>新 Cookie 不可用，仍在使用旧文件。原因：</source>
         <translation>The new cookies are unusable; still using the old file. Reason: </translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1902"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1905"/>
         <source>Cookie 即将过期，建议尽快刷新</source>
         <translation>Cookies are about to expire; refresh them soon</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1906"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1909"/>
         <source>Cookie 将在约 {} 小时后过期，建议提前刷新</source>
         <translation>Cookies expire in about {} hours; refresh them ahead of time</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1907"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1910"/>
         <source>Cookie 将在约 {} 分钟后过期，建议立即刷新</source>
         <translation>Cookies expire in about {} minutes; refresh them now</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1916"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1919"/>
         <source>{} Cookie 需要处理</source>
         <translation>{} cookies need attention</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1918"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1921"/>
         <source>{} Cookie 提醒</source>
         <translation>{} cookie reminder</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1938"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1941"/>
         <source>去刷新</source>
         <translation>Refresh now</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="2006"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="2009"/>
         <source>已恢复 {0} 个挂起的任务</source>
         <translation>Resumed {0} suspended tasks</translation>
     </message>
@@ -5686,7 +5915,7 @@ About to clear these task records; any that are still downloading will be cancel
         <translation type="vanished">Cookie file not imported yet</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1870"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1873"/>
         <source>Cookie 无效</source>
         <translation>Invalid Cookie</translation>
     </message>
@@ -5729,17 +5958,17 @@ About to clear these task records; any that are still downloading will be cancel
         <translation type="vanished">Later</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1950"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1953"/>
         <source>字幕未完全下载</source>
         <translation>Subtitles were not fully downloaded</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1974"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="1977"/>
         <source>去处理</source>
         <translation>Fix it</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="2005"/>
+        <location filename="../../src/fluentytdl/ui/reimagined_main_window.py" line="2008"/>
         <source>操作成功</source>
         <translation>Success</translation>
     </message>
@@ -6006,25 +6235,25 @@ About to clear these task records; any that are still downloading will be cancel
 <context>
     <name>NotificationFlyoutView</name>
     <message>
-        <location filename="../../src/fluentytdl/ui/notification_panel.py" line="372"/>
+        <location filename="../../src/fluentytdl/ui/notification_panel.py" line="379"/>
         <source>消息中心</source>
         <extracomment>请求把这份列表甩到独立窗口里。由主窗口接 —— 只有它握着 `Flyout` 的句柄， 要先把浮窗关掉再开窗口，否则新窗口一拿到焦点，浮窗就自己消失，看着像闪了一下。</extracomment>
         <translation>Message Center</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/notification_panel.py" line="379"/>
+        <location filename="../../src/fluentytdl/ui/notification_panel.py" line="386"/>
         <source>在独立窗口中打开</source>
         <translation>Open in a separate window</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/notification_panel.py" line="396"/>
-        <location filename="../../src/fluentytdl/ui/notification_panel.py" line="397"/>
+        <location filename="../../src/fluentytdl/ui/notification_panel.py" line="403"/>
+        <location filename="../../src/fluentytdl/ui/notification_panel.py" line="404"/>
         <source>全部已读</source>
         <translation>Mark All as Read</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/notification_panel.py" line="404"/>
-        <location filename="../../src/fluentytdl/ui/notification_panel.py" line="405"/>
+        <location filename="../../src/fluentytdl/ui/notification_panel.py" line="411"/>
+        <location filename="../../src/fluentytdl/ui/notification_panel.py" line="412"/>
         <source>全部清空</source>
         <translation>Clear All</translation>
     </message>
@@ -6036,7 +6265,7 @@ About to clear these task records; any that are still downloading will be cancel
 <context>
     <name>NotificationListWidget</name>
     <message>
-        <location filename="../../src/fluentytdl/ui/notification_panel.py" line="305"/>
+        <location filename="../../src/fluentytdl/ui/notification_panel.py" line="312"/>
         <source>暂无通知</source>
         <extracomment>当前渲染出来的条数。容器拿它决定自己多高 / 要不要显示&quot;全部已读&quot;。</extracomment>
         <translation>No Notifications</translation>
@@ -6045,19 +6274,19 @@ About to clear these task records; any that are still downloading will be cancel
 <context>
     <name>NotificationWindow</name>
     <message>
-        <location filename="../../src/fluentytdl/ui/notification_panel.py" line="462"/>
-        <location filename="../../src/fluentytdl/ui/notification_panel.py" line="464"/>
+        <location filename="../../src/fluentytdl/ui/notification_panel.py" line="469"/>
+        <location filename="../../src/fluentytdl/ui/notification_panel.py" line="471"/>
         <source>消息中心</source>
         <extracomment>比基类窄：这一屏是一列卡片，宽了只会让每张卡片中间空出一大片。</extracomment>
         <translation>Message Center</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/notification_panel.py" line="474"/>
+        <location filename="../../src/fluentytdl/ui/notification_panel.py" line="481"/>
         <source>全部已读</source>
         <translation>Mark All as Read</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/notification_panel.py" line="477"/>
+        <location filename="../../src/fluentytdl/ui/notification_panel.py" line="484"/>
         <source>全部清空</source>
         <translation>Clear All</translation>
     </message>
@@ -6523,30 +6752,308 @@ About to clear these task records; any that are still downloading will be cancel
 <context>
     <name>PlaylistWorker</name>
     <message>
-        <location filename="../../src/fluentytdl/download/workers.py" line="236"/>
+        <location filename="../../src/fluentytdl/download/workers.py" line="237"/>
         <source>常规视频</source>
         <extracomment>yt-dlp 自己声明的 `role` → Manifest 的 `Kind`。**只做映射，不做推断** —— 表外的 role（含 `None`）一律不登记，留给 `reconcile()` 那唯一一次兜底分类。 写成显式字典而不是 `cast()`：这里是「报告者声明的角色」进入事务层的关口， 关口上应该看得见到底放行了哪几个值。</extracomment>
         <translation>Videos</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/download/workers.py" line="238"/>
+        <location filename="../../src/fluentytdl/download/workers.py" line="239"/>
         <source>直播回放</source>
         <translation>Past Live Streams</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/download/workers.py" line="347"/>
+        <location filename="../../src/fluentytdl/download/workers.py" line="348"/>
         <source>正在解析 {} ({}/{})...</source>
         <translation>Parsing {} ({}/{})...</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/download/workers.py" line="353"/>
+        <location filename="../../src/fluentytdl/download/workers.py" line="354"/>
         <source>正在并行解析 {} 个标签页...</source>
         <translation>Parsing {} tabs in parallel...</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/download/workers.py" line="412"/>
+        <location filename="../../src/fluentytdl/download/workers.py" line="413"/>
         <source>已完成 {} ({}/{})...</source>
         <translation>Finished {} ({}/{})...</translation>
+    </message>
+</context>
+<context>
+    <name>PotStartupController</name>
+    <message>
+        <location filename="../../src/fluentytdl/ui/pot_startup_controller.py" line="53"/>
+        <location filename="../../src/fluentytdl/ui/pot_startup_controller.py" line="60"/>
+        <source>YouTube 支持组件未就绪</source>
+        <translation>YouTube support component is not ready</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/ui/pot_startup_controller.py" line="62"/>
+        <source>暂时无法解析或下载 YouTube 链接。</source>
+        <translation>YouTube links cannot be parsed or downloaded right now.</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/ui/pot_startup_controller.py" line="66"/>
+        <source>重试加载</source>
+        <translation>Retry loading</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/ui/pot_startup_controller.py" line="67"/>
+        <source>稍后</source>
+        <translation>Later</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/ui/pot_startup_controller.py" line="68"/>
+        <source>查看状态</source>
+        <translation>View status</translation>
+    </message>
+    <message>
+        <source>管理 POT</source>
+        <translation type="vanished">Manage POT</translation>
+    </message>
+</context>
+<context>
+    <name>PotStatusWindow</name>
+    <message>
+        <source>POT 管理</source>
+        <translation type="vanished">POT Manager</translation>
+    </message>
+    <message>
+        <source>重试加载</source>
+        <translation type="vanished">Retry loading</translation>
+    </message>
+    <message>
+        <source>网络设置</source>
+        <translation type="vanished">Network settings</translation>
+    </message>
+    <message>
+        <source>运行状态</source>
+        <translation type="vanished">Status</translation>
+    </message>
+    <message>
+        <source>组件与更新</source>
+        <translation type="vanished">Components and updates</translation>
+    </message>
+    <message>
+        <source>诊断记录</source>
+        <translation type="vanished">Diagnostics</translation>
+    </message>
+    <message>
+        <source>POT 已启用</source>
+        <translation type="vanished">POT enabled</translation>
+    </message>
+    <message>
+        <source>POT 已关闭</source>
+        <translation type="vanished">POT disabled</translation>
+    </message>
+    <message>
+        <source>检查更新</source>
+        <translation type="vanished">Check for updates</translation>
+    </message>
+    <message>
+        <source>更新 / 修复</source>
+        <translation type="vanished">Update / repair</translation>
+    </message>
+    <message>
+        <source>服务与插件配套更新，安装后自动验证。</source>
+        <translation type="vanished">The server and plugin update together and are verified after installation.</translation>
+    </message>
+    <message>
+        <source>POT 与视频解析共用的 JavaScript 运行时。</source>
+        <translation type="vanished">JavaScript runtime shared by POT and video extraction.</translation>
+    </message>
+    <message>
+        <source>使用设置中选择的更新频道。</source>
+        <translation type="vanished">Uses the update channel selected in Settings.</translation>
+    </message>
+    <message>
+        <source>详细检测</source>
+        <translation type="vanished">Run diagnostics</translation>
+    </message>
+    <message>
+        <source>复制脱敏诊断</source>
+        <translation type="vanished">Copy redacted diagnostics</translation>
+    </message>
+    <message>
+        <source>查看日志</source>
+        <translation type="vanished">View logs</translation>
+    </message>
+    <message>
+        <source>POT · {0}</source>
+        <translation type="vanished">POT · {0}</translation>
+    </message>
+    <message>
+        <source>验证服务为需要 PO Token 的 YouTube 请求提供支持。</source>
+        <translation type="vanished">This service supports YouTube requests that require a PO Token.</translation>
+    </message>
+    <message>
+        <source>组件更新验证失败，已继续使用之前的组件。请在诊断记录中查看原因。</source>
+        <translation type="vanished">The component update failed validation. The previous component is still in use. See diagnostics for details.</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/ui/components/dialogs/pot_status_window.py" line="46"/>
+        <location filename="../../src/fluentytdl/ui/components/dialogs/pot_status_window.py" line="47"/>
+        <source>POT 运行状态</source>
+        <translation>POT status</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/ui/components/dialogs/pot_status_window.py" line="61"/>
+        <source>Deno 运行时</source>
+        <translation>Deno runtime</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/ui/components/dialogs/pot_status_window.py" line="62"/>
+        <source>POT 服务连接</source>
+        <translation>POT service connection</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/ui/components/dialogs/pot_status_window.py" line="63"/>
+        <source>yt-dlp 插件</source>
+        <translation>yt-dlp plugin</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/ui/components/dialogs/pot_status_window.py" line="64"/>
+        <source>Token 验证</source>
+        <translation>Token verification</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/ui/components/dialogs/pot_status_window.py" line="74"/>
+        <source>验证范围：yt-dlp 插件调用与 Token 生成。</source>
+        <translation>Checks yt-dlp plugin calls and Token generation.</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/ui/components/dialogs/pot_status_window.py" line="82"/>
+        <source>重新验证</source>
+        <translation>Verify again</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/ui/components/dialogs/pot_status_window.py" line="84"/>
+        <location filename="../../src/fluentytdl/ui/components/dialogs/pot_status_window.py" line="157"/>
+        <source>重启 POT</source>
+        <translation>Restart POT</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/ui/components/dialogs/pot_status_window.py" line="114"/>
+        <source>运行中</source>
+        <translation>Running</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/ui/components/dialogs/pot_status_window.py" line="114"/>
+        <source>未运行</source>
+        <translation>Not running</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/ui/components/dialogs/pot_status_window.py" line="126"/>
+        <source>验证中…</source>
+        <translation>Verifying…</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/ui/components/dialogs/pot_status_window.py" line="130"/>
+        <source>未验证</source>
+        <translation>Not verified</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/ui/components/dialogs/pot_status_window.py" line="135"/>
+        <source>POT {0} · 端口 {1}</source>
+        <translation>POT {0} · Port {1}</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/ui/components/dialogs/pot_status_window.py" line="139"/>
+        <source>已由 yt-dlp 加载官方 HTTP 插件</source>
+        <translation>Official HTTP plugin loaded by yt-dlp</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/ui/components/dialogs/pot_status_window.py" line="141"/>
+        <source>已生成 · {0} 字符</source>
+        <translation>Generated · {0} characters</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/ui/components/dialogs/pot_status_window.py" line="145"/>
+        <source>最近验证：{0}</source>
+        <translation>Last verified: {0}</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/ui/components/dialogs/pot_status_window.py" line="149"/>
+        <source>尚未完成验证</source>
+        <translation>No verification completed yet</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/ui/components/dialogs/pot_status_window.py" line="157"/>
+        <source>启用 POT</source>
+        <translation>Enable POT</translation>
+    </message>
+    <message>
+        <source>组件更新验证失败，已继续使用之前的组件。</source>
+        <translation type="vanished">Component update validation failed. The previous component is still in use.</translation>
+    </message>
+    <message>
+        <source>处理中…</source>
+        <translation type="vanished">Working…</translation>
+    </message>
+    <message>
+        <source>启用并检测</source>
+        <translation type="vanished">Enable and check</translation>
+    </message>
+    <message>
+        <source>重新检测</source>
+        <translation type="vanished">Check again</translation>
+    </message>
+    <message>
+        <source>尚未检查</source>
+        <translation type="vanished">Not checked yet</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/ui/components/dialogs/pot_status_window.py" line="124"/>
+        <source>通过</source>
+        <translation>Passed</translation>
+    </message>
+    <message>
+        <source>检查中</source>
+        <translation type="vanished">Checking</translation>
+    </message>
+    <message>
+        <source>未检查</source>
+        <translation type="vanished">Not checked</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/ui/components/dialogs/pot_status_window.py" line="125"/>
+        <source>失败</source>
+        <translation>Failed</translation>
+    </message>
+    <message>
+        <source>最近检查：{0}</source>
+        <translation type="vanished">Last checked: {0}</translation>
+    </message>
+    <message>
+        <source>下次自动重试：{0}</source>
+        <translation type="vanished">Next automatic retry: {0}</translation>
+    </message>
+    <message>
+        <source>已安装：{0} · 可安装：{1}</source>
+        <translation type="vanished">Installed: {0} · Available: {1}</translation>
+    </message>
+    <message>
+        <source>上游版本：{0}</source>
+        <translation type="vanished">Upstream version: {0}</translation>
+    </message>
+    <message>
+        <source>上游已更新，兼容组件包尚未就绪。</source>
+        <translation type="vanished">Upstream has a newer version. A compatible component bundle is not available yet.</translation>
+    </message>
+    <message>
+        <source>实际使用：{0}</source>
+        <translation type="vanished">In use: {0}</translation>
+    </message>
+    <message>
+        <source>正在安装...</source>
+        <translation type="vanished">Installing...</translation>
+    </message>
+    <message>
+        <source>组件操作失败：{0}</source>
+        <translation type="vanished">Component operation failed: {0}</translation>
+    </message>
+    <message>
+        <source>正在更新 {0}：{1}%</source>
+        <translation type="vanished">Updating {0}: {1}%</translation>
     </message>
 </context>
 <context>
@@ -6861,45 +7368,45 @@ About to clear these task records; any that are still downloading will be cancel
         <translation>subtitle embedding requires an explicit container</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="966"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="910"/>
         <source>未知分辨率</source>
         <translation>Unknown resolution</translation>
     </message>
     <message>
         <location filename="../../src/fluentytdl/models/download_plan.py" line="357"/>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="590"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="542"/>
         <source>不下载</source>
         <translation>Not downloaded</translation>
     </message>
     <message>
         <location filename="../../src/fluentytdl/models/download_plan.py" line="355"/>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="640"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="591"/>
         <source>内嵌</source>
         <translation>Embedded</translation>
     </message>
     <message>
         <location filename="../../src/fluentytdl/models/download_plan.py" line="356"/>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="708"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="658"/>
         <source>外挂文件</source>
         <translation>External file</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1107"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1053"/>
         <source>自动</source>
         <translation>Auto</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="758"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="706"/>
         <source>已从 {0} 升级为 {1}</source>
         <translation>Upgraded from {0} to {1}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1175"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1120"/>
         <source>输出格式</source>
         <translation>Output format</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1174"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1119"/>
         <source>输出容器</source>
         <translation>Output container</translation>
     </message>
@@ -6908,17 +7415,17 @@ About to clear these task records; any that are still downloading will be cancel
         <translation type="vanished">Save to</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="741"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="689"/>
         <source>封面</source>
         <translation>Cover</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1127"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1073"/>
         <source>装配预览</source>
         <translation>Assembly preview</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="755"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="703"/>
         <source>尚未选择</source>
         <translation>Nothing selected yet</translation>
     </message>
@@ -7004,19 +7511,19 @@ Currently using the version found on your system PATH. Updating will install a c
     </message>
     <message>
         <location filename="../../src/fluentytdl/notification/notification_text.py" line="38"/>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="489"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="444"/>
         <source>{0} {1} 已可用，前往「设置 → 更新」即可更新。</source>
         <translation>{0} {1} is available. Go to Settings → Update to install it.</translation>
     </message>
     <message>
         <location filename="../../src/fluentytdl/notification/notification_text.py" line="41"/>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="488"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="443"/>
         <source>{0} {1} 已可用（当前 {2}），前往「设置 → 更新」即可更新。</source>
         <translation>{0} {1} is available (current: {2}). Go to Settings → Update to install it.</translation>
     </message>
     <message>
         <location filename="../../src/fluentytdl/notification/notification_text.py" line="44"/>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="494"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="449"/>
         <source>{0} 将从 {1} 频道切换到 {2} 频道（{3} → {4}），前往「设置 → 更新」即可应用。</source>
         <translation>Switch {0} from the {1} channel to {2} ({3} → {4}). Go to Settings → Update to apply the change.</translation>
     </message>
@@ -7212,182 +7719,181 @@ Runtime files are missing. Extract the complete archive again or repair the inst
         <translation>  Installation: {0} | Path: {1}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="81"/>
         <source>  完整输出见日志。</source>
-        <translation>  See the log for the full output.</translation>
+        <translation type="vanished">  See the log for the full output.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="82"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="81"/>
         <source>  就地替换不可行（{0}），改用退出后 helper</source>
         <translation>  In-place replacement unavailable ({0}); using post-exit helper</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="83"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="82"/>
         <source>  已 spawn updater 自更新 helper: {0} → {1}</source>
         <translation>  Spawned updater self-update helper: {0} → {1}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="84"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="83"/>
         <source>  已删除同批投递的 updater.exe.new（该构建被判定为坏）</source>
         <translation>  Deleted updater.exe.new from the rejected build</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="85"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="84"/>
         <source>  已启动新版 (pid={0})，注意：该实例以管理员权限运行</source>
         <translation>  Started new version (pid={0}); this instance is running as administrator</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="86"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="85"/>
         <source>  已提权实例: {0}</source>
         <translation>  Elevated instance: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="87"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="86"/>
         <source>  已用 {0} 降权启动新版 (pid={1})</source>
         <translation>  Started new version without elevation via {0} (pid={1})</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="88"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="87"/>
         <source>  已通知外壳刷新图标缓存</source>
         <translation>  Requested shell icon cache refresh</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="89"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="88"/>
         <source>  归档: {0}</source>
         <translation>  Archive: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="90"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="89"/>
         <source>  归档文件已删除</source>
         <translation>  Archive file deleted</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="91"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="90"/>
         <source>  打开自身令牌失败: {0}</source>
         <translation>  Failed to open own process token: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="92"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="91"/>
         <source>  数据目录: {0}</source>
         <translation>  Data directory: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="93"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="92"/>
         <source>  数据迁移报告:</source>
         <translation>  Data migration report:</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="94"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="93"/>
         <source>  旧版本已启动 (pid={0}, mode={1})</source>
         <translation>  Previous version started (pid={0}, mode={1})</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="95"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="94"/>
         <source>  没有任何一级令牌的身份等于原用户（典型为 OTS 提权），不自动启动新版</source>
         <translation>  No token identity matches the original user (typically OTS elevation); not starting new version automatically</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="96"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="95"/>
         <source>  目标: {0}</source>
         <translation>  Destination: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="97"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="96"/>
         <source>  看门狗判定: {0} (elapsed={1:.1f}s, alive={2})</source>
         <translation>  Watchdog result: {0} (elapsed={1:.1f}s, alive={2})</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="98"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="97"/>
         <source>  移动: {0}</source>
         <translation>  Moving: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="99"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="98"/>
         <source>  组件版本:</source>
         <translation>  Component versions:</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="100"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="99"/>
         <source>  终止未能就绪的新版本进程...</source>
         <translation>  Terminating new version that failed readiness...</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="101"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="100"/>
         <source>  警告: CreateEnvironmentBlock 失败，退回继承父进程环境</source>
         <translation>  Warning: CreateEnvironmentBlock failed; inheriting parent environment</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="102"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="101"/>
         <source>  警告: 无法删除陈旧的 .update_ready: {0}</source>
         <translation>  Warning: failed to remove stale .update_ready: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="103"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="102"/>
         <source>  警告: 旧版本未能自动启动，需用户手动启动</source>
         <translation>  Warning: previous version did not start automatically; manual launch required</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="104"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="103"/>
         <source>  警告: 未收到 --origin-user-sid（旧主程序），跳过身份校验，只看完整性级别</source>
         <translation>  Warning: --origin-user-sid missing (older application); checking integrity level only</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="105"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="104"/>
         <source>  读取令牌 SID 失败: {0}</source>
         <translation>  Failed to read token SID: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="106"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="105"/>
         <source>  跳过: .new 与 updater.exe 解析到同一路径</source>
         <translation>  Skipping: .new and updater.exe resolve to the same path</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="107"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="106"/>
         <source>  跳过受保护条目（归档不该含它）: {0}</source>
         <translation>  Skipping protected entry (must not be in archive): {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="108"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="107"/>
         <source>  还原 _internal 失败: {0}</source>
         <translation>  Failed to restore _internal: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="109"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="108"/>
         <source>  还原 exe 失败: {0}</source>
         <translation>  Failed to restore executable: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="110"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="109"/>
         <source>  选定降权级别: {0}</source>
         <translation>  Selected de-elevation level: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="111"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="110"/>
         <source>  通知外壳刷新图标缓存失败（无害）: {0}</source>
         <translation>  Failed to request shell icon cache refresh (nonfatal): {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="112"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="111"/>
         <source>  飞行前检查通过: base_library.zip + {0}</source>
         <translation>  Preflight passed: base_library.zip + {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="113"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="112"/>
         <source> (缓存可能过期)</source>
         <translation> (cache may be expired)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="114"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="113"/>
         <source> 等</source>
         <translation> and others</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="115"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="114"/>
         <source> 等 {0} 项</source>
         <translation> and {0} items in total</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="116"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="115"/>
         <source>### 错误描述
 自动捕获到的错误：
 **{0}**
@@ -7416,22 +7922,22 @@ Automatically captured error:
 </translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="117"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="116"/>
         <source>(取不到)</source>
         <translation>(unavailable)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="118"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="117"/>
         <source>(未提供)</source>
         <translation>(not provided)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="119"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="118"/>
         <source>(未解析出)</source>
         <translation>(not resolved)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="120"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="119"/>
         <source>- YouTube: https://www.youtube.com/watch?v=... 或 https://youtu.be/...
 </source>
         <translation>- YouTube: https://www.youtube.com/watch?v=... or https://youtu.be/...
@@ -7439,7 +7945,7 @@ Automatically captured error:
 </translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="121"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="120"/>
         <source>1. {0} 未安装或未登录相关平台
 2. {1} Cookie 数据库被锁定（请关闭浏览器）
 
@@ -7450,139 +7956,144 @@ Automatically captured error:
 </translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="122"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="121"/>
         <source>2D 全景</source>
         <translation>2D panorama</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="123"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="122"/>
         <source>3D 立体 (上下)</source>
         <translation>3D stereoscopic (top/bottom)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="124"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="123"/>
         <source>3D 立体 (左右/Mesh)</source>
         <translation>3D stereoscopic (side by side/Mesh)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="125"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="124"/>
         <source>7za 解压失败 (exit {0}): {1}</source>
         <translation>7za extraction failed (exit {0}): {1}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="126"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="125"/>
         <source>=== 子进程启动 === PID={0}</source>
         <translation>=== Subprocess started === PID={0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="127"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="126"/>
         <source>Arc 浏览器</source>
         <translation>Arc Browser</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="128"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="127"/>
         <source>AtomicParsley 不可用</source>
         <translation>AtomicParsley is unavailable</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="129"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="128"/>
         <source>AtomicParsley 失败: {0}</source>
         <translation>AtomicParsley failed: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="130"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="129"/>
         <source>AtomicParsley 封面嵌入成功: {0}</source>
         <translation>Cover embedded with AtomicParsley: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="131"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="130"/>
         <source>AtomicParsley 异常: {0}</source>
         <translation>AtomicParsley exception: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="132"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="131"/>
         <source>AtomicParsley 错误: {0}</source>
         <translation>AtomicParsley error: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="133"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="132"/>
         <source>Brave 浏览器</source>
         <translation>Brave Browser</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="134"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="133"/>
         <source>COMMIT: 新版本已就绪，清理回滚素材...</source>
         <translation>COMMIT: new version ready; cleaning rollback files...</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="135"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="134"/>
         <source>Chrome 浏览器</source>
         <translation>Chrome Browser</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="136"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="135"/>
         <source>Chromium 浏览器</source>
         <translation>Chromium Browser</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="137"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="136"/>
         <source>Cookie Sentinel 初始化: {0}</source>
         <translation>Cookie Sentinel initialized: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="138"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="137"/>
         <source>Cookie Sentinel 启动失败（预期行为）: {0}</source>
         <translation>Cookie Sentinel startup failed (expected): {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="139"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="138"/>
         <source>Cookie Sentinel 文件不存在，将使用无 Cookie 模式下载（可能受限）</source>
         <translation>Cookie Sentinel file missing; downloading without cookies (may be restricted)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="140"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="139"/>
         <source>Cookie Sentinel 文件存在但未发现 {0} 相关 Cookie</source>
         <translation>Cookie Sentinel file exists but contains no {0} cookies</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="141"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="140"/>
         <source>Cookie Sentinel 获取失败: {0}</source>
         <translation>Cookie Sentinel failed: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="142"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="141"/>
         <source>Cookie 不完整，缺少: {0}</source>
         <translation>Incomplete cookies; missing: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="143"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="142"/>
         <source>Cookie 已刷新({0})</source>
         <translation>Cookies refreshed ({0})</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="144"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="143"/>
         <source>Cookie 文件不存在</source>
         <translation>Cookie file does not exist</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="145"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="144"/>
         <source>Cookie 校验未通过</source>
         <translation>Cookie validation failed</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="146"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="145"/>
         <source>Cookie 格式化失败：提取到空列表</source>
         <translation>Cookie formatting failed: extracted an empty list</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="147"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="146"/>
         <source>Cookies 文件 (*.txt);;所有文件 (*.*)</source>
         <translation>Cookie files (*.txt);;All files (*.*)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="148"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="147"/>
         <source>Cookies 文件疑似为 JSON 格式，yt-dlp 只支持 Netscape HTTP Cookie File 格式；已忽略该文件。</source>
         <translation>Cookie file appears to be JSON; yt-dlp requires Netscape HTTP Cookie File format. File ignored.</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="148"/>
+        <source>Deno 无法运行，请检查或修复运行时。</source>
+        <translation>Deno cannot run. Check or repair the runtime.</translation>
     </message>
     <message>
         <location filename="../../src/fluentytdl/utils/ui_text.py" line="149"/>
@@ -7739,42 +8250,37 @@ Automatically captured error:
         <translation>MessageBoxW failed (user cannot see this failure): {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="178"/>
         <source>Minter 响应正常</source>
-        <translation>Minter responding normally</translation>
+        <translation type="vanished">Minter responding normally</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="179"/>
         <source>Minter 响应正常 (非 JSON)</source>
-        <translation>Minter responding normally (non-JSON)</translation>
+        <translation type="vanished">Minter responding normally (non-JSON)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="180"/>
         <source>Minter 已初始化</source>
-        <translation>Minter initialized</translation>
+        <translation type="vanished">Minter initialized</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="181"/>
         <source>Minter 缓存正常 ({0} 条目)</source>
-        <translation>Minter cache healthy ({0} entries)</translation>
+        <translation type="vanished">Minter cache healthy ({0} entries)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="182"/>
         <source>Minter 缓存正常 (条目: {0})</source>
-        <translation>Minter cache healthy (entries: {0})</translation>
+        <translation type="vanished">Minter cache healthy (entries: {0})</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="183"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="178"/>
         <source>OGG 封面嵌入失败: {0}</source>
         <translation>Failed to embed OGG cover: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="184"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="179"/>
         <source>Opera GX 浏览器</source>
         <translation>Opera GX Browser</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="185"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="180"/>
         <source>Opera 浏览器</source>
         <translation>Opera Browser</translation>
     </message>
@@ -7783,174 +8289,140 @@ Automatically captured error:
         <translation type="vanished">POT HTTP plugin file (getpot_bgutil_http.py) missing</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="186"/>
         <source>POT Manager 进程 stderr: {0}</source>
-        <translation>POT Manager process stderr: {0}</translation>
+        <translation type="vanished">POT Manager process stderr: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="187"/>
         <source>POT Manager 进程 stdout: {0}</source>
-        <translation>POT Manager process stdout: {0}</translation>
+        <translation type="vanished">POT Manager process stdout: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="188"/>
         <source>POT Manager: IT 重置后 Token 仍无效: {0}</source>
-        <translation>POT Manager: token still invalid after IT reset: {0}</translation>
+        <translation type="vanished">POT Manager: token still invalid after IT reset: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="189"/>
         <source>POT Manager: IT 重置后 Token 验证通过: {0}</source>
-        <translation>POT Manager: token validated after IT reset: {0}</translation>
+        <translation type="vanished">POT Manager: token validated after IT reset: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="190"/>
         <source>POT Manager: Integrity Token 已失效，将重新生成</source>
-        <translation>POT Manager: Integrity Token expired; regenerating</translation>
+        <translation type="vanished">POT Manager: Integrity Token expired; regenerating</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="191"/>
         <source>POT Manager: Windows Job Object 已创建</source>
-        <translation>POT Manager: Windows Job Object created</translation>
+        <translation type="vanished">POT Manager: Windows Job Object created</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="192"/>
         <source>POT Manager: 使 Integrity Token 失效失败: {0}</source>
-        <translation>POT Manager: failed to invalidate Integrity Token: {0}</translation>
+        <translation type="vanished">POT Manager: failed to invalidate Integrity Token: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="193"/>
         <source>POT Manager: 使用端口 {0}</source>
-        <translation>POT Manager: using port {0}</translation>
+        <translation type="vanished">POT Manager: using port {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="194"/>
         <source>POT Manager: 关联 Job Object 失败: {0}</source>
-        <translation>POT Manager: failed to assign Job Object: {0}</translation>
+        <translation type="vanished">POT Manager: failed to assign Job Object: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="195"/>
         <source>POT Manager: 创建 Job Object 失败: {0}</source>
-        <translation>POT Manager: failed to create Job Object: {0}</translation>
+        <translation type="vanished">POT Manager: failed to create Job Object: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="196"/>
         <source>POT Manager: 启动服务失败: {0}</source>
-        <translation>POT Manager: failed to start service: {0}</translation>
+        <translation type="vanished">POT Manager: failed to start service: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="197"/>
         <source>POT Manager: 已关闭残留服务 (端口 {0})</source>
-        <translation>POT Manager: stopped leftover service (port {0})</translation>
+        <translation type="vanished">POT Manager: stopped leftover service (port {0})</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="198"/>
         <source>POT Manager: 开始健康检查 (PID: {0})</source>
-        <translation>POT Manager: starting health check (PID: {0})</translation>
+        <translation type="vanished">POT Manager: starting health check (PID: {0})</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="199"/>
         <source>POT Manager: 恢复步骤 1/3 — 清除缓存</source>
-        <translation>POT Manager: recovery step 1/3 — clear cache</translation>
+        <translation type="vanished">POT Manager: recovery step 1/3 — clear cache</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="200"/>
         <source>POT Manager: 恢复步骤 2/3 — 重置 Integrity Token</source>
-        <translation>POT Manager: recovery step 2/3 — reset Integrity Token</translation>
+        <translation type="vanished">POT Manager: recovery step 2/3 — reset Integrity Token</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="201"/>
         <source>POT Manager: 恢复步骤 3/3 — 完整重启服务</source>
-        <translation>POT Manager: recovery step 3/3 — restart service</translation>
+        <translation type="vanished">POT Manager: recovery step 3/3 — restart service</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="202"/>
         <source>POT Manager: 无代理配置</source>
-        <translation>POT Manager: no proxy configured</translation>
+        <translation type="vanished">POT Manager: no proxy configured</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="203"/>
         <source>POT Manager: 服务已停止</source>
-        <translation>POT Manager: service stopped</translation>
+        <translation type="vanished">POT Manager: service stopped</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="204"/>
         <source>POT Manager: 服务已启动 (PID: {0}, 端口: {1})</source>
-        <translation>POT Manager: service started (PID: {0}, port: {1})</translation>
+        <translation type="vanished">POT Manager: service started (PID: {0}, port: {1})</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="205"/>
         <source>POT Manager: 服务已在运行</source>
-        <translation>POT Manager: service is already running</translation>
+        <translation type="vanished">POT Manager: service is already running</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="206"/>
         <source>POT Manager: 服务未运行，尝试启动...</source>
-        <translation>POT Manager: service is not running; attempting to start...</translation>
+        <translation type="vanished">POT Manager: service is not running; attempting to start...</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="207"/>
         <source>POT Manager: 服务未运行，跳过停止操作</source>
-        <translation>POT Manager: service is not running; skipping stop</translation>
+        <translation type="vanished">POT Manager: service is not running; skipping stop</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="208"/>
         <source>POT Manager: 未找到 POT Provider 可执行文件</source>
-        <translation>POT Manager: POT Provider executable not found</translation>
+        <translation type="vanished">POT Manager: POT Provider executable not found</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="209"/>
         <source>POT Manager: 注入代理 → {0}</source>
-        <translation>POT Manager: setting proxy → {0}</translation>
+        <translation type="vanished">POT Manager: setting proxy → {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="210"/>
         <source>POT Manager: 清除缓存失败: {0}</source>
-        <translation>POT Manager: failed to clear cache: {0}</translation>
+        <translation type="vanished">POT Manager: failed to clear cache: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="211"/>
         <source>POT Manager: 端口 {0} 已就绪</source>
-        <translation>POT Manager: port {0} is ready</translation>
+        <translation type="vanished">POT Manager: port {0} is ready</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="212"/>
         <source>POT Manager: 系统代理模式，继承环境（兼容 TUN）</source>
-        <translation>POT Manager: system proxy mode; inheriting environment (TUN compatible)</translation>
+        <translation type="vanished">POT Manager: system proxy mode; inheriting environment (TUN compatible)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="213"/>
         <source>POT Manager: 缓存已清除</source>
-        <translation>POT Manager: cache cleared</translation>
+        <translation type="vanished">POT Manager: cache cleared</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="214"/>
         <source>POT Manager: 缓存清除后 Token 仍无效: {0}</source>
-        <translation>POT Manager: token still invalid after clearing cache: {0}</translation>
+        <translation type="vanished">POT Manager: token still invalid after clearing cache: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="215"/>
         <source>POT Manager: 缓存清除后 Token 验证通过: {0}</source>
-        <translation>POT Manager: token validated after clearing cache: {0}</translation>
+        <translation type="vanished">POT Manager: token validated after clearing cache: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="216"/>
         <source>POT Manager: 触发完整重启...</source>
-        <translation>POT Manager: restarting service...</translation>
+        <translation type="vanished">POT Manager: restarting service...</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="217"/>
         <source>POT Manager: 读取代理配置失败: {0}</source>
-        <translation>POT Manager: failed to read proxy configuration: {0}</translation>
+        <translation type="vanished">POT Manager: failed to read proxy configuration: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="218"/>
         <source>POT Manager: 进程已终止，跳过停止操作</source>
-        <translation>POT Manager: process already terminated; skipping stop</translation>
+        <translation type="vanished">POT Manager: process already terminated; skipping stop</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="219"/>
         <source>POT Manager: 进程已退出 (返回码: {0})</source>
-        <translation>POT Manager: process exited (return code: {0})</translation>
+        <translation type="vanished">POT Manager: process exited (return code: {0})</translation>
     </message>
     <message>
         <source>POT Plugin Sync: yt-dlp.exe 未找到，跳过同步</source>
@@ -7993,7 +8465,7 @@ Automatically captured error:
         <translation type="vanished">POT Provider detection failed: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="221"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="183"/>
         <source>POT 后台预热启动失败: {0}</source>
         <translation>Failed to start POT background warmup: {0}</translation>
     </message>
@@ -8014,32 +8486,31 @@ Automatically captured error:
         <translation type="vanished">POT plugin diagnosis exception: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="223"/>
         <source>POT 服务未运行，无法注入 base_url（先启用并等待预热）</source>
-        <translation>POT service is not running; cannot inject base_url (enable it and wait for warmup)</translation>
+        <translation type="vanished">POT service is not running; cannot inject base_url (enable it and wait for warmup)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="224"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="194"/>
         <source>PlaylistScheduler: 未知 task_id=%r (error)</source>
         <translation>PlaylistScheduler: unknown task_id=%r (error)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="225"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="195"/>
         <source>PlaylistScheduler: 未知 task_id=%r (finished)</source>
         <translation>PlaylistScheduler: unknown task_id=%r (finished)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="226"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="196"/>
         <source>ProcessManager 初始化完成</source>
         <translation>ProcessManager initialized</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="227"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="197"/>
         <source>Python.NET 加载失败: {0}</source>
         <translation>Failed to load Python.NET: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="228"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="198"/>
         <source>ROLLBACK: 还原到更新前的版本...</source>
         <translation>ROLLBACK: restoring the previous version...</translation>
     </message>
@@ -8052,167 +8523,213 @@ Expected: {0}
 Actual: {1}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="229"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="199"/>
         <source>SRT 格式缺少时间码</source>
         <translation>SRT timestamps are missing</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="230"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="200"/>
         <source>ShellExecuteW 返回 {0}，提权失败</source>
         <translation>ShellExecuteW returned {0}; elevation failed</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="231"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="201"/>
         <source>Step 1: 解压新版本到临时目录...</source>
         <translation>Step 1: extracting new version to temporary directory...</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="232"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="202"/>
         <source>Step 2: 验证解压结果...</source>
         <translation>Step 2: verifying extracted files...</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="233"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="203"/>
         <source>Step 4: 重命名 _internal/ → _internal_old/ ...</source>
         <translation>Step 4: renaming _internal/ → _internal_old/ ...</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="234"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="204"/>
         <source>Step 5: 移动新文件到目标目录...</source>
         <translation>Step 5: moving new files to destination...</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="235"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="205"/>
         <source>Step 6: 启动新版本: {0}</source>
         <translation>Step 6: starting new version: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="236"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="206"/>
         <source>Step 7: 看门狗接管 (watch_mode={0}, pid={1}, mode={2})</source>
         <translation>Step 7: watchdog taking over (watch_mode={0}, pid={1}, mode={2})</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="237"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="207"/>
         <source>Step 8: 发现 updater.exe.new，开始 updater 自更新</source>
         <translation>Step 8: updater.exe.new found; starting updater self-update</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="238"/>
         <source>Token 有效 (长度 {0})</source>
-        <translation>Token valid (length {0})</translation>
+        <translation type="vanished">Token valid (length {0})</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="239"/>
         <source>Token 格式异常: 长度={0}</source>
-        <translation>Invalid token format: length={0}</translation>
+        <translation type="vanished">Invalid token format: length={0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="240"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="208"/>
         <source>Token 格式看起来不对（通常包含 &apos;mweb&apos; 或 &apos;visitor&apos;）</source>
         <translation>The token format looks incorrect (usually contains &apos;mweb&apos; or &apos;visitor&apos;)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="241"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="209"/>
         <source>VR 元数据注入成功</source>
         <translation>VR metadata injected</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="243"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="211"/>
         <source>VR 投影转换 (EAC -&gt; Equi)...</source>
         <translation>Converting VR projection (EAC -&gt; Equi)...</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="244"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="212"/>
         <source>VR 解析失败: {0}</source>
         <translation>VR parsing failed: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="245"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="213"/>
         <source>VR 解析失败: {}</source>
         <translation>VR parsing failed: {}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="246"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="214"/>
         <source>VR 解析失败：yt-dlp 未返回有效元数据。</source>
         <translation>VR parsing failed: yt-dlp returned no valid metadata.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="247"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="215"/>
         <source>VR 转换... ({0})</source>
         <translation>Converting VR... ({0})</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="248"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="216"/>
         <source>VR 转码失败</source>
         <translation>VR transcoding failed</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="242"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="210"/>
         <source>VR 投影未能确证，跳过空间元数据注入</source>
         <translation>VR projection unconfirmed; skipping spatial metadata injection</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="249"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="182"/>
+        <source>POT 原版组件尚未安装，请检查更新或修复组件。</source>
+        <translation>The original POT component is not installed. Check for updates or repair it.</translation>
+    </message>
+    <message>
+        <source>POT 尚未就绪，请查看诊断记录并重试。</source>
+        <translation type="vanished">POT is not ready. Check diagnostics and retry.</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="185"/>
+        <source>POT 插件与当前 yt-dlp 不兼容，请更新或修复内核。</source>
+        <translation>The POT plugin is incompatible with the current yt-dlp. Update or repair the engine.</translation>
+    </message>
+    <message>
+        <source>POT 服务启动失败，请查看诊断或修复组件。</source>
+        <translation type="vanished">The POT service could not start. Check diagnostics or repair the component.</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="187"/>
+        <source>POT 服务意外退出，可以重新加载。</source>
+        <translation>The POT service exited unexpectedly. You can reload it.</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="189"/>
+        <source>POT 服务未能生成令牌，请检查网络和代理后重试。</source>
+        <translation>POT could not generate a token. Check your network and proxy, then retry.</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="190"/>
+        <source>POT 组件不完整，请修复组件。</source>
+        <translation>The POT component is incomplete. Please repair it.</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="191"/>
+        <source>POT 组件文件损坏，请修复组件。</source>
+        <translation>POT component files are damaged. Please repair the component.</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="192"/>
+        <source>POT 进程仍在运行，但服务未正常响应，请重启 POT。</source>
+        <translation>The POT process is running but the service is not responding correctly. Restart POT.</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="193"/>
+        <source>POT 验证超时，请检查网络后重试。</source>
+        <translation>POT verification timed out. Check your network and retry.</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="217"/>
         <source>Vivaldi 浏览器</source>
         <translation>Vivaldi Browser</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="250"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="218"/>
         <source>WaitForSingleObject 返回异常值: {0}</source>
         <translation>WaitForSingleObject returned unexpected value: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="251"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="219"/>
         <source>WebM 容器不支持嵌入 SRT/ASS 等常用字幕。建议切换至 MKV 或 MP4。</source>
         <translation>WebM does not support embedding common subtitle formats such as SRT/ASS. Consider switching to MKV or MP4.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="252"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="220"/>
         <source>WebView2 模式：无缓存 Cookie，请在设置页点击「立即刷新」登录获取</source>
         <translation>WebView2 mode: no cached cookies. Click Refresh Now in settings to sign in.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="253"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="221"/>
         <source>WebView2 登录成功，Cookie 已保存: {0} ({1} 个)</source>
         <translation>WebView2 sign-in succeeded; cookies saved: {0} ({1} cookies)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="254"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="222"/>
         <source>WebView2 登录流程失败: {0}</source>
         <translation>WebView2 sign-in failed: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="255"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="223"/>
         <source>WebView2 账号 {0} 的 Cookie 未通过校验，已保留原有 {1} 真相源: {2}</source>
         <translation>Cookies for WebView2 account {0} failed validation; preserved the existing {1} cookie source: {2}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="256"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="224"/>
         <source>WorkerErrorDialog 已在显示，跳过本次</source>
         <translation>WorkerErrorDialog is already visible; skipping</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="257"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="225"/>
         <source>X 平台 Cookie 不完整，缺少关键字段: {0}</source>
         <translation>Incomplete X cookies; missing essential fields: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="259"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="227"/>
         <source>[AdminMode] 以管理员身份自动刷新Cookie: {0}</source>
         <translation>[AdminMode] Refreshing cookies as administrator: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="260"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="228"/>
         <source>[AdminMode] 手动文件模式，跳过自动刷新</source>
         <translation>[AdminMode] Manual file mode, skipping auto-refresh</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="261"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="229"/>
         <source>[AdminMode] 未配置Cookie来源，跳过自动刷新</source>
         <translation>[AdminMode] Cookie source not configured, skipping auto-refresh</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="262"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="230"/>
         <source>[AdminMode] 登录模式(WebView2)，跳过自动刷新（需要用户交互）</source>
         <translation>[AdminMode] Login mode (WebView2), skipping auto-refresh (User interaction required)</translation>
     </message>
@@ -8225,17 +8742,17 @@ Actual: {1}</translation>
         <translation type="vanished">[Bundle] Exported task={} flow={} files={} → {}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="263"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="231"/>
         <source>[CLI] extractor_args 键: {}</source>
         <translation>[CLI] extractor_args keys: {}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="264"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="232"/>
         <source>[CLI] 添加参数: --extractor-args {}</source>
         <translation>[CLI] Adding argument: --extractor-args {}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="265"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="233"/>
         <source>[ChannelFlat] 解析完成: {0} 耗时 {1:.2f}s (tab={2}, entries={3})</source>
         <translation>[ChannelFlat] Parsed {0} in {1:.2f}s (tab={2}, entries={3})</translation>
     </message>
@@ -8244,12 +8761,12 @@ Actual: {1}</translation>
         <translation type="vanished">[ComponentUpdate] Locked channel; skipping manifest fetch</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="266"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="234"/>
         <source>[ComponentUpdate] updater.exe 已启动: pid={0}, archive={1}, dest={2}</source>
         <translation>[ComponentUpdate] updater.exe started: pid={0}, archive={1}, dest={2}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="267"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="235"/>
         <source>[ComponentUpdate] updater.exe 版本 {0} 过旧，不传 --data-dir/--origin-user-sid（updater 将退化为 survival 监护模式）</source>
         <translation>[ComponentUpdate] updater.exe version {0} is too old; omitting --data-dir/--origin-user-sid (using survival monitoring)</translation>
     </message>
@@ -8262,82 +8779,82 @@ Actual: {1}</translation>
         <translation type="vanished">[ComponentUpdate] Download failed after {0} retries: {1}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="268"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="236"/>
         <source>[ComponentUpdate] 取不到当前用户 SID，不传 --origin-user-sid</source>
         <translation>[ComponentUpdate] Current user SID unavailable; omitting --origin-user-sid</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="269"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="237"/>
         <source>[ComponentUpdate] 启动 updater.exe 失败: {0}</source>
         <translation>[ComponentUpdate] Failed to start updater.exe: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="270"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="238"/>
         <source>[ComponentUpdate] 忽略过期 generation 的取消: {0} != {1}</source>
         <translation>[ComponentUpdate] Ignoring cancellation for stale generation: {0} != {1}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="271"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="239"/>
         <source>[ComponentUpdate] 忽略过期 generation 的确认: {0} != {1}</source>
         <translation>[ComponentUpdate] Ignoring confirmation for stale generation: {0} != {1}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="272"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="240"/>
         <source>[ComponentUpdate] 忽略重复的更新请求: {0}</source>
         <translation>[ComponentUpdate] Ignoring duplicate update request: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="273"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="241"/>
         <source>[ComponentUpdate] 无法查询活跃任务，按无任务处理: {0}</source>
         <translation>[ComponentUpdate] Cannot query active tasks; treating as no active tasks: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="274"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="242"/>
         <source>[ComponentUpdate] 更新已批准 (gen={0})，请求优雅退出</source>
         <translation>[ComponentUpdate] Update approved (gen={0}); requesting graceful exit</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="275"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="243"/>
         <source>[ComponentUpdate] 有 {0} 个活跃任务，等待用户确认 (gen={1})</source>
         <translation>[ComponentUpdate] {0} active tasks; awaiting confirmation (gen={1})</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="276"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="244"/>
         <source>[ComponentUpdate] 清单获取失败: {0}</source>
         <translation>[ComponentUpdate] Failed to fetch manifest: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="277"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="245"/>
         <source>[ComponentUpdate] 清单获取成功: {0}</source>
         <translation>[ComponentUpdate] Manifest fetched: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="278"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="246"/>
         <source>[ComponentUpdate] 状态 {0}，不启动 updater</source>
         <translation>[ComponentUpdate] State {0}; not starting updater</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="279"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="247"/>
         <source>[ComponentUpdate] 状态 {0}，忽略取消</source>
         <translation>[ComponentUpdate] State {0}; ignoring cancellation</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="280"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="248"/>
         <source>[ComponentUpdate] 状态 {0}，忽略新的更新请求</source>
         <translation>[ComponentUpdate] State {0}; ignoring new update request</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="281"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="249"/>
         <source>[ComponentUpdate] 状态 {0}，忽略确认</source>
         <translation>[ComponentUpdate] State {0}; ignoring confirmation</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="282"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="250"/>
         <source>[ComponentUpdate] 状态为 QUITTING 但没有 pending 更新</source>
         <translation>[ComponentUpdate] QUITTING state without a pending update</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="283"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="251"/>
         <source>[ComponentUpdate] 用户取消了更新 (gen={0})</source>
         <translation>[ComponentUpdate] User cancelled update (gen={0})</translation>
     </message>
@@ -8346,227 +8863,227 @@ Actual: {1}</translation>
         <translation type="vanished">[ComponentUpdate] Network failure; using cached manifest ({0} hours old)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="284"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="252"/>
         <source>[ComponentUpdate] 读取 PE 版本资源失败 ({0}): {1}</source>
         <translation>[ComponentUpdate] Failed to read PE version resource ({0}): {1}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="285"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="253"/>
         <source>[CookieRefreshWorker] 异常</source>
         <translation>[CookieRefreshWorker] Exception</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="286"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="254"/>
         <source>[CookieRefreshWorker] 提取失败: {0}</source>
         <translation>[CookieRefreshWorker] Extraction failed: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="287"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="255"/>
         <source>[CookieSentinel] Cookie 文件缺少来源元数据</source>
         <translation>[CookieSentinel] Cookie file has no source metadata</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="288"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="256"/>
         <source>[CookieSentinel] Cookie 来源不匹配: 现有={0}, 期望={1}</source>
         <translation>[CookieSentinel] Cookie source mismatch: current={0}, expected={1}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="289"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="257"/>
         <source>[CookieSentinel] WebView2 {0} Cookie 同步完成</source>
         <translation>[CookieSentinel] WebView2 {0} cookies synced</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="290"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="258"/>
         <source>[CookieSentinel] WebView2 {0} Cookie 未同步（沿用旧真相源）: {1}</source>
         <translation>[CookieSentinel] WebView2 {0} cookies not synced (retaining previous source): {1}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="291"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="259"/>
         <source>[CookieSentinel] {0} 尚无 WebView2 登录态，跳过同步</source>
         <translation>[CookieSentinel] No WebView2 session for {0}; skipping sync</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="292"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="260"/>
         <source>[CookieSentinel] {0} 新 Cookie 不可用且无旧文件可回退: {1}</source>
         <translation>[CookieSentinel] New {0} cookies invalid; no previous file available: {1}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="293"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="261"/>
         <source>[CookieSentinel] {0} 新 Cookie 不可用，已保留旧真相源: {1}</source>
         <translation>[CookieSentinel] New {0} cookies invalid; previous source preserved: {1}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="294"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="262"/>
         <source>[CookieSentinel] {0} 更新失败: {1}</source>
         <translation>[CookieSentinel] {0} update failed: {1}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="295"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="263"/>
         <source>[CookieSentinel] {0} 真相源已更新: {1}（{2} 个 Cookie，来源 {3}）</source>
         <translation>[CookieSentinel] {0} cookie source updated: {1} ({2} cookies, source {3})</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="296"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="264"/>
         <source>[CookieSentinel] {0} 静默更新失败: {1}</source>
         <translation>[CookieSentinel] {0} silent update failed: {1}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="297"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="265"/>
         <source>[CookieSentinel] 保存元数据失败 ({0}): {1}</source>
         <translation>[CookieSentinel] Failed to save metadata ({0}): {1}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="298"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="266"/>
         <source>[CookieSentinel] 元数据已保存 ({0}): {1}, {2} cookies</source>
         <translation>[CookieSentinel] Metadata saved ({0}): {1}, {2} cookies</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="299"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="267"/>
         <source>[CookieSentinel] 发出启动健康度失败: {0}</source>
         <translation>[CookieSentinel] Failed to emit startup health: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="300"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="268"/>
         <source>[CookieSentinel] 启动健康度: {0}</source>
         <translation>[CookieSentinel] Startup health: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="301"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="269"/>
         <source>[CookieSentinel] 启动时静默刷新失败: {0}</source>
         <translation>[CookieSentinel] Silent startup refresh failed: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="302"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="270"/>
         <source>[CookieSentinel] 启动时静默刷新开始...</source>
         <translation>[CookieSentinel] Starting silent startup refresh...</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="303"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="271"/>
         <source>[CookieSentinel] 启动时静默刷新异常（预期行为）: {0}</source>
         <translation>[CookieSentinel] Silent startup refresh exception (expected): {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="304"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="272"/>
         <source>[CookieSentinel] 启动时静默刷新成功：{0}</source>
         <translation>[CookieSentinel] Silent startup refresh succeeded: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="305"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="273"/>
         <source>[CookieSentinel] 复制 {0} 失败: {1}</source>
         <translation>[CookieSentinel] Failed to copy {0}: {1}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="306"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="274"/>
         <source>[CookieSentinel] 已删除旧 Cookie 文件: {0}</source>
         <translation>[CookieSentinel] Deleted previous cookie file: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="307"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="275"/>
         <source>[CookieSentinel] 已删除旧元数据文件: {0}</source>
         <translation>[CookieSentinel] Deleted previous metadata file: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="308"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="276"/>
         <source>[CookieSentinel] 已同步手动导入的 Cookie 文件</source>
         <translation>[CookieSentinel] Manually imported cookie file synced</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="309"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="277"/>
         <source>[CookieSentinel] 已迁移旧版 Cookie 元数据: {0} -&gt; {1}</source>
         <translation>[CookieSentinel] Migrated legacy cookie metadata: {0} -&gt; {1}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="310"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="278"/>
         <source>[CookieSentinel] 已迁移旧版 Cookie 文件: {0} -&gt; {1}</source>
         <translation>[CookieSentinel] Migrated legacy cookie file: {0} -&gt; {1}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="311"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="279"/>
         <source>[CookieSentinel] 强制刷新异常</source>
         <translation>[CookieSentinel] Forced refresh exception</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="312"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="280"/>
         <source>[CookieSentinel] 手动导入的 Cookie 文件不可用，沿用旧真相源</source>
         <translation>[CookieSentinel] Manually imported cookies invalid; retaining previous source</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="313"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="281"/>
         <source>[CookieSentinel] 提取了 {0} 个 Cookie</source>
         <translation>[CookieSentinel] Extracted {0} cookies</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="314"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="282"/>
         <source>[CookieSentinel] 未启用验证源，跳过静默刷新</source>
         <translation>[CookieSentinel] No authentication source enabled; skipping silent refresh</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="315"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="283"/>
         <source>[CookieSentinel] 清除文件失败 ({0}): {1}</source>
         <translation>[CookieSentinel] Failed to remove file ({0}): {1}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="316"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="284"/>
         <source>[CookieSentinel] 用户可在设置页点击&apos;手动刷新&apos;重试</source>
         <translation>[CookieSentinel] Click Manual Refresh in settings to retry</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="317"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="285"/>
         <source>[CookieSentinel] 用户触发强制刷新（允许 UAC）</source>
         <translation>[CookieSentinel] User requested forced refresh (UAC allowed)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="318"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="286"/>
         <source>[CookieSentinel] 读取 {0} WebView2 账号失败: {1}</source>
         <translation>[CookieSentinel] Failed to read {0} WebView2 account: {1}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="319"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="287"/>
         <source>[CookieSentinel] 读取Cookie文件失败 ({0}): {1}</source>
         <translation>[CookieSentinel] Failed to read cookie file ({0}): {1}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="320"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="288"/>
         <source>[CookieSentinel] 读取元数据失败 ({0}): {1}</source>
         <translation>[CookieSentinel] Failed to read metadata ({0}): {1}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="321"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="289"/>
         <source>[CookieSentinel] 迁移旧版 Cookie 元数据失败: {0}</source>
         <translation>[CookieSentinel] Failed to migrate legacy cookie metadata: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="322"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="290"/>
         <source>[CookieSentinel] 迁移旧版 Cookie 文件失败: {0}</source>
         <translation>[CookieSentinel] Failed to migrate legacy cookie file: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="323"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="291"/>
         <source>[CoverDirect] 提取失败: {}</source>
         <translation>[CoverDirect] Extraction failed: {}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="324"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="292"/>
         <source>[DialogExtract] 开始解析: {0}</source>
         <translation>[DialogExtract] Starting parse: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="325"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="293"/>
         <source>[DialogExtract] 解析失败: {0} 耗时 {1:.2f}s (build_opts={2:.0f}ms, 子进程轮次={3}) {4}</source>
         <translation>[DialogExtract] Failed to parse {0} in {1:.2f}s (build_opts={2:.0f}ms, subprocess attempts={3}) {4}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="326"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="294"/>
         <source>[DialogExtract] 解析完成: {0} 耗时 {1:.2f}s (build_opts={2:.0f}ms, 子进程轮次={3}, formats={4}, entries={5})</source>
         <translation>[DialogExtract] Parsed {0} in {1:.2f}s (build_opts={2:.0f}ms, subprocess attempts={3}, formats={4}, entries={5})</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="327"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="295"/>
         <source>[DialogRender] 首屏可见耗时 {:.2f}s mode={} url={}</source>
         <translation>[DialogRender] First visible frame in {:.2f}s mode={} url={}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="328"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="296"/>
         <source>[EXE] 开始解析 URL: {0}</source>
         <translation>[EXE] Starting URL parse: {0}</translation>
     </message>
@@ -8579,189 +9096,181 @@ Actual: {1}</translation>
         <translation type="vanished">[Executor] Subtitle embedding + {} → forcing mkv</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="329"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="297"/>
         <source>[Futures] 线程池任务异常 label={}</source>
         <translation>[Futures] Thread pool task exception label={}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="330"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="298"/>
         <source>[ImageLoader] Pillow 解码失败: {0}</source>
         <translation>[ImageLoader] Pillow decoding failed: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="331"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="299"/>
         <source>[ImageLoader] SSL 警告 ({}): {}</source>
         <translation>[ImageLoader] SSL warning ({}): {}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="332"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="300"/>
         <source>[ImageLoader] 代理 URL 无效: {}</source>
         <translation>[ImageLoader] Invalid proxy URL: {}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="333"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="301"/>
         <source>[ImageLoader] 代理模式=手动，但 URL 为空</source>
         <translation>[ImageLoader] Manual proxy mode selected but URL is empty</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="334"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="302"/>
         <source>[ImageLoader] 已启用磁盘缓存: {}</source>
         <translation>[ImageLoader] Disk cache enabled: {}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="335"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="303"/>
         <source>[ImageLoader] 磁盘缓存初始化失败: {}</source>
         <translation>[ImageLoader] Failed to initialize disk cache: {}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="336"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="304"/>
         <source>[ImageLoader] 磁盘缓存清理失败: {0}</source>
         <translation>[ImageLoader] Failed to clean disk cache: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="337"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="305"/>
         <source>[ImageLoader] 磁盘缓存清理：删除 {0} 个旧文件，当前 {1} MB</source>
         <translation>[ImageLoader] Disk cache cleanup: removed {0} old files; current size {1} MB</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="338"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="306"/>
         <source>[ImageLoader] 配置代理: {}:{}</source>
         <translation>[ImageLoader] Configuring proxy: {}:{}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="339"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="307"/>
         <source>[LightweightExtract] yt-dlp 退出码 {}</source>
         <translation>[LightweightExtract] yt-dlp exit code {}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="340"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="308"/>
         <source>[LightweightExtract] 提取失败: {}</source>
         <translation>[LightweightExtract] Extraction failed: {}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="341"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="309"/>
         <source>[MainWindow] Cookie 状态检查失败: {0}</source>
         <translation>[MainWindow] Cookie status check failed: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="342"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="310"/>
         <source>[MainWindow] on_worker_error 异常: {0}</source>
         <translation>[MainWindow] on_worker_error exception: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="343"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="311"/>
         <source>[MainWindow] {0} Cookie 不可用: {1}</source>
         <translation>[MainWindow] {0} cookies unavailable: {1}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="344"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="312"/>
         <source>[MainWindow] {0} Cookie 有效，启动静默</source>
         <translation>[MainWindow] {0} cookies valid; no startup notification</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="345"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="313"/>
         <source>[MainWindow] {0} 新 Cookie 被拒绝，仍在使用旧文件</source>
         <translation>[MainWindow] New {0} cookies rejected; still using previous file</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="346"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="314"/>
         <source>[MainWindow] {0} 未启用 Cookie，跳过启动提醒</source>
         <translation>[MainWindow] Cookies disabled for {0}; skipping startup notification</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="347"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="315"/>
         <source>[MainWindow] 已恢复 {0} 个未完成任务到 UI</source>
         <translation>[MainWindow] Restored {0} unfinished tasks to UI</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="348"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="316"/>
         <source>[MainWindow] 收到更新申请，开始优雅退出</source>
         <translation>[MainWindow] Update requested; starting graceful exit</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="349"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="317"/>
         <source>[MainWindow] 检测到软件更新: {0}</source>
         <translation>[MainWindow] Software update detected: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="350"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="318"/>
         <source>[Navigation] 侧边栏 panel 类型为 {0}，跳过可打断动画安装</source>
         <translation>[Navigation] Sidebar panel type {0}; skipping interruptible animation setup</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="351"/>
         <source>[POT] 开关切换处理失败: {0}</source>
-        <translation>[POT] Failed to handle toggle: {0}</translation>
+        <translation type="vanished">[POT] Failed to handle toggle: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="352"/>
         <source>[POT][Diagnose] 探测输出:
 {}</source>
-        <translation>[POT][Diagnose] Probe output:
+        <translation type="vanished">[POT][Diagnose] Probe output:
 {}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="353"/>
         <source>[POT][Diagnose] 检测异常</source>
-        <translation>[POT][Diagnose] Probe exception</translation>
+        <translation type="vanished">[POT][Diagnose] Probe exception</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="354"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="319"/>
         <source>[POT][Parse] 注入 base_url={0} warm=True port={1} url={2}</source>
         <translation>[POT][Parse] Injecting base_url={0} warm=True port={1} url={2}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="355"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="320"/>
         <source>[POT][Parse] 跳过注入 reason={0} url={1}</source>
         <translation>[POT][Parse] Skipping injection reason={0} url={1}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="356"/>
         <source>[POT][Ready] 失败 stage=server_down (进程存活 pid={0} 但端口 {1} 不通)</source>
-        <translation>[POT][Ready] Failed stage=server_down (process alive pid={0}, port {1} unreachable)</translation>
+        <translation type="vanished">[POT][Ready] Failed stage=server_down (process alive pid={0}, port {1} unreachable)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="357"/>
         <source>[POT][Ready] 失败 stage={0} {1} 将在 {2:.0f}s 后重试 (第 {3} 次)</source>
-        <translation>[POT][Ready] Failed stage={0} {1}; retrying in {2:.0f}s (attempt {3})</translation>
+        <translation type="vanished">[POT][Ready] Failed stage={0} {1}; retrying in {2:.0f}s (attempt {3})</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="358"/>
         <source>[POT][Ready] 服务就绪 port={0} pid={1} token_len={2} warm_ms={3:.0f} plugin={4} minter={5} deno={6}</source>
-        <translation>[POT][Ready] Service ready port={0} pid={1} token_len={2} warm_ms={3:.0f} plugin={4} minter={5} deno={6}</translation>
+        <translation type="vanished">[POT][Ready] Service ready port={0} pid={1} token_len={2} warm_ms={3:.0f} plugin={4} minter={5} deno={6}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="359"/>
         <source>[POT][Ready] 警告 stage=deno_missing — 未找到 deno.exe，POT 服务可能无法铸造 BotGuard Token。请在「设置 → 依赖组件」安装 JS Runtime (Deno)。</source>
-        <translation>[POT][Ready] Warning stage=deno_missing — deno.exe not found; POT may be unable to mint BotGuard tokens. Install JS Runtime (Deno) in Settings → Dependencies.</translation>
+        <translation type="vanished">[POT][Ready] Warning stage=deno_missing — deno.exe not found; POT may be unable to mint BotGuard tokens. Install JS Runtime (Deno) in Settings → Dependencies.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="360"/>
         <source>[POT][Ready] 警告 stage=plugin_missing {0} — 服务已就绪但 yt-dlp 无法加载插件，PO Token 不会被使用</source>
-        <translation>[POT][Ready] Warning stage=plugin_missing {0} — service ready but yt-dlp cannot load the plugin; PO tokens will not be used</translation>
+        <translation type="vanished">[POT][Ready] Warning stage=plugin_missing {0} — service ready but yt-dlp cannot load the plugin; PO tokens will not be used</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="361"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="321"/>
         <source>[POT][{}] argv 已含 youtubepot-bgutilhttp base_url={}{}</source>
         <translation>[POT][{}] argv contains youtubepot-bgutilhttp base_url={}{}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="362"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="322"/>
         <source>[POT][{}] argv 未含 POT 参数 (enabled=False){}</source>
         <translation>[POT][{}] argv has no POT arguments (enabled=False){}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="363"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="323"/>
         <source>[POT][{}] argv 未含 POT 参数 (enabled=True){}</source>
         <translation>[POT][{}] argv has no POT arguments (enabled=True){}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="364"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="324"/>
         <source>[ParseCache] 命中 mode={0}: {1} 缓存年龄 {2:.1f}s 本次耗时 {3:.0f}ms (formats={4}, entries={5}) 桶: {6}</source>
         <translation>[ParseCache] Hit mode={0}: {1} age={2:.1f}s elapsed={3:.0f}ms (formats={4}, entries={5}) buckets: {6}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="365"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="325"/>
         <source>[ParseCache] 已清空 {0} 条缓存{1}</source>
         <translation>[ParseCache] Cleared {0} cache entries{1}</translation>
     </message>
@@ -8770,27 +9279,27 @@ Actual: {1}</translation>
         <translation type="vanished">[ParseCache] Cleared {0} cache entries</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="366"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="326"/>
         <source>[ParseCache] 跳过写入: POT 预热中，键不稳定</source>
         <translation>[ParseCache] Skipping write: POT warming up; key unstable</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="367"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="327"/>
         <source>[ParseCache] 跳过写入: entries={0} 超过上限 {1}，deepcopy 成本高于收益</source>
         <translation>[ParseCache] Skipping write: entries={0} exceeds limit {1}; deepcopy cost outweighs benefit</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="368"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="328"/>
         <source>[PlaylistFlat] 解析完成: {0} 耗时 {1:.2f}s (entries={2})</source>
         <translation>[PlaylistFlat] Parsed {0} in {1:.2f}s (entries={2})</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="369"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="329"/>
         <source>[SABR 追加 web_safari 重解析]</source>
         <translation>[SABR retry with web_safari]</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="370"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="330"/>
         <source>[SABR] web_safari 重解析失败，沿用原结果: {0}</source>
         <translation>[SABR] web_safari retry failed; keeping original result: {0}</translation>
     </message>
@@ -8799,580 +9308,581 @@ Actual: {1}</translation>
         <translation type="vanished">[SABR] Account is in the SABR-only experiment (HD direct URLs discarded); account marked. Future parsing/downloads will append web_safari to recover HD formats.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="372"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="332"/>
         <source>[SubEmbed] 未指定 → MKV</source>
         <translation>[SubEmbed] Unspecified → MKV</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="373"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="333"/>
         <source>[Subtitle] 成功后诊断命中 {} (code={})</source>
         <translation>[Subtitle] Post-success diagnosis matched {} (code={})</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="374"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="334"/>
         <source>[Subtitle] 迟解析取 info 失败，将回落正则模式：{}</source>
         <translation>[Subtitle] Late info extraction failed; falling back to regex mode: {}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="375"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="335"/>
         <source>[TaskDBWriter] 写入异常: {0}</source>
         <translation>[TaskDBWriter] Write exception: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="376"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="336"/>
         <source>[TaskDBWriter] 批量写入回滚，改为逐条重试: {0}</source>
         <translation>[TaskDBWriter] Batch write rolled back; retrying individually: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="377"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="337"/>
         <source>[Timing][run_dump_single_json] env={:.0f}ms 子进程={:.0f}ms JSON={:.0f}ms 输出={}行</source>
         <translation>[Timing][run_dump_single_json] env={:.0f}ms subprocess={:.0f}ms JSON={:.0f}ms output={} lines</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="378"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="338"/>
         <source>[UpdateNotifier] 更新通知已接入消息中心</source>
         <translation>[UpdateNotifier] Update notifications connected to notification center</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="379"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="339"/>
         <source>[UpdateNotifier] 跳过 {0}：有更新但没有下载地址</source>
         <translation>[UpdateNotifier] Skipping {0}: update available but no download URL</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="380"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="340"/>
         <source>[UrlRouter] t.co 展开失败: {0}</source>
         <translation>[UrlRouter] Failed to expand t.co URL: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="381"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="341"/>
         <source>[VR] 元数据注入失败，保留原文件</source>
         <translation>[VR] Metadata injection failed; preserving original file</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="382"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="342"/>
         <source>[VR] 无法找到最终文件</source>
         <translation>[VR] Final file not found</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="383"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="343"/>
         <source>[WebView2Runtime] 已检测到运行时，版本 {0}</source>
         <translation>[WebView2Runtime] Runtime detected, version {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="384"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="344"/>
         <source>[WebView2Runtime] 未检测到 WebView2 运行时，登录模式不可用</source>
         <translation>[WebView2Runtime] WebView2 runtime not found; sign-in unavailable</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="385"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="345"/>
         <source>[WebView2] WebView2 缓存目录: {0}</source>
         <translation>[WebView2] WebView2 cache directory: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="386"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="346"/>
         <source>[WebView2] code={0} stage={1} 子进程报告错误: {2}</source>
         <translation>[WebView2] code={0} stage={1} subprocess reported error: {2}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="387"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="347"/>
         <source>[WebView2] 启动安全登录窗口: {0} (session={1}, hidden_first={2})</source>
         <translation>[WebView2] Opening secure sign-in window: {0} (session={1}, hidden_first={2})</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="388"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="348"/>
         <source>[WebView2] 子进程已启动 (PID: {0}, session={1})，等待用户登录...</source>
         <translation>[WebView2] Subprocess started (PID: {0}, session={1}); waiting for sign-in...</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="389"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="349"/>
         <source>[WebView2] 子进程意外退出且未回传任何结果</source>
         <translation>[WebView2] Subprocess exited unexpectedly without returning a result</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="390"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="350"/>
         <source>[WebView2] 子进程返回空 Cookie 列表</source>
         <translation>[WebView2] Subprocess returned an empty cookie list</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="391"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="351"/>
         <source>[WebView2] 强制终止残留子进程</source>
         <translation>[WebView2] Terminating leftover subprocess</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="392"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="352"/>
         <source>[WebView2] 成功提取 {0} 个 Cookie</source>
         <translation>[WebView2] Extracted {0} cookies</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="393"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="353"/>
         <source>[WebView2] 提取过程异常: {0}</source>
         <translation>[WebView2] Extraction exception: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="394"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="354"/>
         <source>[WebView2] 未收到子进程响应 (超时)</source>
         <translation>[WebView2] No subprocess response (timeout)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="395"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="355"/>
         <source>[WebView2] 读取子进程队列异常: {0}</source>
         <translation>[WebView2] Failed to read subprocess queue: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="396"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="356"/>
         <source>[WebView2] 预检失败：缺少 WebView2 运行时，已跳过子进程启动</source>
         <translation>[WebView2] Preflight failed: WebView2 runtime missing; subprocess not started</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="397"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="357"/>
         <source>[cookie 刷新后重试]</source>
         <translation>[retry after cookie refresh]</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="398"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="358"/>
         <source>[cookie_runfile] 启动清理遗留运行副本: {0} 个</source>
         <translation>[cookie_runfile] Startup cleanup removed {0} leftover run copies</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="399"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="359"/>
         <source>[diagnostics] rc={} 只有警告级线索 {}，不采纳为主因</source>
         <translation>[diagnostics] rc={} has only warning-level evidence {}; not selected as primary cause</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="400"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="360"/>
         <source>[diagnostics] 发现缺少 code 的规则，已跳过</source>
         <translation>[diagnostics] Skipped rule without a code</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="401"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="361"/>
         <source>[diagnostics] 已应用规则覆盖层，{} 条: {}</source>
         <translation>[diagnostics] Applied {} rule overrides: {}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="402"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="362"/>
         <source>[diagnostics] 未加载到任何内置规则，诊断将退化为兜底模式: {}</source>
         <translation>[diagnostics] No built-in rules loaded; falling back to generic diagnosis: {}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="403"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="363"/>
         <source>[diagnostics] 规则 {} 没有任何有效 pattern，已跳过</source>
         <translation>[diagnostics] Rule {} has no valid patterns; skipped</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="404"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="364"/>
         <source>[diagnostics] 规则 {} 的 category 非法（{}），归为 unknown</source>
         <translation>[diagnostics] Invalid category for rule {} ({}); using unknown</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="405"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="365"/>
         <source>[diagnostics] 规则 {} 的 pattern kind 未知: {}</source>
         <translation>[diagnostics] Unknown pattern kind for rule {}: {}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="406"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="366"/>
         <source>[diagnostics] 规则 {} 的 pattern 缺少 value，已跳过</source>
         <translation>[diagnostics] Pattern in rule {} has no value; skipped</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="407"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="367"/>
         <source>[diagnostics] 规则 {} 的 severity 非法（{}），归为 fatal</source>
         <translation>[diagnostics] Invalid severity for rule {} ({}); using fatal</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="408"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="368"/>
         <source>[diagnostics] 规则 {} 的正则无效（{}），已跳过: {}</source>
         <translation>[diagnostics] Invalid regex in rule {} ({}); skipped: {}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="409"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="369"/>
         <source>[diagnostics] 规则文件读取失败，已忽略: {} ({})</source>
         <translation>[diagnostics] Cannot read rule file; ignored: {} ({})</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="410"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="370"/>
         <source>[diagnostics] 规则文件顶层不是对象，已忽略: {}</source>
         <translation>[diagnostics] Rule file root is not an object; ignored: {}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="411"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="371"/>
         <source>[skip=authcheck 重试]</source>
         <translation>[retry with skip=authcheck]</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="412"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="372"/>
         <source>[{0}/{1}] {2} — 后处理: {3}</source>
         <translation>[{0}/{1}] {2} — Post-processing: {3}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="413"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="373"/>
         <source>[{0}] Cookie 清洗完成: {1} -&gt; {2} (移除: {3}, 其中已过期 {4} 个)</source>
         <translation>[{0}] Cookies cleaned: {1} -&gt; {2} (removed: {3}, including {4} expired)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="414"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="374"/>
         <source>[{0}] Cookie 清洗完成: 无需过滤</source>
         <translation>[{0}] Cookies cleaned: no filtering needed</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="415"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="375"/>
         <source>[{0}] 导入文件 Cookie 清洗完成: {1} -&gt; {2} (移除: {3})</source>
         <translation>[{0}] Imported cookies cleaned: {1} -&gt; {2} (removed: {3})</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="416"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="376"/>
         <source>[{0}] 导入文件 Cookie 清洗完成: 保持 {1} 个</source>
         <translation>[{0}] Imported cookies cleaned: retained {1}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="417"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="377"/>
         <source>[{0}s] X 域 {1} 个 Cookie, names={2}</source>
         <translation>[{0}s] {1} cookies for X domains, names={2}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="418"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="378"/>
         <source>[{0}s] YouTube 域 {1} 个 Cookie, names={2}</source>
         <translation>[{0}s] {1} cookies for YouTube domains, names={2}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="419"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="379"/>
         <source>[{0}s] 尚未检测到 LOGIN_INFO</source>
         <translation>[{0}s] LOGIN_INFO not detected yet</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="420"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="380"/>
         <source>[{0}s] 尚未检测到完整的登录 Cookie</source>
         <translation>[{0}s] Complete sign-in cookies not detected yet</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="421"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="381"/>
         <source>[{0}s] 等待跳回 X... (当前: {1})</source>
         <translation>[{0}s] Waiting for redirect to X... (current: {1})</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="422"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="382"/>
         <source>[{0}s] 等待跳回 YouTube... (当前: {1})</source>
         <translation>[{0}s] Waiting for redirect to YouTube... (current: {1})</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="423"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="383"/>
         <source>[{0}s] 超过 {1}s 未检测到有效登录态，主动显示窗口让用户登录...</source>
         <translation>[{0}s] No valid session after {1}s; showing sign-in window...</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="424"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="384"/>
         <source>[全局] {0}</source>
         <translation>[Global] {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="425"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="385"/>
         <source>[冲突] {0}</source>
         <translation>[Conflict] {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="426"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="386"/>
         <source>[失败] {0}</source>
         <translation>[Failed] {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="427"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="387"/>
         <source>[字幕 ({0})]</source>
         <translation>[Subtitles ({0})]</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="428"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="388"/>
         <source>[字幕] {0}</source>
         <translation>[Subtitles] {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="429"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="389"/>
         <source>[字幕处理] ✓ 已就绪 {0} 个字幕文件</source>
         <translation>[Subtitle processing] ✓ {0} subtitle files ready</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="430"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="390"/>
         <source>[封面] {0}</source>
         <translation>[Cover] {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="431"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="391"/>
         <source>[封面嵌入] {0}</source>
         <translation>[Cover embedding] {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="432"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="392"/>
         <source>[封面嵌入] ✓ 成功</source>
         <translation>[Cover embedding] ✓ Success</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="433"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="393"/>
         <source>[封面嵌入] 正在处理: {0}</source>
         <translation>[Cover embedding] Processing: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="434"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="394"/>
         <source>[播放列表] {0}</source>
         <translation>[Playlist] {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="435"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="395"/>
         <source>[无登录态降级]</source>
         <translation>[unauthenticated fallback]</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="436"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="396"/>
         <source>[频道标签降级]</source>
         <translation>[channel tab fallback]</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="437"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="397"/>
         <source>_on_download_clicked 异常</source>
         <translation>_on_download_clicked exception</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="438"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="398"/>
         <source>android_vr 解析失败: {0}</source>
         <translation>android_vr parsing failed: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="439"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="399"/>
         <source>commit gate: 本次已被取消</source>
         <translation>commit gate: run cancelled</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="440"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="400"/>
         <source>cookie 运行副本启动清理失败</source>
         <translation>Failed to clean up cookie run copies at startup</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="441"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="401"/>
         <source>create_window 成功</source>
         <translation>create_window succeeded</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="442"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="402"/>
         <source>create_window 成功 (fallback, 无 hidden)</source>
         <translation>create_window succeeded (fallback, no hidden option)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="443"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="403"/>
         <source>discovery 已封板，reconcile() 不再可用</source>
         <translation>Discovery is sealed; reconcile() is no longer available</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="444"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="404"/>
         <source>discovery 已封板，{0}() 不再可用（生产请走 register_generated）</source>
         <translation>Discovery is sealed; {0}() is no longer available (use register_generated for generated artifacts)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="445"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="405"/>
         <source>drop 必须给出 reason</source>
         <translation>drop requires a reason</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="446"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="406"/>
         <source>ffmpeg 剪切失败: {0}</source>
         <translation>ffmpeg cutting failed: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="447"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="407"/>
         <source>gc_orphans 失败: {}</source>
         <translation>gc_orphans failed: {}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="448"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="408"/>
         <source>group_stem 未确定，build_plan() 拒绝猜测</source>
         <translation>group_stem not determined; build_plan() will not guess</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="449"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="409"/>
         <source>import webview 成功: {0}</source>
         <translation>webview imported: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="450"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="410"/>
         <source>mutagen FLAC 封面嵌入成功: {0}</source>
         <translation>FLAC cover embedded with mutagen: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="451"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="411"/>
         <source>mutagen MP3 封面嵌入成功: {0}</source>
         <translation>MP3 cover embedded with mutagen: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="452"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="412"/>
         <source>mutagen OGG 封面嵌入成功: {0}</source>
         <translation>OGG cover embedded with mutagen: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="453"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="413"/>
         <source>mutagen 不支持 {0} 格式</source>
         <translation>mutagen does not support the {0} format</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="454"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="414"/>
         <source>mutagen 库不可用</source>
         <translation>mutagen library is unavailable</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="455"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="415"/>
         <source>mutagen 异常: {0}</source>
         <translation>mutagen exception: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="456"/>
         <source>provider 拒绝了请求（服务不可达时会静默降级）：
 </source>
-        <translation>Provider rejected the request (silently falls back when service is unreachable):
+        <translation type="vanished">Provider rejected the request (silently falls back when service is unreachable):
 </translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="457"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="416"/>
         <source>psutil 未安装，进程清理功能受限</source>
         <translation>psutil is not installed; process cleanup is limited</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="458"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="417"/>
         <source>py7zr 解压失败 ({0}): {1}</source>
         <translation>py7zr extraction failed ({0}): {1}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="459"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="418"/>
         <source>pywebview 加载失败: {0}
 {1}</source>
         <translation>Failed to load pywebview: {0}
 {1}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="460"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="419"/>
         <source>register_generated 必须给出 producer</source>
         <translation>register_generated requires a producer</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="461"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="420"/>
         <source>register_generated: {0!r} 不存在</source>
         <translation>register_generated: {0!r} does not exist</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="462"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="421"/>
         <source>replace_artifact_content: {0!r} 不存在</source>
         <translation>replace_artifact_content: {0!r} does not exist</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="463"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="422"/>
         <source>replace_artifact_content: {0!r} 是空文件</source>
         <translation>replace_artifact_content: {0!r} is empty</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="464"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="423"/>
         <source>rookiepy 不支持 {0}</source>
         <translation>rookiepy does not support {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="465"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="424"/>
         <source>rookiepy 未安装，无法从浏览器提取 Cookie</source>
         <translation>rookiepy not installed, cannot extract Cookie from browser</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="466"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="425"/>
         <source>rookiepy 未安装，浏览器 Cookie 自动提取功能不可用</source>
         <translation>rookiepy is not installed; automatic browser cookie extraction is unavailable</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="467"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="426"/>
         <source>t.co 短链接</source>
         <translation>t.co short URL</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="468"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="427"/>
         <source>updater.exe 不存在: {0}</source>
         <translation>updater.exe does not exist: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="469"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="428"/>
         <source>webview.start() 已返回（子进程即将退出）</source>
         <translation>webview.start() returned (subprocess will exit)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="470"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="429"/>
         <source>yt-dlp JSON 解析失败: {0}</source>
         <translation>Failed to parse yt-dlp JSON: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="471"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="430"/>
         <source>yt-dlp 信息提取失败 (rc={0}): {1}</source>
         <translation>yt-dlp info extraction failed (rc={0}): {1}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="472"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="431"/>
         <source>yt-dlp 可执行文件未找到</source>
         <translation>yt-dlp executable not found</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="473"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="432"/>
         <source>yt-dlp 安装后置处理失败: {0}</source>
         <translation>yt-dlp post-install processing failed: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="474"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="433"/>
         <source>yt-dlp 执行失败 (退出码: {0})</source>
         <translation>yt-dlp execution failed (exit code: {0})</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="475"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="434"/>
         <source>yt-dlp 执行错误: {}</source>
         <translation>yt-dlp execution error: {}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="476"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="435"/>
+        <source>yt-dlp 未能通过 POT 获取令牌，请检查网络、代理和组件版本。</source>
+        <translation>yt-dlp could not obtain a POT token. Check your network, proxy, and component versions.</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="436"/>
         <source>yt-dlp 未输出可解析的 JSON
 {0}</source>
         <translation>yt-dlp returned no parseable JSON
 {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="477"/>
         <source>yt-dlp 输出里没有任何 POT 痕迹 —— 插件很可能没被加载。
 退出码={0}</source>
-        <translation>No POT information in yt-dlp output — plugin probably did not load.
+        <translation type="vanished">No POT information in yt-dlp output — plugin probably did not load.
 Exit code={0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="478"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="437"/>
         <source>yt-dlp 退出码 {} (非零)，但输出文件有效 ({}, {:.1f} KB)。忽略错误。</source>
         <translation>yt-dlp exited with nonzero code {}, but the output file is valid ({}, {:.1f} KB). Ignoring the error.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="479"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="438"/>
         <source>{0!r} 不在 {1!r} 内</source>
         <translation>{0!r} is not inside {1!r}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="480"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="439"/>
         <source>{0!r} 与 {1!r} 不同卷</source>
         <translation>{0!r} and {1!r} are on different volumes</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="481"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="440"/>
         <source>{0:,} 次观看</source>
         <translation>{0:,} views</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="482"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="441"/>
         <source>{0} Cookie Sentinel: {1} (更新于 {2}, {3} 个 {4} Cookie)</source>
         <translation>{0} Cookie Sentinel: {1} (updated {2}, {3} {4} cookies)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="483"/>
         <source>{0} Minter 缓存：{1}</source>
-        <translation>{0} Minter cache: {1}</translation>
+        <translation type="vanished">{0} Minter cache: {1}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="484"/>
         <source>{0} Token 生成：{1}</source>
-        <translation>{0} Token generation: {1}</translation>
+        <translation type="vanished">{0} Token generation: {1}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="485"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="442"/>
         <source>{0} v130+ 使用了 App-Bound 加密。
 需要以管理员身份重新启动程序才能提取 Cookie。
 
@@ -9383,14 +9893,12 @@ Restart the application as administrator to extract cookies.
 Tip: Edge or Firefox may avoid this issue.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="486"/>
         <source>{0} yt-dlp 主动探测（-v，验证插件被加载且 provider 被选中）：</source>
-        <translation>{0} yt-dlp active probe (-v, verifies plugin loading and provider selection):</translation>
+        <translation type="vanished">{0} yt-dlp active probe (-v, verifies plugin loading and provider selection):</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="487"/>
         <source>{0} yt-dlp 插件：{1}</source>
-        <translation>{0} yt-dlp plugin: {1}</translation>
+        <translation type="vanished">{0} yt-dlp plugin: {1}</translation>
     </message>
     <message>
         <location filename="../../src/fluentytdl/notification/notification_text.py" line="20"/>
@@ -9403,17 +9911,17 @@ Tip: Edge or Firefox may avoid this issue.</translation>
         <translation>{0} {1} is available. Update in Settings → System → About.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="490"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="445"/>
         <source>{0} 个字幕文件全部校验失败</source>
         <translation>All {0} subtitle files failed validation</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="491"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="446"/>
         <source>{0} 分钟前</source>
         <translation>{0} minutes ago</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="493"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="448"/>
         <source>{0} 天前</source>
         <translation>{0} days ago</translation>
     </message>
@@ -9423,187 +9931,184 @@ Tip: Edge or Firefox may avoid this issue.</translation>
         <translation>{0} will switch from the {1} channel to {2} ({3} → {4}). Apply in Settings → Components.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="495"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="450"/>
         <source>{0} 小时前</source>
         <translation>{0} hours ago</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="496"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="451"/>
         <source>{0} 提取失败</source>
         <translation>{0} extraction failed</translation>
     </message>
     <message>
         <location filename="../../src/fluentytdl/notification/notification_text.py" line="17"/>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="498"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="453"/>
         <source>{0} 有新版本 {1}</source>
         <translation>{0} version {1} is available</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="499"/>
         <source>{0} 服务进程：</source>
-        <translation>{0} Service process:</translation>
+        <translation type="vanished">{0} Service process:</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="500"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="454"/>
         <source>{0} 格式不支持封面嵌入: {1}</source>
         <translation>{0} does not support cover embedding: {1}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="501"/>
         <source>{0} 自动修复：</source>
-        <translation>{0} Automatic repair:</translation>
+        <translation type="vanished">{0} Automatic repair:</translation>
     </message>
     <message>
         <location filename="../../src/fluentytdl/notification/notification_text.py" line="18"/>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="502"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="455"/>
         <source>{0} 需要切换频道</source>
         <translation>{0} requires a channel change</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="503"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="456"/>
         <source>{0} 需要管理员权限才能提取 Cookie（App-Bound 加密）</source>
         <translation>{0} requires administrator privileges to extract cookies (App-Bound encryption)</translation>
     </message>
     <message>
         <location filename="../../src/fluentytdl/auth/auth_service.py" line="272"/>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="504"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="457"/>
         <source>{0} 默认账号</source>
         <translation>{0} default account</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="505"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="458"/>
         <source>{0}-结尾</source>
         <translation>{0}-end</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="506"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="459"/>
         <source>{0}: PATH 上找到 {1}，但缺少 {2}，不计为可用</source>
         <translation>{0}: found {1} on PATH, but {2} is missing; not considered available</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="507"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="460"/>
         <source>{0}: 无法保留目的地原有副本，本项跳过（下次启动重试）</source>
         <translation>{0}: cannot preserve existing destination copy; skipped (will retry at next startup)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="508"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="461"/>
         <source>{0}: 目的地已是最新，保持不动</source>
         <translation>{0}: destination is up to date; keeping it</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="509"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="462"/>
         <source>{0}: 采用来自 {1} 的版本</source>
         <translation>{0}: using version from {1}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="510"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="463"/>
         <source>{0}{1}</source>
         <translation>{0}{1}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="511"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="464"/>
         <source>{0}{1} | ⬇️ {2} | {3}/{4} | 剩余: {5}</source>
         <translation>{0}{1} | ⬇️ {2} | {3}/{4} | Remaining: {5}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="512"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="465"/>
         <source>{0}分钟前</source>
         <translation>{0} minutes ago</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="513"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="466"/>
         <source>{0}（来自 {1}）副本校验未通过，该候选不参与裁决</source>
         <translation>{0} (from {1}) failed copy verification; candidate excluded</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="514"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="467"/>
         <source>{0}（来自 {1}）已保留为 {2}</source>
         <translation>{0} (from {1}) preserved as {2}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="515"/>
         <source>{0}，{1:.0f}s 后重试预热（已失败 {2} 次）</source>
-        <translation>{0}; retrying warmup in {1:.0f}s ({2} failed attempts)</translation>
+        <translation type="vanished">{0}; retrying warmup in {1:.0f}s ({2} failed attempts)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="516"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="468"/>
         <source>{0}，{1} 秒后开始…</source>
         <translation>{0}; starting in {1} seconds…</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="517"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="469"/>
         <source>{0}，尝试 py7zr</source>
         <translation>{0}; trying py7zr</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="518"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="470"/>
         <source>{0}；py7zr 依赖加载失败: {1}</source>
         <translation>{0}; failed to load py7zr dependencies: {1}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="519"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="471"/>
         <source>{} 条字幕已嵌入容器，不再单独交付</source>
         <translation>{} subtitle tracks embedded in the container; not delivered separately</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="520"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="472"/>
         <source>ℹ️ 当前以普通用户身份运行</source>
         <translation>ℹ️ Running as a standard user</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="521"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="473"/>
         <source>⏭️ 正在标记/跳过赞助片段...</source>
         <translation>⏭️ Marking/skipping sponsor segments...</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="522"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="474"/>
         <source>⏳ Cookie 将在 {0} 分钟后过期，建议提前刷新。</source>
         <translation>⏳ Cookies expire in {0} minutes. Consider refreshing them now.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="523"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="475"/>
         <source>⏳ {0}（等待 {1} 秒）</source>
         <translation>⏳ {0} (waiting {1} seconds)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="524"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="476"/>
         <source>⏳ 剩余: {0}</source>
         <translation>⏳ Remaining: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="525"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="477"/>
         <source>⏳ 提取超时 ({0}s)</source>
         <translation>⏳ Extraction timed out ({0}s)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="526"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="478"/>
         <source>⏸️ 下载已暂停</source>
         <translation>⏸️ Download paused</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="527"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="479"/>
         <source>⏸️ 下载已暂停 (应用重启)</source>
         <translation>⏸️ Download paused (application restarted)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="528"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="480"/>
         <source>▶️ 继续下载...</source>
         <translation>▶️ Resuming download...</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="529"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="481"/>
         <source>⚙️ 正在执行后期处理 ({0})...</source>
         <translation>⚙️ Post-processing ({0})...</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="530"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="482"/>
         <source>⚠ MP4 容器包含多条音轨（已选 {0} 种）时，在部分自带播放器中可能无法切换音频或出现异常。
 建议使用 MKV 容器或专业播放器（如 VLC/PotPlayer）。</source>
         <translation>⚠ Some built-in players cannot switch audio tracks or may have issues with MP4 files containing multiple tracks ({0} selected).
 Consider MKV or a player such as VLC/PotPlayer.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="531"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="483"/>
         <source>⚠ WebM 容器对多音轨支持有限，合并过程可能报错。强烈建议切换至 MKV。</source>
         <translation>⚠ WebM has limited support for multiple audio tracks and merging may fail. Switching to MKV is strongly recommended.</translation>
     </message>
@@ -9616,27 +10121,27 @@ Consider MKV or a player such as VLC/PotPlayer.</translation>
         <translation type="vanished">⚠️ POT plugin validation failed: {0}. The PO token service is running but may not be usable by yt-dlp.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="532"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="484"/>
         <source>⚠️ [SABR] 该账号处于 SABR-only 灰度，已追加 web_safari 客户端以拿回高清直链 (player_client={0})。此策略为待观察项。</source>
         <translation>⚠️ [SABR] Account is in the SABR-only experiment; appended web_safari to recover HD direct URLs (player_client={0}). This workaround is under observation.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="533"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="485"/>
         <source>⚠️ get_cookies 失败: {0}</source>
         <translation>⚠️ get_cookies failed: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="534"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="486"/>
         <source>⚠️ queue 发送失败: {0}</source>
         <translation>⚠️ Failed to send queue data: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="535"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="487"/>
         <source>⚠️ {0} 新 Cookie 未通过校验，仍在使用旧真相源: {1}</source>
         <translation>⚠️ New {0} cookies failed validation; still using previous source: {1}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="536"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="488"/>
         <source>⚠️ {0} 格式不支持封面嵌入
 原因：{1}
 下载将继续，但不会嵌入封面图片。</source>
@@ -9645,7 +10150,7 @@ Reason: {1}
 The download will continue without an embedded cover.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="537"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="489"/>
         <source>⚠️ {0} 格式封面嵌入支持有限
 备注：{1}
 封面可能无法正确显示在某些播放器中。</source>
@@ -9658,47 +10163,47 @@ The cover may not display correctly in some players.</translation>
         <translation type="vanished">⚠️ Packaging {0} video as MP4 may require transcoding or have limited support, and may take a while.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="539"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="491"/>
         <source>⚠️ {0}，解析可能失败。建议前往设置页刷新 Cookie。</source>
         <translation>⚠️ {0}; parsing may fail. Consider refreshing cookies in settings.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="540"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="492"/>
         <source>⚠️ 字幕文件异常: {0}（{1}）</source>
         <translation>⚠️ Invalid subtitle file: {0} ({1})</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="541"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="493"/>
         <source>⚠️ 封面嵌入工具不可用</source>
         <translation>⚠️ Cover embedding tool is unavailable</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="542"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="494"/>
         <source>⚠️ 提取任务未能完成（应用已重启）</source>
         <translation>⚠️ Extraction was interrupted (application restarted)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="543"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="495"/>
         <source>⚠️ 标题声称 8K 但最高格式仅 {0}p，可能是 VR 视频</source>
         <translation>⚠️ Title claims 8K but highest format is only {0}p; this may be VR video</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="544"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="496"/>
         <source>⚠️ 获取 Google Cookie 失败: {0}</source>
         <translation>⚠️ Failed to obtain Google cookies: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="545"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="497"/>
         <source>⚠️ 警告: 该视频受限，最高仅支持 {0}p 提取</source>
         <translation>⚠️ This video is restricted; the highest available quality is {0}p</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="546"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="498"/>
         <source>⚠️ 请求的语言没有可用字幕</source>
         <translation>⚠️ No subtitles available for the requested languages</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="548"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="500"/>
         <source>⚡ 下载中...</source>
         <translation>⚡ Downloading...</translation>
     </message>
@@ -9707,167 +10212,167 @@ The cover may not display correctly in some players.</translation>
         <translation type="vanished">⚡ Direct native extraction (subtitles/covers)...</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="549"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="501"/>
         <source>⚡ 检测到纯图片直接下载，走极简通道</source>
         <translation>⚡ Direct image download detected; using lightweight path</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="550"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="502"/>
         <source>⚡ 检测到纯提取任务 (skip_download)，走快速原生通道</source>
         <translation>⚡ Extraction-only task detected (skip_download); using fast native path</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="551"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="503"/>
         <source>⚡ 正在下载图片...</source>
         <translation>⚡ Downloading image...</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="552"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="504"/>
         <source>⚡ 正在初始化提取引擎...</source>
         <translation>⚡ Initializing extraction engine...</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="553"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="505"/>
         <source>⚡ 正在直接下载封面图片...</source>
         <translation>⚡ Downloading cover image directly...</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="554"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="506"/>
         <source>⚡ 正在获取字幕或封面...</source>
         <translation>⚡ Fetching subtitles or cover image...</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="555"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="507"/>
         <source>✂️ 正在下载裁切片段 | </source>
         <translation>✂️ Downloading clip | </translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="556"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="508"/>
         <source>✂️ 正在整理裁切文件…</source>
         <translation>✂️ Finalizing clip files…</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="557"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="509"/>
         <source>✂️ 正在精确裁切与重编码 {0:.1f}% | 速度: {1}</source>
         <translation>✂️ Precise cutting and re-encoding {0:.1f}% | Speed: {1}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="558"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="510"/>
         <source>✂️ 片段下载完成，正在准备精确裁切…</source>
         <translation>✂️ Clip downloaded; preparing precise cut…</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="559"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="511"/>
         <source>✂️ 裁切下载 · {0} {1:.1f}% | 已写入 {2}/{3} | ⬇️ {4} | 媒体速度 {5}</source>
         <translation>✂️ Clip download · {0} {1:.1f}% | Written {2}/{3} | ⬇️ {4} | Media speed {5}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="560"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="512"/>
         <source>✂️ 裁切下载 · {0} | 已写入 {1}/{2} | ⬇️ {3}</source>
         <translation>✂️ Clip download · {0} | Written {1}/{2} | ⬇️ {3}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="561"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="513"/>
         <source>✅ Cookie 已更新（{}）</source>
         <translation>✅ Cookie updated ({})</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="562"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="514"/>
         <source>✅ android_vr 客户端获取到 {0} 个格式</source>
         <translation>✅ android_vr client returned {0} formats</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="563"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="515"/>
         <source>✅ 下载完成</source>
         <translation>✅ Download complete</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="564"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="516"/>
         <source>✅ 下载并处理完成！</source>
         <translation>✅ Download and processing complete!</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="565"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="517"/>
         <source>✅ 回退解析成功: {0}</source>
         <translation>✅ Fallback parsing succeeded: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="566"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="518"/>
         <source>✅ 已加载 Cookie 文件: {0} (YouTube/Google cookies: {1})</source>
         <translation>✅ Loaded cookie file: {0} (YouTube/Google cookies: {1})</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="567"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="519"/>
         <source>✅ 已合并 {0} 个 VR 高分辨率格式 (IDs: {1})</source>
         <translation>✅ Merged {0} high-resolution VR formats (IDs: {1})</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="568"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="520"/>
         <source>✅ 已回传 {0} 个 Cookie 到父进程</source>
         <translation>✅ Returned {0} cookies to parent process</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="569"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="521"/>
         <source>✅ 当前以管理员身份运行</source>
         <translation>✅ Running as administrator</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="570"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="522"/>
         <source>✅ 提取完成</source>
         <translation>✅ Extraction complete</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="571"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="523"/>
         <source>✅ 无登录态降级解析成功（格式列表可能不完整）</source>
         <translation>✅ Unauthenticated fallback succeeded (format list may be incomplete)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="572"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="524"/>
         <source>✓ 字幕文件有效: {}</source>
         <translation>✓ Valid subtitle file: {}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="573"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="525"/>
         <source>✗ 字幕文件无效: {} - {}</source>
         <translation>✗ Invalid subtitle file: {} - {}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="574"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="526"/>
         <source>❌ {0} 与 WebM 不兼容。</source>
         <translation>❌ {0} is incompatible with WebM.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="575"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="527"/>
         <source>❌ {0} 与 WebM 不兼容，强烈建议使用 MP4 或 MKV。</source>
         <translation>❌ {0} is incompatible with WebM. MP4 or MKV is strongly recommended.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="576"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="528"/>
         <source>❌ 更新异常: {0}</source>
         <translation>❌ Update exception: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="577"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="529"/>
         <source>❌ 格式化后为空</source>
         <translation>❌ Empty after formatting</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="578"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="530"/>
         <source>❌ 登录未完成，请重新点击「点击登录」</source>
         <translation>❌ Sign-in was not completed. Please click Sign In again.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="579"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="531"/>
         <source>❌ 错误: yt-dlp 退出码 {0}</source>
         <translation>❌ Error: yt-dlp exit code {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="580"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="532"/>
         <source>❌ 错误: {0}</source>
         <translation>❌ Error: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="581"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="533"/>
         <source>【提取解密失败】
 
 受到 {0} 最新的底层加密机制 (App-Bound Encryption) 限制，目前第三方工具无法直接解密提取它的 Cookie。
@@ -9884,576 +10389,605 @@ Use one of these alternatives:
 2. Use Manual Import in settings to provide an exported cookies.txt file</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="582"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="534"/>
         <source>上传日期</source>
         <translation>Upload date</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="584"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="536"/>
         <source>下载 URL 为空</source>
         <translation>Download URL is empty</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="585"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="537"/>
         <source>下载: {0:.1f}%</source>
         <translation>Download: {0:.1f}%</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="586"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="538"/>
         <source>下载失败: {0}</source>
         <translation>Download failed: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="587"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="539"/>
         <source>下载已取消: {}</source>
         <translation>Download cancelled: {}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="588"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="540"/>
         <source>下载流完毕，等待后续合并与处理...</source>
         <translation>Stream downloaded; waiting for merging and processing...</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="589"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="541"/>
         <source>下载过程发生未知异常: {}</source>
         <translation>Unexpected download exception: {}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="591"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="543"/>
         <source>不下载字幕</source>
         <translation>Do not download subtitles</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="592"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="544"/>
         <source>不支持为 {0} 格式嵌入封面</source>
         <translation>Cover embedding is not supported for the {0} format</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="593"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="545"/>
         <source>不支持的平台</source>
         <translation>Unsupported platform</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="594"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="546"/>
         <source>不支持的归档格式: {0}</source>
         <translation>Unsupported archive format: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="595"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="547"/>
         <source>不支持的链接</source>
         <translation>Unsupported Link</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="598"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="550"/>
         <source>专辑与剧集</source>
         <translation>Album &amp; series</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="600"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="552"/>
         <source>主媒体登记失败: {}</source>
         <translation>Failed to register primary media: {}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="601"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="553"/>
         <source>主程序可执行文件名</source>
         <translation>Main application executable name</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="602"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="554"/>
         <source>主程序的用户数据目录（.update_ready 信号落点）。为空则退化为 survival 监护</source>
         <translation>Application user data directory (.update_ready signal destination). Empty uses survival monitoring.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="603"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="555"/>
         <source>主进程 PID</source>
         <translation>Main process PID</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="621"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="572"/>
         <source>传递特性</source>
         <translation>Transfer characteristics</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="623"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="574"/>
         <source>位深</source>
         <translation>Bit depth</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="624"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="575"/>
         <source>作曲</source>
         <translation>Composer</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="630"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="581"/>
         <source>保留落选的 {0}（来自 {1}）失败: {2}</source>
         <translation>Failed to preserve unselected {0} (from {1}): {2}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="632"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="583"/>
         <source>修改日期</source>
         <translation>Modified</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="633"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="584"/>
         <source>像素宽高比</source>
         <translation>Pixel aspect ratio</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="634"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="585"/>
         <source>像素格式</source>
         <translation>Pixel format</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="636"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="587"/>
         <source>关键词</source>
         <translation>Keywords</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="637"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="588"/>
         <source>关闭</source>
         <translation>Close</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="638"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="589"/>
         <source>其他标题</source>
         <translation>Other titles</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="639"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="590"/>
         <source>内容信息</source>
         <translation>Content</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="648"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="599"/>
         <source>写出 {0} 失败，updater 将按超时回滚: {1}</source>
         <translation>Failed to write {0}; updater will roll back after timeout: {1}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="650"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="601"/>
         <source>分类</source>
         <translation>Categories</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="651"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="602"/>
         <source>分类与关键词</source>
         <translation>Categories &amp; keywords</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="652"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="603"/>
         <source>分辨率</source>
         <translation>Resolution</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="661"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="612"/>
         <source>剧集</source>
         <translation>Episode</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="668"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="619"/>
         <source>动态范围</source>
         <translation>Dynamic range</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="669"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="620"/>
         <source>单声道</source>
         <translation>Mono</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="680"/>
+        <source>发现另一份 POT 插件，请查看诊断中的冲突路径。</source>
+        <translation type="vanished">Another POT plugin was found. Check diagnostics for the conflicting path.</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="632"/>
         <source>发行日期</source>
         <translation>Release date</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="684"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="636"/>
         <source>只有 media 能 promote，{0} 是 {1}</source>
         <translation>Only media can be promoted; {0} is {1}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="694"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="645"/>
         <source>启动 updater 失败: {0}</source>
         <translation>Failed to start updater: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="699"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="649"/>
         <source>声道</source>
         <translation>Channels</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="702"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="652"/>
         <source>备注 / 来源链接</source>
         <translation>Comment / source URL</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="703"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="653"/>
         <source>复制</source>
         <translation>Copy</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="704"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="654"/>
         <source>复制 {0}（来自 {1}）失败: {2}</source>
         <translation>Failed to copy {0} (from {1}): {2}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="706"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="656"/>
         <source>复制文件路径</source>
         <translation>Copy file path</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="707"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="657"/>
         <source>复制此卡片</source>
         <translation>Copy this card</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="716"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="664"/>
         <source>字幕</source>
         <translation>Subtitles</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="717"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="665"/>
         <source>字幕 {0}</source>
         <translation>Subtitle {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="727"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="675"/>
         <source>季</source>
         <translation>Season</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="728"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="676"/>
         <source>安装 {0}（来自 {1}）失败: {2}</source>
         <translation>Failed to install {0} (from {1}): {2}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="730"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="678"/>
         <source>完整模式</source>
         <translation>Full mode</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="742"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="690"/>
         <source>封面与附件</source>
         <translation>Cover &amp; attachments</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="753"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="701"/>
         <source>尚无 Cookie 文件</source>
         <translation>No cookie file yet</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="756"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="704"/>
         <source>嵌入图片</source>
         <translation>Embedded pictures</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="757"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="705"/>
         <source>工具未找到: {0}. 请将相应可执行文件放入 &apos;bin&apos; 目录，或将其加入系统 PATH，或在设置中指定路径。</source>
         <translation>Tool not found: {0}. Put the executable in &apos;bin&apos;, add it to PATH, or specify its path in settings.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="760"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="708"/>
         <source>已保留较新的一份，另一份存放在数据目录的 legacy_conflict_* 子目录中：
 {0}</source>
         <translation>The newer copy was retained. The other copy is in a legacy_conflict_* subdirectory of the data directory:
 {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="766"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="714"/>
         <source>已写出 {0} (pid={1}) → {2}</source>
         <translation>Wrote {0} (pid={1}) → {2}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="767"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="715"/>
         <source>已写出数据迁移完成标记</source>
         <translation>Data migration completion marker written</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="793"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="732"/>
+        <source>已就绪</source>
+        <translation>Ready</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="740"/>
         <source>已清理陈旧的 {0}</source>
         <translation>Removed stale {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="816"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="763"/>
         <source>帧宽度</source>
         <translation>Frame width</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="817"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="764"/>
         <source>帧高度</source>
         <translation>Frame height</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="833"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="774"/>
+        <source>当前 Deno 与 POT 不兼容，请更新 Deno。</source>
+        <translation>The current Deno runtime is incompatible with POT. Please update Deno.</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="780"/>
         <source>总平均码率（估算）</source>
         <translation>Overall bitrate (estimated)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="839"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="785"/>
         <source>手动导入</source>
         <translation>Manual Import</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="840"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="786"/>
         <source>手动导入文件</source>
         <translation>Manual File Import</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="845"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="791"/>
         <source>扫描方式</source>
         <translation>Scan type</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="853"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="799"/>
         <source>拖入音视频文件</source>
         <translation>Drop an audio or video file here</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="860"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="804"/>
         <source>提交失败: {0!r}</source>
         <translation>Commit failed: {0!r}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="861"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="805"/>
         <source>提交迁移标记失败，下次启动将重试: {0}</source>
         <translation>Failed to commit migration marker; will retry at next startup: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="871"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="814"/>
         <source>数据迁移：目的地 {0}，遗留候选 {1}</source>
         <translation>Data migration: destination {0}, legacy candidates {1}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="873"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="816"/>
         <source>整组避让超过 {0} 次仍撞名: {1!r}</source>
         <translation>Group naming still collides after {0} attempts: {1!r}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="874"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="817"/>
         <source>文件</source>
         <translation>File</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="880"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="823"/>
         <source>文件位置</source>
         <translation>Location</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="882"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="825"/>
         <source>文件名</source>
         <translation>File name</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="893"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="836"/>
         <source>旋转角度</source>
         <translation>Rotation</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="900"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="843"/>
         <source>无法在 {0} 写下 {1}（只读位置，可忽略）</source>
         <translation>Cannot write {1} in {0} (read-only location; nonfatal)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="902"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="845"/>
         <source>无法生成唯一文件名</source>
         <translation>Cannot generate a unique filename</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="903"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="846"/>
         <source>无法确定 {0} 落点，跳过: {1}</source>
         <translation>Cannot determine destination for {0}; skipped: {1}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="909"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="850"/>
+        <source>无法访问组件文件，请检查目录权限。</source>
+        <translation>Cannot access component files. Check directory permissions.</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="853"/>
         <source>日志 {0}（来自 {1}）与现有文件不同，已另存为 {2}</source>
         <translation>Log {0} (from {1}) differs from existing file; saved separately as {2}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="914"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="858"/>
         <source>显示模式</source>
         <translation>Display mode</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="917"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="861"/>
         <source>暂无音视频参数</source>
         <translation>No audio or video parameters available</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="918"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="862"/>
         <source>曲目</source>
         <translation>Track</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="919"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="863"/>
         <source>更多操作</source>
         <translation>More actions</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="920"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="864"/>
         <source>更新 worker 崩溃退出 code={0} hex={1}: {2}</source>
         <translation>Update worker crashed with exit code={0} hex={1}: {2}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="921"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="865"/>
         <source>更新 worker 无法启动: {0}</source>
         <translation>Update worker failed to start: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="922"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="866"/>
         <source>更新 worker 进程错误(交由 finished 定论): {0}</source>
         <translation>Update worker process error (deferred to finished for verdict): {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="941"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="885"/>
         <source>替代品 {0} 当前 presence={1}，不能顶位</source>
         <translation>Replacement {0} has presence={1}; cannot replace artifact</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="943"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="887"/>
         <source>有 {0} 项迁移失败（通常是文件被占用），下次启动会自动重试。旧数据仍在原位置，未被删除。</source>
         <translation>{0} items could not be migrated (usually because files are in use). Migration will retry at the next startup. The original data remains in its previous location.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="947"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="888"/>
         <source>未启用</source>
         <translation>Disabled</translation>
     </message>
     <message>
         <location filename="../../src/fluentytdl/auth/auth_service.py" line="278"/>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="949"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="890"/>
         <source>未命名账号</source>
         <translation>Unnamed account</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="954"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="897"/>
         <source>未找到 yt-dlp.exe（既没有内置也不在 PATH 中）</source>
         <translation>yt-dlp.exe not found (neither bundled nor on PATH)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="965"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="898"/>
+        <source>未找到 yt-dlp，请安装或检查内核路径。</source>
+        <translation>yt-dlp was not found. Install it or check the engine path.</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="903"/>
+        <source>未检查</source>
+        <translation>Not checked</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="909"/>
         <source>未知 kind: {0!r}</source>
         <translation>Unknown kind: {0!r}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="967"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="911"/>
         <source>未知大小</source>
         <translation>Unknown size</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="968"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="912"/>
         <source>未知标题</source>
         <translation>Unknown Title</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="998"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="941"/>
         <source>检测到两处旧数据</source>
         <translation>Two legacy data locations found</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1020"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="968"/>
         <source>没有任何可交付成员，build_plan() 拒绝产出空计划</source>
         <translation>No deliverable artifacts; build_plan() will not produce an empty plan</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1026"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="974"/>
         <source>流协议 {0} 需要 yt-dlp native 处理</source>
         <translation>Stream protocol {0} requires yt-dlp native handling</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1031"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="979"/>
         <source>清单里没有 {0!r}</source>
         <translation>Manifest has no artifact {0!r}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1039"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="987"/>
         <source>版权</source>
         <translation>Copyright</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1044"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="990"/>
         <source>用户取消下载</source>
         <translation>User cancelled download</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1049"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="995"/>
         <source>画质检查暂停</source>
         <translation>Paused by Quality Check</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1050"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="996"/>
         <source>画质检查：连续 {0} 个任务未达标，触发队列暂停阈值</source>
         <translation>Quality check: {0} consecutive tasks fell below target; the queue pause threshold was reached.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1051"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="997"/>
         <source>画面宽高比</source>
         <translation>Display aspect ratio</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1056"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1002"/>
         <source>登录获取 (WebView2 - {})</source>
         <translation>Sign In (WebView2 - {})</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1057"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1003"/>
         <source>登录获取 (WebView2)</source>
         <translation>Sign In (WebView2)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1058"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1004"/>
         <source>登录获取 (推荐)</source>
         <translation>Sign In (Recommended)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1139"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1085"/>
         <source>解析中...</source>
         <translation>Parsing...</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1167"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1112"/>
         <source>超时</source>
         <translation>Timed out</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1168"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1113"/>
         <source>跨卷复制后主媒体过小: {0}</source>
         <translation>Primary media too small after cross-volume copy: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1169"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1114"/>
         <source>跨卷复制大小不符: {0} != {1}</source>
         <translation>Cross-volume copy size mismatch: {0} != {1}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1171"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1116"/>
         <source>轨道名称</source>
         <translation>Track name</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1172"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1117"/>
         <source>轨道时长</source>
         <translation>Track duration</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1176"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1121"/>
         <source>迁移日志 {0}（来自 {1}）失败: {2}</source>
         <translation>Failed to migrate log {0} (from {1}): {2}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1178"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1123"/>
         <source>迁移有 {0} 项失败，下次启动将重试（不写 {1}）</source>
         <translation>Migration had {0} failures; will retry at next startup (not writing {1})</translation>
     </message>
     <message>
         <location filename="../../src/fluentytdl/notification/notification_text.py" line="30"/>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1191"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1132"/>
         <source>连续 {0} 个任务画质未达标，已暂停排队中的 {1} 个任务。请检查源视频的可用格式、目标分辨率和访问权限后再继续。</source>
         <translation>{0} consecutive tasks fell below the target quality. Paused {1} queued tasks. Check the available source formats, target resolution, and access permissions before resuming.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1192"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1133"/>
         <source>连续画质未达标，排队任务已暂停</source>
         <translation>Queued tasks paused after repeated quality issues</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1203"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1144"/>
         <source>部分数据未能迁移</source>
         <translation>Some data could not be migrated</translation>
     </message>
@@ -10462,163 +10996,172 @@ Use one of these alternatives:
         <translation type="vanished">Warming up… (port {0}; parsing without POT until ready)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1317"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1255"/>
         <source>🧾 正在核对产物...</source>
         <translation>🧾 Verifying artifacts...</translation>
     </message>
     <message>
         <location filename="../../src/fluentytdl/processing/sponsorblock.py" line="30"/>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="604"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="556"/>
         <source>互动提醒</source>
         <translation>Interaction Reminders</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="220"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="181"/>
         <source>POT 加载失败，已停止本次请求：{0}</source>
         <translation>POT loading failed. This request was stopped: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="222"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="184"/>
+        <source>POT 尚未就绪，请查看日志并重试。</source>
+        <translation>POT is not ready. Check the logs and retry.</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="186"/>
+        <source>POT 服务启动失败，请查看日志或修复组件。</source>
+        <translation>POT could not start. Check the logs or repair the component.</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="188"/>
         <source>POT 服务未就绪，请检查服务状态和网络连接后重试。</source>
         <translation>The POT service is not ready. Check the service status and network connection, then retry.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="258"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="226"/>
         <source>YouTube Cookies 已关闭，本次请求不携带 Cookie。</source>
         <translation>YouTube cookies are disabled; this request will not send cookies.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="371"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="331"/>
         <source>[SABR] 检测到 SABR-only（高清直链被丢弃），已标记本次请求对应的账号或匿名会话；后续解析/下载将追加 web_safari 客户端。</source>
         <translation>[SABR] SABR-only detected (HD direct URLs discarded); the account or anonymous session used by this request was marked. Future parsing/downloads will append web_safari.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="492"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="447"/>
         <source>{0} 声道</source>
         <translation>{0} channels</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="497"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="452"/>
         <source>{0} 文件</source>
         <translation>{0} file</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="538"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="490"/>
         <source>⚠️ {0} 视频在 MP4 中的播放兼容性取决于播放器。若无法播放，可尝试 MKV 或其他编码。</source>
         <translation>⚠️ Playback of {0} video in MP4 depends on the player. If it does not play, try MKV or another codec.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="547"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="499"/>
         <source>⚠️ 部分播放器不支持 MP4 中的 Opus 音频。可尝试 MKV，或选择 AAC 音轨。</source>
         <translation>⚠️ Some players do not support Opus audio in MP4. Try MKV or choose an AAC audio track.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="583"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="535"/>
         <source>上传者</source>
         <translation>Uploader</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="596"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="548"/>
         <source>不能用报告覆盖媒体源文件。</source>
         <translation>A report cannot overwrite the source media file.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="597"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="549"/>
         <source>专辑</source>
         <translation>Album</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="599"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="551"/>
         <source>专辑艺术家</source>
         <translation>Album artist</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="605"/>
         <source>交叉验证：minter 缓存现有 {0} 条。</source>
-        <translation>Cross-check: the minter cache currently has {0} entries.</translation>
+        <translation type="vanished">Cross-check: the minter cache currently has {0} entries.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="606"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="557"/>
         <source>产物对账失败</source>
         <translation>Artifact reconciliation failed</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="607"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="558"/>
         <source>产物校验未通过，已保留沙盒供排查</source>
         <translation>Artifact verification failed; sandbox preserved for diagnosis</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="608"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="559"/>
         <source>产物校验未通过，已保留沙盒供排查：{0}</source>
         <translation>Artifact verification failed; sandbox preserved for diagnosis: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="609"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="560"/>
         <source>产物登记失败: {}</source>
         <translation>Failed to register artifact: {}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="610"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="561"/>
         <source>仅支持本地文件，请勿输入网址或网络路径。</source>
         <translation>Only local files are supported. URLs and network paths are not supported.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="611"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="562"/>
         <source>从 {0} 到结束</source>
         <translation>From {0} to the end</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="612"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="563"/>
         <source>从 {0} 提取到 {1} 个 Cookie</source>
         <translation>Extracted {1} cookies from {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="613"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="564"/>
         <source>从 {0} 提取失败: {1}</source>
         <translation>Failed to extract from {0}: {1}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="614"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="565"/>
         <source>从模型移除第 {0} 行失败</source>
         <translation>Failed to remove row {0} from model</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="615"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="566"/>
         <source>代理地址已变更</source>
         <translation>Proxy address changed</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="616"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="567"/>
         <source>代理模式已变更</source>
         <translation>Proxy mode changed</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="617"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="568"/>
         <source>代理配置注入失败: {0}</source>
         <translation>Failed to inject proxy configuration: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="618"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="569"/>
         <source>任务已取消</source>
         <translation>Task cancelled</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="619"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="570"/>
         <source>任务未记录成品路径，请手动选择文件。</source>
         <translation>This task has no recorded output path. Please select a file manually.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="620"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="571"/>
         <source>任务终态失败（不可重试）: {} — {}</source>
         <translation>Task failed permanently (not retryable): {} — {}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="622"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="573"/>
         <source>估算中</source>
         <translation>Estimating</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="625"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="576"/>
         <source>作者 / 艺术家</source>
         <translation>Author / artist</translation>
     </message>
@@ -10627,27 +11170,27 @@ Use one of these alternatives:
         <translation type="vanished">Authors</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="626"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="577"/>
         <source>使用内置 FFmpeg: {0}</source>
         <translation>Using bundled FFmpeg: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="627"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="578"/>
         <source>使用系统 FFmpeg: {0}</source>
         <translation>Using system FFmpeg: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="628"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="579"/>
         <source>使用系统代理</source>
         <translation>Use System Proxy</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="629"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="580"/>
         <source>使用缓存的 Cookie 文件: {0}</source>
         <translation>Using cached cookie file: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="631"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="582"/>
         <source>信号处理注册失败 (可忽略): {0}</source>
         <translation>Failed to register signal handler (nonfatal): {0}</translation>
     </message>
@@ -10664,144 +11207,144 @@ Use one of these alternatives:
         <translation type="vanished">Metadata</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="635"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="586"/>
         <source>全局: {0}</source>
         <translation>Global: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="641"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="592"/>
         <source>内嵌 7za version=unknown</source>
         <translation>Bundled 7za version=unknown</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="642"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="593"/>
         <source>内嵌 7za version={0}</source>
         <translation>Bundled 7za version={0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="643"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="594"/>
         <source>内嵌 7za 不存在</source>
         <translation>Bundled 7za not found</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="644"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="595"/>
         <source>内嵌 7za 无法启动: {0}</source>
         <translation>Cannot start bundled 7za: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="645"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="596"/>
         <source>内置</source>
         <translation>Built-in</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="646"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="597"/>
         <source>内部哨兵：本进程由 _elevate_self 提权启动，禁止再次提权（防 UAC 递归）</source>
         <translation>Internal sentinel: process elevated by _elevate_self; do not elevate again (prevents recursive UAC prompts)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="647"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="598"/>
         <source>写入真相源失败: {0}</source>
         <translation>Failed to write cookie source: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="649"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="600"/>
         <source>写探测失败（目录不可写）: {0} — {1}</source>
         <translation>Write probe failed (directory not writable): {0} — {1}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="653"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="604"/>
         <source>刚刚</source>
         <translation>Just now</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="654"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="605"/>
         <source>创建登录窗口失败: {0}
 {1}</source>
         <translation>Failed to create sign-in window: {0}
 {1}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="655"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="606"/>
         <source>删除 WebView2 账号存储目录失败: {0}</source>
         <translation>Failed to remove WebView2 account storage directory: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="656"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="607"/>
         <source>删除历史行 {0} 失败: {1}</source>
         <translation>Failed to delete history row {0}: {1}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="657"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="608"/>
         <source>删除通知失败: {0}</source>
         <translation>Failed to delete notification: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="658"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="609"/>
         <source>刷新失败: {0}</source>
         <translation>Refresh failed: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="659"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="610"/>
         <source>刷新异常: </source>
         <translation>Refresh Exception: </translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="660"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="611"/>
         <source>刷新异常: {0}</source>
         <translation>Refresh exception: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="662"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="613"/>
         <source>剪切操作超时</source>
         <translation>Cutting operation timed out</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="663"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="614"/>
         <source>剪贴板自动识别已关闭</source>
         <translation>Clipboard detection disabled</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="664"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="615"/>
         <source>剪贴板自动识别已开启</source>
         <translation>Clipboard detection enabled</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="665"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="616"/>
         <source>加载 WebView2 账号配置失败: {0}</source>
         <translation>Failed to load WebView2 account configuration: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="666"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="617"/>
         <source>加载配置文件失败: {0}</source>
         <translation>Failed to load configuration file: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="667"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="618"/>
         <source>加载验证配置失败: {0}</source>
         <translation>Failed to load authentication configuration: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="670"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="621"/>
         <source>单语言字幕: {0}</source>
         <translation>Single subtitle language: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="671"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="622"/>
         <source>即将删除 {0} 个源文件，是否继续？</source>
         <translation>Delete {0} source files?</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="672"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="623"/>
         <source>即将删除 {0} 个缓存文件，是否继续？</source>
         <translation>Delete {0} cache files?</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="673"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="624"/>
         <source>历史行 {0} 没有可用的 ydl_opts，无法直接重下</source>
         <translation>History row {0} has no usable ydl_opts; cannot download again directly</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="674"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="625"/>
         <source>原始格式选择已保存: {}</source>
         <translation>Original format selection saved: {}</translation>
     </message>
@@ -10814,111 +11357,109 @@ Use one of these alternatives:
         <translation type="vanished">Native tags</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="675"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="626"/>
         <source>原生标签读取失败，显示已有技术信息。</source>
         <translation>Native tag reading failed. Available technical information is shown.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="676"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="627"/>
         <source>原生标签超过读取限制，显示已有技术信息。</source>
         <translation>Native tags exceeded the read limit. Available technical information is shown.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="677"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="628"/>
         <source>参考帧率</source>
         <translation>Reference frame rate</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="678"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="630"/>
         <source>发现新版本 {0}</source>
         <translation>New version {0} available</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="679"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="631"/>
         <source>发现预发布版本 {0}</source>
         <translation>Pre-release {0} available</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="681"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="633"/>
         <source>发起更新的原用户 TokenUser SID（S-1-5-21-...），用于降权启动的身份准入</source>
         <translation>Original user&apos;s TokenUser SID (S-1-5-21-...) for identity verification during de-elevation</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="682"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="634"/>
         <source>取消</source>
         <translation>Cancel</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="683"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="635"/>
         <source>取消裁决失败（沙盒留给 GC）: {}</source>
         <translation>Cancellation arbitration failed (sandbox left for GC): {}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="685"/>
         <source>只看到 POT 相关输出，但没有 bgutil provider 的痕迹：
 </source>
-        <translation>POT output found, but no evidence of the bgutil provider:
+        <translation type="vanished">POT output found, but no evidence of the bgutil provider:
 </translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="686"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="637"/>
         <source>合并后共 {0} 个, core匹配={1}</source>
         <translation>{0} total after merge, core match={1}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="687"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="638"/>
         <source>同步当前 WebView2 账号 Cookie 到统一文件失败: {0}</source>
         <translation>Failed to sync current WebView2 account cookies to shared file: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="688"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="639"/>
         <source>后处理: {0} ({1})</source>
         <translation>Post-processing: {0} ({1})</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="689"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="640"/>
         <source>后处理: {0}...</source>
         <translation>Post-processing: {0}...</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="690"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="641"/>
         <source>后处理中...</source>
         <translation>Post-processing...</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="691"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="642"/>
         <source>后处理功能 {} 发生异常: {}</source>
         <translation>Post-processing feature {} raised an exception: {}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="692"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="643"/>
         <source>后处理异常 ({0}): {1}</source>
         <translation>Post-processing exception ({0}): {1}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="693"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="644"/>
         <source>启动 GC 失败</source>
         <translation>Startup GC failed</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="695"/>
         <source>启动更新 worker 失败: {0}</source>
-        <translation>Failed to start update worker: {0}</translation>
+        <translation type="vanished">Failed to start update worker: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="696"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="646"/>
         <source>启动登录窗口失败: {0}
 {1}</source>
         <translation>Failed to start sign-in window: {0}
 {1}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="697"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="647"/>
         <source>启动组件版本探测线程失败: {0}</source>
         <translation>Failed to start component version probe thread: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="698"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="648"/>
         <source>填充内容</source>
         <translation>Filler content</translation>
     </message>
@@ -10931,12 +11472,12 @@ Use one of these alternatives:
         <translation type="vanished">Channels</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="700"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="650"/>
         <source>处理</source>
         <translation>Process</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="701"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="651"/>
         <source>处理中</source>
         <translation>Processing</translation>
     </message>
@@ -10945,93 +11486,91 @@ Use one of these alternatives:
         <translation type="vanished">Comment</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="705"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="655"/>
         <source>复制摘要</source>
         <translation>Copy summary</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="709"/>
         <source>多次解析后它始终不涨，说明 Token 根本没被 yt-dlp 请求。</source>
-        <translation>If this count never increases after repeated parsing, yt-dlp is not requesting tokens.</translation>
+        <translation type="vanished">If this count never increases after repeated parsing, yt-dlp is not requesting tokens.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="710"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="659"/>
         <source>多语言字幕: {0}{1}</source>
         <translation>Multiple subtitle languages: {0}{1}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="711"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="660"/>
         <source>失败任务保留天数已更新为: {}</source>
         <translation>Failed task retention days updated to: {}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="712"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="661"/>
         <source>失败裁决失败（沙盒留给 GC）: {}</source>
         <translation>Failure arbitration failed (sandbox left for GC): {}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="713"/>
         <source>失败，见下方明细</source>
-        <translation>Failed; see details below</translation>
+        <translation type="vanished">Failed; see details below</translation>
     </message>
     <message>
         <source>媒体信息</source>
         <translation type="vanished">Media Info</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="714"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="662"/>
         <source>媒体流</source>
         <translation>Media stream</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="715"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="663"/>
         <source>子进程内部异常: {0}
 {1}</source>
         <translation>Subprocess exception: {0}
 {1}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="718"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="666"/>
         <source>字幕下载未启用</source>
         <translation>Subtitle downloading is disabled</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="719"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="667"/>
         <source>字幕下载未启用，跳过后处理</source>
         <translation>Subtitle downloading is disabled; skipping post-processing</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="720"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="668"/>
         <source>字幕后处理失败: {}（reason={}）</source>
         <translation>Subtitle post-processing failed: {} (reason={})</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="721"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="669"/>
         <source>字幕后处理开始 - output_path={}</source>
         <translation>Starting subtitle post-processing - output_path={}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="722"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="670"/>
         <source>字幕后处理异常: {}</source>
         <translation>Subtitle post-processing exception: {}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="723"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="671"/>
         <source>字幕嵌入未完成，已保留外置字幕文件</source>
         <translation>Subtitle embedding was not completed; external subtitle files preserved</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="724"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="672"/>
         <source>字幕文件校验失败：{0}</source>
         <translation>Subtitle file validation failed: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="725"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="673"/>
         <source>字幕未命中任何可用语言（想要 {0}；该视频只有 {1}）</source>
         <translation>No available subtitle language matched (requested {0}; available {1})</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="726"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="674"/>
         <source>字幕状态回调异常</source>
         <translation>Subtitle status callback exception</translation>
     </message>
@@ -11044,7 +11583,7 @@ Use one of these alternatives:
         <translation type="vanished">Reader coverage</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="729"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="677"/>
         <source>完成</source>
         <translation>Complete</translation>
     </message>
@@ -11053,7 +11592,7 @@ Use one of these alternatives:
         <translation type="vanished">Container</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="731"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="679"/>
         <source>容器报告帧数</source>
         <translation>Reported frame count</translation>
     </message>
@@ -11062,102 +11601,102 @@ Use one of these alternatives:
         <translation type="vanished">Width</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="732"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="680"/>
         <source>导入 Cookie 失败: {0}</source>
         <translation>Failed to import cookies: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="733"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="681"/>
         <source>导入失败（保留旧 Cookie）</source>
         <translation>Import failed (previous cookies preserved)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="734"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="682"/>
         <source>导入失败，继续使用 {0} 的 Cookie</source>
         <translation>Import failed; continuing with cookies from {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="735"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="683"/>
         <source>导入底层异常: {0}</source>
         <translation>Cookie import exception: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="736"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="684"/>
         <source>导入未生效: {0}</source>
         <translation>Import was not applied: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="737"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="685"/>
         <source>导入过程异常: {0}</source>
         <translation>Import exception: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="738"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="686"/>
         <source>导出 JSON</source>
         <translation>Export JSON</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="739"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="687"/>
         <source>导出失败，请检查目标位置和写入权限。</source>
         <translation>Export failed. Check the destination and write permissions.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="740"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="688"/>
         <source>导出媒体信息</source>
         <translation>Export media information</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="743"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="691"/>
         <source>封面嵌入失败: {0}</source>
         <translation>Cover embedding failed: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="744"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="692"/>
         <source>封面嵌入完成: {0} → {1}</source>
         <translation>Cover embedding complete: {0} → {1}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="745"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="693"/>
         <source>封面嵌入异常: {0}</source>
         <translation>Cover embedding exception: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="746"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="694"/>
         <source>封面嵌入成功</source>
         <translation>Cover embedded successfully</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="747"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="695"/>
         <source>封面嵌入未产出文件: {0}</source>
         <translation>Cover embedding produced no file: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="748"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="696"/>
         <source>封面文件不存在: {0}</source>
         <translation>Cover file does not exist: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="749"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="697"/>
         <source>将下载 {0}:{1:02d} 的片段</source>
         <translation>Will download a {0}:{1:02d} clip</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="750"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="698"/>
         <source>将从 {0} 自动提取 Cookie</source>
         <translation>Cookies will be extracted automatically from {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="751"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="699"/>
         <source>将在下次成功提取后更新 Cookie 文件</source>
         <translation>The cookie file will be updated after the next successful extraction</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="752"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="700"/>
         <source>将跳过: {0}</source>
         <translation>Will skip: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="754"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="702"/>
         <source>尚未登录获取 Cookie，请在设置页点击「立即刷新」</source>
         <translation>Not signed in yet. Click Refresh Now in settings to obtain cookies.</translation>
     </message>
@@ -11166,337 +11705,334 @@ Use one of these alternatives:
         <translation type="vanished">No file selected</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="759"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="707"/>
         <source>已从 {0} 提取 Cookie（管理员权限）</source>
         <translation>Cookies extracted from {0} (administrator)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="761"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="709"/>
         <source>已关闭</source>
         <translation>Disabled</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="762"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="710"/>
         <source>已关闭元数据嵌入</source>
         <translation>Metadata embedding disabled</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="763"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="711"/>
         <source>已关闭封面嵌入</source>
         <translation>Cover embedding disabled</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="764"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="712"/>
         <source>已关闭解析后窗口置顶</source>
         <translation>Keep parsed results on top disabled</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="765"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="713"/>
         <source>已关闭：加速播放列表解析（实验性）</source>
         <translation>Fast playlist parsing disabled (experimental)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="768"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="716"/>
         <source>已切换到 WebView2 账号 {0}，并同步 Cookie 到 {1}</source>
         <translation>Switched to WebView2 account {0} and synced cookies to {1}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="769"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="717"/>
         <source>已删除 {0} 个文件</source>
         <translation>Deleted {0} files</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="770"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="718"/>
         <source>已删除文件</source>
         <translation>File deleted</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="771"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="719"/>
         <source>已删除文件残留</source>
         <translation>Leftover files deleted</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="772"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="720"/>
         <source>已加载验证配置: {0}</source>
         <translation>Authentication configuration loaded: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="773"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="721"/>
         <source>已取消；已有结果仅供参考。</source>
         <translation>Cancelled. Any existing results are incomplete.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="774"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="722"/>
         <source>已启动管理员权限进程，当前进程退出</source>
         <translation>Elevated process started; current process exiting</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="775"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="723"/>
         <source>已启用 JS runtime: {0}</source>
         <translation>JS runtime enabled: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="776"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="724"/>
         <source>已启用内置 FFmpeg: {0}</source>
         <translation>Bundled FFmpeg enabled: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="777"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="725"/>
         <source>已启用内置 JS runtime: deno ({0})</source>
         <translation>Bundled JS runtime enabled: deno ({0})</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="778"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="726"/>
         <source>已存在名为 &apos;{0}&apos; 的账号，请使用其他名称</source>
         <translation>An account named &apos;{0}&apos; already exists. Choose another name.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="779"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="727"/>
         <source>已安装 (无版本输出)</source>
         <translation>Installed (no version output)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="780"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="728"/>
         <source>已完成 {0} 个视频 · 总计 {1}</source>
         <translation>Completed {0} videos · Total {1}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="781"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="729"/>
         <source>已完成 {0}/{1} · {2} 个失败 · 总计 {3}</source>
         <translation>Completed {0}/{1} · {2} failed · Total {3}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="782"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="730"/>
         <source>已将旧 WebView2 缓存迁移到账号 {0}: {1}</source>
         <translation>Migrated old WebView2 cache to account {0}: {1}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="783"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="731"/>
         <source>已将账号目录隔离至新路径: {0}</source>
         <translation>Account directory isolated at new path: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="784"/>
         <source>已就位</source>
-        <translation>Installed</translation>
+        <translation type="vanished">Installed</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="785"/>
         <source>已就绪（端口 {0}{1}）</source>
-        <translation>Ready (port {0}{1})</translation>
+        <translation type="vanished">Ready (port {0}{1})</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="786"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="733"/>
         <source>已开启元数据嵌入（标题、作者、描述等）</source>
         <translation>Metadata embedding enabled (title, author, description, etc.)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="787"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="734"/>
         <source>已开启解析后窗口置顶</source>
         <translation>Keep parsed results on top enabled</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="788"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="735"/>
         <source>已更新</source>
         <translation>Updated</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="789"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="736"/>
         <source>已更新为手动导入的 Cookie 文件</source>
         <translation>Updated to manually imported cookie file</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="790"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="737"/>
         <source>已注入自定义代理: {0}</source>
         <translation>Custom proxy injected: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="791"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="738"/>
         <source>已清理 {0} 个子进程</source>
         <translation>Cleaned up {0} subprocesses</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="792"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="739"/>
         <source>已清理 {0} 个文件残留</source>
         <translation>Cleaned up {0} leftover files</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="794"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="741"/>
         <source>已生成 Cookie 文件: {0}</source>
         <translation>Cookie file generated: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="795"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="742"/>
         <source>已经是管理员权限，无需重启</source>
         <translation>Already running as administrator; no restart needed</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="796"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="743"/>
         <source>已请求管理员重启，当前进程即将退出</source>
         <translation>Administrator restart requested; current process will exit</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="797"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="744"/>
         <source>已读取 cookies.txt，但未发现 YouTube/Google 域相关 cookies。请确认是在 youtube.com 登录后导出，且为 Netscape 格式。</source>
         <translation>Read cookies.txt but found no YouTube/Google cookies. Export Netscape-format cookies after signing in at youtube.com.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="798"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="745"/>
         <source>已过滤域名: {0}等</source>
         <translation>Filtered domains: {0} and others</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="799"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="746"/>
         <source>已过滤无关 Cookie: {0}等</source>
         <translation>Filtered unrelated cookies: {0} and others</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="800"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="747"/>
         <source>已选 {0} 条音轨</source>
         <translation>{0} audio tracks selected</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="801"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="748"/>
         <source>已选 {0} 条音轨 ✓</source>
         <translation>{0} audio tracks selected ✓</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="802"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="749"/>
         <source>已选 {0} 种字幕 ✓</source>
         <translation>{0} subtitle languages selected ✓</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="803"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="750"/>
         <source>已选 {0} 种语言 ✓</source>
         <translation>{0} languages selected ✓</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="804"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="751"/>
         <source>已选择 {0} / {1} 项</source>
         <translation>{0} / {1} items selected</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="805"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="752"/>
         <source>已选择 {0} 个类别</source>
         <translation>{0} categories selected</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="806"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="753"/>
         <source>已选择 {0} 个类别: </source>
         <translation>{0} categories selected: </translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="807"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="754"/>
         <source>已选择 {0} 封面</source>
         <translation>{0} cover selected</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="808"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="755"/>
         <source>已选择 {0} 种字幕语言。为便于保留多条字幕，建议使用 MKV；MP4 的播放支持取决于播放器。</source>
         <translation>{0} subtitle languages selected. MKV is recommended for retaining multiple subtitle tracks; MP4 playback support depends on the player.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="809"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="756"/>
         <source>已选择 {0} 种语言</source>
         <translation>{0} languages selected</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="810"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="757"/>
         <source>已选择: </source>
         <translation>Selected: </translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="811"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="758"/>
         <source>已选：{0} 条音轨（请再选择一个视频流）</source>
         <translation>Selected: {0} audio tracks (also select a video stream)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="812"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="759"/>
         <source>已选：视频流 + {0} 条音轨</source>
         <translation>Selected: video stream + {0} audio tracks</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="813"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="760"/>
         <source>已配置 PO Token，但当前未加载有效 Cookies。mweb.gvs PO Token 通常需要配合 cookies 使用。</source>
         <translation>PO token configured, but no valid cookies loaded. mweb.gvs PO tokens usually require cookies.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="814"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="761"/>
         <source>已验证 (检测到 X 平台登录)</source>
         <translation>Verified (X session detected)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="815"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="762"/>
         <source>已验证 (检测到 YouTube 登录)</source>
         <translation>Verified (YouTube session detected)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="818"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="765"/>
         <source>平均帧率</source>
         <translation>Average frame rate</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="819"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="766"/>
         <source>年份</source>
         <translation>Year</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="820"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="767"/>
         <source>应用图标资源缺失，标题栏与启动图将没有图标</source>
         <translation>Application icon resource missing; title bar and splash screen will have no icon</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="821"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="768"/>
         <source>应用安装目录</source>
         <translation>Application installation directory</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="822"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="769"/>
         <source>建议在设置中临时关闭代理后重试解析。</source>
         <translation>Try temporarily disabling the proxy in settings, then parse again.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="823"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="770"/>
         <source>开始</source>
         <translation>Start</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="824"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="771"/>
         <source>开始 WebView2 登录流程（账号: {0}）...</source>
         <translation>Starting WebView2 sign-in (account: {0})...</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="825"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="772"/>
         <source>开始解析 URL: {0}</source>
         <translation>Starting URL parse: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="826"/>
         <source>异常: {0}</source>
-        <translation>Error: {0}</translation>
+        <translation type="vanished">Error: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="827"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="773"/>
         <source>强制直连 (禁用代理)</source>
         <translation>Direct connection forced (proxy disabled)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="828"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="775"/>
         <source>当前 WebView2 账号 ({0}) 尚无 Cookie 缓存，跳过同步</source>
         <translation>Current WebView2 account ({0}) has no cached cookies; skipping sync</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="829"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="776"/>
         <source>当前 {0} 账号: {1}</source>
         <translation>Current {0} account: {1}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="830"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="777"/>
         <source>当前: {0}  |  最新: {1}</source>
         <translation>Current: {0}  |  Latest: {1}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="832"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="779"/>
         <source>总平均码率</source>
         <translation>Overall average bitrate</translation>
     </message>
@@ -11505,22 +12041,22 @@ Use one of these alternatives:
         <translation type="vanished">Constant or variable frame rate</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="838"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="784"/>
         <source>所有文件 (*)</source>
         <translation>All files (*)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="843"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="789"/>
         <source>打开设置</source>
         <translation>Open settings</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="850"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="796"/>
         <source>报告包含原始结果</source>
         <translation>Include raw results</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="851"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="797"/>
         <source>报告包含完整路径</source>
         <translation>Include full path</translation>
     </message>
@@ -11529,7 +12065,7 @@ Use one of these alternatives:
         <translation type="vanished">Reports include descriptions, comments and other file tags.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="852"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="798"/>
         <source>报告已导出</source>
         <translation>Report exported</translation>
     </message>
@@ -11542,27 +12078,27 @@ Use one of these alternatives:
         <translation type="vanished">Description</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="876"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="819"/>
         <source>文件不存在或已移动，请重新选择文件。</source>
         <translation>The file is missing or has moved. Please select it again.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="879"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="822"/>
         <source>文件为空，无法识别。</source>
         <translation>The file is empty and cannot be inspected.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="883"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="826"/>
         <source>文件在读取期间发生变化，请重新识别。</source>
         <translation>The file changed during inspection. Please inspect it again.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="884"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="827"/>
         <source>文件大小</source>
         <translation>File size</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="889"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="832"/>
         <source>文件已保存，部分元数据未写入</source>
         <translation>File saved; some metadata could not be embedded</translation>
     </message>
@@ -11575,27 +12111,27 @@ Use one of these alternatives:
         <translation type="vanished">No information available</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="908"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="852"/>
         <source>无法读取文件，请检查访问权限。</source>
         <translation>Cannot read the file. Check access permissions.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="910"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="854"/>
         <source>日期</source>
         <translation>Date</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="911"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="855"/>
         <source>时长</source>
         <translation>Duration</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="951"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="894"/>
         <source>未找到 FFprobe，请在设置中安装或配置 FFmpeg。</source>
         <translation>FFprobe was not found. Install or configure FFmpeg in settings.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="953"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="896"/>
         <source>未找到 yt-dlp.exe。请检查自定义内核路径、应用托管目录或系统 PATH。</source>
         <translation>yt-dlp.exe was not found. Check the custom executable path, application-managed directory, or system PATH.</translation>
     </message>
@@ -11612,7 +12148,7 @@ Use one of these alternatives:
         <translation type="vanished">Source / scope</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="985"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="928"/>
         <source>来源链接</source>
         <translation>Source URL</translation>
     </message>
@@ -11629,27 +12165,27 @@ Use one of these alternatives:
         <translation type="vanished">Overview</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1011"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="955"/>
         <source>正在切换文件…</source>
         <translation>Switching files…</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1013"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="958"/>
         <source>正在嵌入并验证元数据...</source>
         <translation>Embedding and verifying metadata...</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1014"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="959"/>
         <source>正在检查文件…</source>
         <translation>Checking file…</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1016"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="962"/>
         <source>正在读取原生标签…</source>
         <translation>Reading native tags…</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1017"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="963"/>
         <source>正在读取技术信息…</source>
         <translation>Reading technical information…</translation>
     </message>
@@ -11670,12 +12206,12 @@ Use one of these alternatives:
         <translation type="vanished">Filter fields, values or sources in this view</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1095"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1041"/>
         <source>编码</source>
         <translation>Codec</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1128"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1074"/>
         <source>视频</source>
         <translation>Video</translation>
     </message>
@@ -11688,12 +12224,12 @@ Use one of these alternatives:
         <translation type="vanished">Role declared by file</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1150"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1096"/>
         <source>该文件不是支持的音视频文件。</source>
         <translation>This is not a supported audio or video file.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1156"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1101"/>
         <source>请选择单个音视频文件。</source>
         <translation>Please select a single audio or video file.</translation>
     </message>
@@ -11702,7 +12238,7 @@ Use one of these alternatives:
         <translation type="vanished">Reader versions</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1158"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1103"/>
         <source>读取失败，请检查文件或重试。</source>
         <translation>Inspection failed. Check the file or retry.</translation>
     </message>
@@ -11715,12 +12251,12 @@ Use one of these alternatives:
         <translation type="vanished">Read time</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1161"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1106"/>
         <source>读取结果超过限制，仅保留已获取的信息。</source>
         <translation>Reader output exceeded the limit. Only available information is retained.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1163"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1108"/>
         <source>读取超时，请重试或选择其他文件。</source>
         <translation>Inspection timed out. Retry or choose another file.</translation>
     </message>
@@ -11729,7 +12265,7 @@ Use one of these alternatives:
         <translation type="vanished">Track bitrate</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1184"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1126"/>
         <source>返回下载列表</source>
         <translation>Back to downloads</translation>
     </message>
@@ -11742,52 +12278,51 @@ Use one of these alternatives:
         <translation type="vanished">Choose or drop one local media file. Inspection is read-only.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1198"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1139"/>
         <source>选择文件</source>
         <translation>Choose file</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1199"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1140"/>
         <source>选择音视频文件</source>
         <translation>Choose a media file</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1205"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1146"/>
         <source>配置目录中缺少 FFprobe，请检查 FFmpeg 设置。</source>
         <translation>FFprobe is missing from the configured folder. Check FFmpeg settings.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1206"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1147"/>
         <source>采样率</source>
         <translation>Sample rate</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1211"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1152"/>
         <source>重新识别</source>
         <translation>Inspect again</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1223"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1164"/>
         <source>附件 {0}</source>
         <translation>Attachment {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1234"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1175"/>
         <source>音频</source>
         <translation>Audio</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1238"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1179"/>
         <source>音频码率</source>
         <translation>Audio bitrate</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1241"/>
         <source>预热中…（端口 {0}，解析等待 POT 就绪）</source>
-        <translation>Warming up… (port {0}; parsing waits for POT to be ready)</translation>
+        <translation type="vanished">Warming up… (port {0}; parsing waits for POT to be ready)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1242"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1182"/>
         <source>频道</source>
         <translation>Channel</translation>
     </message>
@@ -11796,7 +12331,7 @@ Use one of these alternatives:
         <translation type="vanished">Height</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1284"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1222"/>
         <source>🔁 [SABR] 本次请求首次检测到 SABR，正在追加 web_safari 客户端重新解析以拿回高清档…</source>
         <translation>🔁 [SABR] SABR first detected for this request; appending web_safari and parsing again to recover HD formats…</translation>
     </message>
@@ -11805,198 +12340,194 @@ Use one of these alternatives:
         <translation type="vanished">You are running the {0} test/pre-release version, which does not support automatic updates.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="831"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="778"/>
         <source>当前进程已具备管理员权限，无需提权</source>
         <translation>Current process already has administrator privileges; no elevation needed</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="834"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="781"/>
         <source>恢复状态失败: {0}</source>
         <translation>Failed to restore state: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="835"/>
         <source>成功</source>
-        <translation>Success</translation>
+        <translation type="vanished">Success</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="836"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="782"/>
         <source>成功处理 {0} 个字幕文件</source>
         <translation>Processed {0} subtitle files</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="837"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="783"/>
         <source>成功添加 {0} 个任务</source>
         <translation>Added {0} tasks</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="841"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="787"/>
         <source>手动导入的 Cookie 文件不存在</source>
         <translation>Manually imported cookie file does not exist</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="842"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="788"/>
         <source>手动导入的 Cookie 文件不存在或无效</source>
         <translation>Manually imported cookie file is missing or invalid</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="844"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="790"/>
         <source>托盘图标资源缺失，已跳过系统托盘初始化</source>
         <translation>Tray icon resource missing; skipped system tray initialization</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="846"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="792"/>
         <source>找到 {0} 个有效 Cookie</source>
         <translation>Found {0} valid cookies</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="847"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="793"/>
         <source>抓帧失败 ({0}s): {1}</source>
         <translation>Frame capture failed ({0}s): {1}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="848"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="794"/>
         <source>抓帧失败: {0}</source>
         <translation>Frame capture failed: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="849"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="795"/>
         <source>抓帧操作超时</source>
         <translation>Frame capture timed out</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="854"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="800"/>
         <source>挂起等待修复...</source>
         <translation>Suspended, waiting for a fix...</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="855"/>
         <source>探测执行失败: {0}</source>
-        <translation>Probe execution failed: {0}</translation>
+        <translation type="vanished">Probe execution failed: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="856"/>
         <source>探测超时（&gt;{0:.0f}s）</source>
-        <translation>Probe timed out (&gt;{0:.0f}s)</translation>
+        <translation type="vanished">Probe timed out (&gt;{0:.0f}s)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="857"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="801"/>
         <source>接入 Observability sink 失败: {0}</source>
         <translation>Failed to connect Observability sink: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="858"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="802"/>
         <source>推送通知失败: {0}</source>
         <translation>Failed to push notification: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="859"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="803"/>
         <source>提交后观测失败</source>
         <translation>Post-commit observation failed</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="862"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="806"/>
         <source>提取 {0} Cookie</source>
         <translation>Extract {0} cookies</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="863"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="807"/>
         <source>提取异常: {0}</source>
         <translation>Extraction exception: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="864"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="808"/>
         <source>提取源 {0} 已停止支持，已自动迁移到 Edge</source>
         <translation>Extraction source {0} is no longer supported; migrated to Edge</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="865"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="809"/>
         <source>提取过程异常: {0}</source>
         <translation>Extraction exception: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="866"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="810"/>
         <source>提权失败: {0}</source>
         <translation>Elevation failed: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="867"/>
         <source>插件检测异常: {0}</source>
-        <translation>Plugin check exception: {0}</translation>
+        <translation type="vanished">Plugin check exception: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="868"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="811"/>
         <source>播放列表解析失败 (耗时 {0:.2f}s): {1}</source>
         <translation>Playlist parsing failed (elapsed {0:.2f}s): {1}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="869"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="812"/>
         <source>播放列表解析失败：返回结果为空</source>
         <translation>Playlist parsing failed: empty result</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="870"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="813"/>
         <source>播放列表过长 ({0}), 将截断前 {1} 个强制逐条入队...</source>
         <translation>Playlist too long ({0}); limiting to the first {1} items and queueing individually...</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="872"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="815"/>
         <source>整合流（视频 + 音频）</source>
         <translation>Combined stream (video + audio)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="875"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="818"/>
         <source>文件不存在</source>
         <translation>File does not exist</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="877"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="820"/>
         <source>文件不存在，请检查路径是否正确</source>
         <translation>File does not exist. Please check the path.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="878"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="821"/>
         <source>文件为空或格式无效</source>
         <translation>File is empty or has an invalid format</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="881"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="824"/>
         <source>文件内容为空</source>
         <translation>File is empty</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="885"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="828"/>
         <source>文件大小 ({}) 为预期 ({}) 的 {:.0%}，低于预期但仍判定为有效（预期由 {} 个流累计）</source>
         <translation>File size ({}) is below expected ({}) at {:.0%}, but accepted (expected size sums {} streams)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="886"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="829"/>
         <source>文件大小 ({}) 仅为预期大小 ({}) 的 {:.0%}，判定为不完整下载</source>
         <translation>File size ({}) is below expected ({}) at {:.0%} — download considered incomplete</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="887"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="830"/>
         <source>文件大小为 0</source>
         <translation>File size is 0</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="888"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="831"/>
         <source>文件夹删除残留</source>
         <translation>Folder could not be completely removed</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="890"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="833"/>
         <source>文件有效</source>
         <translation>File is valid</translation>
     </message>
     <message>
         <location filename="../../src/fluentytdl/notification/notification_text.py" line="14"/>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="891"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="834"/>
         <source>新版本</source>
         <translation>New Version</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="892"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="835"/>
         <source>新版本启动失败，已还原到旧版本。
 
 旧版本正在启动，你的配置与下载记录都还在。请稍后重新检查更新。
@@ -12009,22 +12540,22 @@ The previous version is starting. Your settings and download history are preserv
 Detailed log: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="894"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="837"/>
         <source>无可用字幕</source>
         <translation>No subtitles available</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="895"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="838"/>
         <source>无效的时间格式: {0}</source>
         <translation>Invalid time format: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="896"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="839"/>
         <source>无权限终止进程 {0}</source>
         <translation>Permission denied terminating process {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="897"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="840"/>
         <source>无法从 {0} 提取 Cookie
 
 </source>
@@ -12033,7 +12564,7 @@ Detailed log: {0}</translation>
 </translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="898"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="841"/>
         <source>无法从 {0} 提取 Cookie
 
 可能的原因：
@@ -12058,32 +12589,32 @@ Suggestions:
 • Try another browser, such as Edge</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="899"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="842"/>
         <source>无法准备嵌入落点: {0}</source>
         <translation>Cannot prepare embedding destination: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="901"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="844"/>
         <source>无法检查磁盘空间: {0}</source>
         <translation>Cannot check disk space: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="904"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="847"/>
         <source>无法确定磁盘: {0}</source>
         <translation>Cannot determine disk: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="905"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="848"/>
         <source>无法获取当前版本</source>
         <translation>Cannot determine current version</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="906"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="849"/>
         <source>无法解析时间: {0}</source>
         <translation>Cannot parse time: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="907"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="851"/>
         <source>无法识别该 X 平台链接类型</source>
         <translation>Cannot identify this X URL type</translation>
     </message>
@@ -12092,22 +12623,22 @@ Suggestions:
         <translation type="vanished">Unlimited</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="912"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="856"/>
         <source>时间不能为空</source>
         <translation>Time cannot be empty</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="913"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="857"/>
         <source>昨天</source>
         <translation>Yesterday</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="915"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="859"/>
         <source>显示窗口失败: {0}</source>
         <translation>Failed to show window: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="916"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="860"/>
         <source>智能选择字幕（中文→英语→日语）</source>
         <translation>Smart subtitle selection (Chinese → English → Japanese)</translation>
     </message>
@@ -12116,39 +12647,39 @@ Suggestions:
         <translation type="vanished">Update worker process error: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="923"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="867"/>
         <source>更新 worker 退出码 {0}: {1}</source>
         <translation>Update worker exit code {0}: {1}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="924"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="868"/>
         <source>更新Cookie状态显示失败: {0}</source>
         <translation>Failed to update cookie status display: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="925"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="869"/>
         <source>更新器退出 (COMMIT)</source>
         <translation>Updater exiting (COMMIT)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="926"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="870"/>
         <source>更新器退出 (ROLLBACK)</source>
         <translation>Updater exiting (ROLLBACK)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="927"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="871"/>
         <source>更新失败: {0}</source>
         <translation>Update failed: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="928"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="872"/>
         <source>更新失败: {0}
 （保留旧 Cookie 可用）</source>
         <translation>Update failed: {0}
 (previous cookies remain available)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="929"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="873"/>
         <source>更新已完成，但找不到新版本的可执行文件。
 
 {0}
@@ -12165,7 +12696,7 @@ Start FluentYTDL manually from the Start menu or desktop shortcut.
 Detailed log: {1}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="930"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="874"/>
         <source>更新已完成，但新版本没能自动启动。
 
 请手动双击 FluentYTDL 图标启动程序，你的配置与下载记录都还在。
@@ -12178,22 +12709,22 @@ Double-click the FluentYTDL icon to start it. Your settings and download history
 Detailed log: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="931"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="875"/>
         <source>更新异常: {0}</source>
         <translation>Update exception: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="932"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="876"/>
         <source>更新归档不存在: {0}</source>
         <translation>Update archive does not exist: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="933"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="877"/>
         <source>更新归档文件路径 (7z/zip)</source>
         <translation>Update archive path (7z/zip)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="934"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="878"/>
         <source>更新未能完成：{0} 正被占用，无法替换。
 
 {1}
@@ -12212,7 +12743,7 @@ The previous state has been restored and the application remains usable.
 Detailed log: {2}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="935"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="879"/>
         <source>更新未能完成：复制新版本文件时出错，已还原到旧版本。
 
 程序可以照常使用。请稍后重新检查更新。
@@ -12225,7 +12756,7 @@ The application remains usable. Please check for updates again later.
 Detailed log: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="936"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="880"/>
         <source>更新未能完成：更新包内容不完整，已中止。
 
 程序本体未被改动，可以照常使用。请稍后重新检查更新。
@@ -12238,7 +12769,7 @@ The application was not changed and remains usable. Please check for updates aga
 Detailed log: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="937"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="881"/>
         <source>更新未能完成：更新包解压失败。
 
 {0}
@@ -12255,7 +12786,7 @@ The application was not changed and remains usable. Please check for updates aga
 Detailed log: {1}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="938"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="882"/>
         <source>更新未能完成：程序文件正被占用，无法替换。
 
 {0}
@@ -12274,7 +12805,7 @@ The application was not changed and remains usable.
 Detailed log: {1}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="939"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="883"/>
         <source>更新未能开始：找不到已下载的更新包。
 
 {0}
@@ -12291,7 +12822,7 @@ Check for updates again in settings. The application was not changed and remains
 Detailed log: {1}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="940"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="884"/>
         <source>更新未能开始：没有权限修改安装目录。
 
 {0}
@@ -12310,7 +12841,7 @@ The application was not changed and remains usable.
 Detailed log: {1}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="942"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="886"/>
         <source>有 {0} 个已获取格式的条目最高画质低于 {1}p。
 
 </source>
@@ -12319,32 +12850,29 @@ Detailed log: {1}</translation>
 </translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="944"/>
         <source>服务已起但未就绪</source>
-        <translation>Service started but not ready</translation>
+        <translation type="vanished">Service started but not ready</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="945"/>
         <source>服务未运行</source>
-        <translation>Service is not running</translation>
+        <translation type="vanished">Service is not running</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="946"/>
         <source>服务未运行，跳过主动探测</source>
-        <translation>Service is not running; skipping active probe</translation>
+        <translation type="vanished">Service is not running; skipping active probe</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="948"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="889"/>
         <source>未启用验证</source>
         <translation>Authentication disabled</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="950"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="891"/>
         <source>未安装</source>
         <translation>Not Installed</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="952"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="895"/>
         <source>未找到 JS runtime: {0}。请安装并加入 PATH（推荐 deno），或在设置中填写可执行文件路径。</source>
         <translation>JS runtime not found: {0}. Install it and add it to PATH (deno recommended), or specify the executable in settings.</translation>
     </message>
@@ -12353,32 +12881,31 @@ Detailed log: {1}</translation>
         <translation type="vanished">yt-dlp.exe not found. Specify its path in settings, place it in _internal/yt-dlp/, or add it to PATH.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="955"/>
         <source>未找到 —— POT 可能铸不出 Token，请在「核心组件」安装</source>
-        <translation>Not found — POT may be unable to mint tokens. Install it in Core Components.</translation>
+        <translation type="vanished">Not found — POT may be unable to mint tokens. Install it in Core Components.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="956"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="899"/>
         <source>未找到字幕文件</source>
         <translation>No subtitle files found</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="957"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="900"/>
         <source>未找到字幕文件（清单里没有字幕产物）: video={} candidates={}</source>
         <translation>No subtitle files found (no subtitle artifacts in manifest): video={} candidates={}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="958"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="901"/>
         <source>未找到有效 Cookie</source>
         <translation>No valid cookies found</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="959"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="902"/>
         <source>未提取到有效的 Cookie</source>
         <translation>No valid cookies extracted</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="960"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="904"/>
         <source>未检测到 Microsoft Edge WebView2 运行时，无法使用登录模式。
 请前往以下地址安装后重试，或在设置中改用「浏览器提取」/「手动导入」：
 </source>
@@ -12387,312 +12914,336 @@ Install it from the following URL and retry, or use Browser Extraction / Manual 
 </translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="961"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="905"/>
         <source>未检测到 deno，已自动启用 {0} 作为 JS runtime（建议优先安装 deno）。</source>
         <translation>deno not found; enabled {0} as JS runtime automatically (installing deno is recommended).</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="962"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="906"/>
         <source>未检测到任何受支持的 JS runtime（deno/node/bun/quickjs）。YouTube 解析可能缺失大量格式。建议安装 deno 并加入 PATH。</source>
         <translation>No supported JS runtime detected (deno/node/bun/quickjs). Many YouTube formats may be missing. Install deno and add it to PATH.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="963"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="907"/>
         <source>未检测到有效 Cookies，将使用无 Cookie 默认模式</source>
         <translation>No valid cookies detected; using default mode without cookies</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="964"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="908"/>
         <source>未知</source>
         <translation>Unknown</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="969"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="913"/>
         <source>未知格式，尝试使用 ffmpeg 嵌入</source>
         <translation>Unknown format; attempting embedding with ffmpeg</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="970"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="914"/>
         <source>未知链接</source>
         <translation>Unknown URL</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="971"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="915"/>
         <source>未知错误</source>
         <translation>Unknown Error</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="972"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="916"/>
         <source>未知页面</source>
         <translation>Unknown page</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="973"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="917"/>
         <source>未获取到字幕：已请求 {0}，但一个文件都没写出</source>
         <translation>No subtitles downloaded: requested {0}, but no files were written</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="974"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="918"/>
         <source>未获取到字幕：已请求 {0}，但一个文件都没写出（可能被限速或需要 PO Token）</source>
         <translation>No subtitles downloaded: requested {0}, but no files were written (possibly rate-limited or a PO token is required)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="975"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="919"/>
         <source>未获取到字幕：按正则模式请求 {0}，yt-dlp 没有匹配到任何字幕轨道</source>
         <translation>No subtitles downloaded: regex request {0} did not match any subtitle tracks in yt-dlp</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="976"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="920"/>
         <source>未解析出任何 Cookie（可能不是 Netscape 格式）</source>
         <translation>No cookies parsed (possibly not Netscape format)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="977"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="921"/>
         <source>未读取</source>
         <translation>Not read yet</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="978"/>
         <source>未运行</source>
-        <translation>Not running</translation>
+        <translation type="vanished">Not running</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="979"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="922"/>
         <source>未选择任何类别</source>
         <translation>No categories selected</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="980"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="923"/>
         <source>未配置验证源，请先在设置中选择浏览器或导入 Cookie 文件</source>
         <translation>No authentication source configured. Select a browser or import a cookie file in settings.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="981"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="924"/>
         <source>未验证</source>
         <translation>Unverified</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="982"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="925"/>
         <source>本进程已是提权实例（--elevated），跳过提权检查</source>
         <translation>Process already elevated (--elevated); skipping elevation check</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="983"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="926"/>
         <source>来源与版权</source>
         <translation>Source &amp; copyright</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="984"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="927"/>
         <source>来源文件不存在: {0}</source>
         <translation>Source file does not exist: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="986"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="929"/>
         <source>查看完整内容</source>
         <translation>Read more</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="987"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="930"/>
         <source>查看读取详情</source>
         <translation>View reader details</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="988"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="931"/>
         <source>标记全部通知已读失败: {0}</source>
         <translation>Failed to mark all notifications as read: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="989"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="932"/>
         <source>标记通知已读失败: {0}</source>
         <translation>Failed to mark notification as read: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="990"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="933"/>
         <source>格式化后 {0} 个 Cookie</source>
         <translation>{0} cookies after formatting</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="991"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="934"/>
         <source>检查</source>
         <translation>Check</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="992"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="935"/>
         <source>检测 GPU 编码器失败: {0}</source>
         <translation>Failed to detect GPU encoder: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="993"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="936"/>
         <source>检测到 &apos;The page needs to be reloaded&apos;，正在自动刷新 WebView2 Cookie 并重试一次...</source>
         <translation>Detected &apos;The page needs to be reloaded&apos;; refreshing WebView2 cookies and retrying once...</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="994"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="937"/>
         <source>检测到 Chrome v130+ App-Bound 加密，需要管理员权限</source>
         <translation>Chrome v130+ App-Bound encryption detected; administrator privileges required</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="995"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="938"/>
         <source>检测到 Chromium 严格依赖本地执行的 App-Bound 加密拒绝解密</source>
         <translation>Chromium App-Bound encryption denied decryption; local execution is required</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="996"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="939"/>
         <source>检测到 Program Files 目录，尝试请求管理员权限...</source>
         <translation>Program Files directory detected; requesting administrator privileges...</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="997"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="940"/>
         <source>检测到 winget 安装的 deno，但未在 PATH 中；已自动使用: {0}</source>
         <translation>Found deno installed by winget outside PATH; using it automatically: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="999"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="942"/>
         <source>检测到播放列表 authcheck 限制提示，按 yt-dlp 官方建议自动启用 youtubetab:skip=authcheck 并重试一次。</source>
         <translation>Playlist authcheck restriction detected; enabling youtubetab:skip=authcheck and retrying once.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1000"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="943"/>
         <source>检测到频道 authcheck 限制，自动启用 youtubetab:skip=authcheck 并重试。</source>
         <translation>Channel authcheck restriction detected; enabling youtubetab:skip=authcheck and retrying.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1001"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="944"/>
         <source>检测失败</source>
         <translation>Detection Failed</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1002"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="945"/>
         <source>正在下载... {0}%</source>
         <translation>Downloading... {0}%</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1003"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="946"/>
         <source>正在下载更新... {0}%</source>
         <translation>Downloading update... {0}%</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1004"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="947"/>
         <source>正在从 {0} 提取 Cookies，请稍候...</source>
         <translation>Extracting cookies from {0}, please wait...</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1005"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="948"/>
         <source>正在从 {0} 提取...</source>
         <translation>Extracting from {0}...</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1006"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="949"/>
         <source>正在以管理员权限提取 {0} Cookie...</source>
         <translation>Extracting {0} cookies as administrator...</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1007"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="950"/>
         <source>正在使用 AtomicParsley 嵌入封面...</source>
         <translation>Embedding cover with AtomicParsley...</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1008"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="951"/>
         <source>正在使用 FFmpeg 嵌入封面...</source>
         <translation>Embedding cover with FFmpeg...</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1009"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="952"/>
         <source>正在使用 mutagen 嵌入封面...</source>
         <translation>Embedding cover with mutagen...</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1010"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="953"/>
         <source>正在保存: {0}</source>
         <translation>Saving: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1012"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="954"/>
+        <source>正在停止</source>
+        <translation>Stopping</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="956"/>
+        <source>正在加载</source>
+        <translation>Loading</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="957"/>
         <source>正在加载频道{0}（{1}）...</source>
         <translation>Loading channel {0} ({1})...</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1015"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="960"/>
+        <source>正在检查组件</source>
+        <translation>Checking components</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="961"/>
         <source>正在解析链接 {0}/{1}...</source>
         <translation>Parsing URL {0}/{1}...</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1018"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="964"/>
         <source>正在重试...</source>
         <translation>Retrying...</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1019"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="965"/>
+        <source>正在验证连接</source>
+        <translation>Verifying the connection</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="966"/>
+        <source>此 POT 组件需要更新 FluentYTDL 后才能使用。</source>
+        <translation>Update FluentYTDL before using this POT component.</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="967"/>
         <source>沙盒清理失败（成品不受影响）</source>
         <translation>Sandbox cleanup failed (delivered files unaffected)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1021"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="969"/>
         <source>没有任何链接解析成功。</source>
         <translation>None of the URLs could be parsed.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1022"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="970"/>
         <source>没有可用的封面嵌入工具</source>
         <translation>No cover embedding tool is available</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1023"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="971"/>
         <source>注入 VR 元数据...</source>
         <translation>Injecting VR metadata...</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1024"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="972"/>
         <source>注册子进程 PID {0}</source>
         <translation>Registered subprocess PID {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1025"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="973"/>
         <source>注销子进程 PID {0}</source>
         <translation>Unregistered subprocess PID {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1027"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="975"/>
         <source>浏览器 Cookie 提取完成</source>
         <translation>Browser cookie extraction complete</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1028"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="976"/>
         <source>消息中心: 收到新通知 [{0}] {1}</source>
         <translation>Notification center: received notification [{0}] {1}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1029"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="977"/>
         <source>清单未获取</source>
         <translation>Manifest not fetched</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1030"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="978"/>
         <source>清单里有 {} 个字幕文件，开始校验</source>
         <translation>Manifest contains {} subtitle files; starting validation</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1032"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="980"/>
         <source>清理回调失败: {0}</source>
         <translation>Cleanup callback failed: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1033"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="981"/>
         <source>清理旧备份目录 _internal_old/ ...</source>
         <translation>Removing previous backup directory _internal_old/ ...</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1034"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="982"/>
         <source>清理残留的 _update_tmp/ 目录...</source>
         <translation>Cleaning leftover _update_tmp/ directory...</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1035"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="983"/>
         <source>清理解析缓存失败（不影响主流程）: {0}</source>
         <translation>Failed to clear parse cache (nonfatal): {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1036"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="984"/>
         <source>清空通知失败: {0}</source>
         <translation>Failed to clear notifications: {0}</translation>
     </message>
@@ -12713,7 +13264,7 @@ Install it from the following URL and retry, or use Browser Extraction / Manual 
     </message>
     <message>
         <location filename="../../src/fluentytdl/processing/sponsorblock.py" line="34"/>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1037"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="985"/>
         <source>片头</source>
         <translation>Intro</translation>
     </message>
@@ -12724,7 +13275,7 @@ Install it from the following URL and retry, or use Browser Extraction / Manual 
     </message>
     <message>
         <location filename="../../src/fluentytdl/processing/sponsorblock.py" line="38"/>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1038"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="986"/>
         <source>片尾</source>
         <translation>Ending</translation>
     </message>
@@ -12769,127 +13320,125 @@ Install it from the following URL and retry, or use Browser Extraction / Manual 
         <translation>Skip unrelated content</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1040"/>
         <source>状态不可用（{0}）</source>
-        <translation>Status unavailable ({0})</translation>
+        <translation type="vanished">Status unavailable ({0})</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1041"/>
         <source>状态：{0} · {1}</source>
-        <translation>Status: {0} · {1}</translation>
+        <translation type="vanished">Status: {0} · {1}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1042"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="988"/>
         <source>环境 PATH</source>
         <translation>Environment PATH</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1043"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="989"/>
         <source>用户关闭了登录窗口</source>
         <translation>User closed the sign-in window</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1045"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="991"/>
         <source>用户取消了管理员权限请求 (返回码: {0})</source>
         <translation>User cancelled administrator request (return code: {0})</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1046"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="992"/>
         <source>用户在结果页要求重新解析</source>
         <translation>User requested parsing again from the results page</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1047"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="993"/>
         <source>用户在设置页手动清空</source>
         <translation>User cleared cache manually in settings</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1048"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="994"/>
         <source>用户手动重试解析</source>
         <translation>User retried parsing manually</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1052"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="998"/>
         <source>登录失败: {0}</source>
         <translation>Sign-in failed: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1053"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="999"/>
         <source>登录失败，未返回 Cookie 数据</source>
         <translation>Sign-in failed; no cookie data returned</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1054"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1000"/>
         <source>登录窗口意外退出且未回传结果，请查看登录子进程日志。</source>
         <translation>Sign-in window exited unexpectedly without returning a result. See the sign-in subprocess log.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1055"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1001"/>
         <source>登录结果读取失败: {0}</source>
         <translation>Failed to read sign-in result: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1059"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1005"/>
         <source>登录超时 ({0}s)，未检测到有效的登录 Cookie</source>
         <translation>Sign-in timed out ({0}s); no valid sign-in cookies detected</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1060"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1006"/>
         <source>登录超时，未收到 Cookie 数据</source>
         <translation>Sign-in timed out; no cookie data received</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1061"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1007"/>
         <source>百分浏览器 (Cent)</source>
         <translation>Cent Browser</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1062"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1008"/>
         <source>目标 {0}p → 实际 {1}p</source>
         <translation>Target {0}p → Actual {1}p</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1063"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1009"/>
         <source>目标 {0}p → 最高可用 {1}p</source>
         <translation>Target {0}p → Best available {1}p</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1064"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1010"/>
         <source>目标目录不可写且未获得管理员权限，中止更新（未做任何改动）</source>
         <translation>Destination not writable and administrator privileges not granted; update aborted (no changes made)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1065"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1011"/>
         <source>目标目录不可写（自定义只读安装位置），尝试请求管理员权限...</source>
         <translation>Destination not writable (custom read-only installation); requesting administrator privileges...</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1066"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1012"/>
         <source>直接提取失败: {0}</source>
         <translation>Direct extraction failed: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1067"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1013"/>
         <source>短链接展开失败，请手动在浏览器打开复制完整链接</source>
         <translation>Could not expand short URL. Open it in your browser and copy the full URL.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1068"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1014"/>
         <source>码率</source>
         <translation>Bitrate</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1069"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1015"/>
         <source>碟片</source>
         <translation>Disc</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1070"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1016"/>
         <source>磁盘空间不足: {0} MB</source>
         <translation>Low disk space: {0} MB</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1071"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1017"/>
         <source>磁盘空间不足！
 需要: {0}
 可用: {1}
@@ -12900,423 +13449,426 @@ Available: {1}
 Shortfall: {2}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1072"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1018"/>
         <source>磁盘空间严重不足: {0} MB</source>
         <translation>Critically low disk space: {0} MB</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1073"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1019"/>
         <source>移动 {0} 失败: {1}</source>
         <translation>Failed to move {0}: {1}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1074"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1020"/>
         <source>移动文件失败，执行完整回滚...</source>
         <translation>Failed to move files; performing full rollback...</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1075"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1021"/>
         <source>空间充足 (需要 {0}，可用 {1})</source>
         <translation>Enough space (required {0}, available {1})</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1076"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1022"/>
         <source>立体声</source>
         <translation>Stereo</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1077"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1023"/>
         <source>章节</source>
         <translation>Chapters</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1078"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1024"/>
         <source>章节 {0}</source>
         <translation>Chapter {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1079"/>
         <source>端点不存在 (旧版本，跳过)</source>
-        <translation>Endpoint not found (older version; skipped)</translation>
+        <translation type="vanished">Endpoint not found (older version; skipped)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1080"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1025"/>
         <source>第 {0}/{1} 次自动重试</source>
         <translation>Automatic retry {0}/{1}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1081"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1026"/>
         <source>等待下载...</source>
         <translation>Waiting to Download...</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1082"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1027"/>
         <source>等待主进程退出...</source>
         <translation>Waiting for main process to exit...</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1083"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1028"/>
+        <source>等待当前任务结束</source>
+        <translation>Waiting for active tasks to finish</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1029"/>
         <source>等待进程 {0} 超时 ({1}s)</source>
         <translation>Timed out waiting for process {0} ({1}s)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1084"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1030"/>
         <source>等待进程退出的超时秒数</source>
         <translation>Process exit timeout in seconds</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1085"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1031"/>
         <source>简介与备注</source>
         <translation>Description &amp; comments</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1086"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1032"/>
         <source>类型</source>
         <translation>Type</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1087"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1033"/>
         <source>精简模式</source>
         <translation>Compact mode</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1088"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1034"/>
         <source>系列</source>
         <translation>Series</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1089"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1035"/>
         <source>红灯 下载已暂停: {}</source>
         <translation>Red light: download paused: {}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1090"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1036"/>
         <source>组件下载无响应超时，终止 worker: {0}</source>
         <translation>Component download idle timeout; terminating worker: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1091"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1037"/>
         <source>组件版本探测失败: {0}</source>
         <translation>Component version probe failed: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1092"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1038"/>
         <source>终止进程 {0} 失败: {1}</source>
         <translation>Failed to terminate process {0}: {1}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1093"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1039"/>
         <source>结束时间必须大于开始时间</source>
         <translation>End time must be later than start time</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1094"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1040"/>
         <source>绿灯 下载已恢复: {}</source>
         <translation>Green light: download resumed: {}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1096"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1042"/>
         <source>编码格式</source>
         <translation>Codec</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1097"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1043"/>
         <source>编码规格</source>
         <translation>Profile</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1098"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1044"/>
         <source>编码错误</source>
         <translation>Encoding error</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1099"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1045"/>
         <source>编辑 {0}</source>
         <translation>Edit {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1100"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1046"/>
         <source>缺少 .youtube.com 登录态 Cookie（LOGIN_INFO / SID / SAPISID / __Secure-1PSID 之一）</source>
         <translation>Missing .youtube.com sign-in cookies (one of LOGIN_INFO / SID / SAPISID / __Secure-1PSID)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1101"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1047"/>
         <source>网络检测异常: {0}</source>
         <translation>Network check exception: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1102"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1048"/>
         <source>网络状态: 不稳定</source>
         <translation>Network status: unstable</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1103"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1049"/>
         <source>网络状态: 断开</source>
         <translation>Network status: disconnected</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1104"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1050"/>
         <source>网络状态: 稳定</source>
         <translation>Network status: stable</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1105"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1051"/>
         <source>网络监控已停止</source>
         <translation>Network monitoring stopped</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1106"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1052"/>
         <source>网络监控已启动</source>
         <translation>Network monitoring started</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1108"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1054"/>
         <source>自动(推荐)</source>
         <translation>Auto (Recommended)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1109"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1055"/>
         <source>自动刷新 WebView2 Cookie 失败: {0}</source>
         <translation>Automatic WebView2 cookie refresh failed: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1110"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1056"/>
         <source>自动刷新 WebView2 Cookie 异常: {0}</source>
         <translation>Automatic WebView2 cookie refresh exception: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1111"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1057"/>
         <source>自动刷新 WebView2 Cookie 成功，准备重试解析</source>
         <translation>Automatic WebView2 cookie refresh succeeded; preparing to retry parsing</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1112"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1058"/>
         <source>自定义</source>
         <translation>Custom</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1113"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1059"/>
         <source>自定义: {0}</source>
         <translation>Custom: {0}</translation>
     </message>
     <message>
         <location filename="../../src/fluentytdl/processing/sponsorblock.py" line="26"/>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1114"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1060"/>
         <source>自我推广</source>
         <translation>Self Promotion</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1115"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1061"/>
         <source>至少需要保留一个 {0} WebView2 账号，拒绝删除</source>
         <translation>At least one {0} WebView2 account must remain; deletion rejected</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1116"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1062"/>
         <source>色域</source>
         <translation>Color gamut</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1117"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1063"/>
         <source>色度采样和位深</source>
         <translation>Chroma sampling and depth</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1118"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1064"/>
         <source>色彩原色</source>
         <translation>Color primaries</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1119"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1065"/>
         <source>色彩空间</source>
         <translation>Color space</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1120"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1066"/>
         <source>色彩范围</source>
         <translation>Color range</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1121"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1067"/>
         <source>获取 Cookie 失败: {0}</source>
         <translation>Failed to obtain cookies: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1122"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1068"/>
         <source>获取失败: {0}</source>
         <translation>Failed to obtain data: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1123"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1069"/>
         <source>获取时长失败: {0}</source>
         <translation>Failed to get duration: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1124"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1070"/>
         <source>获取未读通知数失败: {0}</source>
         <translation>Failed to get unread notification count: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1125"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1071"/>
         <source>获取磁盘空间失败: {0}</source>
         <translation>Failed to get disk space: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1126"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1072"/>
         <source>获取视频时长失败: {0}</source>
         <translation>Failed to get video duration: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1129"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1075"/>
         <source>视频 + 音频分流</source>
         <translation>Separate video + audio streams</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1130"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1076"/>
         <source>视频总时长: {0}:{1:02d}。格式: 1:30 或 1m30s 或 90 (秒)</source>
         <translation>Video duration: {0}:{1:02d}. Format: 1:30, 1m30s or 90 (seconds)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1131"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1077"/>
         <source>视频文件不存在</source>
         <translation>Video file does not exist</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1132"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1078"/>
         <source>视频文件不存在: {0}</source>
         <translation>Video file does not exist: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1133"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1079"/>
         <source>视频文件不存在，无法进行字幕后处理: {}</source>
         <translation>Video file missing; cannot post-process subtitles: {}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1134"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1080"/>
         <source>视频流</source>
         <translation>Video Stream</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1135"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1081"/>
         <source>视频码率</source>
         <translation>Video bitrate</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1136"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1082"/>
         <source>解压失败: {0}</source>
         <translation>Extraction failed: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1137"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1083"/>
         <source>解压验证失败，中止更新</source>
         <translation>Extracted file verification failed; update aborted</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1138"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1084"/>
         <source>解压验证通过</source>
         <translation>Extracted file verification passed</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1140"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1086"/>
         <source>解析失败: {0}</source>
         <translation>Parsing failed: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1141"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1087"/>
         <source>解析失败: {}</source>
         <translation>Parsing failed: {}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1142"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1088"/>
         <source>解析失败：yt-dlp 未返回有效元数据（可能被要求登录/验证）。请在弹窗中启用浏览器 Cookies 重试。</source>
         <translation>Parsing failed: yt-dlp returned no valid metadata (sign-in/verification may be required). Enable browser cookies in the dialog and retry.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1143"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1089"/>
         <source>解析结果保留时间已关闭</source>
         <translation>Parse result retention disabled</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1144"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1090"/>
         <source>解码采样格式</source>
         <translation>Decoded sample format</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1145"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1091"/>
         <source>警告: VERSION 文件不存在（非致命）</source>
         <translation>Warning: VERSION file missing (nonfatal)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1146"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1092"/>
         <source>警告: 等待超时，尝试继续替换...</source>
         <translation>Warning: wait timed out; attempting replacement anyway...</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1147"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1093"/>
         <source>计算中</source>
         <translation>Calculating</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1148"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1094"/>
         <source>记录生效配置快照失败: {0}</source>
         <translation>Failed to record effective configuration snapshot: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1149"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1095"/>
         <source>许可</source>
         <translation>License</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1151"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1097"/>
         <source>该视频最高仅支持 {0}p，请确认是否继续下载。</source>
         <translation>The highest available quality is {0}p. Continue downloading?</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1152"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1098"/>
         <source>语言</source>
         <translation>Language</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1153"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1099"/>
         <source>请求以管理员身份重启: {0}</source>
         <translation>Requesting restart as administrator: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1154"/>
         <source>请求失败: {0}</source>
-        <translation>Request failed: {0}</translation>
+        <translation type="vanished">Request failed: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1155"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1100"/>
         <source>请求管理员重启失败</source>
         <translation>Failed to request administrator restart</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1157"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1102"/>
         <source>读取失败: {0}</source>
         <translation>Read failed: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1159"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1104"/>
         <source>读取数据迁移报告失败: {0}</source>
         <translation>Failed to read data migration report: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1160"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1105"/>
         <source>读取来源文件失败: {0}</source>
         <translation>Failed to read source file: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1162"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1107"/>
         <source>读取详情</source>
         <translation>Reader details</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1164"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1109"/>
         <source>读取通知失败: {0}</source>
         <translation>Failed to read notifications: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1165"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1110"/>
         <source>调用 webview.start() ...</source>
         <translation>Calling webview.start() ...</translation>
     </message>
@@ -13326,57 +13878,53 @@ Shortfall: {2}</translation>
     </message>
     <message>
         <location filename="../../src/fluentytdl/processing/sponsorblock.py" line="22"/>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1166"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1111"/>
         <source>赞助广告</source>
         <translation>Sponsor Ads</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1170"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1115"/>
         <source>跳过 VR 转码: 分辨率过高 ({0}p)</source>
         <translation>Skipping VR transcoding: resolution too high ({0}p)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1173"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1118"/>
         <source>输入文件不存在: {0}</source>
         <translation>Input file does not exist: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1177"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1122"/>
         <source>迁移旧 WebView2 缓存失败: {0}</source>
         <translation>Failed to migrate old WebView2 cache: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1179"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1124"/>
         <source>迁移账号 {0} Cookie 文件失败: {1}</source>
         <translation>Failed to migrate cookie file for account {0}: {1}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1180"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1125"/>
         <source>迁移账号目录失败 {0}: {1}</source>
         <translation>Failed to migrate account directory {0}: {1}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1181"/>
         <source>运行中 (端口 {0}), {1}</source>
-        <translation>Running (port {0}), {1}</translation>
+        <translation type="vanished">Running (port {0}), {1}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1182"/>
         <source>运行中但 Token 生成异常: {0}</source>
-        <translation>Running, but token generation failed: {0}</translation>
+        <translation type="vanished">Running, but token generation failed: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1183"/>
         <source>运行中（127.0.0.1:{0}）</source>
-        <translation>Running (127.0.0.1:{0})</translation>
+        <translation type="vanished">Running (127.0.0.1:{0})</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1185"/>
         <source>返回内容非 JSON</source>
-        <translation>Response is not JSON</translation>
+        <translation type="vanished">Response is not JSON</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1186"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1127"/>
         <source>还有 {0} 个已勾选条目正在补全信息。
 
 </source>
@@ -13385,22 +13933,22 @@ Shortfall: {2}</translation>
 </translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1187"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1128"/>
         <source>这看起来不是一个 .exe 文件</source>
         <translation>This does not appear to be an .exe file</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1188"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1129"/>
         <source>进程 {0} 不存在或已退出</source>
         <translation>Process {0} does not exist or has exited</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1189"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1130"/>
         <source>进程 {0} 已退出</source>
         <translation>Process {0} exited</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1190"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1131"/>
         <source>进程扫描失败: {0}</source>
         <translation>Process scan failed: {0}</translation>
     </message>
@@ -13409,117 +13957,117 @@ Shortfall: {2}</translation>
         <translation type="vanished">Quality dropped in {0} consecutive tasks, which may indicate platform restrictions. Safely paused {1} queued tasks to protect the account.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1193"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1134"/>
         <source>选择</source>
         <translation>Select</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1194"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1135"/>
         <source>选择 Cookies 文件</source>
         <translation>Select Cookies File</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1195"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1136"/>
         <source>选择 {0}</source>
         <translation>Select {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1196"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1137"/>
         <source>选择下载目录</source>
         <translation>Select Download Directory</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1197"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1138"/>
         <source>选择保存位置</source>
         <translation>Choose destination</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1200"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1141"/>
         <source>通过 py7zr 解压完成</source>
         <translation>Extraction complete via py7zr</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1201"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1142"/>
         <source>通过 zipfile 解压完成</source>
         <translation>Extraction complete via zipfile</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1202"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1143"/>
         <source>通过内嵌 7za 解压完成</source>
         <translation>Extraction complete via bundled 7za</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1204"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1145"/>
         <source>配置为 {0}，但提取失败，当前使用 {1} 的 Cookie</source>
         <translation>Configured for {0}, but extraction failed; currently using cookies from {1}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1207"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1148"/>
         <source>重命名 _internal 失败: {0}</source>
         <translation>Failed to rename _internal: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1208"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1149"/>
         <source>重命名 {0} → {1}.old ...</source>
         <translation>Renaming {0} → {1}.old ...</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1209"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1150"/>
         <source>重命名 {0} 失败: {1}</source>
         <translation>Failed to rename {0}: {1}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1210"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1151"/>
         <source>重新尝试下载...</source>
         <translation>Retrying download...</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1212"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1153"/>
         <source>链接不能为空</source>
         <translation>URL cannot be empty</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1213"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1154"/>
         <source>错误</source>
         <translation>Error</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1214"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1155"/>
         <source>错误: _internal/ 下找不到 python3*.dll（归档不完整）</source>
         <translation>Error: no python3*.dll found under _internal/ (incomplete archive)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1215"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1156"/>
         <source>错误: _internal/ 目录不存在或为空</source>
         <translation>Error: _internal/ directory is missing or empty</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1216"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1157"/>
         <source>错误: _internal/base_library.zip 不存在或大小为 0（归档不完整）</source>
         <translation>Error: _internal/base_library.zip is missing or empty (incomplete archive)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1217"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1158"/>
         <source>错误: {0} 不存在或大小为 0</source>
         <translation>Error: {0} is missing or empty</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1218"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1159"/>
         <source>错误: 归档文件不存在: {0}</source>
         <translation>Error: archive file does not exist: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1219"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1160"/>
         <source>错误: 新版本 {0} 不存在</source>
         <translation>Error: new version {0} does not exist</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1220"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1161"/>
         <source>错误: 目标目录不存在: {0}</source>
         <translation>Error: destination directory does not exist: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1221"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1162"/>
         <source>错误详情：
 {0}</source>
         <translation>Error details:
@@ -13527,114 +14075,114 @@ Shortfall: {2}</translation>
     </message>
     <message>
         <location filename="../../src/fluentytdl/notification/notification_text.py" line="29"/>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1222"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1163"/>
         <source>队列已自动暂停</source>
         <translation>Queue paused automatically</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1224"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1165"/>
         <source>降档前移除旧 worker 失败（继续）: {0}</source>
         <translation>Failed to remove old worker before downgrade (continuing): {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1225"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1166"/>
         <source>降档重建 worker 失败: {0}</source>
         <translation>Failed to rebuild worker for downgrade: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1226"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1167"/>
         <source>降级解析也失败: {0}</source>
         <translation>Fallback parsing also failed: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1227"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1168"/>
         <source>集</source>
         <translation>Episode number</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1228"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1169"/>
         <source>非 Windows 系统不支持自动提权重启</source>
         <translation>Automatic elevated restart is only supported on Windows</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1229"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1170"/>
         <source>非音乐部分</source>
         <translation>Non-music part</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1230"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1171"/>
         <source>音量标准化失败: {0}</source>
         <translation>Audio normalization failed: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1231"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1172"/>
         <source>音量标准化完成: {0} → {1}</source>
         <translation>Audio normalization complete: {0} → {1}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1232"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1173"/>
         <source>音量标准化异常: {0}</source>
         <translation>Audio normalization exception: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1233"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1174"/>
         <source>音量标准化未产出文件: {0}</source>
         <translation>Audio normalization produced no file: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1235"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1176"/>
         <source>音频{0}k</source>
         <translation>Audio {0}k</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1236"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1177"/>
         <source>音频或封面文件不存在</source>
         <translation>Audio or cover file does not exist</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1237"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1178"/>
         <source>音频流</source>
         <translation>Audio streams</translation>
     </message>
     <message>
         <location filename="../../src/fluentytdl/notification/notification_text.py" line="15"/>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1239"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1180"/>
         <source>预发布版本</source>
         <translation>Pre-release Version</translation>
     </message>
     <message>
         <location filename="../../src/fluentytdl/processing/sponsorblock.py" line="42"/>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1240"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1181"/>
         <source>预告</source>
         <translation>Teaser</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1243"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1183"/>
         <source>频道 {0} 标签页解析出错: {1}</source>
         <translation>Failed to parse channel {0} tab: {1}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1244"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1184"/>
         <source>频道当前标签页不存在，自动尝试回退解析: {0} ...</source>
         <translation>Current channel tab does not exist; trying fallback tab: {0} ...</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1245"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1185"/>
         <source>频道标签页 {0} 任务异常: {1}</source>
         <translation>Channel tab {0} task exception: {1}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1246"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1186"/>
         <source>频道解析失败 (耗时 {0:.2f}s): {1}</source>
         <translation>Channel parsing failed (elapsed {0:.2f}s): {1}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1247"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1187"/>
         <source>频道解析失败: {}</source>
         <translation>Channel parsing failed: {}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1248"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1188"/>
         <source>频道解析失败：返回结果为空</source>
         <translation>Channel parsing failed: empty result</translation>
     </message>
@@ -13647,179 +14195,177 @@ Shortfall: {2}</translation>
         <translation type="vanished">Account protection: too many quality issues; queued tasks suspended</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1249"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1189"/>
         <source>首次启动，默认使用 WebView2 登录获取验证</source>
         <translation>First launch; using WebView2 sign-in for authentication by default</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1250"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1190"/>
         <source>验证失败: {0}</source>
         <translation>Validation failed: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1251"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1191"/>
         <source>验证源变化: {0} -&gt; {1}</source>
         <translation>Authentication source changed: {0} -&gt; {1}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1252"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1192"/>
         <source>验证源已设置: {0}</source>
         <translation>Authentication source set: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1253"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1193"/>
         <source>默认语言</source>
         <translation>Default language</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1254"/>
         <source>，Token 长度 {0}</source>
-        <translation>, token length {0}</translation>
+        <translation type="vanished">, token length {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1255"/>
         <source>，minter 缓存 {0}</source>
-        <translation>, minter cache {0}</translation>
+        <translation type="vanished">, minter cache {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1256"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1194"/>
         <source>𝕏 推文视频</source>
         <translation>𝕏 Post video</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1257"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1195"/>
         <source>🎉 [VR] 最高可用分辨率: {0}p (8K)</source>
         <translation>🎉 [VR] Highest available resolution: {0}p (8K)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1258"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1196"/>
         <source>🎉 最高可用分辨率: {0}p (8K)</source>
         <translation>🎉 Highest available resolution: {0}p (8K)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1259"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1197"/>
         <source>🎬 YouTube 播放列表</source>
         <translation>🎬 YouTube playlist</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1260"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1198"/>
         <source>🎬 YouTube 短视频</source>
         <translation>🎬 YouTube Short</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1261"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1199"/>
         <source>🎬 YouTube 视频</source>
         <translation>🎬 YouTube video</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1262"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1200"/>
         <source>🎬 YouTube 频道</source>
         <translation>🎬 YouTube channel</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1263"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1201"/>
         <source>🎬 视频流</source>
         <translation>🎬 Video stream</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1264"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1202"/>
         <source>🎯 检测到 LOGIN_INFO! 用户已完成登录。</source>
         <translation>🎯 LOGIN_INFO detected! User has signed in.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1265"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1203"/>
         <source>🎯 检测到 auth_token! 用户已完成登录。</source>
         <translation>🎯 auth_token detected! User has signed in.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1266"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1204"/>
         <source>🎵 正在提取独立音频流...</source>
         <translation>🎵 Extracting audio stream...</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1267"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1205"/>
         <source>🎵 音频流</source>
         <translation>🎵 Audio stream</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1268"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1206"/>
         <source>🏷️ 正在写入视频元数据 (标题/作者)...</source>
         <translation>🏷️ Writing video metadata (title/author)...</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1269"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1207"/>
         <source>💥 _background_poll 未捕获异常: {0}
 {1}</source>
         <translation>💥 Unhandled _background_poll exception: {0}
 {1}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1270"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1208"/>
         <source>📝 字幕</source>
         <translation>📝 Subtitles</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1271"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1209"/>
         <source>📝 正在下载字幕...</source>
         <translation>📝 Downloading subtitles...</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1272"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1210"/>
         <source>📝 正在保存字幕...</source>
         <translation>📝 Saving subtitles...</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1273"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1211"/>
         <source>📝 正在保存字幕: {0}</source>
         <translation>📝 Saving subtitles: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1274"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1212"/>
         <source>📝 正在内嵌字幕轨道...</source>
         <translation>📝 Embedding subtitle tracks...</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1275"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1213"/>
         <source>📝 正在转换字幕格式...</source>
         <translation>📝 Converting subtitle format...</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1276"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1214"/>
         <source>📡 导航到 accounts.google.com ...</source>
         <translation>📡 Navigating to accounts.google.com ...</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1277"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1215"/>
         <source>📡 正在获取流媒体元数据...</source>
         <translation>📡 Fetching stream metadata...</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1278"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1216"/>
         <source>📦 数据流</source>
         <translation>📦 Data stream</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1279"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1217"/>
         <source>📦 正在整理文件...</source>
         <translation>📦 Finalizing files...</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1280"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1218"/>
         <source>📦 正在无损合并音视频 (FFmpeg)...</source>
         <translation>📦 Merging video and audio losslessly (FFmpeg)...</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1281"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1219"/>
         <source>📺 [VR] 最高可用分辨率: {0}p</source>
         <translation>📺 [VR] Highest available resolution: {0}p</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1282"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1220"/>
         <source>📺 [VR] 最高可用分辨率: {0}p (4K)</source>
         <translation>📺 [VR] Highest available resolution: {0}p (4K)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1283"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1221"/>
         <source>📺 最高可用分辨率: {0}p (4K)</source>
         <translation>📺 Highest available resolution: {0}p (4K)</translation>
     </message>
@@ -13828,162 +14374,177 @@ Shortfall: {2}</translation>
         <translation type="vanished">🔁 [SABR] Account-level SABR first detected; appending web_safari and parsing again to recover HD formats…</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1285"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1223"/>
         <source>🔄 使用 android_vr 客户端获取 VR 高分辨率格式...</source>
         <translation>🔄 Fetching high-resolution VR formats with android_vr client...</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1286"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1224"/>
         <source>🔄 切片下载超时，正在重试... {0}</source>
         <translation>🔄 Fragment download timed out; retrying... {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1287"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1225"/>
         <source>🔄 检测到认证封锁，丢弃 Cookie 使用无登录态客户端重试...</source>
         <translation>🔄 Authentication block detected; discarding cookies and retrying with unauthenticated clients...</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1288"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1226"/>
         <source>🔄 网络请求失败，正在重试... {0}</source>
         <translation>🔄 Network request failed; retrying... {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1289"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1227"/>
         <source>🔍 正在拉取元数据...</source>
         <translation>🔍 Fetching metadata...</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1290"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1228"/>
         <source>🔍 正在解析目标地址...</source>
         <translation>🔍 Parsing target URL...</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1291"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1229"/>
         <source>🔐 已注入手动 PO Token：将优先尝试 mweb 客户端</source>
         <translation>🔐 Manual PO token injected; mweb client will be tried first</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1292"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1230"/>
         <source>🖼️ 封面</source>
         <translation>🖼️ Cover</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1293"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1231"/>
         <source>🖼️ 正在下载视频封面图...</source>
         <translation>🖼️ Downloading video cover...</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1294"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1232"/>
         <source>🖼️ 正在嵌入视频封面图...</source>
         <translation>🖼️ Embedding video cover...</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1295"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1233"/>
         <source>🖼️ 正在转换视频封面图...</source>
         <translation>🖼️ Converting video cover...</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1296"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1234"/>
         <source>🗑️ 任务已取消并清理残骸</source>
         <translation>🗑️ Task cancelled and partial files cleaned up</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1297"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1235"/>
         <source>🚀 Cookies 模式激活：交由 yt-dlp 自动管理最优客户端组合</source>
         <translation>🚀 Cookie mode active: yt-dlp will manage the client combination automatically</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1298"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1236"/>
         <source>🚀 _background_poll 线程已启动</source>
         <translation>🚀 _background_poll thread started</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1299"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1237"/>
         <source>🚀 准备启动执行器...</source>
         <translation>🚀 Preparing executor...</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1300"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1238"/>
         <source>🚀 启动下载...</source>
         <translation>🚀 Starting download...</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1301"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1239"/>
         <source>🚚 正在移动文件...</source>
         <translation>🚚 Moving files...</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1302"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1240"/>
         <source>🚪 用户关闭了登录窗口</source>
         <translation>🚪 User closed the sign-in window</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1303"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1241"/>
         <source>🚫 SponsorBlock 已启用: 将标记以下类别为章节: {0}</source>
         <translation>🚫 SponsorBlock enabled: marking categories as chapters: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1304"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1242"/>
         <source>🚫 SponsorBlock 已启用: 将移除以下类别: {0}</source>
         <translation>🚫 SponsorBlock enabled: removing categories: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1305"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1243"/>
         <source>🛡️ 质量守卫报告 ({0} 项异常)</source>
         <translation>🛡️ Quality Guard report ({0} issues)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1311"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1249"/>
         <source>🥽 [VR] 解析 VR 视频: {0}</source>
         <translation>🥽 [VR] Parsing VR video: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1313"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1251"/>
         <source>🥽 [VR] 解析完成: {0} 个格式</source>
         <translation>🥽 [VR] Parsing complete: {0} formats</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1306"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1244"/>
         <source>🥽 [VR] 所选格式仅 android_vr 可见，下载端重钉 android_vr（与解析对齐）</source>
         <translation>🥽 [VR] The selected format is visible only to android_vr; the download side re-pins android_vr (aligned with parsing)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1307"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="629"/>
+        <source>发现另一份 POT 插件，请查看日志中的冲突路径。</source>
+        <translation>Another POT plugin was found. Check the logs for the conflicting path.</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="892"/>
+        <source>未就绪</source>
+        <translation>Not ready</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="893"/>
+        <source>未找到 Deno，请安装或检查运行时路径。</source>
+        <translation>Deno was not found. Install it or check the runtime path.</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1245"/>
         <source>🥽 [VR] 所选格式默认客户端同样可见，下载端沿用默认客户端（带 cookie 与 POT，比匿名 android_vr 更稳）</source>
         <translation>🥽 [VR] The selected format is equally visible to the default clients; the download side keeps them (with cookies and POT they are steadier than anonymous android_vr)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1308"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1246"/>
         <source>🥽 [VR] 投影检测: {0} / {1} (Equi={2}, Mesh={3}, EAC={4})</source>
         <translation>🥽 [VR] Projection detected: {0} / {1} (Equi={2}, Mesh={3}, EAC={4})</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1309"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1247"/>
         <source>🥽 [VR] 本核心下 android_vr 只回 SABR 流且拿不到 GVS POT，下载端改用默认客户端（VR 后处理不受影响）</source>
         <translation>🥽 [VR] On this core android_vr returns SABR streams only and no GVS POT is available; the download side falls back to the default clients (VR post-processing unaffected)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1310"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1248"/>
         <source>🥽 [VR] 检测到 SABR 流（{0}）；将按纯视频+纯音频组合下载合并。</source>
         <translation>🥽 [VR] SABR streams detected ({0}); will download and merge as separate video + audio.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1312"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1250"/>
         <source>🥽 [VR] 解析失败: {0}</source>
         <translation>🥽 [VR] Parsing failed: {0}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1314"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1252"/>
         <source>🥽 检测到 VR 关键词: &apos;{0}&apos;</source>
         <translation>🥽 VR keyword detected: &apos;{0}&apos;</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1315"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1253"/>
         <source>🥽 检测到 VR 投影格式 (mesh)</source>
         <translation>🥽 VR projection format detected (mesh)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1316"/>
+        <location filename="../../src/fluentytdl/utils/ui_text.py" line="1254"/>
         <source>🧩 正在组装 m3u8 碎片地图...</source>
         <translation>🧩 Building m3u8 fragment map...</translation>
     </message>
@@ -14424,9 +14985,8 @@ Shortfall: {2}</translation>
         <translation type="vanished">Prepares the verification service in the background. Parsing proceeds without PO Tokens until ready. Off by default.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2258"/>
         <source>默认启用。后台准备验证服务，首次解析等待就绪；失败时停止请求并提示。</source>
-        <translation>Enabled by default. The verification service starts in the background. The first parse waits until it is ready; a failure stops the request and shows an error.</translation>
+        <translation type="vanished">Enabled by default. The verification service starts in the background. The first parse waits until it is ready; a failure stops the request and shows an error.</translation>
     </message>
 </context>
 <context>
@@ -14998,65 +15558,65 @@ Shortfall: {2}</translation>
 <context>
     <name>SettingsPage</name>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1219"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="868"/>
         <source>下载选项</source>
         <extracomment>启动检查的错峰间隔（毫秒）。每个组件的检查都要在工作线程里 `subprocess.run([exe, &quot;--version&quot;])` 再发一次 HTTPS 请求，5 个一起来会把 启动瞬间的 CPU / 磁盘吃干。1.2s 一个，用户完全感知不到，但不再卡顿。</extracomment>
         <translation>Download Options</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1222"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="871"/>
         <source>选择文件夹</source>
         <translation>Select Folder</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1224"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="873"/>
         <source>默认保存路径</source>
         <translation>Default Save Path</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1232"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="881"/>
         <source>分片并发数</source>
         <translation>Concurrent Fragments</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1233"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="882"/>
         <source>设置单个视频的分片下载线程数 (默认: 4)</source>
         <translation>Number of fragments downloaded at once for each video (default: 4).</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1245"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="894"/>
         <source>网络重试次数</source>
         <translation>Network Retries</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1246"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="895"/>
         <source>请求失败或切片断连时的最大重试次数，网络较差时建议调高</source>
         <translation>Maximum retries when a request fails or a fragment connection drops; raise this on poor networks</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1258"/>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3068"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="907"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2513"/>
         <source>最大同时下载数</source>
         <translation>Max Concurrent Downloads</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1259"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="908"/>
         <source>设置同时进行的下载任务数量 (默认: 3)</source>
         <translation>Set the number of concurrent download tasks (Default: 3)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1271"/>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3089"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="920"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2534"/>
         <source>播放列表解析并发</source>
         <translation>Concurrent Detail Requests</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1273"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="922"/>
         <source>控制进入解析页后同时获取视频详情的数量。过高可能触发 YouTube IP 限制 (默认: 2)</source>
         <translation>Number of video details fetched at once. High values may trigger YouTube rate limits (default: 2).</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1291"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="940"/>
         <source>解析结果保留时间</source>
         <translation>Video Details Cache Duration</translation>
     </message>
@@ -15065,37 +15625,37 @@ Shortfall: {2}</translation>
         <translation type="vanished">Re-parsing the same link within this window reuses the previous result instead of requesting again (default: 30 minutes)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1294"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="943"/>
         <source>不保留</source>
         <translation>Do Not Keep</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1295"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="944"/>
         <source>5 分钟</source>
         <translation>5 minutes</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1296"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="945"/>
         <source>15 分钟</source>
         <translation>15 minutes</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1297"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="946"/>
         <source>30 分钟</source>
         <translation>30 minutes</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1298"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="947"/>
         <source>1 小时</source>
         <translation>1 hour</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1299"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="948"/>
         <source>2 小时</source>
         <translation>2 hours</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1322"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="971"/>
         <source>立即清空</source>
         <translation>Clear Now</translation>
     </message>
@@ -15108,7 +15668,7 @@ Shortfall: {2}</translation>
         <translation type="vanished">If parse results are still stale after changing cookies or switching proxy nodes, click here to force a re-parse</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1332"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="981"/>
         <source>失败任务保留时间</source>
         <translation>Failed Task Retention Time</translation>
     </message>
@@ -15117,37 +15677,37 @@ Shortfall: {2}</translation>
         <translation type="vanished">Set auto-cleanup time for failed task records (Default: 3 Days)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1335"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="984"/>
         <source>1 天</source>
         <translation>1 Day</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1336"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="985"/>
         <source>3 天</source>
         <translation>3 Days</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1337"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="986"/>
         <source>7 天</source>
         <translation>7 Days</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1338"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="987"/>
         <source>15 天</source>
         <translation>15 Days</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1339"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="988"/>
         <source>30 天</source>
         <translation>30 Days</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1340"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="989"/>
         <source>永久保留</source>
         <translation>Keep Forever</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1364"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1013"/>
         <source>音轨下载</source>
         <translation>Audio Tracks</translation>
     </message>
@@ -15192,7 +15752,7 @@ Shortfall: {2}</translation>
         <translation type="vanished">Spanish</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1394"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1043"/>
         <source>首选音轨语言 (多音轨视频)</source>
         <translation>Preferred Audio Languages</translation>
     </message>
@@ -15201,12 +15761,12 @@ Shortfall: {2}</translation>
         <translation type="vanished">When video contains multiple language dubs, which language track to prioritize (multi-select and sortable)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1409"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1058"/>
         <source>包含音频描述轨</source>
         <translation>Include audio description tracks</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1410"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1059"/>
         <source>音频描述轨为视障用户附加了画面解说。默认排除，开启后可被自动选中</source>
         <translation>Audio description adds narration of visual content for visually impaired viewers. Excluded by default; enable to allow automatic selection.</translation>
     </message>
@@ -15219,18 +15779,18 @@ Shortfall: {2}</translation>
         <translation type="vanished">Single Video Container Default</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1435"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1084"/>
         <source>在单视频解析模式下的默认视频封装容器</source>
         <translation>Default video container for single-video downloads.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1436"/>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1449"/>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1458"/>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1471"/>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1480"/>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1493"/>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1502"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1085"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1098"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1107"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1120"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1129"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1142"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1151"/>
         <source>自动推断</source>
         <translation>Automatic</translation>
     </message>
@@ -15239,7 +15799,7 @@ Shortfall: {2}</translation>
         <translation type="vanished">Single Video Audio Default</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1457"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1106"/>
         <source>在单视频解析模式下的默认纯音频格式</source>
         <translation>Default format for audio-only downloads of individual videos.</translation>
     </message>
@@ -15248,7 +15808,7 @@ Shortfall: {2}</translation>
         <translation type="vanished">Playlist Container Default</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1479"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1128"/>
         <source>在播放列表高级格式设置中的默认容器</source>
         <translation>Default container for the playlist’s advanced format settings.</translation>
     </message>
@@ -15257,7 +15817,7 @@ Shortfall: {2}</translation>
         <translation type="vanished">Playlist Audio Default</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1501"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1150"/>
         <source>在播放列表高级格式设置中的默认音频格式</source>
         <translation>Default audio format for the playlist’s advanced format settings.</translation>
     </message>
@@ -15274,17 +15834,17 @@ Shortfall: {2}</translation>
         <translation type="vanished">Handling method when actual download quality cannot reach expected target</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1528"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1177"/>
         <source>仅警告 (默认)</source>
         <translation>Warning Only (Default)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1528"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1177"/>
         <source>阻止并挂起</source>
         <translation>Pause Task</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1528"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1177"/>
         <source>忽略差异</source>
         <translation>Ignore Quality Differences</translation>
     </message>
@@ -15305,7 +15865,7 @@ Shortfall: {2}</translation>
         <translation type="vanished">Force ffprobe to probe actual physical dimensions when system fails to extract resolution from log</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1574"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1223"/>
         <source>快速模式策略</source>
         <translation>Quick Mode Strategy</translation>
     </message>
@@ -15326,83 +15886,83 @@ Shortfall: {2}</translation>
         <translation type="vanished">Limit the max number of tasks a single quick-add can enqueue to prevent freezing or severe risk control</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1597"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1246"/>
         <source>无限制</source>
         <translation>Unlimited</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1642"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1290"/>
         <source>网络连接</source>
         <translation>Network Connection</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1646"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1294"/>
         <source>代理模式</source>
         <translation>Proxy Mode</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1647"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1295"/>
         <source>选择网络连接方式</source>
         <translation>Select Network Connection Method</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1649"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1297"/>
         <source>不使用代理</source>
         <translation>Do Not Use Proxy</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1650"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1298"/>
         <source>使用系统代理</source>
         <translation>Use System Proxy</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1651"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1299"/>
         <source>手动 HTTP 代理</source>
         <translation>Manual HTTP Proxy</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1652"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1300"/>
         <source>手动 SOCKS5 代理</source>
         <translation>Manual SOCKS5 Proxy</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1660"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1308"/>
         <source>自定义代理地址</source>
         <translation>Custom Proxy Address</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1661"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1309"/>
         <source>仅手动代理模式生效 (示例: 127.0.0.1:7890)</source>
         <translation>Only effective in manual proxy mode (Example: 127.0.0.1:7890)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1043"/>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1678"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="690"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1326"/>
         <source>账号验证</source>
         <translation>Accounts</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1050"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="697"/>
         <source>下载</source>
         <translation>Download</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1057"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="704"/>
         <source>网络</source>
         <translation>Network</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1064"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="711"/>
         <source>功能</source>
         <translation>Features</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1071"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="718"/>
         <source>更新</source>
         <translation>Update</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1078"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="725"/>
         <source>系统</source>
         <translation>System</translation>
     </message>
@@ -15411,7 +15971,7 @@ Shortfall: {2}</translation>
         <translation type="vanished">Failed task retention days updated to: {}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1701"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1349"/>
         <source>Cookie 来源</source>
         <translation>Cookie Source</translation>
     </message>
@@ -15420,27 +15980,27 @@ Shortfall: {2}</translation>
         <translation type="vanished">Select Cookie fetching method (Cookie Sentinel will maintain lifecycle automatically)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1704"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1352"/>
         <source>🚀 自动从本地浏览器提取</source>
         <translation>🚀 Extract automatically from local browser</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1705"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1353"/>
         <source>🔑 登录获取 (推荐)</source>
         <translation>🔑 Sign In (Recommended)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1706"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1354"/>
         <source>📄 手动导入 cookies.txt 文件</source>
         <translation>📄 Manually Import cookies.txt File</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1714"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1362"/>
         <source>选择浏览器</source>
         <translation>Select Browser</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1715"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1363"/>
         <source>Chromium 内核需管理员权限，Firefox 内核无需管理员权限</source>
         <translation>Chromium based browsers require Admin privileges, Firefox based do not</translation>
     </message>
@@ -15533,7 +16093,7 @@ Shortfall: {2}</translation>
         <translation type="vanished">Delete currently selected WebView2 account (keep at least 1)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3948"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3393"/>
         <source>立即刷新</source>
         <translation>Refresh Now</translation>
     </message>
@@ -15546,17 +16106,17 @@ Shortfall: {2}</translation>
         <translation type="vanished">Re-extract Cookie from browser (may require administrator privileges)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1765"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1413"/>
         <source>选择文件</source>
         <translation>Select File</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1767"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1415"/>
         <source>Cookie 文件路径</source>
         <translation>Cookie File Path</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1768"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1416"/>
         <source>未选择</source>
         <translation>Not Selected</translation>
     </message>
@@ -15581,17 +16141,17 @@ Shortfall: {2}</translation>
         <translation type="vanished">When enabled, retains only YouTube core Cookie (Disable to support other platforms, but may expose more privacy data)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1809"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1457"/>
         <source>软件更新</source>
         <translation>Software Update</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1815"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1463"/>
         <source>核心组件</source>
         <translation>Core Components</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1820"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1468"/>
         <source>启动时自动检查更新</source>
         <translation>Check for updates on startup</translation>
     </message>
@@ -15616,48 +16176,48 @@ Shortfall: {2}</translation>
         <translation type="vanished">GHProxy (Mirror)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1843"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1491"/>
         <source>yt-dlp 更新频道</source>
         <translation>yt-dlp Update Channel</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1844"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1492"/>
         <source>选择 yt-dlp 版本的更新分支</source>
         <translation>Select yt-dlp version update branch</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1848"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1496"/>
         <source>Nightly (每夜版)</source>
         <translation>Nightly</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1847"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1495"/>
         <source>Stable (稳定版)</source>
         <translation>Stable</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1849"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1497"/>
         <source>Master (主线)</source>
         <translation>Master</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1860"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1508"/>
         <source>yt-dlp 引擎</source>
         <translation>yt-dlp Engine</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1861"/>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1869"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1509"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1517"/>
         <source>点击检查更新以获取最新版本</source>
         <translation>Click to check for updates and get latest version</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1868"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1516"/>
         <source>FFmpeg 引擎</source>
         <translation>FFmpeg Engine</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1876"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1524"/>
         <source>JS Runtime (Deno)</source>
         <translation>JS Runtime (Deno)</translation>
     </message>
@@ -15666,7 +16226,7 @@ Shortfall: {2}</translation>
         <translation type="vanished">Used to accelerate yt-dlp parsing (Click to check updates)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1884"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1532"/>
         <source>POT Provider</source>
         <translation>POT Provider</translation>
     </message>
@@ -15675,113 +16235,112 @@ Shortfall: {2}</translation>
         <translation type="vanished">Used to bypass YouTube bot detection (Click to check updates)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1892"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1546"/>
         <source>AtomicParsley</source>
         <translation>AtomicParsley</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1893"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1547"/>
         <source>用于 MP4/M4A 封面嵌入（启用封面嵌入功能需要此工具）</source>
         <translation>Used for MP4/M4A cover embedding (Tool required for cover embedding feature)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1899"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1553"/>
         <source>JS Runtime 策略</source>
         <translation>JS Runtime Strategy</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1900"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1554"/>
         <source>选择首选的 JavaScript 运行时</source>
         <translation>Select preferred JavaScript runtime</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1901"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1555"/>
         <source>自动(推荐)</source>
         <translation>Auto (Recommended)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1918"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1572"/>
         <source>外观</source>
         <translation>Appearance</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1922"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1576"/>
         <source>界面语言 (Language)</source>
         <translation>Language</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1923"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1577"/>
         <source>选择应用的界面语言（重启后生效）</source>
         <translation>Select the application language (takes effect after restart)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1924"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1578"/>
         <source>跟随系统 (Auto)</source>
         <translation>System Default (Auto)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1935"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1589"/>
         <source>主题模式</source>
         <translation>Theme Mode</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1936"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1590"/>
         <source>选择应用的色彩主题</source>
         <translation>Select the application color theme</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1937"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1591"/>
         <source>跟随系统 (自动)</source>
         <translation>System Default (Auto)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1937"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1591"/>
         <source>浅色模式</source>
         <translation>Light Mode</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1937"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1591"/>
         <source>深色模式</source>
         <translation>Dark Mode</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1952"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1606"/>
         <source>需要重启</source>
         <translation>Restart Required</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1953"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1607"/>
         <source>语言设置已更改，请重启应用以使更改生效。
 是否立即重启？</source>
         <translation>Language settings have changed. Please restart the application for changes to take effect.
 Restart now?</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1956"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1610"/>
         <source>立即重启</source>
         <translation>Restart Now</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1957"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1611"/>
         <source>稍后</source>
         <translation>Later</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1964"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1618"/>
         <source>高级</source>
         <translation>Advanced</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1968"/>
         <source>POT 验证引擎 (实验性)</source>
-        <translation>POT Verification Engine (Experimental)</translation>
+        <translation type="vanished">POT Verification Engine (Experimental)</translation>
     </message>
     <message>
         <source>内置的 bgutil-pot-provider 服务，可绕过 YouTube 机器人检测。开启会增加启动耗时，默认关闭。</source>
         <translation type="vanished">Built-in bgutil-pot-provider service to bypass YouTube bot detection. Enabling increases startup time, default closed.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2001"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1635"/>
         <source>YouTube PO Token(可选)</source>
         <translation>YouTube PO Token (Optional)</translation>
     </message>
@@ -15790,17 +16349,17 @@ Restart now?</translation>
         <translation type="vanished">Leave empty to clear; Saving improves availability (Geek/Experimental)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2013"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1647"/>
         <source>JS Runtime 路径(可选)</source>
         <translation>JS Runtime Path (Optional)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2039"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1672"/>
         <source>自动化</source>
         <translation>Automation</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2043"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1676"/>
         <source>剪贴板自动识别</source>
         <translation>Clipboard Link Detection</translation>
     </message>
@@ -15809,37 +16368,37 @@ Restart now?</translation>
         <translation type="vanished">Auto-detect copied YouTube links and pop up parse window (Default closed)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1724"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1372"/>
         <source>一键提取</source>
         <translation>One-Click Extraction</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1726"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1374"/>
         <source>提取所有支持的平台</source>
         <translation>Extract All Supported Platforms</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1727"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1375"/>
         <source>自动从选定的本地浏览器提取 YouTube 和 X 平台 Cookie，并进行规范化处理</source>
         <translation>Automatically extract YouTube and X platform Cookies from the selected local browser and normalize them</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1738"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1386"/>
         <source>YouTube 登录</source>
         <translation>YouTube Login</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1739"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1387"/>
         <source>管理 YouTube 平台的 WebView2 账号</source>
         <translation>Manage WebView2 accounts for the YouTube platform</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1752"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1400"/>
         <source>X (Twitter) 登录</source>
         <translation>X (Twitter) Login</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1753"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1401"/>
         <source>管理 X (Twitter) 平台的 WebView2 账号</source>
         <translation>Manage WebView2 accounts for the X (Twitter) platform</translation>
     </message>
@@ -15848,23 +16407,20 @@ Restart now?</translation>
         <translation type="vanished">Source for app updates and update manifests. Component version checks use their own sources.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1969"/>
         <source>正在读取状态…</source>
-        <translation>Reading status…</translation>
+        <translation type="vanished">Reading status…</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1970"/>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2319"/>
         <source>一键检测</source>
-        <translation>Check Now</translation>
+        <translation type="vanished">Check Now</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1988"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1622"/>
         <source>启用</source>
         <translation>Enable</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1990"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1624"/>
         <source>字幕下载可能需要 POT</source>
         <translation>Subtitle downloads may need POT</translation>
     </message>
@@ -15873,67 +16429,67 @@ Restart now?</translation>
         <translation type="vanished">Auto-translated subtitles are often rate-limited (429) or refused; enabling the POT engine improves the success rate</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2008"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1642"/>
         <source>粘贴或输入 PO Token。允许留空；非空时将进行简单格式校验。</source>
         <translation>Paste or type a PO Token. May be left empty; if not empty, a basic format check is applied.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2021"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1655"/>
         <source>请输入 JS Runtime 可执行文件路径（可留空）。支持粘贴带引号的路径。</source>
         <translation>Enter the path to the JS Runtime executable (may be left empty). Quoted paths can be pasted.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2044"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1677"/>
         <source>自动识别复制的视频链接并弹出解析窗口（默认关闭）</source>
         <translation>Automatically identify copied video links and pop up the parsing window (Disabled by default)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2051"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1684"/>
         <source>剪贴板识别默认行为</source>
         <translation>Clipboard Detection Default Behavior</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2052"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1685"/>
         <source>选择自动识别到链接后的处理方式</source>
         <translation>Select action after auto-detecting link</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2054"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1687"/>
         <source>智能识别 (推荐)</source>
         <translation>Smart Detect (Recommended)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2055"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1688"/>
         <source>仅普通下载</source>
         <translation>Normal Download Only</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2056"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1689"/>
         <source>仅 VR 下载</source>
         <translation>VR Download Only</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2057"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1690"/>
         <source>仅下载字幕</source>
         <translation>Subtitle Download Only</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2058"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1691"/>
         <source>仅下载封面</source>
         <translation>Cover Download Only</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2068"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1701"/>
         <source>解析后置顶窗口</source>
         <translation>Bring window to front after parsing</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2069"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1702"/>
         <source>识别到链接并弹出解析窗口时，自动将其置于前台（默认开启）</source>
         <translation>Bring to front automatically when link is detected and parse window pops up (Default enabled)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2083"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1716"/>
         <source>VR / 360°</source>
         <translation>VR / 360°</translation>
     </message>
@@ -15942,37 +16498,37 @@ Restart now?</translation>
         <translation type="vanished">Hardware Performance Detection</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2089"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1722"/>
         <source>正在检测系统硬件...</source>
         <translation>Detecting system hardware...</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2096"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1729"/>
         <source>重新检测硬件</source>
         <translation>Re-detect hardware</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2106"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1739"/>
         <source>EAC 自动转码</source>
         <translation>EAC Auto Transcoding</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2108"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1741"/>
         <source>检测到 YouTube 专用 EAC 投影格式时，自动转换为通用的 Equirectangular 格式（耗时较长）</source>
         <translation>When YouTube EAC projection format is detected, auto-convert to standard Equirectangular format (Takes longer)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2117"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1750"/>
         <source>硬件加速策略</source>
         <translation>Hardware Acceleration Strategy</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2118"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1751"/>
         <source>选择转码时的硬件加速模式</source>
         <translation>Select hardware acceleration mode for transcoding</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2119"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1752"/>
         <source>自动 (推荐)</source>
         <translation>Auto (Recommended)</translation>
     </message>
@@ -15985,12 +16541,12 @@ Restart now?</translation>
         <translation type="vanished">Force GPU (Fast)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2127"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1760"/>
         <source>最大转码分辨率</source>
         <translation>Max Transcoding Resolution</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2128"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1761"/>
         <source>超过此分辨率的视频将跳过转码（防止内存溢出或死机）</source>
         <translation>Videos exceeding this resolution will skip transcoding (prevent OOM or freezing)</translation>
     </message>
@@ -16007,12 +16563,12 @@ Restart now?</translation>
         <translation type="vanished">8K (4320p) - High Risk</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2143"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1776"/>
         <source>转码性能模式</source>
         <translation>Transcoding Performance Mode</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2144"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1777"/>
         <source>控制 CPU 占用率和系统响应速度</source>
         <translation>Control CPU usage and system response speed</translation>
     </message>
@@ -16021,12 +16577,12 @@ Restart now?</translation>
         <translation type="vanished">Low (Smooth Background)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2145"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1778"/>
         <source>中 (均衡)</source>
         <translation>Medium (Balanced)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2145"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1778"/>
         <source>高 (全速)</source>
         <translation>High (Full Speed)</translation>
     </message>
@@ -16039,95 +16595,83 @@ Restart now?</translation>
         <translation type="vanished">Prevent original file loss due to transcoding failure</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2246"/>
         <source>POT 验证引擎已启用</source>
-        <translation>POT verification engine enabled</translation>
+        <translation type="vanished">POT verification engine enabled</translation>
     </message>
     <message>
         <source>正在后台预热，不阻塞当前操作；未就绪时会自动降级为无 POT 解析。</source>
         <translation type="vanished">Warming up in the background without blocking anything; until it is ready, parsing falls back to no-POT automatically.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2292"/>
         <source>POT 未启用</source>
-        <translation>POT Not Enabled</translation>
+        <translation type="vanished">POT Not Enabled</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2293"/>
         <source>请先打开 POT 验证引擎开关，等待预热后再检测。</source>
-        <translation>Turn on the POT Verification Engine first and wait for it to warm up before checking.</translation>
+        <translation type="vanished">Turn on the POT Verification Engine first and wait for it to warm up before checking.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2303"/>
         <source>修复中…</source>
-        <translation>Fixing…</translation>
+        <translation type="vanished">Fixing…</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2303"/>
         <source>检测中…</source>
-        <translation>Checking…</translation>
+        <translation type="vanished">Checking…</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2305"/>
         <source>正在检测 POT</source>
-        <translation>Checking POT</translation>
+        <translation type="vanished">Checking POT</translation>
     </message>
     <message>
         <source>会实际铸一次 Token 并跑一次带 -v 的 yt-dlp 探测，可能需要几十秒。</source>
         <translation type="vanished">This actually mints a token and runs a verbose yt-dlp probe; it can take tens of seconds.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2327"/>
         <source>检测失败</source>
-        <translation>Detection Failed</translation>
+        <translation type="vanished">Detection Failed</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2337"/>
         <source>POT 检测通过</source>
-        <translation>POT Check Passed</translation>
+        <translation type="vanished">POT Check Passed</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2337"/>
         <source>POT 检测发现问题</source>
-        <translation>POT Check Found Problems</translation>
+        <translation type="vanished">POT Check Found Problems</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2339"/>
         <source>关闭</source>
-        <translation>Close</translation>
+        <translation type="vanished">Close</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2341"/>
         <source>好的</source>
-        <translation>OK</translation>
+        <translation type="vanished">OK</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2345"/>
         <source>尝试修复</source>
-        <translation>Try to Fix</translation>
+        <translation type="vanished">Try to Fix</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2454"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1899"/>
         <source>行为策略</source>
         <translation>Behavior Strategy</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2458"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1903"/>
         <source>移除任务时的默认行为</source>
         <translation>Default behavior when removing tasks</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2459"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1904"/>
         <source>选择从列表中删除任务时的文件处理策略</source>
         <translation>Select file handling strategy when deleting task from list</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2461"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1906"/>
         <source>每次询问 (默认)</source>
         <translation>Ask every time (Default)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2462"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1907"/>
         <source>仅移除记录 (保留文件)</source>
         <translation>Remove record only (Keep files)</translation>
     </message>
@@ -16136,97 +16680,97 @@ Restart now?</translation>
         <translation type="vanished">Delete completely (Also delete files)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2473"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1918"/>
         <source>加速播放列表解析（实验性）</source>
         <translation>Accelerate Playlist Parsing (Experimental)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2475"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1920"/>
         <source>跳过 YouTube 登录验证检查（authcheck）。可加快大列表解析，但可能导致部分受限视频无法解析（默认关闭）</source>
         <translation>Skip YouTube’s sign-in check to load large playlists faster. Some restricted videos may fail to load. Off by default.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2490"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1935"/>
         <source>后处理</source>
         <translation>Post-processing</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2495"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1940"/>
         <source>独立封面</source>
         <translation>Save Cover Separately</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2496"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1941"/>
         <source>将视频封面作为独立的图片文件保存</source>
         <translation>Save video cover as a standalone image file</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2504"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1949"/>
         <source>嵌入封面图片</source>
         <translation>Embed Cover Image</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2506"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1951"/>
         <source>将视频缩略图嵌入到下载文件中作为封面（支持 MP4/MKV/MP3/M4A/FLAC/OGG/OPUS 等格式）</source>
         <translation>Embed video thumbnail into download file as cover (Supports MP4/MKV/MP3/M4A/FLAC/OGG/OPUS)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2515"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1960"/>
         <source>嵌入元数据</source>
         <translation>Embed metadata</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2516"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1961"/>
         <source>将视频标题、作者、描述等信息嵌入到下载文件中（推荐开启）</source>
         <translation>Embed video title, author, description, etc., into download file (Recommended)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2529"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1974"/>
         <source>SponsorBlock 广告跳过</source>
         <translation>SponsorBlock Ad Skip</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2530"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1975"/>
         <source>自动跳过视频中的赞助广告、自我推广等片段（基于社区标注）</source>
         <translation>Auto-skip sponsor ads, self promotions, etc., in videos (Based on community annotations)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2538"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1983"/>
         <source>跳过类别设置</source>
         <translation>Skip Category Settings</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2544"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1989"/>
         <source>选择类别</source>
         <translation>Select Categories</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2563"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2008"/>
         <source>字幕下载</source>
         <translation>Subtitle Download</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2568"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2013"/>
         <source>启用字幕下载</source>
         <translation>Enable Subtitle Download</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2609"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2054"/>
         <source>嵌入视频容器</source>
         <translation>Embed in video container</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2610"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2055"/>
         <source>将字幕封装进视频文件（软字幕，可开关）</source>
         <translation>Embed subtitles in the video file (optional soft subtitles)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2619"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2064"/>
         <source>另存独立字幕文件</source>
         <translation>Save separate subtitle files</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2620"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2065"/>
         <source>同时保留独立的 .srt / .ass 等字幕文件</source>
         <translation>Also keep separate subtitle files such as .srt and .ass</translation>
     </message>
@@ -16235,42 +16779,42 @@ Restart now?</translation>
         <translation type="vanished">Cleared {} retained parse result(s). The next parse will request them again.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3125"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2570"/>
         <source>无需清空</source>
         <translation>Nothing to clear</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3126"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2571"/>
         <source>当前没有保留任何解析结果。</source>
         <translation>No parse results are currently retained.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3677"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3122"/>
         <source>已打开下载页面</source>
         <translation>Download page opened</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3678"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3123"/>
         <source>请安装 Microsoft Edge WebView2 运行时后重试登录</source>
         <translation>Install the Microsoft Edge WebView2 runtime, then try signing in again</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4104"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3549"/>
         <source>上次获取的 Cookie 未通过校验：{}</source>
         <translation>The cookies fetched last time failed validation: {}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4163"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3608"/>
         <source>新 Cookie 不可用，仍在使用 {} 的旧文件：{}</source>
         <translation>The new cookies are unusable; still using the old file from {}: {}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4253"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3698"/>
         <source>yt-dlp 更新频道已切换为: {}，正在重新检查版本</source>
         <translation>yt-dlp update channel switched to {}. Re-checking the version.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4756"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4203"/>
         <source>视频没有原音标记时的回退语言顺序 (可多选并排序)</source>
         <translation>Fallback language order when no original audio is marked (select and reorder multiple languages)</translation>
     </message>
@@ -16279,7 +16823,7 @@ Restart now?</translation>
         <translation type="vanished">Original only ignores language: use original audio when available, otherwise the best track</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4788"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4235"/>
         <source>字幕语言偏好: {}</source>
         <translation>Subtitle language preferences: {}</translation>
     </message>
@@ -16296,12 +16840,12 @@ Restart now?</translation>
         <translation type="vanished">Select subtitle languages to download (multi-select)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2593"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2038"/>
         <source>字幕类型偏好</source>
         <translation>Subtitle Type Preference</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2594"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2039"/>
         <source>自动选择字幕时的策略</source>
         <translation>Strategy for auto-selecting subtitles</translation>
     </message>
@@ -16314,7 +16858,7 @@ Restart now?</translation>
         <translation type="vanished">Manual subtitles first, auto-generated last</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2598"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2043"/>
         <source>所有类型（含自动翻译）</source>
         <translation>All types (including auto-translated)</translation>
     </message>
@@ -16327,7 +16871,7 @@ Restart now?</translation>
         <translation type="vanished">Select Subtitle Encapsulation Method</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2631"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2076"/>
         <source>字幕输出格式</source>
         <translation>Subtitle Output Format</translation>
     </message>
@@ -16336,88 +16880,88 @@ Restart now?</translation>
         <translation type="vanished">Default conversion target format for all subtitles (Embed/External/Pure Download)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2633"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2078"/>
         <source>SRT (推荐)</source>
         <translation>SRT (Recommended)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2633"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2078"/>
         <source>ASS (支持样式)</source>
         <translation>ASS (Supports styles)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2633"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2078"/>
         <source>VTT (Web原生)</source>
         <translation>VTT (Web Native)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2659"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2104"/>
         <source>关于</source>
         <translation>About</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2662"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2107"/>
         <source>访问项目仓库</source>
         <translation>Visit Project Repository</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2665"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2110"/>
         <source>基于 PySide6 &amp; Fluent Design 构建</source>
         <translation>Built with PySide6 &amp; Fluent Design</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2673"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2118"/>
         <source>日志管理</source>
         <translation>Log Management</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2678"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2123"/>
         <source>运行日志</source>
         <translation>Application Logs</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2679"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2124"/>
         <source>日志目录: {}</source>
         <translation>Log directory: {}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2684"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2129"/>
         <source>查看日志</source>
         <translation>View logs</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2688"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2133"/>
         <source>打开日志目录</source>
         <translation>Open log directory</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2695"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2140"/>
         <source>清理所有日志</source>
         <translation>Clean all logs</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2730"/>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4075"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2175"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3520"/>
         <source>目录不存在</source>
         <translation>Directory not found</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2731"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2176"/>
         <source>{} 尚未创建</source>
         <translation>{} is not yet created</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2735"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2180"/>
         <source>错误</source>
         <translation>Error</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2742"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2187"/>
         <source>确认清理</source>
         <translation>Confirm cleanup</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2743"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2188"/>
         <source>确定要删除所有日志文件吗？
 
 日志目录: {}</source>
@@ -16426,27 +16970,27 @@ Restart now?</translation>
 Log directory: {}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2763"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2208"/>
         <source>清理完成</source>
         <translation>Cleanup Complete</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2763"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2208"/>
         <source>已删除所有日志文件</source>
         <translation>All log files have been deleted</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2767"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2212"/>
         <source>无需清理</source>
         <translation>Nothing to Clean Up</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2767"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2212"/>
         <source>日志目录不存在</source>
         <translation>Log directory does not exist</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2770"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2215"/>
         <source>清理失败</source>
         <translation>Cleanup Failed</translation>
     </message>
@@ -16455,13 +16999,13 @@ Log directory: {}</translation>
         <translation type="vanished">⚠️ Current: {} (High Risk! May cause YouTube IP ban 429)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3065"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2510"/>
         <source>最大同时下载数 (慎用)</source>
         <translation>Max Concurrent Downloads (Use with caution)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3067"/>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3088"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2512"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2533"/>
         <source>当前: {}</source>
         <translation>Current: {}</translation>
     </message>
@@ -16470,25 +17014,25 @@ Log directory: {}</translation>
         <translation type="vanished">⚠️ Current: {} (High Risk! Very likely to cause HTTP 429 Too Many Requests)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3086"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2531"/>
         <source>播放列表解析并发 (慎用)</source>
         <translation>Playlist Parse Concurrency (use with care)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3168"/>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3180"/>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3189"/>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3201"/>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3214"/>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3223"/>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3244"/>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3265"/>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3272"/>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3395"/>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4190"/>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4206"/>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4252"/>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4265"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2613"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2625"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2634"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2646"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2659"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2668"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2689"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2710"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2717"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2840"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3635"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3651"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3697"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3710"/>
         <source>设置已更新</source>
         <translation>Settings Updated</translation>
     </message>
@@ -16497,119 +17041,127 @@ Log directory: {}</translation>
         <translation type="vanished">Download source switched to: {}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3169"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2614"/>
         <source>主题已切换为: {}</source>
         <translation>Theme switched to: {}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4191"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3636"/>
         <source>已开启启动时自动检查更新</source>
         <translation>Auto check for updates on startup is enabled</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4191"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3636"/>
         <source>已关闭启动时自动检查更新</source>
         <translation>Auto check for updates on startup is disabled</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3202"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2647"/>
         <source>剪贴板识别行为已更改为: {}</source>
         <translation>Clipboard detection behavior changed to: {}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2247"/>
         <source>正在后台准备验证服务，您可以继续操作；解析将在服务就绪后开始。</source>
-        <translation>The verification service is starting in the background. You can continue using the app; parsing will begin when the service is ready.</translation>
+        <translation type="vanished">The verification service is starting in the background. You can continue using the app; parsing will begin when the service is ready.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3215"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2660"/>
         <source>删除策略已更改为: {}</source>
         <translation>Deletion policy changed to: {}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3224"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2669"/>
         <source>已开启：加速播放列表解析（实验性）</source>
         <translation>Enabled: Accelerate playlist parsing (Experimental)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3245"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2690"/>
         <source>已开启封面嵌入（支持 MP4/MKV/MP3/M4A/FLAC/OGG/OPUS 等格式）</source>
         <translation>Cover embedding enabled (Supports MP4/MKV/MP3/M4A/FLAC/OGG/OPUS)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3265"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2710"/>
         <source>字幕类型偏好已保存</source>
         <translation>Subtitle type preference saved</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3303"/>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3310"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2748"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2755"/>
         <source>SponsorBlock 已启用</source>
         <translation>SponsorBlock Enabled</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3311"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2756"/>
         <source>请在下方选择要跳过的类别</source>
         <translation>Please select the categories to skip below</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3317"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2762"/>
         <source>SponsorBlock 已关闭</source>
         <translation>SponsorBlock Disabled</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3318"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2763"/>
         <source>视频将保留原始内容</source>
         <translation>Video will retain original content</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3372"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2817"/>
         <source>类别已更新</source>
         <translation>Category Updated</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3379"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2824"/>
         <source>未选择类别</source>
         <translation>No Category Selected</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3380"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2825"/>
         <source>请至少选择一个要跳过的类别</source>
         <translation>Please select at least one category to skip</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3396"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2841"/>
         <source>代理模式已切换为: {}</source>
         <translation>Proxy mode switched to: {}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3412"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2857"/>
         <source>保存成功</source>
         <translation>Saved Successfully</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3413"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2858"/>
         <source>代理已更新为 {}</source>
         <translation>Proxy updated to {}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3118"/>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3418"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2563"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2863"/>
         <source>已清空</source>
         <translation>Cleared</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3418"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1525"/>
+        <source>为 POT 和 yt-dlp 提供 JavaScript 执行环境（点击检查更新）</source>
+        <translation>JavaScript runtime for POT and yt-dlp (click to check for updates)</translation>
+    </message>
+    <message>
+        <source>管理 POT</source>
+        <translation type="vanished">Manage POT</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2863"/>
         <source>代理地址已清空。</source>
         <translation>Proxy address cleared.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3445"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2890"/>
         <source>已切换到自动提取</source>
         <translation>Switched to Auto-extract</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3464"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2909"/>
         <source>已切换到登录获取模式</source>
         <translation>Switched to Sign-in Mode</translation>
     </message>
@@ -16618,15 +17170,15 @@ Log directory: {}</translation>
         <translation type="vanished">Please click the &apos;Start Secure Login&apos; button for account authentication</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3506"/>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3567"/>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3904"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2951"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3012"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3349"/>
         <source>{name} 需要管理员权限</source>
         <translation>{name} Requires Administrator Privileges</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3508"/>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3906"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2953"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3351"/>
         <source>{name} 使用了 App-Bound 加密保护，
 需要以管理员身份运行程序才能提取 Cookie。
 
@@ -16637,17 +17189,17 @@ The program must run as administrator to extract cookies.
 </translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3702"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3147"/>
         <source>登录进行中</source>
         <translation>Sign-in in Progress</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3703"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3148"/>
         <source>请等待 {} 平台登录完成后再操作</source>
         <translation>Wait for the {} sign-in to finish before continuing</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3751"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3196"/>
         <source>Cookie 已成功提取并保存（{}）
 账号文件: {}
 统一文件: {}</source>
@@ -16656,22 +17208,22 @@ Account file: {}
 Unified file: {}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3810"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3255"/>
         <source>创建</source>
         <translation>Create</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3867"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3312"/>
         <source>删除</source>
         <translation>Delete</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4018"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3463"/>
         <source>已导入: {n} 个 Cookie</source>
         <translation>Imported: {n} cookies</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4022"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3467"/>
         <source>已导入 {} 个 Cookie 到 {} 平台</source>
         <translation>Imported {} cookies for {}</translation>
     </message>
@@ -16684,18 +17236,18 @@ Unified file: {}</translation>
         <translation type="vanished">Please click &apos;Log into YouTube&apos; button for account authentication</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3481"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2926"/>
         <source>已切换到手动导入</source>
         <translation>Switched to manual import</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3482"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2927"/>
         <source>请选择 cookies.txt 文件</source>
         <translation>Please select cookies.txt file</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3511"/>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3909"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2956"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3354"/>
         <source>点击「以管理员身份重启」后将自动完成提取。
 
 </source>
@@ -16704,38 +17256,38 @@ Unified file: {}</translation>
 </translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3512"/>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3910"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2957"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3355"/>
         <source>或者您可以：
 </source>
         <translation>Or you can:
 </translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3513"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2958"/>
         <source>• 选择 Firefox/LibreWolf 浏览器（无需管理员权限）
 </source>
         <translation>• Select Firefox/LibreWolf Browser (No Admin required)
 </translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3514"/>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3912"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2959"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3357"/>
         <source>• 手动导出 Cookie 文件</source>
         <translation>• Manually export Cookie file</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3532"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2977"/>
         <source>正在切换浏览器</source>
         <translation>Switching browser</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3547"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2992"/>
         <source>切换成功</source>
         <translation>Switched Successfully</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3548"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2993"/>
         <source>已从 {} 提取 Cookies</source>
         <translation>Extracted Cookies from {}</translation>
     </message>
@@ -16748,12 +17300,12 @@ Unified file: {}</translation>
         <translation type="vanished">Extracting {platform_label} Cookie... {status_msg}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3630"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3075"/>
         <source>提取完成</source>
         <translation>Extraction Complete</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3634"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3079"/>
         <source>提取失败</source>
         <translation>Extraction Failed</translation>
     </message>
@@ -16766,7 +17318,7 @@ Unified file: {}</translation>
         <translation type="vanished">Extraction Exception</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3714"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3159"/>
         <source>登录方式提示</source>
         <translation>Login Method Tip</translation>
     </message>
@@ -16777,22 +17329,22 @@ Unified file: {}</translation>
 Please log in directly using &apos;Phone/Username/Email + Password&apos; in the pop-up interface, otherwise a white screen will appear!</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3723"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3168"/>
         <source>默认账号</source>
         <translation>Default Account</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3729"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3174"/>
         <source>正在后台提取登录态（{}），必要时会自动显示登录窗口...</source>
         <translation>Extracting login state in background ({}), login window will appear if needed...</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3744"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3189"/>
         <source>✔ 登录成功，Cookie 已提取</source>
         <translation>✔ Login successful, Cookie extracted</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3750"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3195"/>
         <source>登录成功</source>
         <translation>Login Successful</translation>
     </message>
@@ -16805,7 +17357,7 @@ Account file: {}
 Unified file: {}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3769"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3214"/>
         <source>登录未完成</source>
         <translation>Login Incomplete</translation>
     </message>
@@ -16814,57 +17366,57 @@ Unified file: {}</translation>
         <translation type="vanished"> (Default)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3791"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3236"/>
         <source>未知账号</source>
         <translation>Unknown Account</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3798"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3243"/>
         <source>已切换 WebView2 账号</source>
         <translation>Switched WebView2 Account</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3818"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3263"/>
         <source>名称为空</source>
         <translation>Name is Empty</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3818"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3263"/>
         <source>请输入有效账号名称</source>
         <translation>Please enter a valid account name</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3828"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3273"/>
         <source>创建失败</source>
         <translation>Creation Failed</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3835"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3280"/>
         <source>账号已创建</source>
         <translation>Account Created</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3836"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3281"/>
         <source>已创建并切换到: {}</source>
         <translation>Created and switched to: {}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3853"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3298"/>
         <source>无可删账号</source>
         <translation>No Account to Delete</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3854"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3299"/>
         <source>当前没有可删除的 WebView2 账号</source>
         <translation>No WebView2 account available to delete</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3861"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3306"/>
         <source>删除当前 WebView2 账号</source>
         <translation>Delete current WebView2 account</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3862"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3307"/>
         <source>确定删除账号「{}」吗？
 
 至少需要保留 1 个账号。</source>
@@ -16873,46 +17425,46 @@ Unified file: {}</translation>
 At least 1 account must be kept.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3874"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3319"/>
         <source>删除失败</source>
         <translation>Delete Failed</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3874"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3319"/>
         <source>至少需要保留一个账号</source>
         <translation>At least one account must be retained</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3881"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3326"/>
         <source>删除成功</source>
         <translation>Delete Successful</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3882"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3327"/>
         <source>已删除: {}</source>
         <translation>Deleted: {}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3911"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3356"/>
         <source>• 切换到 Firefox/LibreWolf 浏览器（无需管理员权限）
 </source>
         <translation>• Switch to Firefox/LibreWolf Browser (No Admin required)
 </translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3517"/>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3569"/>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3915"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2962"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3014"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3360"/>
         <source>以管理员身份重启</source>
         <translation>Restart as Administrator</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1292"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="941"/>
         <source>同一链接在此时间内再次解析会直接复用上次结果，不再重新请求（默认: 不保留）</source>
         <translation>Reuse cached details when loading the same link within this period (default: do not keep).</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1371"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1020"/>
         <source>音轨策略</source>
         <translation>Audio track preference</translation>
     </message>
@@ -16921,12 +17473,12 @@ At least 1 account must be kept.</translation>
         <translation type="vanished">Choose which track to prefer: original audio was recorded by the creator; dubbed audio was added later</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1374"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1023"/>
         <source>原音优先</source>
         <translation>Prefer original audio</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1375"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1024"/>
         <source>指定语言优先</source>
         <translation>Prefer selected languages</translation>
     </message>
@@ -16935,82 +17487,82 @@ At least 1 account must be kept.</translation>
         <translation type="vanished">Original only (best track if unavailable)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2571"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2016"/>
         <source>自动下载视频字幕（支持多语言、格式转换、嵌入到视频）</source>
         <translation>Automatically download subtitles (multi-language, format conversion, embedding into the video)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2581"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2026"/>
         <source>字幕语言偏好</source>
         <translation>Subtitle language preferences</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2583"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2028"/>
         <source>按偏好匹配视频上真实存在的字幕轨，如 en 可命中 en-GB / en-US</source>
         <translation>Preferences are matched against the video&apos;s real caption tracks — en also matches en-GB / en-US</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3518"/>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3570"/>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3811"/>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3868"/>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3916"/>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4243"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2963"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3015"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3256"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3313"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3361"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3688"/>
         <source>取消</source>
         <translation>Cancel</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3933"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3378"/>
         <source>刷新中...</source>
         <translation>Refreshing...</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3936"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3381"/>
         <source>正在刷新 Cookie</source>
         <translation>Refreshing Cookie</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3936"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3381"/>
         <source>请稍候...</source>
         <translation>Please wait...</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3952"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3397"/>
         <source>刷新成功</source>
         <translation>Refresh Successful</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3960"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3405"/>
         <source>Cookie 刷新失败</source>
         <translation>Cookie Refresh Failed</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4008"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3453"/>
         <source>文件格式有问题</source>
         <translation>File Format Error</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4021"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3466"/>
         <source>导入成功</source>
         <translation>Import Successful</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4030"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3475"/>
         <source>导入失败</source>
         <translation>Import Failed</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4031"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3476"/>
         <source>复制文件时出错: {}</source>
         <translation>Error copying file: {}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4076"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3521"/>
         <source>Cookie 目录尚未创建: {}</source>
         <translation>Cookie directory not yet created: {}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4091"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3536"/>
         <source>⚪ 未启用 Cookie 验证</source>
         <translation>⚪ Cookie Verification Disabled</translation>
     </message>
@@ -17019,43 +17571,43 @@ At least 1 account must be kept.</translation>
         <translation type="vanished">🔑 WebView2 Mode — Not logged in, click &apos;Log into YouTube&apos; button</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4097"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3542"/>
         <source>❌ Cookie 文件不存在，请重新选择文件</source>
         <translation>❌ Cookie file does not exist, please reselect</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4099"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3544"/>
         <source>❌ 尚无 Cookie — 请点击「立即刷新」从 {} 提取</source>
         <translation>❌ No Cookie yet — Click &apos;Refresh Now&apos; to extract from {}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4109"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3554"/>
         <source>{} 分钟前</source>
         <translation>{} mins ago</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4109"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3554"/>
         <source>未知时间</source>
         <translation>Unknown time</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4127"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3572"/>
         <source>{}（当前配置: {}）</source>
         <translation>{} (Current config: {})</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4140"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3585"/>
         <source>{} {} | 更新于 {} | {} 个 Cookie</source>
         <translation>{} {} | Updated {} | {} Cookies</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4176"/>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4184"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3621"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3629"/>
         <source>状态获取失败: {err}</source>
         <translation>Failed to read status: {err}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4207"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3652"/>
         <source>组件更新源已切换为: {}</source>
         <translation>Component update source switched to: {}</translation>
     </message>
@@ -17064,134 +17616,134 @@ At least 1 account must be kept.</translation>
         <translation type="vanished">yt-dlp update channel switched to: {} (takes effect on next update)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4266"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3711"/>
         <source>JS Runtime 已切换为: {}</source>
         <translation>JS Runtime switched to: {}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4298"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3743"/>
         <source>选择 yt-dlp.exe</source>
         <translation>Select yt-dlp.exe</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4311"/>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4610"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3756"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4057"/>
         <source>路径无效</source>
         <translation>Invalid Path</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4312"/>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4611"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3757"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4058"/>
         <source>未找到该文件，已回退为自动检测（优先内置，其次 PATH）。</source>
         <translation>File not found, fell back to auto-detect (Built-in first, then PATH).</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4342"/>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4441"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3787"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3886"/>
         <source>已就绪（手动指定）</source>
         <translation>Ready (Manually specified)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4355"/>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4452"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3800"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3897"/>
         <source>已就绪（内置）</source>
         <translation>Ready (Built-in)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4359"/>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4456"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3804"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3901"/>
         <source>已就绪（环境（PATH））</source>
         <translation>Ready (System PATH)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4361"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3806"/>
         <source>未就绪（无法解析/下载）</source>
         <translation>Not ready (Cannot parse/download)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4399"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3844"/>
         <source>选择 ffmpeg.exe</source>
         <translation>Select ffmpeg.exe</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4415"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3860"/>
         <source>路径可能无效</source>
         <translation>Path might be invalid</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4416"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3861"/>
         <source>未找到该文件，请确认 ffmpeg.exe 路径是否正确。</source>
         <translation>File not found, please check if ffmpeg.exe path is correct.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4422"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3867"/>
         <source>自定义: {path}</source>
         <translation>Custom: {path}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4459"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3904"/>
         <source>未找到（解决：使用 full 包内置 FFmpeg，或安装 FFmpeg 并加入 PATH，或在此处选择）</source>
         <translation>Not found (Solution: Use full package with built-in FFmpeg, install FFmpeg to PATH, or select here)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4568"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4015"/>
         <source>手动指定</source>
         <translation>Manually specified</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4569"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4016"/>
         <source>内置</source>
         <translation>Built-in</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4570"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4017"/>
         <source>环境（PATH）</source>
         <translation>System PATH</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4578"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4025"/>
         <source>未就绪（解决：使用 full 包内置 Deno，或安装 deno 并加入 PATH，或在此处选择）</source>
         <translation>Not Ready (Solution: Use full package built-in Deno, or install deno and add to PATH, or select here)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4580"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4027"/>
         <source>已就绪（自动：{} / {}）</source>
         <translation>Ready (Auto: {} / {})</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4580"/>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4592"/>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4685"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4027"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4039"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4132"/>
         <source>未知</source>
         <translation>Unknown</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4589"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4036"/>
         <source>未就绪: {}（解决：优先使用内置，其次 PATH；也可在此处选择）</source>
         <translation>Not ready: {} (Solution: Built-in preferred, then PATH; or select here)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4592"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4039"/>
         <source>已就绪（{}）</source>
         <translation>Ready ({})</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4597"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4044"/>
         <source>选择 JS Runtime 可执行文件（可选）</source>
         <translation>Select JS Runtime executable (Optional)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4637"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4084"/>
         <source>未找到 JS Runtime</source>
         <translation>JS Runtime Not Found</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4638"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4085"/>
         <source>请安装 deno/node/bun/quickjs 或在此处指定可执行文件路径。</source>
         <translation>Please install deno/node/bun/quickjs or specify executable path here.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4684"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4131"/>
         <source>类型: {}
 版本: {}
 路径: {}
@@ -17202,17 +17754,17 @@ Path: {}
 Source: {}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4696"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4143"/>
         <source>未找到 yt-dlp.exe</source>
         <translation>yt-dlp.exe not found</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4698"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4145"/>
         <source>请在此处选择 yt-dlp.exe，或将 yt-dlp.exe 放入 _internal/yt-dlp/，或加入 PATH。</source>
         <translation>Please select yt-dlp.exe here, or put it in _internal/yt-dlp/, or add to PATH.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4708"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4155"/>
         <source>版本: {}
 路径: {}
 更新方式: 替换该 yt-dlp.exe</source>
@@ -17221,29 +17773,29 @@ Path: {}
 Update method: Replace this yt-dlp.exe</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4768"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4215"/>
         <source>已启用</source>
         <translation>Enabled</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4768"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4215"/>
         <source>已禁用</source>
         <translation>Disabled</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4770"/>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4799"/>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4811"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4217"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4246"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4258"/>
         <source>字幕设置</source>
         <translation>Subtitle Settings</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4770"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4217"/>
         <source>字幕下载{}</source>
         <translation>Subtitle download {}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4785"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4232"/>
         <source>语言设置</source>
         <translation>Language Settings</translation>
     </message>
@@ -17264,229 +17816,227 @@ Update method: Replace this yt-dlp.exe</translation>
         <translation type="vanished">Subtitle embed type: {}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4822"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4269"/>
         <source>格式设置</source>
         <translation>Format Settings</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4823"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4270"/>
         <source>字幕输出格式: {}</source>
         <translation>Subtitle output format: {}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2176"/>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4838"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1809"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4285"/>
         <source>检测中...</source>
         <translation>Detecting...</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1324"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="973"/>
         <source>清除视频详情缓存</source>
         <translation>Clear Cached Video Details</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1325"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="974"/>
         <source>更换 Cookie 或代理后，若视频详情未更新，可清除缓存，下次解析时重新获取。</source>
         <translation>If video details are outdated after changing cookies or proxies, clear the cache to fetch them again the next time you load the link.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1333"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="982"/>
         <source>超过此时间后自动清理失败任务的记录（默认：3 天）。</source>
         <translation>Automatically remove failed task records after this period (default: 3 days).</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1372"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1021"/>
         <source>选择多音轨视频的自动选择策略；原音与配音以平台提供的标记为准</source>
         <translation>Choose how audio tracks are selected. Original and dubbed labels come from the platform.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1376"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1025"/>
         <source>优先原音（无原音时选最佳音轨）</source>
         <translation>Original, or Best Available</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1395"/>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4752"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1044"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4199"/>
         <source>视频有多语言音轨时，按此顺序选择音轨（可多选并排序）</source>
         <translation>For videos with multiple audio languages, select tracks in this order. You can select and reorder languages.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1430"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1079"/>
         <source>默认输出格式</source>
         <translation>Default Output Formats</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1434"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1083"/>
         <source>单视频容器</source>
         <translation>Single-video Container</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1456"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1105"/>
         <source>单视频音频格式</source>
         <translation>Single-video Audio Format</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1478"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1127"/>
         <source>播放列表容器</source>
         <translation>Playlist Container</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1500"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1149"/>
         <source>播放列表音频格式</source>
         <translation>Playlist Audio Format</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1522"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1171"/>
         <source>下载画质检查</source>
         <translation>Download Quality Checks</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1526"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1175"/>
         <source>画质未达标时</source>
         <translation>When Quality Is Below Target</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1527"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1176"/>
         <source>选择实际下载分辨率低于目标时的处理方式</source>
         <translation>Choose what happens when the downloaded resolution is below the target.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1540"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1189"/>
         <source>连续未达标暂停阈值</source>
         <translation>Pause After Consecutive Quality Issues</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1541"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1190"/>
         <source>连续多少个任务画质未达标时，自动暂停队列</source>
         <translation>Pause the queue after this many consecutive tasks fall below the target quality.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1557"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1206"/>
         <source>使用 FFprobe 核验分辨率</source>
         <translation>Verify Resolution with FFprobe</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1558"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1207"/>
         <source>无法从下载日志获取分辨率时，使用 FFprobe 检查视频文件的实际分辨率</source>
         <translation>Use FFprobe to read the video file’s resolution when it is unavailable in the download log.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1578"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1227"/>
         <source>拆分播放列表的数量阈值</source>
         <translation>Playlist Task Split Threshold</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1579"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1228"/>
         <source>选择“自动判断”时，超过此数量的播放列表会按视频拆分任务，否则作为一个任务下载</source>
         <translation>With Auto selected, split playlists above this size into one task per video; otherwise use one task for the playlist.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1595"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1244"/>
         <source>单次添加任务上限</source>
         <translation>Tasks per Batch</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1596"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1245"/>
         <source>限制单次快速添加的任务数量，减少界面卡顿和请求过多的风险</source>
         <translation>Limit the number of tasks added at once to reduce UI delays and excessive requests.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1682"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1330"/>
         <source>使用 YouTube Cookies</source>
         <translation>Use YouTube Cookies</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1684"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1332"/>
         <source>关闭后，新解析不携带 YouTube Cookies；账号和同步设置保留，已解析及已创建的任务沿用原模式。</source>
         <translation>When off, new extractions use no YouTube cookies. Accounts and sync settings are retained; existing results and tasks keep their original mode.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1702"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1350"/>
         <source>选择从浏览器提取、通过登录获取或手动导入 Cookie</source>
         <translation>Choose browser extraction, sign-in, or manual import to obtain cookies.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1776"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1424"/>
         <source>过滤非必要 Cookie</source>
         <translation>Filter Unneeded Cookies</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1778"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1426"/>
         <source>按 YouTube 或 X 平台保留所需 Cookie，移除无关 Cookie；关闭后保留提取到的全部 Cookie</source>
         <translation>Keep the cookies needed for YouTube or X and remove unrelated cookies. Turn off to retain all extracted cookies.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1821"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1469"/>
         <source>启动时检查应用与组件更新；距上次自动检查不足 24 小时则跳过</source>
         <translation>Check for app and component updates at startup, unless an automatic check ran in the last 24 hours.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1850"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1498"/>
         <source>SABR Test (测试核心)</source>
         <translation>SABR Test (Experimental core)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1877"/>
         <source>为 yt-dlp 提供 JavaScript 执行环境（点击检查更新）</source>
-        <translation>Provides the JavaScript runtime used by yt-dlp. Click to check for updates.</translation>
+        <translation type="vanished">Provides the JavaScript runtime used by yt-dlp. Click to check for updates.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1885"/>
         <source>为需要验证令牌的 YouTube 请求提供 PO Token（点击检查更新）</source>
-        <translation>Provides PO Tokens for YouTube requests that require them. Click to check for updates.</translation>
+        <translation type="vanished">Provides PO Tokens for YouTube requests that require them. Click to check for updates.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1993"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1627"/>
         <source>自动翻译字幕请求可能被限流（HTTP 429）或拒绝。启用 POT 服务可能有助于完成验证。</source>
         <translation>Requests for auto-translated subtitles may be rate-limited (HTTP 429) or rejected. Enabling the POT service may help with verification.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2002"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1636"/>
         <source>手动提供 YouTube 验证令牌；留空可清除（高级选项）</source>
         <translation>Provide a YouTube verification token manually. Leave empty to clear it. Advanced option.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2088"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1721"/>
         <source>硬件加速检测</source>
         <translation>Hardware Acceleration Check</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2119"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1752"/>
         <source>仅使用 CPU</source>
         <translation>CPU Only</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2119"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1752"/>
         <source>优先使用 GPU</source>
         <translation>Prefer GPU</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2130"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1763"/>
         <source>4K (2160p)</source>
         <translation>4K (2160p)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2131"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1764"/>
         <source>5K/6K（内存占用较高）</source>
         <translation>5K/6K (More Memory)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2132"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1765"/>
         <source>8K (4320p)（内存占用很高）</source>
         <translation>8K (4320p) (High Memory Use)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2145"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1778"/>
         <source>低（优先保持系统响应）</source>
         <translation>Low (Prioritize Responsiveness)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2155"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1788"/>
         <source>转码成功后保留原文件</source>
         <translation>Keep Original After Conversion</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2156"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1789"/>
         <source>转换成功后仍保留下载的原始视频文件</source>
         <translation>Keep the downloaded original video after conversion succeeds.</translation>
     </message>
@@ -17495,85 +18045,89 @@ Update method: Replace this yt-dlp.exe</translation>
         <translation type="vanished">Preparing the verification service in the background. You can continue using the app; parsing will proceed without PO Tokens until it is ready.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2306"/>
         <source>将检查令牌生成和 yt-dlp 连接情况，可能需要几十秒。</source>
-        <translation>Checks token generation and the yt-dlp connection. This may take several dozen seconds.</translation>
+        <translation type="vanished">Checks token generation and the yt-dlp connection. This may take several dozen seconds.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2463"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1533"/>
+        <source>服务与插件配套更新，安装后自动验证。</source>
+        <translation>The server and plugin update together and are verified after installation.</translation>
+    </message>
+    <message>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="1908"/>
         <source>移除记录并删除文件</source>
         <translation>Remove Record and Delete Files</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2596"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2041"/>
         <source>仅人工上传的字幕</source>
         <translation>Uploaded Subtitles Only</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2597"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2042"/>
         <source>优先人工字幕，其次自动生成字幕</source>
         <translation>Prefer Uploaded, Then Auto-generated</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2632"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2077"/>
         <source>设置字幕的默认保存格式，适用于嵌入、单独保存和仅下载字幕</source>
         <translation>Default format for embedded subtitles, separate subtitle files, and subtitle-only downloads.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3063"/>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3084"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2508"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2529"/>
         <source>⚠️ 当前: {}（并发较高，可能触发 HTTP 429 请求限流）</source>
         <translation>⚠️ Current: {} (high concurrency may trigger HTTP 429 rate limiting)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3119"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2564"/>
         <source>已清除 {} 条缓存结果，下次解析将重新获取。</source>
         <translation>Cleared {} cached results. Details will be fetched again next time.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3423"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2868"/>
         <source>Cookie 使用方式已更改</source>
         <translation>Cookie usage changed</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3424"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2869"/>
         <source>请重新解析链接以应用新设置；已有任务沿用原模式。</source>
         <translation>Extract the link again to apply this setting. Existing tasks keep their original mode.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3465"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="2910"/>
         <source>请点击“点击登录”，在弹出的窗口中完成登录</source>
         <translation>Click Sign In and complete sign-in in the window that opens.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3716"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3161"/>
         <source>应用内 X 登录暂不支持“通过 Google / Apple 登录”。
 请在登录窗口使用手机号、用户名或邮箱及密码登录。</source>
         <translation>In-app X sign-in does not currently support Sign in with Google or Apple.
 Use your phone number, username, or email and password in the sign-in window.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4095"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3540"/>
         <source>🔑 尚未登录，请点击“点击登录”</source>
         <translation>🔑 Not signed in. Click Sign In to continue.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4231"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3676"/>
         <source>请稍候</source>
         <translation>Please wait</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4231"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3676"/>
         <source>yt-dlp 正在安装，请完成后再切换频道。</source>
         <translation>yt-dlp is being installed. Wait for it to finish before switching channels.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4236"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3681"/>
         <source>切换到 SABR 测试核心</source>
         <translation>Switch to the SABR test core</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4238"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3683"/>
         <source>测试核心主要面向普通视频；VR 现已支持（自动合并视频与音频流），仅直播解析仍暂时受限。
 
 确认后请点击 yt-dlp 引擎卡片中的“立即更新”，下载并安装测试核心。您可以随时切回官方频道。</source>
@@ -17582,103 +18136,103 @@ Use your phone number, username, or email and password in the sign-in window.</t
 After confirming, click Update Now on the yt-dlp engine card to download and install the test core. You can switch back to an official channel at any time.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4242"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="3687"/>
         <source>继续切换</source>
         <translation>Continue switching</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4761"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4208"/>
         <source>此策略不按语言筛选：优先选择标记为原音的音轨，没有原音标记时选择最佳可用音轨</source>
         <translation>This option ignores language preferences: use a track marked as original, or the best available track if none is marked.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4800"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4247"/>
         <source>嵌入视频容器: {}</source>
         <translation>Embed in video container: {}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4800"/>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4812"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4247"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4259"/>
         <source>开</source>
         <translation>On</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4800"/>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4812"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4247"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4259"/>
         <source>关</source>
         <translation>Off</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4812"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4259"/>
         <source>另存独立字幕文件: {}</source>
         <translation>Save separate subtitle files: {}</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4855"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4302"/>
         <source>内存: {} GB</source>
         <translation>Memory: {} GB</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4857"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4304"/>
         <source> | GPU 加速: 可用 ({})</source>
         <translation> | GPU Accel: Available ({})</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4858"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4305"/>
         <source>您的硬件支持 VR 硬件转码。</source>
         <translation>Your hardware supports VR hardware transcoding.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4860"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4307"/>
         <source> (支持 8K 转码)</source>
         <translation> (Supports 8K Transcoding)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4862"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4309"/>
         <source> (建议限制在 4K/6K)</source>
         <translation> (Recommended to limit to 4K/6K)</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4864"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4311"/>
         <source> | GPU 加速: 不可用</source>
         <translation> | GPU Accel: Unavailable</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4865"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4312"/>
         <source>未检测到硬件编码器，将使用 CPU 转码 (较慢)。</source>
         <translation>No hardware encoder detected, will use CPU for transcoding (slower).</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4887"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4334"/>
         <source>耗时操作警告</source>
         <translation>Time-consuming Operation Warning</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4888"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4335"/>
         <source>EAC 转码非常消耗资源。如果没有高性能显卡，8K 视频可能需要数小时。</source>
         <translation>EAC transcoding consumes heavy resources. Without high-end GPU, 8K videos may take hours.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4903"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4350"/>
         <source>未检测到 GPU 编码器</source>
         <translation>GPU Encoder Not Detected</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4904"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4351"/>
         <source>当前系统没有可用的硬件编码器（NVENC/QSV/AMF），
 </source>
         <translation>Current system has no available hardware encoder (NVENC/QSV/AMF),
 </translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4905"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4352"/>
         <source>“优先使用 GPU”将改用 CPU，转换可能耗时较长。
 </source>
         <translation>Prefer GPU will fall back to CPU, which may take longer.
 </translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4919"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4366"/>
         <source>8K 转换可能消耗大量内存和时间。请根据硬件能力设置上限；内存不足时可降低分辨率。</source>
         <translation>8K conversion may use substantial memory and time. Choose a limit suitable for your hardware and lower it if memory is insufficient.</translation>
     </message>
@@ -17689,12 +18243,12 @@ After confirming, click Update Now on the yt-dlp engine card to download and ins
 </translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4906"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4353"/>
         <source>建议改为「自动 (推荐)」。</source>
         <translation>Recommend changing to &apos;Auto (Recommended)&apos;.</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4917"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="4364"/>
         <source>高风险设置</source>
         <translation>High Risk Settings</translation>
     </message>
@@ -19325,17 +19879,17 @@ After confirming, click Update Now on the yt-dlp engine card to download and ins
 <context>
     <name>WebView2AccountNameDialog</name>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="831"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="517"/>
         <source>新增 WebView2 账号</source>
         <translation>Add WebView2 Account</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="831"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="517"/>
         <source>请输入账号名称</source>
         <translation>Please enter the account name</translation>
     </message>
     <message>
-        <location filename="../../src/fluentytdl/ui/settings_page.py" line="833"/>
+        <location filename="../../src/fluentytdl/ui/settings_page.py" line="519"/>
         <source>例如：A 账号</source>
         <translation>e.g. Account A</translation>
     </message>

@@ -288,8 +288,9 @@ class TestBinComponentArtifacts:
             if component == "7zip":
                 continue  # 7zip 只在构建期用来解包，运行时不做在线更新
             channel = DEFAULT_YTDLP_CHANNEL if component == "yt-dlp" else "stable"
-            assert runtime[f"{component}:{channel}"] == repo, (
-                f"{component}: 清单={repo!r} 运行时={runtime.get(f'{component}:{channel}')!r}"
+            endpoint = "pot-provider-original" if component == "pot-provider" else component
+            assert runtime[f"{endpoint}:{channel}"] == repo, (
+                f"{component}: 清单={repo!r} 运行时={runtime.get(f'{endpoint}:{channel}')!r}"
             )
         # ffmpeg 必须来自 yt-dlp 的修复版构建，不是 BtbN 的
         assert gm.REPOSITORIES["ffmpeg"] == "yt-dlp/FFmpeg-Builds"

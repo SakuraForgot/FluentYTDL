@@ -263,6 +263,13 @@ class NotificationCard(CardWidget):
             notification_center.mark_as_read(self.notif.id)
         if self.notif.type == "announcement" and self.notif.metadata.get("announcement"):
             notification_center.announcement_requested.emit(self.notif.metadata["announcement"])
+        if (
+            self.notif.metadata.get("action") == "manage_pot"
+            or self.notif.metadata.get("component") == "pot-provider"
+        ):
+            from .components.dialogs.pot_status_window import PotStatusWindow
+
+            PotStatusWindow.show_singleton(self.window())
         super().mousePressEvent(event)
 
 

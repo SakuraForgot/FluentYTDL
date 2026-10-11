@@ -7,7 +7,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from PySide6.QtCore import QT_TRANSLATE_NOOP, QCoreApplication, Qt, QThread, QTimer, QUrl, Signal
+from PySide6.QtCore import QCoreApplication, Qt, QTimer, QUrl, Signal
 from PySide6.QtGui import QColor, QDesktopServices
 from PySide6.QtWidgets import QFileDialog, QStackedWidget, QVBoxLayout, QWidget
 from qfluentwidgets import (
@@ -18,7 +18,6 @@ from qfluentwidgets import (
     HyperlinkCard,
     LineEdit,
     MessageBox,
-    ProgressBar,
     PushButton,
     PushSettingCard,
     ScrollArea,
@@ -37,6 +36,7 @@ from fluentytdl.ui.components.common.cookie_refresh_worker import CookieRefreshW
 from fluentytdl.ui.components.common.custom_info_bar import InfoBar
 from fluentytdl.ui.components.common.transitions import RegionFader
 from fluentytdl.ui.components.settings.app_update_card import AppUpdateSettingCard
+from fluentytdl.ui.components.settings.component_card import ComponentSettingCard
 from fluentytdl.ui.components.settings.smart_setting_card import SmartSettingCard
 from fluentytdl.utils.localized_log import log_text
 from fluentytdl.utils.ui_text import tr_text
@@ -82,320 +82,6 @@ def _audio_strategy_index(strategy: str) -> int:
         return _AUDIO_STRATEGY_ORDER.index(str(strategy or "").strip().lower())
     except ValueError:
         return 0
-
-
-class ComponentSettingCard(SettingCard):
-    """Card for managing an external component (check update, install)."""
-
-    #: 按钮当前代表的动作。以前 `_on_action_clicked()` 是拿 `actionButton.text()` 去和
-    #: `self.tr("检查更新")` 之类比字符串来决定干什么 —— 换界面语言、或者 setText 和
-    #: 点击之间插进一个信号，就会点错动作（甚至什么都不做）。状态显式存下来。
-    _IDLE = "idle"
-    _CHECKING = "checking"
-    _UPDATE_AVAILABLE = "update_available"
-    _NOT_INSTALLED = "not_installed"
-    _DOWNLOADING = "downloading"
-    _INSTALLING = "installing"
-
-    def __init__(
-        self,
-        component_key: str,
-        icon: FluentIcon,
-        title: str,
-        content: str,
-        parent=None,
-    ):
-        super().__init__(icon, title, content, parent)
-        self.component_key = component_key
-        self._state = self._IDLE
-
-        # UI Elements
-        self.progressBar = ProgressBar(self)
-        self.progressBar.setRange(0, 100)
-        self.progressBar.setValue(0)
-        self.progressBar.setFixedWidth(120)
-        self.progressBar.setVisible(False)
-
-        self.actionButton = PushButton(self.tr("检查更新"), self)
-        self.actionButton.clicked.connect(self._on_action_clicked)
-
-        self.importButton = PushButton(self.tr("手动导入"), self, FluentIcon.ADD)
-        self.importButton.setToolTip(self.tr("选择本地文件覆盖当前组件"))
-        self.importButton.installEventFilter(
-            ToolTipFilter(self.importButton, showDelay=300, position=ToolTipPosition.BOTTOM)
-        )
-        self.importButton.clicked.connect(self._on_import_clicked)
-
-        self.folderButton = ToolButton(FluentIcon.FOLDER, self)
-        self.folderButton.setToolTip(self.tr("打开所在文件夹"))
-        self.folderButton.installEventFilter(
-            ToolTipFilter(self.folderButton, showDelay=300, position=ToolTipPosition.BOTTOM)
-        )
-        self.folderButton.clicked.connect(self._open_folder)
-
-        # Layout
-        self.hBoxLayout.addWidget(self.progressBar, 0, Qt.AlignmentFlag.AlignRight)
-        self.hBoxLayout.addSpacing(10)
-        self.hBoxLayout.addWidget(self.actionButton, 0, Qt.AlignmentFlag.AlignRight)
-        self.hBoxLayout.addSpacing(5)
-        self.hBoxLayout.addWidget(self.importButton, 0, Qt.AlignmentFlag.AlignRight)
-        self.hBoxLayout.addSpacing(5)
-        self.hBoxLayout.addWidget(self.folderButton, 0, Qt.AlignmentFlag.AlignRight)
-        self.hBoxLayout.addSpacing(16)
-
-        # Connect signals
-        dependency_manager.check_started.connect(self._on_check_started)
-        dependency_manager.check_finished.connect(self._on_check_finished)
-        dependency_manager.check_error.connect(self._on_error)
-
-        dependency_manager.download_started.connect(self._on_download_started)
-        dependency_manager.download_progress.connect(self._on_download_progress)
-        dependency_manager.download_finished.connect(self._on_download_finished)
-        dependency_manager.download_error.connect(self._on_error)
-        dependency_manager.install_finished.connect(self._on_install_finished)
-
-    def _set_state(self, state: str, text: str):
-        """状态和按钮文案必须一起改 —— 分开改就是这个类以前的 bug。"""
-        self._state = state
-        self.actionButton.setText(text)
-
-    def _on_action_clicked(self):
-        if self._state == self._IDLE:
-            dependency_manager.check_update(self.component_key)
-        elif self._state in (self._UPDATE_AVAILABLE, self._NOT_INSTALLED):
-            dependency_manager.install_component(self.component_key)
-        # checking / downloading / installing：按钮此时是 disabled，走不到这里
-
-    def _on_import_clicked(self):
-        # Filter based on component type
-        exe_name = "yt-dlp.exe"
-        if self.component_key == "ffmpeg":
-            exe_name = "ffmpeg.exe"
-        elif self.component_key == "deno":
-            exe_name = "deno.exe"
-        elif self.component_key == "pot-provider":
-            exe_name = "bgutil-pot-provider.exe"
-        elif self.component_key == "atomicparsley":
-            exe_name = "AtomicParsley.exe"
-
-        file, _ = QFileDialog.getOpenFileName(
-            self.window(),
-            tr_text("选择 {0}", exe_name),
-            "",
-            f"Executables ({exe_name});;All Files (*)",
-        )
-
-        if not file:
-            return
-
-        try:
-            src = Path(file)
-            if not src.exists():
-                return
-
-            target_dir = dependency_manager.get_target_dir(self.component_key)
-            target_path = target_dir / exe_name
-
-            # Simple check
-            if src.stat().st_size == 0:
-                InfoBar.error(self.tr("错误"), self.tr("所选文件为空"), parent=self.window())
-                return
-
-            shutil.copy2(src, target_path)
-
-            InfoBar.info(
-                self.tr("导入成功"), self.tr("已手动导入 {}").format(exe_name), parent=self.window()
-            )
-            # Refresh version info
-            dependency_manager.check_update(self.component_key)
-
-        except Exception as e:
-            InfoBar.error(self.tr("导入失败"), str(e), parent=self.window())
-
-    def _open_folder(self):
-        try:
-            path = dependency_manager.get_target_dir(self.component_key)
-            if path.exists():
-                import os
-
-                os.startfile(path)
-            else:
-                InfoBar.warning(
-                    self.tr("目录不存在"), self.tr("{} 尚未创建").format(path), parent=self.window()
-                )
-        except Exception as e:
-            InfoBar.error(self.tr("错误"), str(e), parent=self.window())
-
-    def _on_check_started(self, key):
-        if key != self.component_key:
-            return
-        self._set_state(self._CHECKING, self.tr("正在检查..."))
-        self.actionButton.setEnabled(False)
-
-    def _format_version(self, version: str, channel: str) -> str:
-        """把裸版本号和频道拼成展示串。
-
-        core 那边只给裸版本号 + 独立的 channel 字段 —— 拼字符串是 UI 的活。以前
-        core 直接造 `"2026.08.20 (nightly)"` 传上来，而清单路径又不拼，两条路径格式
-        不一致，跨频道比较就悄悄失效了。
-        """
-        if not channel:
-            return version
-        return f"{version} ({channel})"
-
-    def _on_check_finished(self, key, result):
-        if key != self.component_key:
-            return
-        self.actionButton.setEnabled(True)
-
-        curr = result.get("current", "unknown")
-        latest = result.get("latest", "unknown")
-        curr_ch = str(result.get("current_channel") or "")
-        latest_ch = str(result.get("latest_channel") or "")
-        has_update = result.get("update_available", False)
-        source = result.get("source", "")
-        # 自动（启动）检查：一条 InfoBar 都不弹。启动时 5 个组件的结果几乎同时回来，
-        # 弹出来就是一屏噪音；「有更新」这件事由消息中心（标题栏小铃铛）负责提醒，
-        # 见 `notification/update_notifier.py`。
-        silent = bool(result.get("silent"))
-
-        curr_text = self._format_version(curr, curr_ch if curr != "unknown" else "")
-        if key == "yt-dlp" and source and curr == "unknown":
-            curr_text = (
-                self.tr("版本检测超时")
-                if result.get("version_status") == "timeout"
-                else self.tr("版本未知")
-            )
-        latest_text = self._format_version(latest, latest_ch if latest != "unknown" else "")
-
-        # 组件可能来自自带的 bin 目录，也可能是用户自己装在 PATH 上的那一份 ——
-        # yt-dlp 子进程两种都能用，所以必须把来源写出来。不写的话，PATH 用户会看到
-        # 一个版本号却不知道它是哪来的，而更新按钮装出来的是另一份（自带目录优先）。
-        content = self.tr("当前: {}  |  最新: {}").format(curr_text, latest_text)
-        if source == "custom":
-            content += self.tr("  |  来源: 自定义路径")
-        if key == "yt-dlp":
-            content += self.tr("\n实际使用: {}\n托管安装目标: {}").format(
-                result.get("exe_path", ""), result.get("install_path", "")
-            )
-        if source == "path":
-            content += self.tr("  |  来源: 系统 PATH")
-        self.setContent(content)
-
-        title_text = self.titleLabel.text()
-        # 频道不一致时这不是"升级"而是"换频道"，装上去的版本号可能反而更小
-        channel_switch = bool(curr_ch and latest_ch and curr_ch != latest_ch and curr != "unknown")
-
-        if has_update:
-            self._set_state(self._UPDATE_AVAILABLE, self.tr("立即更新"))
-            if silent:
-                return
-            if channel_switch:
-                detail = self.tr("将从 {} 频道切换到 {} 频道（版本 {} → {}）").format(
-                    curr_ch, latest_ch, curr, latest
-                )
-            else:
-                detail = self.tr("版本 {} 可用 (当前: {})").format(latest, curr)
-            if source == "custom":
-                detail += self.tr("\n更新仅安装到托管目录；当前自定义内核不会被替换或自动切换。")
-            if source == "path":
-                # 安装动作只会写自带目录，不会去动 PATH 上别人的文件。
-                detail += self.tr(
-                    "\n当前使用的是系统 PATH 上的版本，更新会在应用自带目录下安装一份并优先使用。"
-                )
-            InfoBar.info(
-                self.tr("切换频道: {}").format(title_text)
-                if channel_switch
-                else self.tr("发现新版本: {}").format(title_text),
-                detail,
-                duration=15000,
-                parent=self.window(),
-            )
-        else:
-            if latest == "unknown":
-                self._set_state(self._IDLE, self.tr("检查更新"))
-                if silent:
-                    return
-                InfoBar.error(
-                    self.tr("检查失败"),
-                    self.tr("无法获取 {} 的最新版本信息，请检查网络连接或更换镜像源。").format(
-                        title_text
-                    ),
-                    duration=5000,
-                    parent=self.window(),
-                )
-            elif curr == "unknown":
-                if source:
-                    self._set_state(self._IDLE, self.tr("检查更新"))
-                else:
-                    self._set_state(self._NOT_INSTALLED, self.tr("立即安装"))
-            else:
-                self._set_state(self._IDLE, self.tr("检查更新"))
-                # 「已是最新」用户什么都不用做 —— 自动检查时是纯噪音
-                if silent:
-                    return
-                InfoBar.info(
-                    self.tr("已是最新"),
-                    self.tr("{} 当前版本 {} 已是最新。").format(title_text, curr_text),
-                    duration=5000,
-                    parent=self.window(),
-                )
-
-    def _on_download_started(self, key):
-        if key != self.component_key:
-            return
-        self.progressBar.setVisible(True)
-        self.progressBar.setValue(0)
-        self.actionButton.setEnabled(False)
-        self._set_state(self._DOWNLOADING, self.tr("正在下载..."))
-
-    def _on_download_progress(self, key, percent):
-        if key != self.component_key:
-            return
-        self.progressBar.setValue(percent)
-
-    def _on_download_finished(self, key):
-        if key != self.component_key:
-            return
-        self._set_state(self._INSTALLING, self.tr("正在安装..."))
-
-    def _on_install_finished(self, key):
-        if key != self.component_key:
-            return
-        self.progressBar.setVisible(False)
-        self.actionButton.setEnabled(True)
-        self._set_state(self._IDLE, self.tr("检查更新"))
-        # Trigger a re-check to update version text
-        dependency_manager.check_update(self.component_key)
-
-        title_text = self.titleLabel.text()
-        InfoBar.info(
-            self.tr("安装完成"),
-            self.tr("{} 已成功安装/更新到托管目录；实际使用版本以重新检查结果为准。").format(
-                title_text
-            ),
-            duration=5000,
-            parent=self.window(),
-        )
-
-    def _on_error(self, key, code):
-        if key != self.component_key:
-            return
-        self.progressBar.setVisible(False)
-        self.actionButton.setEnabled(True)
-        self._set_state(self._IDLE, self.tr("检查更新"))  # Reset
-
-        # 信号里传的是稳定 code（它要进 JSONL 日志），翻译只能在 UI 这一层做；
-        # 没见过的 code 原样显示 —— 比"未知错误"有用。
-        from .components.settings.component_error_text import translate as translate_component_error
-
-        title_text = self.titleLabel.text()
-        InfoBar.error(
-            self.tr("{} 错误").format(title_text),
-            translate_component_error(code),
-            duration=15000,
-            parent=self.window(),
-        )
 
 
 class InlineComboBoxCard(SettingCard):
@@ -924,45 +610,6 @@ class InlineSwitchActionCard(SettingCard):
         self.switchButton.checkedChanged.connect(self.checkedChanged)
 
 
-class PotDiagnoseWorker(QThread):
-    """POT 一键检测：全部网络往返都在子线程里，UI 永不阻塞。
-
-    `get_health_status()` 会真去铸一次 Token（最坏 15s），`probe_ytdlp_provider()`
-    还要起一个 yt-dlp 子进程 —— 这两件事任何一件放在 UI 线程都会把窗口冻住。
-    """
-
-    finished = Signal(dict)
-
-    def __init__(self, parent=None, *, recover: bool = False, probe: bool = True):
-        super().__init__(parent)
-        self.recover = recover
-        self.probe = probe
-
-    def run(self):
-        report: dict[str, Any] = {"recovered": None}
-        try:
-            from ..youtube.pot_manager import pot_manager
-
-            if self.recover:
-                report["recovered"] = pot_manager.try_recover()
-
-            report["health"] = pot_manager.get_health_status()
-            report["plugin_ok"], report["plugin_detail"] = pot_manager.verify_plugin_loadable()
-            report["deno_ok"] = pot_manager._probe_deno()
-
-            # 主动探测只在服务确实活着时才跑：服务没起来时 base_url 都拿不到，
-            # 白起一个 yt-dlp 子进程只会让用户多等几十秒看一句废话。
-            if self.probe and report["health"].get("running"):
-                report["probe_ok"], report["probe_detail"] = pot_manager.probe_ytdlp_provider()
-            else:
-                report["probe_ok"] = None
-                report["probe_detail"] = tr_text("服务未运行，跳过主动探测")
-        except Exception as e:
-            report["error"] = str(e)
-            log_text(logger, "exception", "[POT][Diagnose] 检测异常")
-        self.finished.emit(report)
-
-
 class SettingsPage(QWidget):
     """设置页面：管理下载、网络、核心组件配置 (重构版 - Pivot导航)"""
 
@@ -1192,22 +839,27 @@ class SettingsPage(QWidget):
         last_check = float(config_manager.get("last_update_check") or 0)
         now = time.time()
         # 24 小时内检查过就跳过
-        if now - last_check <= 86400:
-            return
-
-        config_manager.set("last_update_check", now)
 
         from ..core.update_transport import configured_check
 
         check_session = configured_check()
 
         # Software and components share one source transition for this batch.
-        self.appUpdateCard.check_for_update(check_session=check_session)
+        if now - last_check > 86400:
+            # Persist the stamp so the app check honours the 24h throttle across
+            # launches; without this write the check fires on every startup.
+            config_manager.set("last_update_check", now)
+            self.appUpdateCard.check_for_update(check_session=check_session)
 
         # bin/ 下的外部工具错峰排队
         for i, key in enumerate(
             ("yt-dlp", "ffmpeg", "deno", "pot-provider", "atomicparsley"), start=1
         ):
+            if (
+                now - float((config_manager.get("component_check_times") or {}).get(key, 0))
+                <= 86400
+            ):
+                continue
             QTimer.singleShot(
                 i * self._STARTUP_CHECK_STAGGER_MS,
                 lambda k=key, session=check_session: dependency_manager.check_update(
@@ -1634,7 +1286,6 @@ class SettingsPage(QWidget):
     def _on_retention_days_changed(self, index: int):
         days = [1, 3, 7, 15, 30, -1][index]
         config_manager.set("failed_task_retention_days", days)
-        from ..utils.logger import logger
 
         log_text(logger, "info", "失败任务保留天数已更新为: {}", days)
 
@@ -1874,7 +1525,7 @@ class SettingsPage(QWidget):
             "deno",
             FluentIcon.CODE,
             self.tr("JS Runtime (Deno)"),
-            self.tr("为 yt-dlp 提供 JavaScript 执行环境（点击检查更新）"),
+            self.tr("为 POT 和 yt-dlp 提供 JavaScript 执行环境（点击检查更新）"),
             self.coreGroup,
         )
 
@@ -1882,9 +1533,15 @@ class SettingsPage(QWidget):
             "pot-provider",
             FluentIcon.CERTIFICATE,
             self.tr("POT Provider"),
-            self.tr("为需要验证令牌的 YouTube 请求提供 PO Token（点击检查更新）"),
+            self.tr("服务与插件配套更新，安装后自动验证。"),
             self.coreGroup,
         )
+        self.potProviderCard.status_requested.connect(self._on_pot_diagnose_clicked)
+        self.potProviderCard.enabled_requested.connect(self._on_pot_provider_toggled)
+        from ..youtube.pot_manager import pot_manager
+
+        pot_manager.signals.state_changed.connect(self._refresh_pot_health_content)
+        self._refresh_pot_health_content()
 
         self.atomicParsleyCard = ComponentSettingCard(
             "atomicparsley",
@@ -1963,26 +1620,6 @@ class SettingsPage(QWidget):
     def _init_advanced_group(self, parent_widget: QWidget | None, layout: QVBoxLayout) -> None:
         self.advancedGroup = SettingCardGroup(self.tr("高级"), parent_widget)
 
-        self.potProviderEnabledCard = InlineSwitchActionCard(
-            FluentIcon.CERTIFICATE,
-            self.tr("POT 验证引擎 (实验性)"),
-            self.tr("正在读取状态…"),
-            self.tr("一键检测"),
-            parent=self.advancedGroup,
-        )
-        self.potProviderEnabledCard.switchButton.setChecked(
-            config_manager.get("pot_provider_enabled", False)
-        )
-        self.potProviderEnabledCard.checkedChanged.connect(self._on_pot_provider_toggled)
-        self.potProviderEnabledCard.actionClicked.connect(self._on_pot_diagnose_clicked)
-
-        # 开关旁的实时健康摘要。只读内存状态（零网络 I/O），所以可以放心定时刷。
-        self._pot_health_timer = QTimer(self)
-        self._pot_health_timer.setInterval(2000)
-        self._pot_health_timer.timeout.connect(self._refresh_pot_health_content)
-        self._pot_health_timer.start()
-        self._refresh_pot_health_content()
-
         # 用户关闭 POT 时提供字幕验证提示，点击后重新启用。
         self.potSubtitleHintCard = PushSettingCard(
             self.tr("启用"),
@@ -2027,7 +1664,6 @@ class SettingsPage(QWidget):
             lambda _: self.jsRuntimePathCard.setContent(self._js_runtime_status_text())
         )
 
-        self.advancedGroup.addSettingCard(self.potProviderEnabledCard)
         self.advancedGroup.addSettingCard(self.potSubtitleHintCard)
         self._indent_setting_card(self.potSubtitleHintCard)
         self._refresh_pot_subtitle_hint()
@@ -2215,39 +1851,12 @@ class SettingsPage(QWidget):
         return True, ""
 
     def _on_pot_provider_toggled(self, checked: bool) -> None:
-        """开关切换后立即在后台预热/停服，无需重启（预热不阻塞 UI）。"""
-        config_manager.set("pot_provider_enabled", checked)
-        try:
-            from fluentytdl.youtube.pot_manager import pot_manager
+        from ..youtube.pot_manager import pot_manager
 
-            if checked:
-                pot_manager.ensure_warm_async()
-            else:
-                pot_manager.stop_server()
-        except Exception as e:
-            log_text(logger, "warning", "[POT] 开关切换处理失败: {0}", e)
-        self._refresh_pot_health_content()
-        self._refresh_pot_subtitle_hint()
+        pot_manager.signals.enabled_requested.emit(checked)
 
     def _on_pot_enable_from_hint(self) -> None:
-        """提示卡上的「启用」：走和手动拨开关**完全相同**的路径。
-
-        `SwitchButton.setChecked()` 不会发 `checkedChanged` —— qfluentwidgets 只在
-        `Indicator.mouseReleaseEvent` 里发那个信号，程序化 setter 只更新文字和指示器
-        外观。所以这里必须自己再调一次处理函数，否则开关看着是开了，而
-        `config_manager` 和 `pot_manager.ensure_warm_async()` 一个都没动 ——
-        用户下次重开设置页会发现开关又变回了关。
-
-        （`:1874` 那行 init 期的 `setChecked()` 正是靠这个特性才不会误触发预热。）
-        """
-        self.potProviderEnabledCard.switchButton.setChecked(True)
         self._on_pot_provider_toggled(True)
-        InfoBar.success(
-            self.tr("POT 验证引擎已启用"),
-            self.tr("正在后台准备验证服务，您可以继续操作；解析将在服务就绪后开始。"),
-            duration=5000,
-            parent=self,
-        )
 
     def _refresh_pot_subtitle_hint(self) -> None:
         """POT 已启用时收起提示卡 —— 提示只在真的有事可做时出现。"""
@@ -2255,191 +1864,30 @@ class SettingsPage(QWidget):
         if card is not None:
             card.setVisible(not config_manager.get("pot_provider_enabled", False))
 
-    _POT_CARD_HINT = QT_TRANSLATE_NOOP(
-        "RuntimeText", "默认启用。后台准备验证服务，首次解析等待就绪；失败时停止请求并提示。"
-    )
+    def _refresh_pot_health_content(self, _state=None) -> None:
+        from ..youtube.pot_manager import pot_manager
 
-    def _refresh_pot_health_content(self) -> None:
-        """把 POT 实时状态摘要写进卡片描述。
-
-        只调 `status_brief()`（纯内存读），绝不调 `get_health_status()` —— 后者会
-        真去铸一次 Token，最坏 15s，放在定时器里等于每 2 秒冻一次 UI。
-
-        单行输出：`SettingCard` 在构造时就 `setFixedHeight(70)`，多行会被裁掉。
-        """
-        card = getattr(self, "potProviderEnabledCard", None)
-        if card is None:
-            return
-        if not card.isVisible() and getattr(self, "_pot_health_seen", False):
-            return
-        try:
-            from fluentytdl.youtube.pot_manager import pot_manager
-
-            brief = pot_manager.status_brief()
-        except Exception as e:
-            brief = tr_text("状态不可用（{0}）", e)
-        self._pot_health_seen = True
-        text = tr_text("状态：{0} · {1}", brief, tr_text(self._POT_CARD_HINT))
-        if card.contentLabel.text() != text:
-            card.setContent(text)
+        state = _state or pot_manager.snapshot()
+        self.potProviderCard.set_runtime(state, pot_manager.status_brief(state))
+        if state["state"] == "ready":
+            dependency_manager.local_requested.emit("pot-provider")
+            dependency_manager.local_requested.emit("deno")
+        self._refresh_pot_subtitle_hint()
 
     def _on_pot_diagnose_clicked(self) -> None:
-        """一键检测：健康状态 + 插件就位 + deno + `-v` 主动探测，全在子线程跑。"""
-        if getattr(self, "_pot_diagnose_worker", None) is not None:
-            return
-        if not config_manager.get("pot_provider_enabled", False):
-            InfoBar.warning(
-                self.tr("POT 未启用"),
-                self.tr("请先打开 POT 验证引擎开关，等待预热后再检测。"),
-                duration=5000,
-                parent=self,
-            )
-            return
-        self._start_pot_diagnose(recover=False)
+        from .components.dialogs.pot_status_window import PotStatusWindow
+
+        PotStatusWindow.show_singleton(self.window())
 
     def _start_pot_diagnose(self, *, recover: bool) -> None:
-        card = self.potProviderEnabledCard
-        card.actionButton.setEnabled(False)
-        card.actionButton.setText(self.tr("修复中…") if recover else self.tr("检测中…"))
-        InfoBar.info(
-            self.tr("正在检测 POT"),
-            self.tr("将检查令牌生成和 yt-dlp 连接情况，可能需要几十秒。"),
-            duration=5000,
-            parent=self,
+        self._on_pot_diagnose_clicked()
+        from ..youtube.pot_manager import pot_manager
+
+        signal = (
+            pot_manager.signals.retry_requested if recover else pot_manager.signals.check_requested
         )
+        signal.emit()
 
-        worker = PotDiagnoseWorker(self, recover=recover)
-        self._pot_diagnose_worker = worker
-        worker.finished.connect(self._on_pot_diagnose_finished, Qt.ConnectionType.QueuedConnection)
-        worker.start()
-
-    def _on_pot_diagnose_finished(self, report: dict) -> None:
-        card = self.potProviderEnabledCard
-        card.actionButton.setEnabled(True)
-        card.actionButton.setText(self.tr("一键检测"))
-        worker = getattr(self, "_pot_diagnose_worker", None)
-        self._pot_diagnose_worker = None
-        if worker is not None:
-            worker.deleteLater()
-        self._refresh_pot_health_content()
-
-        if report.get("error"):
-            InfoBar.error(self.tr("检测失败"), str(report["error"]), duration=15000, parent=self)
-            return
-
-        health = report.get("health") or {}
-        lines = self._format_pot_report(report, health)
-        overall_ok = bool(health.get("overall_ok")) and bool(report.get("plugin_ok"))
-        probe_ok = report.get("probe_ok")
-        if probe_ok is False:
-            overall_ok = False
-
-        title = self.tr("POT 检测通过") if overall_ok else self.tr("POT 检测发现问题")
-        box = MessageBox(title, "\n".join(lines), self.window())
-        box.cancelButton.setText(self.tr("关闭"))
-        if overall_ok:
-            box.yesButton.setText(self.tr("好的"))
-            box.exec()
-            return
-
-        box.yesButton.setText(self.tr("尝试修复"))
-        if box.exec():
-            self._start_pot_diagnose(recover=True)
-
-    def _format_pot_report(self, report: dict, health: dict) -> list[str]:
-        """把诊断结果拼成人类可读的报告。只出现端口/长度/条目数，绝不含 Token 明文。
-
-        每行都控制在 ~110 字符内：`MessageBox` 内部会对 content 再跑一遍 TextWrap，
-        超长行会被折得七零八落。完整探测输出走日志，不塞进对话框。
-        """
-
-        def mark(ok: object) -> str:
-            if ok is None:
-                return "—"
-            return "✓" if ok else "✗"
-
-        def clip(s: str, n: int = 110) -> str:
-            s = s.strip()
-            return s if len(s) <= n else s[: n - 1] + "…"
-
-        lines: list[str] = []
-        if report.get("recovered") is not None:
-            ok = report["recovered"]
-            lines.append(
-                tr_text("{0} 自动修复：", mark(ok))
-                + (tr_text("成功") if ok else tr_text("失败，见下方明细"))
-            )
-            lines.append("")
-
-        port = health.get("port") or 0
-        running = health.get("running")
-        lines.append(
-            tr_text("{0} 服务进程：", mark(running))
-            + (tr_text("运行中（127.0.0.1:{0}）", port) if running and port else tr_text("未运行"))
-        )
-        lines.append(
-            tr_text(
-                "{0} Token 生成：{1}",
-                mark(health.get("token_ok")),
-                clip(health.get("token_detail") or "—"),
-            )
-        )
-        lines.append(
-            tr_text(
-                "{0} Minter 缓存：{1}",
-                mark(health.get("minter_ok")),
-                clip(health.get("minter_detail") or "—"),
-            )
-        )
-        lines.append(
-            tr_text(
-                "{0} yt-dlp 插件：{1}",
-                mark(report.get("plugin_ok")),
-                clip(report.get("plugin_detail") or "—"),
-            )
-        )
-        lines.append(
-            f"{mark(report.get('deno_ok'))} JS Runtime (Deno)："
-            + (
-                tr_text("已就位")
-                if report.get("deno_ok")
-                else tr_text("未找到 —— POT 可能铸不出 Token，请在「核心组件」安装")
-            )
-        )
-
-        probe_ok = report.get("probe_ok")
-        detail = str(report.get("probe_detail") or "")
-        lines.append("")
-        lines.append(
-            tr_text("{0} yt-dlp 主动探测（-v，验证插件被加载且 provider 被选中）：", mark(probe_ok))
-        )
-        if probe_ok:
-            head = [ln for ln in detail.splitlines() if "bgutil" in ln.lower()][:3]
-            lines.extend(f"  {clip(ln)}" for ln in (head or detail.splitlines()[:3]))
-            lines.append(tr_text("  完整输出见日志。"))
-        else:
-            lines.extend(f"  {clip(ln)}" for ln in detail.splitlines()[:6])
-
-        cache_size = health.get("minter_cache_size")
-        if cache_size is not None:
-            lines.append("")
-            lines.append(tr_text("交叉验证：minter 缓存现有 {0} 条。", cache_size))
-            lines.append(tr_text("多次解析后它始终不涨，说明 Token 根本没被 yt-dlp 请求。"))
-
-        logger.info(
-            "[POT][Diagnose] running={} token_ok={} minter_ok={} plugin_ok={} deno={} probe={}",
-            health.get("running"),
-            health.get("token_ok"),
-            health.get("minter_ok"),
-            report.get("plugin_ok"),
-            report.get("deno_ok"),
-            probe_ok,
-        )
-        if detail:
-            log_text(logger, "info", "[POT][Diagnose] 探测输出:\n{}", detail[:4000])
-        return lines
-
-    @staticmethod
     def _validate_po_token(text: str) -> tuple[bool, str]:
         """PO Token 简单格式校验：允许为空；非空时做保守检查。"""
         s = str(text or "").strip()
@@ -4467,7 +3915,9 @@ class SettingsPage(QWidget):
         这里挡掉会让设置页把内置 runtime 报成「未找到」，与实际运行的东西不一致。
         """
         if runtime_id == "deno":
-            return find_bundled_executable("deno.exe", "js/deno.exe", "deno/deno.exe")
+            from ..utils.js_runtime import resolve_deno
+
+            return resolve_deno().path
         if runtime_id == "node":
             return find_bundled_executable("node.exe", "js/node.exe", "node/node.exe")
         if runtime_id == "bun":

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
@@ -11,6 +12,13 @@ from urllib.parse import unquote, urlparse
 
 import fetch_tools
 from fetch_tools import REPOSITORIES
+
+
+def _filesystem(path):
+    value = str(Path(path).resolve())
+    if os.name == "nt" and not value.startswith("\\\\?\\"):
+        value = "\\\\?\\UNC\\" + value[2:] if value.startswith("\\\\") else "\\\\?\\" + value
+    return Path(value)
 
 
 class ReleaseSource:
@@ -91,7 +99,9 @@ def _resolve_component(
 ) -> dict:
     """Fetch one component through an isolated ReleaseSource (no shared globals)."""
     source = ReleaseSource(REPOSITORIES[key])
-    extra = {"release_tag": source.release["tag_name"]} if key == "yt-dlp" else {}
+    extra = {"release_tag": source.release["tag_name"]} if key in {"yt-dlp", "pot-provider"} else {}
+    if key == "pot-provider":
+        extra["release"] = source.release
     version, files, asset = fetcher(
         destination / "bin" / subdir,
         download=source.download,
@@ -107,7 +117,7 @@ def _resolve_component(
         **source.metadata(),
         "version": version,
         "files": {
-            path.relative_to(destination).as_posix(): {
+            _filesystem(path).relative_to(_filesystem(destination)).as_posix(): {
                 "sha256": file_hashes[path],
                 "size": path.stat().st_size,
             }
@@ -170,17 +180,24 @@ def prepare(destination: Path) -> Path:
     )
     from prepare_7zip import prepare as prepare_7zip
 
-    # 每个组件用独立 ReleaseSource + 独立子目录，互不共享全局状态，可安全并发。
+    # POT uses the Deno from this same snapshot, after its download completes.
     with ThreadPoolExecutor(max_workers=len(fetch_tools.FETCHERS) + 1) as pool:
         components = {
             key: pool.submit(
                 _resolve_component, destination, baseline, key, subdir, fetcher, filenames
             )
             for key, subdir, fetcher, filenames, _probe in fetch_tools.FETCHERS
+            if key != "pot-provider"
         }
         sevenzip = pool.submit(_resolve_7zip, destination, prepare_7zip)
         resolved = {key: future.result() for key, future in components.items()}
         sevenzip_entry = sevenzip.result()
+    pot_key, subdir, fetcher, filenames, _probe = next(
+        row for row in fetch_tools.FETCHERS if row[0] == "pot-provider"
+    )
+    resolved[pot_key] = _resolve_component(
+        destination, baseline, pot_key, subdir, fetcher, filenames
+    )
     for key, *_rest in fetch_tools.FETCHERS:
         snapshot["tools"][key] = resolved[key]
     snapshot["tools"]["7zip"] = sevenzip_entry
@@ -190,6 +207,7 @@ def prepare(destination: Path) -> Path:
 
 
 def verify(path: Path) -> dict:
+    path = _filesystem(path)
     data = json.loads(path.read_text(encoding="utf-8"))
     if data.get("schema_version") != 1:
         raise RuntimeError("Unsupported component snapshot schema")
@@ -210,10 +228,13 @@ def verify(path: Path) -> dict:
     actual = {p.relative_to(path.parent).as_posix() for p in path.parent.rglob("*") if p.is_file()}
     if actual != listed:
         raise RuntimeError("Unlisted or missing files in component snapshot")
+    from fluentytdl.core.pot_dependencies import verify_dependencies
+
+    verify_dependencies(path.parent / "bin/pot-provider/server")
     return data
 
 
 def replay(path: Path, destination: Path) -> Path:
     verify(path)
-    shutil.copytree(path.parent, destination)
+    shutil.copytree(_filesystem(path.parent), _filesystem(destination))
     return destination / path.name

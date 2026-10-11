@@ -11,6 +11,7 @@ from urllib.parse import parse_qs, urlparse
 
 from PySide6.QtCore import QThread, Signal
 
+from fluentytdl.core.runtime_activity import YtDlpLaunchCancelled, ytdlp_popen
 from fluentytdl.utils.localized_log import log_text
 from fluentytdl.utils.ui_text import tr_text
 
@@ -329,7 +330,9 @@ class ChannelExtractWorker(QThread):
             # 串行解析 "all" 就是单次耗时的三倍；这里并发跑，总耗时收敛到最慢的那一个。
             # ydl_opts 在这里构建一次共享（每个子任务再各自 dict() 复制），
             # 避免三个线程重复读 cookie 文件、重复探测 exe 路径。
-            ydl_opts = dict(youtube_service.build_ydl_options(self.options))
+            ydl_opts = dict(
+                youtube_service.build_ydl_options(self.options, cancel_event=self._cancel_event)
+            )
             ydl_opts.update(
                 {
                     "skip_download": True,
@@ -419,6 +422,8 @@ class ChannelExtractWorker(QThread):
 
             self.finished_all.emit(results)
 
+        except YtDlpCancelled:
+            return
         except Exception as exc:
             log_text(logger, "exception", "频道解析失败: {}", self.base_url)
             err = translate_error(exc)
@@ -1177,7 +1182,9 @@ class DownloadWorker(QThread):
 
             # 合并 YoutubeService 的基础反封锁/网络配置
             base_opts = youtube_service.build_ydl_options(
-                freeze_youtube_options(enabled=self.opts.get(COOKIE_MODE)), url=self.url
+                freeze_youtube_options(enabled=self.opts.get(COOKIE_MODE)),
+                url=self.url,
+                cancel_event=self._cancel_event,
             )
             import copy
 
@@ -1806,7 +1813,7 @@ class DownloadWorker(QThread):
                 self._run_outcome = "success"
                 self.completed.emit()
 
-        except DownloadCancelled:
+        except (DownloadCancelled, YtDlpCancelled):
             self._clean_logger.force_update("cancelled", 0.0, tr_text("🗑️ 任务已取消并清理残骸"))
             # 取消的**唯一**裁决点。判据是 phase 不是调用点：`committing` 之后取消
             # 只记 `pending_cancel`，`committed` 之后是 no-op —— 绝不出现「UI 说已
@@ -2114,6 +2121,7 @@ class DownloadWorker(QThread):
             log_pot_in_argv,
             prepare_yt_dlp_env,
             resolve_yt_dlp_exe,
+            ydl_opts_to_cli_args,
         )
 
         exe = resolve_yt_dlp_exe()
@@ -2154,8 +2162,13 @@ class DownloadWorker(QThread):
 
         # 从 youtube_service 获取基础选项（仅一次）
         base_opts = youtube_service.build_ydl_options(
-            freeze_youtube_options(enabled=self.opts.get(COOKIE_MODE)), url=self.url
+            freeze_youtube_options(enabled=self.opts.get(COOKIE_MODE)),
+            url=self.url,
+            cancel_event=self._cancel_event,
         )
+
+        # 与完整下载保持相同的覆盖顺序；空字符串必须传给 CLI 才能关闭系统代理。
+        cmd += ydl_opts_to_cli_args({"proxy": opts.get("proxy", base_opts.get("proxy"))})
 
         # Cookie（必须保留，否则可能无法访问受限视频）。
         # yt-dlp 每次运行结束都把 jar 回写进 `--cookies` 文件；绝不把 Sentinel 真相源直接
@@ -2276,8 +2289,9 @@ class DownloadWorker(QThread):
         self._clean_logger.force_update("parsing", 0.0, tr_text("⚡ 正在初始化提取引擎..."))
 
         try:
-            proc = subprocess.Popen(
+            proc = ytdlp_popen(
                 cmd,
+                cancel_check=self._cancel_event.is_set,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=False,
@@ -2418,7 +2432,7 @@ class DownloadWorker(QThread):
                 self._run_outcome = "success"
                 self.completed.emit()
 
-        except DownloadCancelled:
+        except (DownloadCancelled, YtDlpLaunchCancelled):
             # 取消**唯一**裁决点（与完整道路同一个）：判据是 phase 不是调用点。
             self._finalize_staging_cancel()
             self._run_outcome = "cancelled"
@@ -2526,8 +2540,9 @@ class DownloadWorker(QThread):
             cwd = self.download_dir or os.getcwd()
             os.makedirs(cwd, exist_ok=True)
 
-            proc = subprocess.Popen(
+            proc = ytdlp_popen(
                 cmd,
+                cancel_check=self._cancel_event.is_set,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=False,
@@ -2611,7 +2626,7 @@ class DownloadWorker(QThread):
                 self._clean_logger.force_update("completed", 100.0, tr_text("✅ 下载完成"))
                 self._run_outcome = "success"
                 self.completed.emit()
-        except DownloadCancelled:
+        except (DownloadCancelled, YtDlpLaunchCancelled):
             # 取消**唯一**裁决点（与完整道路、轻量提取同一个）：判据是 phase 不是调用点。
             self._finalize_staging_cancel()
             self._run_outcome = "cancelled"

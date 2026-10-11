@@ -99,11 +99,6 @@ def detect_component_versions(release_dir: Path) -> dict[str, dict]:
             "cmd": ["--version"],
             "repo": REPOSITORIES["deno"],
         },
-        "pot-provider": {
-            "exe": "pot-provider/bgutil-pot-provider.exe",
-            "cmd": ["--version"],
-            "repo": REPOSITORIES["pot-provider"],
-        },
         "atomicparsley": {
             "exe": "atomicparsley/AtomicParsley.exe",
             "cmd": ["--version"],
@@ -146,6 +141,15 @@ def detect_component_versions(release_dir: Path) -> dict[str, dict]:
                 "repo": defn["repo"],
             }
 
+    pot_manifest = bin_dir / "pot-provider/manifest.json"
+    if pot_manifest.is_file():
+        pot = json.loads(pot_manifest.read_text(encoding="utf-8"))
+        components["pot-provider"] = {
+            "version": pot["upstream_version"],
+            "repo": REPOSITORIES["pot-provider"],
+            "implementation": "brainicism",
+            "bundle_id": pot["bundle_id"],
+        }
     return components
 
 
@@ -263,7 +267,8 @@ def generate_manifest(
             entry["size"] = asset["size"]
             note = f"制品 {asset['sha256'][:16]}…"
 
-        manifest["components"][f"bin/{key}"] = entry
+        manifest_key = "pot-provider-original" if key == "pot-provider" else key
+        manifest["components"][f"bin/{manifest_key}"] = entry
         print(f"  bin/{key}: {version} ({note})")
 
     return manifest

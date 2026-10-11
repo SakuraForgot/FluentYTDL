@@ -905,6 +905,23 @@ def locate_runtime_tool(*relative_candidates: str) -> Path:
     If not found, raises FileNotFoundError.
     """
 
+    from .component_paths import managed_candidates
+
+    aliases = {
+        "yt-dlp.exe": "yt-dlp",
+        "ffmpeg.exe": "ffmpeg",
+        "ffprobe.exe": "ffmpeg",
+        "deno.exe": "deno",
+        "atomicparsley.exe": "atomicparsley",
+    }
+    for relative in relative_candidates:
+        name = Path(relative).name
+        key = aliases.get(name.lower())
+        if key:
+            for managed in managed_candidates(key, name):
+                if managed.is_file():
+                    return managed.resolve()
+
     # --- 0. Explicit High-Priority Check for Packaged Tools ---
     # This addresses issues where tools are definitely in `bin/` next to the exe
     # but generic logic might miss them due to path combination complexity.

@@ -33,6 +33,10 @@ import pytest  # noqa: E402
 from loguru import logger  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
+# Windows must use the serial Qt lane and its deferred-delete/style cleanup.
+# Linux retains headless parallel coverage of these QWidget contracts.
+pytestmark = pytest.mark.windows_gui if sys.platform == "win32" else []
+
 from fluentytdl.core.config_manager import config_manager  # noqa: E402
 from fluentytdl.observability import new_flow  # noqa: E402
 from fluentytdl.ui.components.platforms.youtube import (  # noqa: E402

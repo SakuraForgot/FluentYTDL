@@ -2,22 +2,21 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
-import tempfile
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from threading import Event, Lock
+from threading import Event
 from typing import Any
 
+from fluentytdl.core.runtime_activity import YtDlpLaunchCancelled, ytdlp_popen, ytdlp_run
 from fluentytdl.utils.localized_log import log_text
 from fluentytdl.utils.message_catalog import english
 from fluentytdl.utils.paths import (
     config_path,
     find_bundled_executable,
-    frozen_internal_dir,
     get_clean_env,
-    is_frozen,
     locate_runtime_tool,
 )
 from fluentytdl.utils.ui_text import tr_text
@@ -53,13 +52,15 @@ def log_pot_from_output(out: str, *, stage: str) -> None:
         return
     from loguru import logger
 
+    from ..utils.diagnostic_text import redact_detail
+
     for line in out.splitlines():
         s = line.strip()
         if not s or s.startswith("{"):
             continue
         low = s.lower()
         if any(m in low for m in _POT_OUTPUT_MARKERS):
-            logger.info("[POT][YtDlp][{}] {}", stage, s[:400])
+            logger.info("[POT][YtDlp][{}] {}", stage, redact_detail(s)[:400])
 
 
 def log_pot_in_argv(cmd: list[str], *, stage: str, task_id: str = "") -> None:
@@ -189,136 +190,71 @@ def _prepend_path(env: dict[str, str], *dirs: str) -> None:
 # ---------------------------------------------------------------------------
 
 _PLUGIN_PACKAGE_NAME = "bgutil-ytdlp-pot-provider"
+_LEGACY_RUST_HASHES = {
+    "getpot_bgutil.py": "714630e5dd2109fcd9c3d74531ffa53f2495485a881c8d71b296571510d7fbaf",
+    "getpot_bgutil_http.py": "f284c49c18928a0bbfadf0a088e9ee049f8d71f2f5eeca4ba3534f4f3ce412f6",
+    "getpot_bgutil_cli.py": "ee40fefbce38c79f764935933dfff4f7a7a42a554f27ed1ae64d8bc869a793b6",
+}
 
 
-def _get_pot_plugin_source_dir() -> Path | None:
-    """获取 POT 插件源文件目录。
+def legacy_pot_directories(root: Path) -> list[Path]:
+    """Return only verified app-owned legacy plugin directories for retirement."""
+    import hashlib
 
-    Dev 模式: src/fluentytdl/yt_dlp_plugins_ext/yt_dlp_plugins/extractor/
-    Frozen 模式: _internal/fluentytdl/yt_dlp_plugins_ext/yt_dlp_plugins/extractor/
-    """
-    _subpath = Path("yt_dlp_plugins_ext") / "yt_dlp_plugins" / "extractor"
+    from ..core.pot_component import ComponentError
 
-    # 方式 1：基于 __file__ 的相对路径（dev 和大多数 frozen 场景）
-    source = Path(__file__).resolve().parent.parent / _subpath
-    if source.exists():
-        return source
-
-    # 方式 2：frozen 回退 — 基于 _internal 目录
-    # PyInstaller 打包时 .spec datas 将 yt_dlp_plugins_ext 挂载到 fluentytdl/ 下
-    # 但 __file__ 在某些 PyInstaller 配置下可能不指向 _internal
-    if is_frozen():
-        source2 = frozen_internal_dir() / "fluentytdl" / _subpath
-        if source2.exists():
-            return source2
-
-    return None
-
-
-# Serialize deployment; these three small files are compared by content on every check.
-_pot_sync_lock = Lock()
-_POT_REQUIRED_FILES = ("getpot_bgutil.py", "getpot_bgutil_http.py", "getpot_bgutil_cli.py")
-
-
-def _read_pot_sources() -> tuple[Path, dict[str, bytes]]:
-    source = _get_pot_plugin_source_dir()
-    if source is None:
-        raise FileNotFoundError("Bundled POT plugin sources missing")
-    files = {name: (source / name).read_bytes() for name in _POT_REQUIRED_FILES}
-    for name, content in files.items():
-        if not content.strip():
-            raise ValueError(f"Empty POT plugin source: {name}")
-        compile(content, str(source / name), "exec")
-    return source, files
-
-
-def _pot_file_matches(path: Path, content: bytes) -> bool:
-    try:
-        return path.is_file() and path.read_bytes() == content
-    except OSError:
-        return False
-
-
-def _write_pot_file(path: Path, content: bytes) -> None:
-    """Replace only verified complete files; retry transient Windows sharing failures."""
-    for attempt in range(3):
-        temporary = None
-        try:
-            path.parent.mkdir(parents=True, exist_ok=True)
-            with tempfile.NamedTemporaryFile(
-                dir=path.parent, suffix=".tmp", delete=False
-            ) as stream:
-                temporary = Path(stream.name)
-                stream.write(content)
-                stream.flush()
-                os.fsync(stream.fileno())
-            if not _pot_file_matches(temporary, content):
-                raise OSError("POT temporary file verification failed")
-            os.replace(temporary, path)
-            if not _pot_file_matches(path, content):
-                raise OSError("POT destination verification failed")
-            return
-        except OSError:
-            if attempt == 2:
-                raise
-            time.sleep(0.1 * (attempt + 1))
-        finally:
-            if temporary is not None:
-                try:
-                    temporary.unlink(missing_ok=True)
-                except OSError:
-                    pass
-
-
-def sync_pot_plugins_to_ytdlp(exe: Path | None = None) -> bool:
-    """Verify and atomically deploy all bundled POT files beside the selected executable."""
-    from loguru import logger
-
-    with _pot_sync_lock:
-        try:
-            exe = exe if exe is not None else resolve_yt_dlp_exe()
-            if exe is None or not exe.is_file():
-                return False
-            _, files = _read_pot_sources()
-            target = (
-                exe.parent
-                / "yt-dlp-plugins"
-                / _PLUGIN_PACKAGE_NAME
-                / "yt_dlp_plugins"
-                / "extractor"
+    result = []
+    if not root.is_dir():
+        return result
+    for directory in root.iterdir():
+        hashed = re.fullmatch(r"fluentytdl-pot-([a-f0-9]{16})", directory.name)
+        if not hashed and directory.name != _PLUGIN_PACKAGE_NAME:
+            continue
+        package = directory / _PLUGIN_PACKAGE_NAME if hashed else directory
+        extractor = package / "yt_dlp_plugins/extractor"
+        files = sorted(extractor.glob("getpot_bgutil*.py"))
+        if hashed:
+            identity = hashlib.sha256(b"".join(p.read_bytes() for p in files)).hexdigest()[:16]
+            owned = {p.name for p in files} == {
+                "getpot_bgutil.py",
+                "getpot_bgutil_http.py",
+            } and identity == hashed[1]
+        else:
+            owned = bool(files) and all(
+                hashlib.sha256(p.read_bytes().replace(b"\r\n", b"\n")).hexdigest()
+                == _LEGACY_RUST_HASHES.get(p.name)
+                for p in files
             )
-            changed = 0
-            for name, content in files.items():
-                if not _pot_file_matches(target / name, content):
-                    _write_pot_file(target / name, content)
-                    changed += 1
-            if not all(
-                _pot_file_matches(target / name, content) for name, content in files.items()
-            ):
-                raise OSError("POT plugin deployment changed during verification")
-            if changed:
-                logger.info("POT Plugin Sync: verified {} files at {}", changed, target)
-            return True
-        except Exception as error:
-            logger.warning("POT Plugin Sync failed: {}", error)
-            return False
+        extras = [
+            p
+            for p in directory.rglob("*")
+            if p.is_file() and p not in files and "__pycache__" not in p.parts
+        ]
+        if (
+            not owned
+            or extras
+            or any(p.is_symlink() or p.is_junction() for p in directory.rglob("*"))
+        ):
+            raise ComponentError("pot_plugin_conflict", str(directory))
+        result.append(directory)
+    return result
 
 
-def pot_plugin_directory(exe: Path | None = None) -> Path | None:
-    """Return an actual plugin search root, including a read-only bundled fallback.
+def sync_pot_plugins_to_ytdlp(exe: Path | None = None, *, bundle=None) -> bool:
+    """Compatibility entry point: the updater installs the official ZIP once."""
+    return pot_plugin_directory(exe, bundle=bundle) is not None
 
-    --plugin-dirs searches packages immediately below this root. In the fallback,
-    yt_dlp_plugins_ext is that package; no writable installation directory is needed.
-    """
+
+def pot_plugin_directory(exe: Path | None = None, *, bundle=None) -> Path | None:
+    from ..core.pot_component import ComponentError, resolve_bundle, runtime_path
+
     exe = exe if exe is not None else resolve_yt_dlp_exe()
     if exe is None or not exe.is_file():
         return None
-    if sync_pot_plugins_to_ytdlp(exe):
-        return exe.parent / "yt-dlp-plugins"
     try:
-        source, _ = _read_pot_sources()
-        return source.parents[2]
-    except Exception:
+        bundle = bundle or resolve_bundle()
+        return runtime_path(bundle.plugin_root)
+    except ComponentError:
         return None
 
 
@@ -352,14 +288,17 @@ def prepare_yt_dlp_env(
             if bundled_ffmpeg is not None:
                 _prepend_path(env, str(bundled_ffmpeg.resolve().parent))
 
-    # JS runtime (deno preferred)
+    # JS runtime: Deno uses the same resolver as the original POT server.
     js_runtime_path = str(config_manager.get("js_runtime_path") or "").strip() or None
     if js_runtime_path and Path(js_runtime_path).exists():
         _prepend_path(env, str(Path(js_runtime_path).resolve().parent))
     else:
         try:
-            p = locate_runtime_tool("deno.exe", "js/deno.exe", "deno/deno.exe")
-            _prepend_path(env, str(Path(p).resolve().parent))
+            from ..utils.js_runtime import resolve_deno
+
+            p = resolve_deno().path
+            if p:
+                _prepend_path(env, str(p.resolve().parent))
         except FileNotFoundError:
             bundled_deno = find_bundled_executable("deno.exe", "js/deno.exe", "deno/deno.exe")
             if bundled_deno is not None:
@@ -371,36 +310,19 @@ def prepare_yt_dlp_env(
             if p and Path(p).exists():
                 _prepend_path(env, p)
 
-    # --- POT Plugin Sync ---
-    # 显式选择本次实际执行内核的插件目录；坏的旧副本不能先于已验证目录加载。
     if command is not None:
         plugin_root = pot_plugin_directory(Path(command[0]))
         if plugin_root is not None:
-            command[1:1] = [
-                "--no-plugin-dirs",
-                "--plugin-dirs",
-                str(plugin_root),
-                "--plugin-dirs",
-                "default",
-            ]
+            # Managed yt-dlp discovers the ZIP beside its executable by default.
+            # A custom/read-only executable uses the same single managed ZIP.
+            if plugin_root.resolve() != (Path(command[0]).parent / "yt-dlp-plugins").resolve():
+                if str(plugin_root) not in command:
+                    command[1:1] = ["--plugin-dirs", str(plugin_root)]
             env.pop("YTDLP_NO_PLUGINS", None)
         elif any("youtubepot-bgutilhttp:" in arg for arg in command):
             raise RuntimeError(
-                tr_text(
-                    "POT 加载失败，已停止本次请求：{0}",
-                    "Bundled POT plugins unavailable or invalid",
-                )
+                tr_text("POT 加载失败，已停止本次请求：{0}", "POT plugin unavailable or invalid")
             )
-    else:
-        sync_pot_plugins_to_ytdlp()
-
-    # PYTHONPATH fallback: pip 安装的 yt-dlp（Python 脚本版）仍可通过此路径发现插件
-    plugin_dir = Path(__file__).resolve().parent.parent / "yt_dlp_plugins_ext"
-    if plugin_dir.exists():
-        existing_pypath = env.get("PYTHONPATH") or ""
-        env["PYTHONPATH"] = (
-            f"{plugin_dir}{os.pathsep}{existing_pypath}" if existing_pypath else str(plugin_dir)
-        )
 
     return env
 
@@ -1112,7 +1034,7 @@ def run_dump_single_json(
                     return b.decode("utf-8", errors="replace")
 
         if cancel_event is None:
-            proc = subprocess.run(
+            proc = ytdlp_run(
                 cmd,
                 capture_output=True,
                 env=env,
@@ -1125,14 +1047,18 @@ def run_dump_single_json(
                 stderr_snippet = _extract_error_lines(out)
                 raise YtDlpExecutionError(proc.returncode, stderr_snippet)
         else:
-            proc2 = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                env=env,
-                cwd=work_dir,
-                **_win_hide_console_kwargs(),
-            )
+            try:
+                proc2 = ytdlp_popen(
+                    cmd,
+                    cancel_check=cancel_event.is_set,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    env=env,
+                    cwd=work_dir,
+                    **_win_hide_console_kwargs(),
+                )
+            except YtDlpLaunchCancelled as error:
+                raise YtDlpCancelled("yt-dlp cancelled") from error
 
             # 使用独立的取消监控线程，communicate() 只调用一次
             import threading as _threading

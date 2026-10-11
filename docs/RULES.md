@@ -104,7 +104,7 @@ pythonVersion = "3.12"
 5. **非零退出时验证文件大小** — Windows `.part-Frag` 删除失败但下载已完成
 6. **同步 POT 插件到 exe 目录** — 编译后的 yt-dlp 无法通过 PYTHONPATH 发现插件
 7. **TUN 模式不注入代理环境变量** — 注入 `HTTPS_PROXY` 导致双重代理
-8. **web_music 需要 `disable_innertube=True`** — 该客户端的 InnerTube 挑战有缺陷
+8. **原版 POT 按配对组件管理** — Brainicism 服务端与匹配的 HTTP 插件一起激活，复用现有公共 Deno 组件。禁止向 POT 目录复制或下载私有 Deno；缺失或损坏时复用现有组件更新器；必须通过真实 yt-dlp Token 请求才算就绪。不得恢复历史 Rust 专用 `disable_innertube` 参数，也不得仅凭 `/ping` 判定就绪。
 9. **BCP-47 别名扩展** — `zh-Hans` 必须匹配 `zh-CN`、`zh-SG` 等；音频与**字幕**都走 `utils/bcp47.py` 这一份。`--sub-langs` 的每一项被 yt-dlp 当作**锚定正则**去匹配真实字幕键，裸 `en` 匹配不到 `en-GB` —— 用户偏好必须先解析成真实键（或回落成 `en(-.+)?`）才能进命令行
 10. **事务沙盒模型** — `download/staging.py` 的 `StagingArea` 全权管理产物生命周期。完整顺序：`create(事务级 uuid4 目录)` → `prepare_attempt(n)` → yt-dlp 以 `paths.home = payload/`、`paths.temp = .parts/` 运行 → 每行输出 `add_reported()` → `reconcile()`（唯一物理扫描，只扫 `payload/`）→ `seal_discovery()` → Feature 经 `StagingArea` 原子 API 变更 → `verify()`（安全门，二值，不做集合减法）→ `build_plan()` → `commit()`（取消门 → phase=committing → 预留整组 → WAL 逐项发布 → phase=committed）→ 不可逆点 → `finalize_failure()` 作为唯一失败/取消裁决点。四条绝对不可违反的约束：
     - **`outtmpl` 必须是相对路径且必须通过 `assert_inside`** —— 绝对 `-o` 会让 `-P` 完全失效，破坏类型化路径沙盒重定向。

@@ -82,7 +82,7 @@ REPOSITORIES = {
     "ffmpeg": "yt-dlp/FFmpeg-Builds",
     "deno": "denoland/deno",
     "atomicparsley": "wez/atomicparsley",
-    "pot-provider": "jim60105/bgutil-ytdlp-pot-provider-rs",
+    "pot-provider": "Brainicism/bgutil-ytdlp-pot-provider",
     "7zip": "ip7z/7zip",
 }
 
@@ -588,31 +588,58 @@ def fetch_atomicparsley(
 
 
 def fetch_pot_provider(
-    dest_dir: Path, *, download=download_file, asset_meta=asset_meta
-) -> tuple[str, dict[str, Path], dict | None]:
-    """获取 POT Provider (bgutil-ytdlp-pot-provider-rs)
+    dest_dir: Path, *, download=download_file, asset_meta=asset_meta, release_tag="", release=None
+):
+    """Prepare upstream's release with the Deno resolved by this build."""
+    import sys
 
-    上游不发布校验文件，下载完整性靠 ``ReleaseSource`` 的 size + GitHub 资产 digest 校验。
-    """
-    print("\n🔧 获取 POT Provider...")
-    dest_dir.mkdir(parents=True, exist_ok=True)
+    sys.path.insert(0, str(ROOT / "src"))
+    from fluentytdl.core.pot_component import digest, filesystem_path
+    from fluentytdl.core.pot_upstream import install_release, release_metadata
+    from fluentytdl.core.update_transport import Transport
 
-    with tempfile.TemporaryDirectory() as tmp:
-        tmp_path = Path(tmp)
-        exe_path = tmp_path / "bgutil-pot-provider.exe"
-
-        url = "https://github.com/jim60105/bgutil-ytdlp-pot-provider-rs/releases/latest/download/bgutil-pot-windows-x86_64.exe"
-        download(url, exe_path)
-        asset_info = asset_meta(url, exe_path)
-
-        final_path = dest_dir / "bgutil-pot-provider.exe"
-        shutil.move(str(exe_path), str(final_path))
-
-    version = probe_version(
-        dest_dir / "bgutil-pot-provider.exe", ["--version"], r"bgutil-pot\s+(\S+)"
+    release = release or github_api(
+        f"/repos/{REPOSITORIES['pot-provider']}/releases/"
+        + (f"tags/{release_tag}" if release_tag else "latest")
     )
-    print(f"  ✓ POT Provider {version} 已安装到 {dest_dir}")
-    return version, {"bgutil-pot-provider.exe": dest_dir / "bgutil-pot-provider.exe"}, asset_info
+    metadata = release_metadata(release)
+
+    class BuildTransport(Transport):
+        def download(self, url, destination, sha256="", progress=None):
+            if url != metadata["asset_url"]:
+                return super().download(url, destination, sha256, progress)
+            download(url, destination)
+            if digest(destination) != metadata["sha256"]:
+                raise RuntimeError("POT plugin digest mismatch")
+            return destination
+
+    dest_dir = filesystem_path(dest_dir.resolve())
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    transport = BuildTransport("system")
+    try:
+        installed = install_release(
+            metadata,
+            dest_dir,
+            transport,
+            deno_path=dest_dir.parent / "deno/deno.exe",
+            packaged=True,
+            ytdlp_path=dest_dir.parent / "yt-dlp/yt-dlp.exe",
+        )
+        asset = {
+            "url": metadata["asset_url"],
+            "sha256": metadata["sha256"],
+            "size": metadata["size"],
+        }
+    finally:
+        transport.session.close()
+    return (
+        metadata["upstream_version"],
+        {
+            **{p.relative_to(dest_dir).as_posix(): p for p in dest_dir.rglob("*") if p.is_file()},
+            installed.plugin_archive.name: installed.plugin_archive,
+        },
+        asset,
+    )
 
 
 # ============================================================================
@@ -635,8 +662,8 @@ FETCHERS = [
         "pot-provider",
         "pot-provider",
         fetch_pot_provider,
-        ["bgutil-pot-provider.exe"],
-        ("bgutil-pot-provider.exe", ["--version"], r"bgutil-pot\s+(\S+)"),
+        ["manifest.json"],
+        ("manifest.json", [], None),
     ),
     (
         "atomicparsley",

@@ -1,182 +1,285 @@
-"""POT 预热退避（`ensure_warm_async` / `_schedule_warm_retry`）的确定性回归。
-
-对应"断网 → 恢复"这条人工用例的可自动化部分：断网期间预热必然失败，此时
-既不能永久放弃（否则网络恢复后 POT 再也起不来），也不能每次解析都重试（否则
-每解析一次就白起一次进程、卡一次 20s 的 verify_token_generation）。
-
-用假时钟推进 monotonic，不 sleep、不触网、不起子进程。
-"""
+"""Bounded retries, stale completions and readiness are independent of TCP success."""
 
 import importlib
-import sys
+import io
 import threading
-from pathlib import Path
+from contextlib import contextmanager, nullcontext
+from types import SimpleNamespace
+from unittest.mock import Mock
 
 import pytest
 
-# Resolve src/ for direct execution
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
-
-# 必须走 importlib：`fluentytdl.youtube` 把 `pot_manager` 这个名字重导出成了
-# 单例*实例*，`from ... import pot_manager` 拿到的是对象而不是模块。
-pot_mod = importlib.import_module("fluentytdl.youtube.pot_manager")
-POTManager = pot_mod.POTManager
+pot = importlib.import_module("fluentytdl.youtube.pot_manager")
 
 
 @pytest.fixture
-def mgr():
-    """裸实例：绕开 __init__ 里的 atexit 注册与 Job Object 创建。"""
-    m = POTManager.__new__(POTManager)
-    m._lock = threading.Lock()
-    m._warm_event = threading.Event()
+def manager(monkeypatch):
+    monkeypatch.setattr(pot.POTManager, "_setup_job_object", lambda self: None)
+    monkeypatch.setattr(pot.atexit, "register", lambda callback: None)
+    monkeypatch.setitem(pot.config_manager.config, "pot_provider_enabled", True)
+    m = object.__new__(pot.POTManager)
+    m.__init__()
+    yield m
+    pot.config_manager.configChanged.disconnect(m._config_changed)
     m._warm_thread = None
-    m._warm_attempts = 0
-    m._warm_retry_at = 0.0
-    m._active_port = 0
-    m._is_running = False
-    m._process = None
-    m._last_token_len = 0
-    m._last_minter_size = None
-    return m
+    m.stop_server()
 
 
 @pytest.fixture
-def clock(monkeypatch):
-    """可手动推进的 monotonic 时钟。"""
+def timers(monkeypatch):
+    calls = []
 
-    class Clock:
-        def __init__(self):
-            self.now = 1000.0
+    class Timer:
+        def __init__(self, delay, callback):
+            self.delay, self.callback, self.cancelled = delay, callback, False
+            calls.append(self)
 
-        def advance(self, dt):
-            self.now += dt
+        def start(self):
+            pass
 
-    c = Clock()
-    monkeypatch.setattr(pot_mod.time, "monotonic", lambda: c.now)
-    return c
+        def cancel(self):
+            self.cancelled = True
 
+    class Thread:
+        def __init__(self, **kw):
+            self.options, self.started = kw, False
 
-def test_backoff_schedule_escalates_then_plateaus(mgr, clock):
-    """退避必须递增到上限后封顶，而不是无限增长或永远停在 30s。"""
-    expected = [30.0, 120.0, 300.0, 300.0, 300.0]
-    for i, delay in enumerate(expected, start=1):
-        base = clock.now
-        mgr._schedule_warm_retry("server_down")
-        assert mgr._warm_attempts == i
-        assert mgr._warm_retry_at == pytest.approx(base + delay), f"第 {i} 次退避应为 {delay}s"
-        clock.advance(delay)
+        def start(self):
+            self.started = True
 
+        def is_alive(self):
+            return self.started
 
-def test_no_retry_inside_backoff_window(mgr, clock, monkeypatch):
-    """退避窗口内绝不能起新预热线程 —— 否则每次解析都白起一次进程。"""
-    spawned = _stub_thread(monkeypatch)
-
-    mgr._schedule_warm_retry("server_down")  # 30s 窗口
-    clock.advance(29.0)
-    mgr.ensure_warm_async()
-    assert not spawned, "退避未到期就重试了"
-
-    clock.advance(2.0)  # 越过 30s
-    mgr.ensure_warm_async()
-    assert len(spawned) == 1, "退避到期后必须允许重试"
+    monkeypatch.setattr(
+        pot,
+        "threading",
+        SimpleNamespace(
+            Timer=Timer,
+            Thread=Thread,
+            Event=threading.Event,
+            RLock=threading.RLock,
+            current_thread=threading.current_thread,
+        ),
+    )
+    return calls
 
 
-def test_warm_success_resets_attempts(mgr, clock, monkeypatch):
-    """一次成功必须把计数清零，否则网络恢复后仍背着上一轮的 5 分钟退避。"""
-    mgr._schedule_warm_retry("server_down")
-    mgr._schedule_warm_retry("token_fail")
-    assert mgr._warm_attempts == 2
-
-    monkeypatch.setattr(mgr, "is_running", lambda: True)
-    monkeypatch.setattr(mgr, "verify_token_generation", lambda timeout=20.0: (True, "ok"))
-    monkeypatch.setattr(mgr, "verify_plugin_loadable", lambda: (True, "ok"))
-    monkeypatch.setattr(mgr, "check_minter_health", lambda timeout=3.0: (True, "ok"))
-    monkeypatch.setattr(POTManager, "_probe_deno", staticmethod(lambda: True))
-
-    mgr._warm_worker()
-    assert mgr._warm_attempts == 0
+def test_only_three_automatic_retries(manager, timers):
+    for _ in range(5):
+        manager._schedule_warm_retry("pot_token_rejected")
+    assert [t.delay for t in timers] == [30, 120, 300]
+    assert manager._warm_attempts == 3
+    assert manager.snapshot()["retry_at"] == 0
 
 
-def test_already_warm_short_circuits(mgr, clock, monkeypatch):
-    """已经 warm 就不该再起线程。"""
-    spawned = _stub_thread(monkeypatch)
-    mgr._warm_event.set()
-    mgr.ensure_warm_async()
-    assert not spawned
+def test_retry_timer_wakes_without_another_link(manager, timers, monkeypatch):
+    run = Mock()
+    monkeypatch.setattr(manager, "ensure_warm_async", run)
+    manager._schedule_warm_retry("pot_timeout")
+    timers[-1].callback()
+    run.assert_called_once()
 
 
-def test_status_brief_reports_remaining_backoff(mgr, clock, monkeypatch):
-    """退避期间状态摘要要说清"还剩多久"，否则用户只看到"未运行"会以为坏了。"""
-    _enable_pot(monkeypatch)
-    monkeypatch.setattr(mgr, "is_running", lambda: False)
-
-    mgr._schedule_warm_retry("server_down")
-    clock.advance(10.0)
-    brief = mgr.status_brief()
-    assert "20s" in brief and "1" in brief, brief
+def test_stale_timer_cannot_restart_new_generation(manager, timers, monkeypatch):
+    run = Mock()
+    monkeypatch.setattr(manager, "ensure_warm_async", run)
+    manager._schedule_warm_retry("pot_timeout")
+    manager._generation += 1
+    timers[-1].callback()
+    run.assert_not_called()
 
 
-def test_status_brief_backoff_wins_over_running(mgr, clock, monkeypatch):
-    """断网这条真实路径：服务是本地进程、起得来，只有铸 Token 失败。
-
-    此时 is_running()=True 而预热线程早已退出。若摘要先看 running 就会一直显示
-    "预热中…"，把"正在退避、当前没人干活"说成"马上就好" —— 断网实测时用户在
-    UI 上就完全看不出退避在跑。
-    """
-    _enable_pot(monkeypatch)
-    monkeypatch.setattr(mgr, "is_running", lambda: True)
-    mgr._active_port = 4416
-
-    mgr._schedule_warm_retry("token_fail")
-    clock.advance(5.0)
-    brief = mgr.status_brief()
-    assert "25s" in brief, brief
-    assert "预热中" not in brief, f"退避中却报预热中: {brief}"
+def test_manual_retry_bypasses_backoff_and_reuses_one_worker(manager, timers):
+    manager._schedule_warm_retry("pot_timeout")
+    manager.ensure_warm_async()
+    assert manager._warm_thread is None
+    manager.request_retry()
+    first = manager._warm_thread
+    assert first.is_alive() and manager._warm_attempts == 0
+    manager.request_retry()
+    assert manager._warm_thread is first
 
 
-def test_status_brief_warm_ignores_stale_retry_at(mgr, clock, monkeypatch):
-    """已 warm 就是已就绪 —— 上一轮失败留下的 _warm_retry_at 不该把它盖掉。"""
-    _enable_pot(monkeypatch)
-    monkeypatch.setattr(mgr, "is_running", lambda: True)
-    mgr._active_port = 4416
-    mgr._last_token_len = 232
-
-    mgr._schedule_warm_retry("token_fail")
-    mgr._warm_event.set()
-    brief = mgr.status_brief()
-    assert "已就绪" in brief and "232" in brief, brief
+def test_missing_component_waits_for_repair_not_timer(manager, timers):
+    manager._schedule_warm_retry("pot_package_missing")
+    assert timers == []
 
 
-def _enable_pot(monkeypatch) -> None:
-    from fluentytdl.core.config_manager import config_manager
-
-    monkeypatch.setitem(config_manager.config, "pot_provider_enabled", True)
-
-
-class _NoopThread:
-    def start(self):
-        pass
-
-    def is_alive(self):
-        return False
+def test_explicit_disabled_never_starts(manager, timers, monkeypatch):
+    monkeypatch.setitem(pot.config_manager.config, "pot_provider_enabled", False)
+    manager.request_retry()
+    assert manager._warm_thread is None
+    assert manager.snapshot()["state"] == "stopped"
 
 
-def _stub_thread(monkeypatch) -> list[dict]:
-    """把 `pot_manager` 模块看到的 threading 换成壳，记录起线程的意图。
+@pytest.mark.parametrize("token_ok", [False, True])
+def test_listening_server_is_not_readiness(manager, timers, tmp_path, monkeypatch, token_ok):
+    monkeypatch.setattr(pot, "active_count", lambda: 0)
+    monkeypatch.setattr(pot, "changing_components", lambda cancel: nullcontext())
+    bundle = SimpleNamespace(root=tmp_path, bundle_id="pot-original-v2.0.2-r1", version="2.0.2")
+    monkeypatch.setattr(pot, "resolve_bundle", lambda **kw: bundle)
+    monkeypatch.setattr(
+        manager,
+        "_choose_runtime",
+        lambda b: SimpleNamespace(path=tmp_path / "deno.exe", version="2.9.7", source="managed"),
+    )
+    monkeypatch.setattr(pot, "select_verified_deno", lambda *a: None)
+    monkeypatch.setattr(manager, "_start_owned", lambda *a: None)
+    monkeypatch.setattr(manager, "is_running", lambda: True)
 
-    只替换模块属性，不动全局 `threading.Thread` —— 后者会连累测试进程里
-    其他正在起的线程。Lock/Event 原样透传，模块里别处还要用。
-    """
-    spawned: list[dict] = []
+    def probe(**kw):
+        kw["on_plugin"]()
+        return token_ok, "ok" if token_ok else "pot_token_rejected"
 
-    class _Shim:
-        Lock = threading.Lock
-        Event = threading.Event
+    monkeypatch.setattr(manager, "probe_ytdlp_provider", probe)
+    manager._warm_worker()
+    assert manager.is_warm is token_ok
+    assert manager.snapshot()["state"] == ("ready" if token_ok else "unavailable")
+    assert manager.snapshot()["components"]["plugin"] == "passed"
+    assert manager.snapshot()["checked_at"] > 0
+    if not token_ok:
+        assert manager.snapshot()["components"]["token"] == "failed"
+        assert timers[-1].delay == 30
 
-        @staticmethod
-        def Thread(**kw):  # noqa: N802 - 镜像 threading 的命名
-            spawned.append(kw)
-            return _NoopThread()
 
-    monkeypatch.setattr(pot_mod, "threading", _Shim)
-    return spawned
+@pytest.mark.parametrize("healthy", [False, True])
+def test_recheck_pings_existing_process_without_restarting(manager, monkeypatch, healthy):
+    manager._process = Mock(pid=1234)
+    manager._process.poll.return_value = None
+    manager._is_running = True
+    manager._bundle = SimpleNamespace(version="2.0.2")
+    manager._active_port = 12345
+    reply = Mock(return_value=io.BytesIO(b'{"version": "2.0.2"}'))
+    if not healthy:
+        reply.side_effect = OSError("service not responding")
+    monkeypatch.setattr(manager, "_local_urlopen", reply)
+    if healthy:
+        manager._start_owned(pot.time.monotonic() + 10, threading.Event())
+    else:
+        with pytest.raises(pot.ComponentError, match="pot_local_health_failed"):
+            manager._start_owned(pot.time.monotonic() + 10, threading.Event())
+    assert reply.call_args.args[0] == "http://127.0.0.1:12345/ping"
+    manager._process.terminate.assert_not_called()
+
+
+def test_new_verification_clears_old_token_and_restart_intent_is_explicit(manager, timers):
+    manager._last_token_len = 124
+    manager._state["components"] = {"token": "passed"}
+    manager.request_check()
+    assert manager._warm_thread.options["args"][-1] is False
+    assert manager.snapshot()["token_length"] == 0
+    assert manager.snapshot()["components"] == {}
+    manager._warm_thread = None
+    manager.request_retry()
+    assert manager._warm_thread.options["args"][-1] is True
+
+
+def test_stop_does_not_claim_a_new_verification(manager, monkeypatch):
+    manager._last_token_len = 124
+    manager._state.update(checked_at=12345, components={"token": "passed"})
+    monkeypatch.setitem(pot.config_manager.config, "pot_provider_enabled", False)
+    manager._warm_worker()
+    state = manager.snapshot()
+    assert state["checked_at"] == 12345
+    assert state["components"] == {} and state["token_length"] == 0
+
+
+def test_unexpected_exit_invalidates_service_and_token_evidence(manager, timers):
+    process = Mock(stdout=io.BytesIO(), returncode=1)
+    process.poll.return_value = 1
+    manager._process, manager._is_running = process, True
+    manager._last_token_len = 124
+    manager._state.update(
+        state="ready",
+        checked_at=12345,
+        components=dict(deno="passed", server="passed", plugin="passed", token="passed"),
+    )
+    manager._read_server(process)
+    state = manager.snapshot()
+    assert state["code"] == "pot_process_exited" and not state["running"]
+    assert state["components"]["server"] == "failed"
+    assert state["components"]["token"] == "unchecked" and state["token_length"] == 0
+    assert state["checked_at"] == 12345
+
+
+def test_old_completion_does_not_overwrite_new_state(manager):
+    manager._generation = 3
+    manager._publish("ready", generation=3)
+    manager._publish("unavailable", generation=2, code="pot_timeout")
+    assert manager.snapshot()["state"] == "ready"
+
+
+def test_repeated_failure_is_one_incident_until_recovery(manager):
+    manager._publish("unavailable", code="pot_timeout")
+    incident = manager.snapshot()["incident"]
+    manager._publish("checking")
+    manager._publish("unavailable", code="pot_timeout")
+    assert manager.snapshot()["incident"] == incident
+    manager._publish("ready")
+    manager._publish("unavailable", code="pot_process_exited")
+    assert manager.snapshot()["incident"] == incident + 1
+
+
+def test_reapplying_enabled_setting_does_not_restart_ready_service(manager, monkeypatch):
+    save = Mock()
+    monkeypatch.setattr(pot.config_manager, "set", save)
+    manager.set_enabled(True)
+    save.assert_not_called()
+    manager.set_enabled(False)
+    save.assert_called_once_with("pot_provider_enabled", False)
+
+
+def test_disable_cancels_backoff_and_reports_stopping_during_probe(manager, timers, monkeypatch):
+    manager._schedule_warm_retry("pot_timeout")
+    timer = timers[-1]
+    manager._process = Mock(pid=1234)
+    manager._process.poll.return_value = None
+    manager._is_running = True
+    manager._warm_event.set()
+    manager._warm_thread = SimpleNamespace(is_alive=lambda: True)
+    monkeypatch.setitem(pot.config_manager.config, "pot_provider_enabled", False)
+    manager._config_changed("pot_provider_enabled", False)
+    assert timer.cancelled and manager._retry_timer is None
+    assert manager._cancel.is_set() and not manager.is_warm
+    state = manager.snapshot()
+    assert state["state"] == "stopping" and state["running"] and not state["enabled"]
+    assert state["retry_at"] == 0
+    manager._schedule_warm_retry("pot_process_exited")
+    assert len(timers) == 1
+
+
+def test_disable_waits_for_active_request_before_stopping_owned_server(manager, monkeypatch):
+    from fluentytdl.core import runtime_activity as activity
+
+    active = Mock()
+    active.poll.return_value = None
+    monkeypatch.setattr(activity, "_condition", threading.Condition(threading.RLock()))
+    monkeypatch.setattr(activity, "_processes", {active})
+    monkeypatch.setattr(activity, "_changing", False)
+    waiting = threading.Event()
+
+    @contextmanager
+    def gate(cancel):
+        waiting.set()
+        with activity.changing_components(cancel):
+            yield
+
+    monkeypatch.setattr(pot, "changing_components", gate)
+    server = Mock(pid=1234)
+    server.poll.return_value = None
+    manager._process, manager._is_running = server, True
+    monkeypatch.setitem(pot.config_manager.config, "pot_provider_enabled", False)
+    manager._config_changed("pot_provider_enabled", False)
+    worker = manager._warm_thread
+    try:
+        assert waiting.wait(2)
+        assert manager.snapshot()["state"] == "waiting"
+        assert manager.is_running()
+        server.terminate.assert_not_called()
+    finally:
+        active.poll.return_value = 0
+        worker.join(timeout=3)
+    assert not worker.is_alive()
+    assert manager.snapshot()["state"] == "stopped"
+    assert not manager.is_running() and not manager._shutdown
+    server.terminate.assert_called_once()

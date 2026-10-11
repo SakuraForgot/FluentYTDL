@@ -20,7 +20,7 @@ COMPONENTS: tuple[tuple[str, str], ...] = (
     ("yt-dlp", "yt-dlp/yt-dlp.exe"),
     ("ffmpeg", "ffmpeg/ffmpeg.exe"),
     ("deno", "deno/deno.exe"),
-    ("pot-provider", "pot-provider/bgutil-pot-provider.exe"),
+    ("pot-provider", "pot-provider/manifest.json"),
     ("atomicparsley", "atomicparsley/AtomicParsley.exe"),
 )
 
@@ -54,6 +54,10 @@ def _resolve_component(key: str, base: Path, rel_path: str) -> tuple[Path | None
     用户会在启动日志里看到一排「未安装」，而 yt-dlp 全程用得很好 —— 排查问题时
     这种假线索比没有日志更糟。
     """
+    if key in {"pot-provider", "deno"}:
+        from ..core.dependency_manager import dependency_manager
+
+        return dependency_manager.resolve_exe(key)
     if key == "yt-dlp":
         from fluentytdl.youtube.yt_dlp_cli import resolve_yt_dlp_runtime
 
@@ -83,6 +87,13 @@ def _resolve_component(key: str, base: Path, rel_path: str) -> tuple[Path | None
 
 def _quick_detect_version(key: str, exe_path: Path) -> str:
     """快速检测组件版本，3 秒超时避免阻塞启动。"""
+    if key == "pot-provider":
+        import json
+
+        try:
+            return json.loads(exe_path.read_text(encoding="utf-8"))["upstream_version"]
+        except (OSError, KeyError, ValueError, TypeError):
+            return "unknown"
     if key == "yt-dlp":
         from .ytdlp_runtime import probe_version
 

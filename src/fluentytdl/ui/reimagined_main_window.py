@@ -345,6 +345,9 @@ class MainWindow(FluentWindow):
         from .announcement_controller import AnnouncementController
 
         self._announcement_controller = AnnouncementController(self)
+        from .pot_startup_controller import PotStartupController
+
+        self._pot_startup_controller = PotStartupController(self)
         QApplication.instance().aboutToQuit.connect(self._announcement_controller.service.stop)
         component_update_manager.app_update_available.connect(self._on_app_update_available)
         component_update_manager.apply_requested.connect(self._on_update_apply_requested)

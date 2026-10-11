@@ -442,6 +442,11 @@ class Builder:
         env = os.environ.copy()
         env["FLUENTYTDL_VERSION_FILE"] = str(version_file)
         env["FLUENTYTDL_QT_EXCLUDES"] = ",".join(self.config.get("qt_excludes", []))
+        if sys.platform == "win32":
+            # Match the Windows loader: system DLLs precede PATH tools. Otherwise
+            # e.g. Poppler's icuuc.dll shadows Windows ICU and breaks frozen Qt.
+            system32 = Path(env.get("SystemRoot", r"C:\Windows")) / "System32"
+            env["PATH"] = str(system32) + os.pathsep + env.get("PATH", "")
 
         cmd = [
             sys.executable,
@@ -614,14 +619,30 @@ class Builder:
         print(f"🧹 Qt 瘦身完成：清理了 {saved_mb:.1f} MB 的无用文件")
 
     def bundle_tools(self, target_dir: Path) -> None:
+        from component_snapshot import _filesystem
+
+        from fluentytdl.core.pot_dependencies import verify_dependencies
+
         excluded_tool_dirs = {"dle_user", "dle_profile", "profile", "profiles", "cookies"}
         bin_dest = target_dir / "bin"
         if ASSETS_BIN.exists():
+            verify_dependencies(ASSETS_BIN / "pot-provider/server")
 
             def _ignore_tool_user_data(_src: str, names: list[str]) -> set[str]:
+                # Session folders live at bin/ or a component root. Nested
+                # packages can contain real runtime code named cookies/profile.
+                relative = Path(_src).relative_to(_filesystem(ASSETS_BIN))
+                if len(relative.parts) > 1:
+                    return set()
                 return {name for name in names if name.lower() in excluded_tool_dirs}
 
-            shutil.copytree(ASSETS_BIN, bin_dest, dirs_exist_ok=True, ignore=_ignore_tool_user_data)
+            shutil.copytree(
+                _filesystem(ASSETS_BIN),
+                _filesystem(bin_dest),
+                dirs_exist_ok=True,
+                ignore=_ignore_tool_user_data,
+            )
+            verify_dependencies(bin_dest / "pot-provider/server")
             print("✓ 捆绑工具至 bin (已排除会话数据)")
 
         if LICENSES_DIR.exists():
@@ -804,10 +825,10 @@ class Builder:
         if effective_target != "spec":
             self.ensure_tools()
         app_dir = self.build_spec()
-        self.smoke_app(app_dir)
 
         # "spec" 只验证 PyInstaller 蓝图能否落地（CI 用），不产出发布物
         if effective_target == "spec":
+            self.smoke_app(app_dir)
             self.write_result(effective_target, app_dir)
             print(f"\n✅ .spec 验证通过: {app_dir}")
             return
@@ -822,6 +843,7 @@ class Builder:
 
         # 4. 注入二进制工具
         self.bundle_tools(app_dir)
+        self.smoke_app(app_dir, components=True)
 
         # 5. 产物分发 —— 严格按 TARGET_OUTPUTS，目标没点名的一律不产出
         print(f"\n========== Release 打包 (target={effective_target}) ==========")
@@ -894,14 +916,18 @@ class Builder:
         shutil.copytree(ROOT / "assets/locales", locale_dir)
         os.environ["FLUENTYTDL_LOCALES_DIR"] = str(locale_dir)
 
-    def smoke_app(self, app_dir: Path) -> None:
+    def smoke_app(self, app_dir: Path, *, components: bool = False) -> None:
         with tempfile.TemporaryDirectory(prefix="fluentytdl_app_smoke_") as tmp:
             try:
                 subprocess.run(
                     [str(app_dir / "FluentYTDL.exe"), "--build-self-test", tmp],
                     check=True,
                     timeout=120,
-                    env={**os.environ, "QT_QPA_PLATFORM": "offscreen"},
+                    env={
+                        **os.environ,
+                        "QT_QPA_PLATFORM": "offscreen",
+                        "FLUENTYTDL_SELFTEST_COMPONENTS": "1" if components else "0",
+                    },
                 )
             finally:
                 report = Path(tmp) / "self-test.json"
