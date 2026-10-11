@@ -369,6 +369,13 @@ def main() -> None:
         # best-effort：迁移失败绝不阻塞启动。数据仍在旧位置未丢，日志会记录。
         pass
 
+    from loguru import logger
+
+    from fluentytdl.core.updater_worker import recover_managed_installs
+
+    for component, error_type in recover_managed_installs():
+        logger.warning("Component recovery failed: {} {}", component, error_type)
+
     def activate_main_window():
         main_win = getattr(app, "_main_window", None)
         if main_win:

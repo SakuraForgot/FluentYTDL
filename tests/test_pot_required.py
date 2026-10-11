@@ -27,6 +27,7 @@ def provider(monkeypatch):
     provider.verify_plugin_loadable.return_value = (True, "ok")
     monkeypatch.setattr(pot_mod, "pot_manager", provider)
     monkeypatch.setitem(config_manager.config, "pot_provider_enabled", True)
+    monkeypatch.setitem(config_manager.config, "youtube_cookies_enabled", False)
     return provider
 
 
@@ -49,8 +50,9 @@ def test_failure_never_falls_back(provider, failure):
         YoutubeService().build_ydl_options(url="https://www.youtube.com/watch?v=test")
 
 
-def test_twitter_does_not_wait(provider):
-    YoutubeService().build_ydl_options(url="https://x.com/example/status/123")
+@pytest.mark.parametrize("url", ["https://x.com/example/status/123", "https://vimeo.com/123456"])
+def test_other_sites_do_not_wait(provider, url):
+    YoutubeService().build_ydl_options(url=url)
     provider.wait_until_ready.assert_not_called()
 
 
@@ -62,7 +64,7 @@ def test_explicitly_disabled_does_not_wait(provider, monkeypatch):
 
 @pytest.mark.parametrize("ready", [True, False])
 def test_wait_reuses_worker_and_reports_result(monkeypatch, ready):
-    mgr = pot_mod.POTManager.__new__(pot_mod.POTManager)
+    mgr = object.__new__(pot_mod.POTManager)
     mgr._warm_event = threading.Event()
     mgr._lock = threading.Lock()
     mgr._warm_thread = Mock()

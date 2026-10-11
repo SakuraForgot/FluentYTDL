@@ -31,6 +31,21 @@ def QT_TRANSLATE_NOOP(_context: str, text: str) -> str:
 #: code → 未翻译的中文原文。真正的翻译在 `translate()` 里过 `QCoreApplication.translate`，
 #: 这里只用 `QT_TRANSLATE_NOOP` 标记源串 —— 模块级直接调 `tr()` 会在翻译器装好之前求值。
 _MESSAGES: dict[str, str] = {
+    "pot_dependency_install_failed": QT_TRANSLATE_NOOP(
+        "ComponentError", "POT 运行依赖准备失败，请检查网络后重试；详情见日志"
+    ),
+    "pot_dependency_install_timeout": QT_TRANSLATE_NOOP(
+        "ComponentError", "POT 运行依赖下载超时，请检查网络后重试"
+    ),
+    "pot_runtime_missing": QT_TRANSLATE_NOOP(
+        "ComponentError", "未找到 Deno，请安装 Deno 组件或检查自定义路径"
+    ),
+    "pot_runtime_invalid": QT_TRANSLATE_NOOP(
+        "ComponentError", "Deno 无法运行，请修复 Deno 组件或检查自定义路径"
+    ),
+    "component_install_unwritable": QT_TRANSLATE_NOOP(
+        "ComponentError", "无法写入组件安装目录，请检查目录权限"
+    ),
     # dependency_manager
     "component_update_url_unresolved": QT_TRANSLATE_NOOP(
         "ComponentError", "没能解析出下载地址，请检查网络或稍后重试"
@@ -46,12 +61,33 @@ _MESSAGES: dict[str, str] = {
         "ComponentError", "文件校验失败，下载内容可能被篡改或损坏"
     ),
     "worker_download_failed": QT_TRANSLATE_NOOP("ComponentError", "下载失败，请检查网络或代理设置"),
+    "worker_prepare_failed": QT_TRANSLATE_NOOP("ComponentError", "组件准备失败，详情见日志"),
+    "worker_validate_failed": QT_TRANSLATE_NOOP(
+        "ComponentError", "组件文件无效或无法运行，现有组件已保留"
+    ),
+    "worker_commit_failed": QT_TRANSLATE_NOOP(
+        "ComponentError", "组件替换失败，已尝试恢复原版本，请检查文件占用和目录权限"
+    ),
+    "component_worker_incomplete": QT_TRANSLATE_NOOP(
+        "ComponentError", "更新进程未确认安装完成，请重试"
+    ),
+    "pot_runtime_incompatible": QT_TRANSLATE_NOOP(
+        "ComponentError", "Deno 与 POT 不兼容，现有组件已保留"
+    ),
+    "pot_plugin_incompatible": QT_TRANSLATE_NOOP(
+        "ComponentError", "yt-dlp 与 POT 插件不兼容，现有组件已保留"
+    ),
+    "pot_metadata_invalid": QT_TRANSLATE_NOOP("ComponentError", "POT 组件元数据无效，未安装此更新"),
     "component_worker_error": QT_TRANSLATE_NOOP("ComponentError", "更新失败，详情见日志"),
 }
 
 
 def translate(code: str) -> str:
     """已知 code 翻成中文，未知 code 原样返回。"""
+    if code.startswith("update_"):
+        from ....utils.control_center_text import text
+
+        return text(code)
     text = _MESSAGES.get(code)
     if text is None:
         return code

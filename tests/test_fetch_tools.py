@@ -28,6 +28,52 @@ from fetch_tools import download_file, parse_upstream_sha256  # noqa: E402
 DENO_HASH = "68ED08B05C56CF887E9AA509947DC3F468F7E12F47A13E5C1ABD51D46D1453EF"
 YTDLP_HASH = "a" * 64
 
+
+def test_pot_snapshot_lists_zip_beside_ytdlp(tmp_path, monkeypatch):
+    import component_snapshot
+
+    from fluentytdl.core import pot_upstream
+    from fluentytdl.core.pot_component import PotBundle
+
+    release = {
+        "id": 1,
+        "tag_name": "2.0.2",
+        "assets": [
+            {
+                "name": pot_upstream.PLUGIN_ASSET,
+                "size": 8,
+                "digest": "sha256:" + "a" * 64,
+                "browser_download_url": f"https://github.com/{pot_upstream.UPSTREAM_REPOSITORY}/releases/download/2.0.2/{pot_upstream.PLUGIN_ASSET}",
+            }
+        ],
+    }
+
+    def install(metadata, target, transport, *, deno_path, ytdlp_path, packaged):
+        assert packaged
+        assert deno_path == target.parent / "deno/deno.exe"
+        assert ytdlp_path == target.parent / "yt-dlp/yt-dlp.exe"
+        (target / "manifest.json").write_text("{}")
+        bundle = PotBundle(target, {})
+        bundle.plugin_root.mkdir(parents=True)
+        bundle.plugin_archive.write_bytes(b"original")
+        return bundle
+
+    monkeypatch.setattr(fetch_tools, "github_api", lambda _: release)
+    monkeypatch.setattr(pot_upstream, "install_release", install)
+    result = component_snapshot._resolve_component(
+        tmp_path,
+        {},
+        "pot-provider",
+        "pot-provider",
+        fetch_tools.fetch_pot_provider,
+        ["manifest.json"],
+    )
+    assert set(result["files"]) == {
+        "bin/pot-provider/manifest.json",
+        "bin/yt-dlp/yt-dlp-plugins/bgutil-ytdlp-pot-provider.zip",
+    }
+
+
 # 逐字节照抄自 denoland/deno 的真实产物（含 CRLF 与首尾空行）
 DENO_SHA256SUM = (
     "\r\n"

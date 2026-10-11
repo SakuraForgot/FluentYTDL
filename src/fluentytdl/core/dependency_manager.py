@@ -7,6 +7,8 @@ import re
 import shutil
 import subprocess
 import sys
+import threading
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -23,7 +25,7 @@ except ImportError:
     HAS_PSUTIL = False
 
 from ..utils.logger import logger
-from ..utils.paths import frozen_app_dir, get_clean_env, is_frozen
+from ..utils.paths import get_clean_env, is_frozen
 from ..utils.ytdlp_runtime import DEFAULT_YTDLP_CHANNEL, SABR_REPOSITORY, YTDLP_CHANNELS
 from .config_manager import config_manager
 
@@ -35,7 +37,6 @@ PATH_EXE_ALIASES: dict[str, tuple[str, ...]] = {
     "yt-dlp": ("yt-dlp",),
     "ffmpeg": ("ffmpeg",),
     "deno": ("deno",),
-    "pot-provider": ("bgutil-pot-provider", "bgutil-ytdlp-pot-provider"),
     "atomicparsley": ("AtomicParsley", "atomicparsley"),
 }
 
@@ -93,6 +94,18 @@ def _sanitize_url(url: str | None) -> str:
         return ""
 
 
+def _sha256(value) -> str:
+    """Accept a checksum value, never stringify missing or malformed metadata."""
+    return (
+        value.lower() if isinstance(value, str) and re.fullmatch(r"[a-fA-F0-9]{64}", value) else ""
+    )
+
+
+def _asset_sha256(asset: dict) -> str:
+    value = asset.get("digest")
+    return _sha256(value[7:]) if isinstance(value, str) and value.startswith("sha256:") else ""
+
+
 @dataclass(frozen=True)
 class RemoteVersion:
     """一次远端版本查询的结果。
@@ -107,6 +120,8 @@ class RemoteVersion:
     channel: str = ""  # 仅 yt-dlp 非空
     url: str = ""
     sha256: str = ""
+    bundle: dict | None = None
+    upstream: str = ""
 
 
 class ComponentInfo:
@@ -123,6 +138,12 @@ class ComponentInfo:
         self.latest_channel: str = ""
         self.download_url: str | None = None
         self.expected_sha256: str | None = None
+        self.last_result: dict = {}
+        self.local_result: dict = {}
+        self.last_error: dict = {}
+        self.operation_status = ""
+        self.progress = 0
+        self.local_epoch = 0
 
 
 class DependencyManager(QObject):
@@ -137,13 +158,24 @@ class DependencyManager(QObject):
 
     download_started = Signal(str)  # component_key
     download_progress = Signal(str, int)  # component_key, percent
+    download_status = Signal(str, str)
     download_finished = Signal(str)  # component_key
     download_error = Signal(str, str)  # component_key, error_msg
 
     install_finished = Signal(str)  # component_key
+    check_requested = Signal(str)
+    install_requested = Signal(str)
+    import_requested = Signal(str, str)
+    local_requested = Signal(str)
+    local_refreshed = Signal(str, dict)
+    error_detail = Signal(str, dict)
 
     def __init__(self):
         super().__init__()
+        self.check_requested.connect(self.check_update)
+        self.install_requested.connect(self.install_component)
+        self.import_requested.connect(self.import_component)
+        self.local_requested.connect(self.refresh_local)
         self._workers = {}
         #: component_key → 刚装上去的 `(版本, 频道)`。用于抑制"装完立刻又说有更新"的
         #: 误报，但**只在版本真的对上时**抑制 —— 见 `_on_check_finished`。
@@ -154,6 +186,10 @@ class DependencyManager(QObject):
         #: `install_component()` 因为 URL 缺失而自动补检查过的组件。只补一次，
         #: 否则「检查完还是没 URL」会和自动重试变成死循环。
         self._url_recheck_pending: set[str] = set()
+        # A missing shared runtime is installed by the existing Deno component
+        # updater, then this one POT operation resumes (at most once).
+        self._pot_after_deno: str | None = None
+        self._pot_deno_retried = False
         #: url → (取到的时刻, 响应体)。见 `_API_CACHE_TTL_SEC`。
         self._api_cache: dict[str, tuple[float, dict]] = {}
 
@@ -162,9 +198,7 @@ class DependencyManager(QObject):
             "yt-dlp": ComponentInfo("yt-dlp", "yt-dlp", "yt-dlp.exe"),
             "ffmpeg": ComponentInfo("ffmpeg", "FFmpeg", "ffmpeg.exe", extra_exes=["ffprobe.exe"]),
             "deno": ComponentInfo("deno", "JS Runtime (Deno)", "deno.exe"),
-            "pot-provider": ComponentInfo(
-                "pot-provider", "POT Provider", "bgutil-pot-provider.exe"
-            ),
+            "pot-provider": ComponentInfo("pot-provider", "POT Provider", "manifest.json"),
             "atomicparsley": ComponentInfo("atomicparsley", "AtomicParsley", "AtomicParsley.exe"),
         }
 
@@ -173,22 +207,9 @@ class DependencyManager(QObject):
         Get the installation directory for a component.
         Prioritizes exe_dir/bin/{component_key}/ for packaged apps.
         """
-        # Default to 'bin' next to the executable (standard for our packaged app)
-        # Fallback to project root assets/bin for dev
-        if is_frozen():
-            base = frozen_app_dir() / "bin"
-        else:
-            # Dev mode: src/fluentytdl/assets/bin or project_root/assets/bin
-            # Let's use project_root/assets/bin for consistency
-            base = Path(__file__).parents[3] / "assets" / "bin"
+        from ..utils.component_paths import component_target
 
-        target = base / component_key
-        if not target.exists():
-            try:
-                target.mkdir(parents=True, exist_ok=True)
-            except Exception as e:
-                logger.error(f"Failed to create target dir {target}: {e}")
-        return target
+        return component_target(component_key)
 
     def get_exe_path(self, component_key: str) -> Path:
         return self.get_target_dir(component_key) / self.components[component_key].exe_name
@@ -209,6 +230,18 @@ class DependencyManager(QObject):
 
         安装动作**不要**用这里的结果做目标路径：装到 PATH 上别人的目录里是越界。
         """
+        if component_key == "pot-provider":
+            from .pot_component import ComponentError, resolve_bundle
+
+            try:
+                return resolve_bundle().root / "manifest.json", "brainicism"
+            except ComponentError:
+                return None, ""
+        if component_key == "deno":
+            from ..utils.js_runtime import resolve_deno
+
+            runtime = resolve_deno()
+            return runtime.path, runtime.source
         if component_key == "yt-dlp":
             from ..youtube.yt_dlp_cli import resolve_yt_dlp_runtime
 
@@ -219,9 +252,13 @@ class DependencyManager(QObject):
         if info is None:
             return None, ""
 
-        bundled = self.get_exe_path(component_key)
-        if bundled.exists():
-            return bundled, "bundled"
+        from ..utils.component_paths import managed_candidates
+
+        for bundled in managed_candidates(component_key, info.exe_name):
+            if bundled.is_file() and all(
+                (bundled.parent / name).is_file() for name in info.extra_exes
+            ):
+                return bundled, "bundled"
 
         for name in self._PATH_ALIASES.get(component_key, (Path(info.exe_name).stem,)):
             found = shutil.which(name)
@@ -265,11 +302,68 @@ class DependencyManager(QObject):
         if existing and existing.isRunning():
             return
         worker = UpdateCheckerWorker(component_key, self, check_session)
+        worker.setParent(self)
+        worker.finished.connect(worker.deleteLater)
         worker.finished_signal.connect(self._on_check_finished)
-        worker.error_signal.connect(self.check_error)
+        worker.local_signal.connect(self._on_local_result)
+        worker.error_signal.connect(self._on_check_error)
         self._workers[f"check_{component_key}"] = worker
-        worker.start()
+        self.components[component_key].last_error = {}
         self.check_started.emit(component_key)
+        worker.start()
+
+    def refresh_local(self, key: str):
+        """Read installed identity without requiring a successful network check."""
+        if key not in self.components or self.is_installing(key) or self.is_checking(key):
+            return
+        previous = self._workers.get(f"local_{key}")
+        if previous and previous.isRunning():
+            return
+        worker = UpdateCheckerWorker(key, self, local_only=True)
+        worker.setParent(self)
+        worker.local_signal.connect(self._on_local_result)
+        worker.finished.connect(worker.deleteLater)
+        worker.finished.connect(lambda k=key, w=worker: self._finish_local(k, w))
+        self._workers[f"local_{key}"] = worker
+        worker.start()
+
+    def _finish_local(self, key, worker):
+        if self._workers.get(f"local_{key}") is worker:
+            self._workers.pop(f"local_{key}", None)
+        if worker.local_epoch != self.components[key].local_epoch:
+            self.refresh_local(key)
+
+    def _on_local_result(self, key, result):
+        if result.get("local_epoch") != self.components[key].local_epoch:
+            return
+        info = self.components[key]
+        info.local_result = dict(result)
+        # A POT download only stages a candidate. Clear the old update offer
+        # when local readback confirms that exact candidate became active.
+        expected = (info.last_result.get("bundle") or {}).get("bundle_id")
+        if key == "pot-provider" and expected and result.get("current_bundle_id") == expected:
+            info.last_result.update(
+                current=result["current"],
+                current_channel=result.get("current_channel", ""),
+                update_available=False,
+                decision="up_to_date",
+            )
+        self.local_refreshed.emit(key, result)
+
+    def _on_check_error(self, key, code):
+        if key in self.components:
+            self.components[key].last_error = {"code": code, "silent": key in self._silent_checks}
+        pending = key in self._url_recheck_pending
+        self._url_recheck_pending.discard(key)
+        self._silent_checks.discard(key)
+        self._workers.pop(f"check_{key}", None)
+        if key == "pot-provider":
+            self._pot_deno_retried = False
+        self.check_error.emit(key, code)
+        if pending:
+            self.download_error.emit(key, code)
+        if key == "deno":
+            self._finish_pot_dependency(code)
 
     def _on_check_finished(self, key, result):
         if key == "yt-dlp" and result.get("requested_channel") not in (
@@ -294,6 +388,7 @@ class DependencyManager(QObject):
             installed is not None
             and result.get("update_available")
             and not external_active
+            and key != "pot-provider"
             and result.get("current_channel") != "sabr"
         ):
             want_ver, want_ch = installed
@@ -316,6 +411,8 @@ class DependencyManager(QObject):
 
         # Store result in our cache
         if key in self.components:
+            self.components[key].last_result = dict(result)
+            self.components[key].last_error = {}
             self.components[key].current_version = result.get("current")
             self.components[key].current_channel = str(result.get("current_channel") or "")
             self.components[key].latest_version = result.get("latest")
@@ -323,9 +420,13 @@ class DependencyManager(QObject):
             self.components[key].download_url = result.get("url")
             self.components[key].expected_sha256 = result.get("expected_sha256")
 
-        self.check_finished.emit(key, result)
+        times = dict(config_manager.get("component_check_times") or {})
+        times[key] = time.time()
+        config_manager.set("component_check_times", times)
+
         # Clean up worker ref
         self._workers.pop(f"check_{key}", None)
+        self.check_finished.emit(key, result)
 
         # URL 缺失时 `install_component()` 会先补一次检查再回来 —— 现在结果到了。
         if key in self._url_recheck_pending:
@@ -340,11 +441,17 @@ class DependencyManager(QObject):
                     component=key,
                     latest_version=str(result.get("latest") or ""),
                 )
-                self.download_error.emit(key, ERR_URL_UNRESOLVED)
+                self._on_install_error(key, ERR_URL_UNRESOLVED)
 
     def is_installing(self, component_key: str) -> bool:
-        worker = self._workers.get(f"install_{component_key}")
-        return bool(worker and worker.isRunning())
+        # Registration precedes the started signal; completion removes ownership
+        # before notifying views. This also covers QProcess's Starting state.
+        return f"install_{component_key}" in self._workers or (
+            component_key == "pot-provider" and self._pot_after_deno is not None
+        )
+
+    def is_checking(self, component_key: str) -> bool:
+        return f"check_{component_key}" in self._workers
 
     def install_component(self, component_key: str):
         """Async download and install."""
@@ -352,6 +459,9 @@ class DependencyManager(QObject):
             return
 
         if self.is_installing(component_key):
+            return
+        if self.is_checking(component_key):
+            self._url_recheck_pending.add(component_key)
             return
         if component_key == "yt-dlp":
             info = self.components[component_key]
@@ -380,7 +490,11 @@ class DependencyManager(QObject):
             self.check_update(component_key)
             return
 
-        target_exe = self.get_exe_path(component_key)
+        try:
+            target_exe = self.get_exe_path(component_key)
+        except OSError as error:
+            self._on_install_error(component_key, "component_install_unwritable", str(error))
+            return
 
         expected_version = self.components[component_key].latest_version or "unknown"
         expected_sha256 = self.components[component_key].expected_sha256 or ""
@@ -409,20 +523,67 @@ class DependencyManager(QObject):
             expected_sha256=expected_sha256,
             parent=self,
         )
-        worker.progress_signal.connect(self.download_progress)
+        worker.bundle_id = (self.components[component_key].last_result.get("bundle") or {}).get(
+            "bundle_id", ""
+        )
+        worker.pot_release = self.components[component_key].last_result.get("bundle")
+        if component_key == "pot-provider":
+            worker.deno_retried = self._pot_deno_retried
+            self._pot_deno_retried = False
+        self._start_install_worker(component_key, worker)
+
+    def import_component(self, component_key: str, source: str):
+        if (
+            component_key not in self.components
+            or self.is_installing(component_key)
+            or self.is_checking(component_key)
+        ):
+            return
+        try:
+            target = self.get_exe_path(component_key)
+        except OSError as error:
+            self._on_install_error(component_key, "component_install_unwritable", str(error))
+            return
+        worker = DownloaderWorker(component_key, "", target, parent=self)
+        worker.local_source = source
+        if component_key == "pot-provider":
+            worker.deno_retried = self._pot_deno_retried
+            self._pot_deno_retried = False
+        self._start_install_worker(component_key, worker)
+
+    def _start_install_worker(self, component_key, worker):
+        self.components[component_key].last_error = {}
+        self.components[component_key].local_epoch += 1
+        self.components[component_key].progress = 0
+        self.components[component_key].operation_status = (
+            "validate" if getattr(worker, "local_source", "") else "downloading"
+        )
+        worker.progress_signal.connect(self._on_progress)
+        worker.status_signal.connect(self._on_install_status)
         worker.finished_signal.connect(self._on_install_finished)
         worker.error_signal.connect(self._on_install_error)
-        worker.start()
         self._workers[f"install_{component_key}"] = worker
         self.download_started.emit(component_key)
+        worker.start()
+
+    def _on_progress(self, key, percent):
+        self.components[key].progress = percent
+        self.download_progress.emit(key, percent)
+
+    def _on_install_status(self, key, status):
+        self.components[key].operation_status = status
+        self.download_status.emit(key, status)
 
     def _on_install_finished(self, key):
+        if key == "deno":
+            from ..utils.js_runtime import clear_deno_selection
+
+            clear_deno_selection()
+        completed = self._workers.get(f"install_{key}")
         info = self.components.get(key)
         self._just_installed[key] = (
-            str(info.latest_version or "") if info else "",
-            str(config_manager.get("ytdlp_channel", DEFAULT_YTDLP_CHANNEL)).strip()
-            if key == "yt-dlp"
-            else "",
+            getattr(completed, "expected_version", str(info.latest_version or "") if info else ""),
+            getattr(completed, "expected_channel", ""),
         )
 
         # Installed bytes invalidate shared version identity; path resolution is always fresh.
@@ -440,17 +601,71 @@ class DependencyManager(QObject):
                 log_text(logger, "warning", "yt-dlp 安装后置处理失败: {0}", e)
 
         _emit("stage", code="component_install_finished", component=key)
-        self.install_finished.emit(key)
-        worker = self._workers.pop(f"install_{key}", None)
-        if worker:
-            worker.deleteLater()
+        from ..youtube.pot_manager import pot_manager
 
-    def _on_install_error(self, key: str, code: str):
-        _emit("diagnosis", level="ERROR", code=code, component=key)
-        self.download_error.emit(key, code)
+        if key not in {"deno", "yt-dlp", "pot-provider"}:
+            pot_manager.signals.component_changed.emit(key)
+        self.components[key].operation_status = ""
+        self.components[key].local_epoch += 1
         worker = self._workers.pop(f"install_{key}", None)
+        self.install_finished.emit(key)
+        self.refresh_local(key)
         if worker:
             worker.deleteLater()
+        if key == "deno":
+            self._finish_pot_dependency()
+
+    def _finish_pot_dependency(self, error: str = ""):
+        source = self._pot_after_deno
+        if source is None:
+            return
+        self._pot_after_deno = None
+        if error:
+            self._on_install_error("pot-provider", error)
+            return
+        self._pot_deno_retried = True
+        if source:
+            self.import_component("pot-provider", source)
+        else:
+            self.install_component("pot-provider")
+
+    def _on_install_error(self, key: str, code: str, message: str = ""):
+        from ..utils.diagnostic_text import redact_detail
+
+        self._url_recheck_pending.discard(key)
+        worker = self._workers.get(f"install_{key}")
+        if (
+            key == "pot-provider"
+            and worker is not None
+            and not getattr(worker, "deno_retried", False)
+            and code in {"pot_runtime_missing", "pot_runtime_invalid", "pot_runtime_incompatible"}
+        ):
+            from ..utils.js_runtime import resolve_deno
+
+            # Never override a runtime path explicitly selected by the user.
+            if resolve_deno().source != "custom":
+                self._pot_after_deno = getattr(worker, "local_source", "")
+                self._workers.pop(f"install_{key}", None)
+                worker.deleteLater()
+                self._on_install_status(key, "preparing")
+                self.install_component("deno")
+                return
+        if key == "pot-provider":
+            self._pot_deno_retried = False
+        detail = dict(
+            getattr(worker, "last_error", {}) or {"code": code, "detail": redact_detail(message)}
+        )
+        if key in self.components:
+            self.components[key].last_error = detail
+            self.components[key].operation_status = ""
+        self.error_detail.emit(key, detail)
+        _emit("diagnosis", level="ERROR", code=code, component=key)
+        worker = self._workers.pop(f"install_{key}", None)
+        self.download_error.emit(key, code)
+        if worker:
+            worker.deleteLater()
+        if key == "deno":
+            self._finish_pot_dependency(code)
 
     def _fetch_json(self, url: str) -> dict:
         return self._fetch_json_uncached(url)
@@ -468,12 +683,17 @@ class DependencyManager(QObject):
 
 class UpdateCheckerWorker(QThread):
     finished_signal = Signal(str, dict)
+    local_signal = Signal(str, dict)
     error_signal = Signal(str, str)
 
-    def __init__(self, key: str, manager: DependencyManager, check_session=None):
+    def __init__(
+        self, key: str, manager: DependencyManager, check_session=None, *, local_only=False
+    ):
         super().__init__()
         self.key = key
         self.manager = manager
+        self.local_only = local_only
+        self.local_epoch = getattr(getattr(manager, "components", {}).get(key), "local_epoch", 0)
         self.requested_channel = str(
             config_manager.get("ytdlp_channel", DEFAULT_YTDLP_CHANNEL)
         ).strip()
@@ -546,9 +766,47 @@ class UpdateCheckerWorker(QThread):
             exe_path = resolved if resolved is not None else self.manager.get_exe_path(self.key)
             current_ver, current_ch = self._get_local_version(self.key, exe_path)
 
+            local = {
+                "current": current_ver,
+                "current_channel": current_ch,
+                "source": source,
+                "exe_path": str(resolved) if resolved else "",
+                "install_path": str(self.manager.get_exe_path(self.key)),
+                "version_status": getattr(self, "_local_version_status", ""),
+                "local_epoch": self.local_epoch,
+            }
+            if self.key == "pot-provider" and resolved:
+                from .pot_component import resolve_bundle
+
+                local["current_bundle_id"] = resolve_bundle().manifest.get("bundle_id", "")
+            self.local_signal.emit(self.key, local)
+            if self.local_only:
+                return
+
             remote = self._get_remote_version(self.key)
 
             update_available, decision = self._compare(current_ver, current_ch, remote)
+            if self.key == "pot-provider":
+                from .pot_component import ComponentError, bundle_order, resolve_bundle
+
+                try:
+                    current_bundle = resolve_bundle()
+                except ComponentError:
+                    current_bundle = None
+                update_available = bool(
+                    remote.bundle
+                    and (
+                        current_bundle is None
+                        or bundle_order(remote.bundle) > bundle_order(current_bundle.manifest)
+                    )
+                )
+                decision = (
+                    "original_bundle_differs"
+                    if update_available
+                    else "upstream_pending"
+                    if remote.upstream != remote.version
+                    else "up_to_date"
+                )
             if self.key == "yt-dlp" and current_ch == remote.channel == "sabr":
                 # Date-only versions cannot distinguish same-day upstream revisions/rebuilds.
                 with exe_path.open("rb") as stream:
@@ -586,10 +844,26 @@ class UpdateCheckerWorker(QThread):
                 "source": source,
                 "exe_path": str(exe_path),
                 "install_path": str(self.manager.get_exe_path(self.key)),
+                "bundle": remote.bundle,
+                "upstream_latest": remote.upstream,
+                "decision": decision,
             }
             self.finished_signal.emit(self.key, result)
 
         except Exception as e:
+            if self.local_only:
+                from ..utils.diagnostic_text import redact_detail
+
+                self.local_signal.emit(
+                    self.key,
+                    {
+                        "current": "unknown",
+                        "source": "",
+                        "local_epoch": self.local_epoch,
+                        "local_error": redact_detail(str(e)),
+                    },
+                )
+                return
             logger.error(f"Update check failed for {self.key}: {e}")
             _emit(
                 "diagnosis",
@@ -602,6 +876,13 @@ class UpdateCheckerWorker(QThread):
 
     def _get_local_version(self, key: str, path: Path) -> tuple[str, str]:
         """读本地已装版本，返回 `(裸版本号, 频道)`。频道只有 yt-dlp 非空。"""
+        if key == "pot-provider":
+            from .pot_component import ComponentError, resolve_bundle
+
+            try:
+                return resolve_bundle().version, "brainicism"
+            except ComponentError:
+                return "unknown", ""
         if key == "yt-dlp":
             from ..utils.ytdlp_runtime import probe_version
 
@@ -637,6 +918,7 @@ class UpdateCheckerWorker(QThread):
                 encoding="utf-8",
                 errors="ignore",
                 env=env,
+                timeout=5,
                 **kwargs,
             )
             if proc.returncode != 0:
@@ -663,12 +945,6 @@ class UpdateCheckerWorker(QThread):
                     if vm:
                         return vm.group(1), ""
                     return raw, ""  # fallback
-            elif key == "pot-provider":
-                # bgutil-ytdlp-pot-provider-rs
-                # Output: something like "bgutil-pot-provider 0.1.5" or just version
-                m = re.search(r"(\d+\.\d+\.\d+)", out)
-                if m:
-                    return m.group(1), ""
             elif key == "atomicparsley":
                 # AtomicParsley outputs: "AtomicParsley version: 20240608.083822.0 1ed9031..."
                 # 只取日期+时间部分 (YYYYMMDD.HHMMSS)，忽略后面的 build/commit 信息
@@ -685,7 +961,9 @@ class UpdateCheckerWorker(QThread):
         except Exception:
             return "unknown", ""
 
-    def _overlay_manifest(self, key: str, remote: RemoteVersion) -> RemoteVersion:
+    def _overlay_manifest(
+        self, key: str, remote: RemoteVersion, *, manifest: dict | None = None
+    ) -> RemoteVersion:
         """清单里恰好有这个版本的制品信息时，用清单的 url/sha256 替换 API 解析结果。
 
         **版本判定权单向归 API** —— 清单永远不参与「最新是什么」的决定。清单里的
@@ -702,12 +980,23 @@ class UpdateCheckerWorker(QThread):
         try:
             from .component_update_manager import component_update_manager
 
-            comp = component_update_manager.get_manifest_component(f"bin/{key}")
-            if not comp:
+            comp = (
+                manifest.get("components", {}).get(f"bin/{key}")
+                if manifest is not None
+                else component_update_manager.get_manifest_component(f"bin/{key}")
+            )
+            if not isinstance(comp, dict):
                 return remote
 
             m_version = str(comp.get("version", "") or "").strip()
             m_url = str(comp.get("url", "") or "").strip()
+            if key == "atomicparsley":
+                # Its executable reports a trailing build suffix (e.g. .0),
+                # whereas update checks display only the date and time. The
+                # exact release asset URL must still match below.
+                match = re.fullmatch(r"(\d{8}\.\d{6})(?:\.[0-9a-fA-F]+)?", m_version)
+                if match:
+                    m_version = match[1]
             if m_version != remote.version:
                 _emit(
                     "decision",
@@ -742,7 +1031,7 @@ class UpdateCheckerWorker(QThread):
                 version=remote.version,
                 channel=remote.channel,
                 url=m_url,
-                sha256=str(comp.get("sha256", "") or "").strip() or remote.sha256,
+                sha256=_sha256(comp.get("sha256")) or remote.sha256,
             )
         except Exception:  # noqa: BLE001 - 清单读不到就用 API 的结果，不该让检查失败
             return remote
@@ -750,15 +1039,38 @@ class UpdateCheckerWorker(QThread):
     def _get_remote_version(self, key: str) -> RemoteVersion:
         """查上游最新版本，再看清单能不能提供该版本的制品元数据。"""
         remote = self._fetch_remote_from_api(key)
-        if remote.channel == "sabr":
+        if remote.channel == "sabr" or key == "pot-provider":
             return remote
-        return self._overlay_manifest(key, remote)
+        remote = self._overlay_manifest(key, remote)
+        if not _sha256(remote.sha256):
+            # Older upstream assets (notably AtomicParsley) have no GitHub
+            # digest. A standalone component check must fetch its own checksum
+            # metadata instead of relying on a prior app-update UI action.
+            channel = "pre" if config_manager.get("app_update_channel") == "pre" else "stable"
+            manifest = self.check_session.manifest(channel)
+            remote = self._overlay_manifest(key, remote, manifest=manifest)
+        if not _sha256(remote.sha256):
+            from .update_transport import UpdateError
+
+            raise UpdateError("update_invalid_response")
+        return remote
 
     def _fetch_remote_from_api(self, key: str) -> RemoteVersion:
+        from .update_transport import UpdateError
+
         channel_label = self.requested_channel if key == "yt-dlp" else ""
         if channel_label not in ("", *YTDLP_CHANNELS):
             channel_label = DEFAULT_YTDLP_CHANNEL
         data = self.check_session.release(key, channel_label or "stable")
+        if key == "pot-provider":
+            return RemoteVersion(
+                version=data["upstream_version"],
+                channel="brainicism",
+                url=data["asset_url"],
+                sha256=data["sha256"],
+                bundle=data,
+                upstream=data["upstream_version"],
+            )
 
         if key == "yt-dlp" and channel_label == "sabr":
             from .update_transport import UpdateError
@@ -800,13 +1112,30 @@ class UpdateCheckerWorker(QThread):
                     checksum_url = asset["browser_download_url"]
 
             expected_sha256 = ""
+            asset_digest = next(
+                (_asset_sha256(a) for a in data.get("assets", []) if a.get("name") == "yt-dlp.exe"),
+                "",
+            )
+            if asset_digest:
+                expected_sha256 = asset_digest
             if checksum_url:
                 try:
                     sums = self.manager._fetch_text(checksum_url)
                     for line in sums.splitlines():
-                        if "yt-dlp.exe" in line:
-                            expected_sha256 = line.split()[0].strip()
+                        parts = line.split()
+                        if (
+                            len(parts) == 2
+                            and parts[1].lstrip("*") == "yt-dlp.exe"
+                            and re.fullmatch(r"[a-f0-9]{64}", parts[0])
+                        ):
+                            if expected_sha256 and expected_sha256 != parts[0]:
+                                from .update_transport import UpdateError
+
+                                raise UpdateError("update_hash")
+                            expected_sha256 = parts[0]
                             break
+                except UpdateError:
+                    raise
                 except Exception as e:
                     logger.warning(f"Failed to fetch checksums for yt-dlp: {e}")
 
@@ -843,7 +1172,19 @@ class UpdateCheckerWorker(QThread):
                 except Exception as e:
                     logger.warning(f"Failed to fetch checksums for deno: {e}")
 
-            return RemoteVersion(version=tag, url=dl_url, sha256=expected_sha256)
+            return RemoteVersion(
+                version=tag,
+                url=dl_url,
+                sha256=_sha256(expected_sha256)
+                or next(
+                    (
+                        _asset_sha256(a)
+                        for a in data.get("assets", [])
+                        if a.get("browser_download_url") == dl_url
+                    ),
+                    "",
+                ),
+            )
 
         elif key == "ffmpeg":
             tag = data.get("tag_name", "unknown")
@@ -876,21 +1217,19 @@ class UpdateCheckerWorker(QThread):
                 except Exception as e:
                     logger.warning(f"Failed to fetch checksums for ffmpeg: {e}")
 
-            return RemoteVersion(version=tag, url=dl_url, sha256=expected_sha256)
-
-        elif key == "pot-provider":
-            # bgutil-ytdlp-pot-provider-rs from jim60105
-            tag = data.get("tag_name", "vunknown").lstrip("v")
-
-            # Find windows exe or zip
-            dl_url = ""
-            for asset in data.get("assets", []):
-                name = asset["name"].lower()
-                # Look for windows exe: bgutil-pot-windows-x86_64.exe
-                if "windows" in name and name.endswith(".exe"):
-                    dl_url = asset["browser_download_url"]
-                    break
-            return RemoteVersion(version=tag, url=dl_url)
+            return RemoteVersion(
+                version=tag,
+                url=dl_url,
+                sha256=_sha256(expected_sha256)
+                or next(
+                    (
+                        _asset_sha256(a)
+                        for a in data.get("assets", [])
+                        if a.get("browser_download_url") == dl_url
+                    ),
+                    "",
+                ),
+            )
 
         elif key == "atomicparsley":
             # wez/atomicparsley from GitHub
@@ -912,15 +1251,28 @@ class UpdateCheckerWorker(QThread):
                 if "windows" in name and name.endswith(".zip"):
                     dl_url = asset["browser_download_url"]
                     break
-            return RemoteVersion(version=tag, url=dl_url)
+            return RemoteVersion(
+                version=tag,
+                url=dl_url,
+                sha256=next(
+                    (
+                        _asset_sha256(a)
+                        for a in data.get("assets", [])
+                        if a.get("browser_download_url") == dl_url
+                    ),
+                    "",
+                ),
+            )
 
         return RemoteVersion()
 
 
 class DownloaderWorker(QObject):
     progress_signal = Signal(str, int)
+    status_signal = Signal(str, str)
     finished_signal = Signal(str)
     error_signal = Signal(str, str)
+    activation_granted = Signal()
 
     def __init__(
         self,
@@ -941,6 +1293,17 @@ class DownloaderWorker(QObject):
         self.expected_version = expected_version
         self.expected_channel = expected_channel
         self.expected_sha256 = expected_sha256
+        self.bundle_id = ""
+        self.pot_release = None
+        self.local_source = ""
+        self.last_error = {}
+        self._done_received = False
+        self._running = False
+        self._gate_done = threading.Event()
+        self._cancel = threading.Event()
+        self.activation_granted.connect(self._grant_activation)
+        self._activation_waiting = False
+        self._owned_process = None
         self.extra_exes: list[str] = []
 
         if dependency_manager.components.get(key):
@@ -952,6 +1315,11 @@ class DownloaderWorker(QObject):
         self.process.readyReadStandardOutput.connect(self._on_ready_read)
         self.process.finished.connect(self._on_finished)
         self.process.errorOccurred.connect(self._on_error)
+        self.process.started.connect(self._write_config)
+        from PySide6.QtCore import QCoreApplication
+
+        if QCoreApplication.instance():
+            QCoreApplication.instance().aboutToQuit.connect(self._cancel_worker)
 
         self._buffer = ""
         self._is_finished_emitted = False
@@ -967,14 +1335,67 @@ class DownloaderWorker(QObject):
 
     def _on_stalled(self):
         log_text(logger, "warning", "组件下载无响应超时，终止 worker: {0}", self.key)
-        self._emit_error(ERR_DOWNLOAD_STALLED)
+        self.last_error = {"code": ERR_DOWNLOAD_STALLED, "detail": ""}
         try:
             self.process.kill()
         except Exception:  # noqa: BLE001
             pass
 
     def start(self):
+        self._running = True
+        self._launch()
+
+    def isRunning(self):
+        return self._running and not self._error_emitted and not self._is_finished_emitted
+
+    def _guarded_activate(self):
+        from ..youtube.pot_manager import pot_manager
+        from .runtime_activity import changing_components
+
+        done = self._gate_done
+        try:
+            with changing_components(self._cancel):
+                if self._cancel.is_set() or done.is_set():
+                    return
+                pot_manager._stop_owned()
+                self.activation_granted.emit()
+                done.wait()
+                from .updater_worker import recover_install
+
+                # A terminated installer cannot run its own rollback. Recover
+                # before releasing queued CLI requests or restarting POT.
+                root = self.target_exe.parent
+                recover_install(root.parent if self.key == "pot-provider" else root)
+        except InterruptedError:
+            return
+        pot_manager._invalidate()
+
+    def _grant_activation(self):
+        if self._cancel.is_set() or self._gate_done.is_set():
+            return
+        self.process.write(b'{"activate":true}\n')
+        self.process.closeWriteChannel()
+        self._stall_timer.start()
+        self.status_signal.emit(self.key, "installing")
+
+    def _cancel_worker(self):
+        from PySide6.QtCore import QProcess
+
+        from ..utils.owned_process import close_job
+
+        self._cancel.set()
+        if self.process.state() == QProcess.ProcessState.NotRunning:
+            self._gate_done.set()
+        self._running = False
+        self._stall_timer.stop()
+        close_job(self._owned_process)
+        self.process.kill()
+
+    def _launch(self):
         from .config_manager import config_manager
+
+        if self._cancel.is_set():
+            return
 
         proxy_url = config_manager.get("proxy_url")
         proxy_mode = config_manager.get("proxy_mode")
@@ -989,9 +1410,21 @@ class DownloaderWorker(QObject):
             "extra_exes": self.extra_exes,
             "proxy_url": proxy_url,
             "proxy_mode": proxy_mode,
+            "bundle_id": self.bundle_id,
+            "pot_release": self.pot_release,
+            "local_source": self.local_source,
+            "activation_gate": self.key in {"deno", "yt-dlp", "pot-provider"},
         }
+        if self.key == "pot-provider":
+            from ..utils.js_runtime import resolve_deno
 
-        from ..utils.paths import is_frozen
+            runtime = resolve_deno()
+            config["deno_path"] = str(runtime.path) if runtime.path else ""
+            from ..youtube.yt_dlp_cli import resolve_yt_dlp_exe
+
+            exe = resolve_yt_dlp_exe()
+            config["ytdlp_path"] = str(exe) if exe else ""
+        self._config_data = (json.dumps(config) + "\n").encode("utf-8")
 
         args = []
         if not is_frozen():
@@ -1003,22 +1436,29 @@ class DownloaderWorker(QObject):
             args = ["--update-worker"]
 
         self.process.start(exe, args)
-        if not self.process.waitForStarted():
-            log_text(logger, "error", "启动更新 worker 失败: {0}", self.process.errorString())
-            self._emit_error(ERR_WORKER_START_FAILED)
-            return
 
-        config_data = json.dumps(config).encode("utf-8")
-        self.process.write(config_data)
-        self.process.closeWriteChannel()
+    def _write_config(self):
+        from types import SimpleNamespace
+
+        from ..utils.owned_process import attach_job
+
+        # Assign ownership before sending work: dependency probes can spawn their
+        # own Deno/CLI children, which must also exit if the updater is cancelled.
+        self._owned_process = SimpleNamespace(pid=int(self.process.processId()))
+        attach_job(self._owned_process)
+        self.process.write(self._config_data)
+        if self.key not in {"deno", "yt-dlp", "pot-provider"}:
+            self.process.closeWriteChannel()
         self._stall_timer.start()
 
     def _emit_error(self, code: str):
         """`code` 是**稳定错误码**，不是给人看的文案 —— 翻译在 UI 侧。"""
         self._stall_timer.stop()
         if not self._error_emitted:
-            self.error_signal.emit(self.key, code)
             self._error_emitted = True
+            self._running = False
+            self._gate_done.set()
+            self.error_signal.emit(self.key, code)
 
     def _on_ready_read(self):
         data = self.process.readAllStandardOutput().data().decode("utf-8", errors="replace")
@@ -1037,19 +1477,45 @@ class DownloaderWorker(QObject):
                     self._stall_timer.start()  # 有进展，重新计时
                     self.progress_signal.emit(self.key, msg.get("percent", 0))
                 elif msg_type == "error":
-                    self._emit_error(msg.get("msg", "component_worker_error"))
+                    from ..utils.diagnostic_text import redact_detail
+
+                    self.last_error = {
+                        "code": msg.get("code") or msg.get("msg", "component_worker_error"),
+                        "detail": redact_detail(msg.get("detail", "")),
+                    }
+                elif msg_type == "status":
+                    self._stall_timer.start()
+                    self.status_signal.emit(self.key, msg.get("msg", "validate"))
+                elif msg_type == "activation_request" and not self._activation_waiting:
+                    self._activation_waiting = True
+                    self._stall_timer.stop()
+                    self.status_signal.emit(self.key, "waiting")
+                    threading.Thread(
+                        target=self._guarded_activate, daemon=True, name=f"install-{self.key}"
+                    ).start()
                 elif msg_type == "done":
                     # Let _on_finished handle the signal to ensure process has fully exited
-                    pass
+                    self._done_received = True
             except json.JSONDecodeError:
+                from ..utils.diagnostic_text import redact_detail
                 from ..utils.logger import logger
 
-                logger.debug(f"Worker stdout: {line}")
+                logger.debug("Worker stdout: {}", redact_detail(line))
 
     def _on_finished(self, exitCode, exitStatus):
         from PySide6.QtCore import QProcess
 
+        from ..utils.diagnostic_text import redact_detail
+        from ..utils.owned_process import close_job
+
         self._stall_timer.stop()
+        self._on_ready_read()
+        self._running = False
+        close_job(self._owned_process)
+        self._gate_done.set()
+        if self.last_error:
+            self._emit_error(self.last_error["code"])
+            return
 
         if exitStatus == QProcess.ExitStatus.CrashExit:
             # 看门狗 kill 掉的进程也走这里，但那时 `_error_emitted` 已经是 True，
@@ -1065,17 +1531,21 @@ class DownloaderWorker(QObject):
                 "更新 worker 崩溃退出 code={0} hex={1}: {2}",
                 exitCode,
                 hex(exitCode & 0xFFFFFFFF),
-                err.strip()[:500],
+                redact_detail(err)[:500],
             )
             self._emit_error(ERR_WORKER_CRASHED)
         elif exitCode != 0:
             err = self.process.readAllStandardError().data().decode("utf-8", errors="replace")
-            log_text(logger, "error", "更新 worker 退出码 {0}: {1}", exitCode, err.strip()[:500])
+            log_text(
+                logger, "error", "更新 worker 退出码 {0}: {1}", exitCode, redact_detail(err)[:500]
+            )
             self._emit_error(ERR_WORKER_EXIT_NONZERO)
+        elif not self._done_received:
+            self._emit_error("component_worker_incomplete")
         else:
             if not self._is_finished_emitted and not self._error_emitted:
-                self.finished_signal.emit(self.key)
                 self._is_finished_emitted = True
+                self.finished_signal.emit(self.key)
 
     def _on_error(self, error):
         from PySide6.QtCore import QProcess

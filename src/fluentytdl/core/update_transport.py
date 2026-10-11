@@ -28,7 +28,7 @@ REPOSITORIES = {
     "yt-dlp:sabr": SABR_REPOSITORY,
     "deno:stable": "denoland/deno",
     "ffmpeg:stable": "yt-dlp/FFmpeg-Builds",
-    "pot-provider:stable": "jim60105/bgutil-ytdlp-pot-provider-rs",
+    "pot-provider-original:stable": "Brainicism/bgutil-ytdlp-pot-provider",
     "atomicparsley:stable": "wez/atomicparsley",
 }
 
@@ -278,7 +278,10 @@ class CheckSession:
                         and error.code != "update_cancelled"
                     )
                     if not can_switch:
-                        if self.switched:
+                        if self.switched and error.code not in {
+                            "update_invalid_response",
+                            "update_stale",
+                        }:
                             self.failed = True
                         record(
                             "check_failed",
@@ -300,6 +303,8 @@ class CheckSession:
                     )
 
     def release(self, component, channel="stable"):
+        if component == "pot-provider":
+            return self.pot_release()
         repo = REPOSITORIES[f"{component}:{channel}"]
 
         if component == "yt-dlp" and channel == "sabr":
@@ -351,6 +356,24 @@ class CheckSession:
             f"https://api.github.com/repos/{repo}/releases/latest",
             f"{CF_BASE}/updates/components/{component}?channel={channel}",
             component=component,
+            normalize=normalize,
+        )
+
+    def pot_release(self):
+        from .pot_upstream import API, release_metadata
+
+        def normalize(data, source):
+            if source == "cloudflare":
+                _fresh(data)
+                if data.get("schema") != 2 or data.get("implementation") != "brainicism":
+                    raise UpdateError("update_invalid_response")
+                data = data.get("release", {})
+            return release_metadata(data)
+
+        return self._request(
+            f"{API}/releases/latest",
+            f"{CF_BASE}/updates/components/pot-provider-original",
+            component="pot-provider",
             normalize=normalize,
         )
 

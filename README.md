@@ -103,7 +103,7 @@ uv run python main.py
 Alternatively, use a Python virtual environment and install the project with `pip install -e ".[dev]"`, then run `python main.py`.
 
 > [!NOTE]
-> The application manages yt-dlp, FFmpeg, Deno, AtomicParsley, and other external components. A source checkout may download a missing component when its related feature is first used.
+> Python dependencies do not include external components. Open Settings → Components to install or update yt-dlp, FFmpeg, Deno, POT and AtomicParsley directly from their upstream releases. POT uses the built-in Deno to prepare its dependencies; its separate window shows runtime status and retry. See [development setup](CONTRIBUTING.md#development-setup) for command-line installation and verification.
 
 ---
 

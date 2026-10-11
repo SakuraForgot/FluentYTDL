@@ -44,7 +44,6 @@ datas = [
     # 错误诊断规则表，diagnostics/rules.py 通过 resource_path 加载。
     # 漏掉它会让所有错误退化成 unknown 兜底文案。
     ('../assets/error_rules.json', 'assets'),
-    ('../src/fluentytdl/yt_dlp_plugins_ext', 'fluentytdl/yt_dlp_plugins_ext'),
     (os.environ.get('FLUENTYTDL_VERSION_SOURCE', '../VERSION'), '.'),  # 版本文件，运行时 __init__.py 读取
 ]
 

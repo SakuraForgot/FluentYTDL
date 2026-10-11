@@ -31,9 +31,9 @@ _notified: set[tuple[str, str]] = set()
 _installed = False
 
 
-def _push(component: str, version: str, title: str, message: str) -> None:
+def _push(component: str, version: str, title: str, message: str, *, identity: str = "") -> None:
     """写入一条更新通知，同一个 (组件, 版本) 只写一次。"""
-    fingerprint = (component, str(version))
+    fingerprint = (component, identity or str(version))
     if fingerprint in _notified:
         return
     _notified.add(fingerprint)
@@ -113,7 +113,15 @@ def notify_component_update(key: str, result: dict) -> None:
             tr_text("\n当前使用的是系统 PATH 上的版本，更新会在应用自带目录下安装一份并优先使用。"),
         )
 
-    _push(key, latest, title, message)
+    identity = "|".join(
+        (
+            str(latest),
+            latest_ch,
+            str((result.get("bundle") or {}).get("bundle_id", "")),
+            str(result.get("expected_sha256") or ""),
+        )
+    )
+    _push(key, latest, title, message, identity=identity)
 
 
 def install_update_notifier() -> None:

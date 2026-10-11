@@ -9,15 +9,17 @@ from pathlib import Path
 
 
 def check_pot_sources() -> None:
-    """Fail the frozen build when external plugin data is missing or invalid."""
-    source = (
-        Path(__file__).resolve().parents[1] / "yt_dlp_plugins_ext" / "yt_dlp_plugins" / "extractor"
-    )
-    for name in ("getpot_bgutil.py", "getpot_bgutil_http.py", "getpot_bgutil_cli.py"):
-        content = (source / name).read_bytes()
-        if not content.strip():
-            raise RuntimeError(f"Empty bundled POT plugin: {name}")
-        compile(content, str(source / name), "exec")
+    """Validate the actual bundle and Deno, with external dependency downloads blocked."""
+    from ..core.pot_component import local_probe, resolve_bundle, runtime_compatible
+    from ..core.pot_dependencies import verify_dependencies
+    from .js_runtime import probe_deno, resolve_deno
+
+    bundle = resolve_bundle(verify=True)
+    verify_dependencies(bundle.root / "server")
+    runtime = probe_deno(resolve_deno())
+    if not runtime_compatible(bundle, runtime.version):
+        raise RuntimeError("Bundled Deno is incompatible with POT")
+    local_probe(bundle, runtime.path)
 
 
 def run_selftest(output: Path) -> int:
@@ -25,8 +27,15 @@ def run_selftest(output: Path) -> int:
     os.environ["FLUENTYTDL_DATA_DIR_OVERRIDE"] = str(output / "data")
     report = {"frozen": bool(getattr(sys, "frozen", False)), "checks": []}
     try:
-        check_pot_sources()
-        report["checks"].append("Bundled POT plugin sources and syntax")
+        if os.environ.get("FLUENTYTDL_SELFTEST_COMPONENTS") == "1":
+            check_pot_sources()
+            report["checks"].append("Original POT bundle, Deno and offline local service startup")
+        else:
+            from ..core.pot_component import read_bundle  # noqa: F401
+
+            report["checks"].append(
+                "POT validation module (spec-only build; component payload not requested)"
+            )
         from ..processing.metadata_normalizer import normalize_metadata
         from ..processing.metadata_writers import read_id3, write_id3
 

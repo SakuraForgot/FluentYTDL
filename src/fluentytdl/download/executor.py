@@ -21,6 +21,7 @@ from typing import Any, Protocol
 
 from loguru import logger
 
+from fluentytdl.core.runtime_activity import YtDlpLaunchCancelled, ytdlp_popen
 from fluentytdl.utils.localized_log import log_text
 from fluentytdl.utils.message_catalog import english
 
@@ -438,15 +439,20 @@ class DownloadExecutor:
         work_dir = self._resolve_output_dir(ydl_opts)
         _emit_disk_space_signal(work_dir)
 
-        self._proc = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=False,
-            env=env,
-            cwd=work_dir,
-            **_win_hide_kwargs(),
-        )
+        try:
+            self._proc = ytdlp_popen(
+                cmd,
+                cancel_check=cancel_check,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=False,
+                env=env,
+                cwd=work_dir,
+                **_win_hide_kwargs(),
+            )
+        except YtDlpLaunchCancelled as error:
+            self._release_cookie_runfile()
+            raise RuntimeError(english("用户取消下载")) from error
 
         # FFmpegFD does not consistently forward its child FFmpeg progress to
         # yt-dlp's stdout. While it is silent, poll the transaction layer's
@@ -922,8 +928,9 @@ class DownloadExecutor:
         env = prepare_yt_dlp_env(command=cmd)
         env["PYTHONIOENCODING"] = "utf-8"
 
-        proc = subprocess.Popen(
+        proc = ytdlp_popen(
             cmd,
+            cancel_check=cancel_check,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,

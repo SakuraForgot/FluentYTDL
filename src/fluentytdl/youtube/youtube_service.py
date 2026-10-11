@@ -300,7 +300,11 @@ class YoutubeService:
             return False
 
     def build_ydl_options(
-        self, options: YoutubeServiceOptions | None = None, *, url: str = ""
+        self,
+        options: YoutubeServiceOptions | None = None,
+        *,
+        url: str = "",
+        cancel_event: threading.Event | None = None,
     ) -> dict[str, Any]:
         """Construct yt-dlp options with anti-blocking and auth."""
 
@@ -557,11 +561,12 @@ class YoutubeService:
         pot_injected = False
         _pot_url_tag = _short_url_tag(url)
         _pot_skip_reason = "twitter" if _is_twitter else "disabled"
-        if not _is_twitter and config_manager.get("pot_provider_enabled", False):
+        if _platform == "youtube" and config_manager.get("pot_provider_enabled", False):
             try:
                 from .pot_manager import pot_manager
 
-                if not pot_manager.wait_until_ready():
+                wait_options = {"cancel_check": cancel_event.is_set} if cancel_event else {}
+                if not pot_manager.wait_until_ready(**wait_options):
                     raise RuntimeError(tr_text("POT 服务未就绪，请检查服务状态和网络连接后重试。"))
                 else:
                     pot_extractor_args = pot_manager.get_extractor_args()
@@ -606,6 +611,8 @@ class YoutubeService:
                 if not pot_injected:
                     raise RuntimeError(tr_text("POT 服务未就绪，请检查服务状态和网络连接后重试。"))
             except Exception as e:
+                if cancel_event and cancel_event.is_set():
+                    raise YtDlpCancelled("yt-dlp cancelled") from e
                 raise RuntimeError(tr_text("POT 加载失败，已停止本次请求：{0}", e)) from e
 
         if not pot_injected and _pot_skip_reason:
@@ -838,6 +845,7 @@ class YoutubeService:
         options: YoutubeServiceOptions | None = None,
         *,
         url: str = "",
+        cancel_event: threading.Event | None = None,
     ) -> dict[str, Any]:
         """VR 解析用的 opts：build_ydl_options（POT/网络/代理/FFmpeg/JS runtime 的单一
         事实源）+ android_vr 覆盖层。
@@ -846,7 +854,7 @@ class YoutubeService:
         Provider 的 extractor_args，android_vr 无 POT 时直链被全部跳过。改走这里后 POT
         开启即能救回 https 直链，SABR 核心下则以 protocol=sabr 兜底。
         """
-        vr_opts = self.build_ydl_options(options, url=url)
+        vr_opts = self.build_ydl_options(options, url=url, cancel_event=cancel_event)
         vr_opts["skip_download"] = True
         self.apply_android_vr_overlay(vr_opts)
         return vr_opts
@@ -978,7 +986,7 @@ class YoutubeService:
                     "🔁 [SABR] 本次请求首次检测到 SABR，正在追加 web_safari 客户端重新解析以拿回高清档…"
                 ),
             )
-            fresh = self.build_ydl_options(options, url=url)
+            fresh = self.build_ydl_options(options, url=url, cancel_event=cancel_event)
             fresh.update(tuned_overrides)
             info = run_dump_single_json(
                 url, fresh, extra_args=extra_args, cancel_event=cancel_event
@@ -1025,6 +1033,11 @@ class YoutubeService:
             只会让 dev 和发行版走两条不同的代码路径 —— 开发时永远测不到发行版的分支，
             还会在 deno 明明就在自带目录里时警告"未检测到任何受支持的 JS runtime"。
             """
+            if runtime_id == "deno":
+                from ..utils.js_runtime import resolve_deno
+
+                runtime = resolve_deno()
+                return str(runtime.path) if runtime.path and runtime.path.is_file() else None
             entry = runtime_candidates.get(runtime_id)
             if entry is None:
                 return None
@@ -1479,7 +1492,7 @@ class YoutubeService:
 
         # 与 extract_vr_info_sync 共用同一 VR opts 事实源（build_ydl_options + android_vr
         # 覆盖层）：拿到 POT/网络/代理/FFmpeg/JS runtime，cookiefile 仍被剥离。
-        vr_opts = self._build_vr_ydl_options(url=url)
+        vr_opts = self._build_vr_ydl_options(url=url, cancel_event=cancel_event)
 
         try:
             info = run_dump_single_json(
@@ -1589,7 +1602,7 @@ class YoutubeService:
         照常写** —— 这一趟本来就是新鲜的，写回去顺带刷新条目，对其他模式只有好处。
         """
 
-        ydl_opts = self.build_ydl_options(options, url=url)
+        ydl_opts = self.build_ydl_options(options, url=url, cancel_event=cancel_event)
 
         # === TTL 缓存查询（P2.1：播放列表逐条深解析）===
         _t_total = time.perf_counter()
@@ -1939,7 +1952,7 @@ class YoutubeService:
         _t_total = time.perf_counter()
 
         _t_opts = time.perf_counter()
-        ydl_opts = self.build_ydl_options(options, url=url)
+        ydl_opts = self.build_ydl_options(options, url=url, cancel_event=cancel_event)
         _opts_ms = (time.perf_counter() - _t_opts) * 1000
         tuned = dict(ydl_opts)
 
@@ -2157,7 +2170,7 @@ class YoutubeService:
         # 与普通解析同一事实源：build_ydl_options 给全 cookie / 默认 player_client
         # （含 web_safari SABR-only 兜底）/ POT / 代理 / FFmpeg / JS runtime，只把
         # skip_download 打开。VR 不再是 android_vr 的独占视角。
-        vr_opts = self.build_ydl_options(url=url)
+        vr_opts = self.build_ydl_options(url=url, cancel_event=cancel_event)
         vr_opts["skip_download"] = True
 
         # === TTL 缓存查询（P2.1）===
@@ -2309,7 +2322,7 @@ class YoutubeService:
         """
 
         options = freeze_youtube_options(options)
-        base_opts = self.build_ydl_options(options, url=url)
+        base_opts = self.build_ydl_options(options, url=url, cancel_event=cancel_event)
         ydl_opts = dict(base_opts)
 
         # Key knobs to reduce requests
@@ -2725,7 +2738,11 @@ class YoutubeService:
         if base_ydl_opts is not None:
             ydl_opts = dict(base_ydl_opts)
         else:
-            ydl_opts = dict(self.build_ydl_options(options or YoutubeServiceOptions(), url=url))
+            ydl_opts = dict(
+                self.build_ydl_options(
+                    options or YoutubeServiceOptions(), url=url, cancel_event=cancel_event
+                )
+            )
         ydl_opts.update(
             {
                 "skip_download": True,

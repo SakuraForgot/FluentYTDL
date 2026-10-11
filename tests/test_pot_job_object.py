@@ -41,7 +41,7 @@ def test_job_object_is_anonymous(monkeypatch):
 
     monkeypatch.setattr(win32job, "CreateJobObject", spy)
 
-    mgr = POTManager.__new__(POTManager)
+    mgr = object.__new__(POTManager)
     mgr._setup_job_object()
 
     assert calls, "没有调用 CreateJobObject —— job 根本没建"
@@ -53,7 +53,7 @@ def test_job_object_is_anonymous(monkeypatch):
 
 def test_job_object_kills_children_on_close():
     """KILL_ON_JOB_CLOSE 必须置位，否则父进程被强杀时 POT 服务会残留。"""
-    mgr = POTManager.__new__(POTManager)
+    mgr = object.__new__(POTManager)
     mgr._setup_job_object()
     assert mgr._job_handle is not None
 
@@ -72,6 +72,6 @@ def test_setup_job_object_never_raises(monkeypatch):
 
     monkeypatch.setattr(win32job, "CreateJobObject", boom)
 
-    mgr = POTManager.__new__(POTManager)
+    mgr = object.__new__(POTManager)
     mgr._setup_job_object()
     assert mgr._job_handle is None

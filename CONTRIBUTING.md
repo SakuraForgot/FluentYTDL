@@ -36,6 +36,27 @@ If `uv` is unavailable, create a virtual environment and run `pip install -e ".[
 
 External tools such as yt-dlp, FFmpeg, Deno, and AtomicParsley are managed separately from Python dependencies. Do not commit downloaded binaries, cookies, logs, `config.json`, or local build output.
 
+Install POT directly from **Settings → Components → POT → Install**. The updater
+downloads the official Brainicism Release plugin and matching source archive,
+then reuses the existing Deno component to prepare the locked runtime dependencies.
+If Deno needs installation or repair, the same component updater handles it first;
+POT never carries its own Deno executable. It does
+not require Node, npm, Git, or a FluentYTDL-owned component release. The separate
+POT window shows runtime status and provides retry. For command-line setup, install
+the Deno and yt-dlp components first:
+
+```powershell
+uv run python scripts/setup_pot.py
+```
+
+This installs into the development component directory and verifies the actual
+Deno, server, plugin and yt-dlp Token request. It does not change your saved POT
+switch, proxy or executable settings. A `ready: true` result means the next source
+launch can use that installation. Importing the official plugin ZIP still needs
+network access to retrieve its matching server and dependencies.
+In the UI, components expose their installed version even when update servers
+cannot be reached; use the details button to inspect paths and errors.
+
 ## Project rules
 
 Read [docs/RULES_EN.md](docs/RULES_EN.md) and [docs/ARCHITECTURE_EN.md](docs/ARCHITECTURE_EN.md) before changing application architecture. In particular:

@@ -218,7 +218,7 @@ def test_logs_preserve_exception_caller_and_nested_language(language, tmp_path):
             log_text(
                 logger.opt(exception=exc),
                 "error",
-                "[POT][Diagnose] 探测输出:\n{}",
+                "错误详情：\n{0}",
                 tr_text("已完成 {0} 个视频 · 总计 {1}", 3, "1MB"),
             )
         assert len(records) == 1
