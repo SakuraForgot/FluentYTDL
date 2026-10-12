@@ -12,6 +12,22 @@ import gc  # noqa: E402
 import pytest  # noqa: E402
 
 
+@pytest.fixture(scope="session", autouse=True)
+def qt_application():
+    """Keep one widget-capable Qt application alive in each pytest worker.
+
+    Model tests and widget tests share the process, including under xdist.
+    A QCoreApplication cannot be upgraded to QApplication later: instance()
+    returns the core-only object and constructing the next QWidget aborts.
+    """
+    from PySide6.QtWidgets import QApplication
+
+    app = QApplication.instance() or QApplication([])
+    if not isinstance(app, QApplication):
+        pytest.fail("Tests require QApplication; a core-only Qt application already exists")
+    yield app
+
+
 @pytest.fixture
 def dispose_qt_widget():
     """Destroy a test page while its Python owners and mocked services still exist."""

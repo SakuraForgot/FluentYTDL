@@ -11,7 +11,8 @@
 3. **文件存在性只对 `completed` 生效** —— delegate 见到 `file_exists is False` 就整行
    降透明且**不看状态**，所以一旦把失败行也拿去 stat，每条失败记录都会变成半透明。
 
-只需要 `QCoreApplication`（不需要显示），DB 一律指向 `tmp_path`，不碰用户数据。
+复用会话级离屏 `QApplication`，与同一 worker 后续的控件测试兼容。
+DB 一律指向 `tmp_path`，不碰用户数据。
 """
 
 import os
@@ -28,7 +29,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 _ENV_GUARD = tempfile.mkdtemp(prefix="fluentytdl-taskrow-test-")
 os.environ.setdefault("FLUENTYTDL_DATA_DIR_OVERRIDE", _ENV_GUARD)
 
-from PySide6.QtCore import QCoreApplication, QEventLoop, QObject, QTimer, Signal  # noqa: E402
+from PySide6.QtCore import QEventLoop, QObject, QTimer, Signal  # noqa: E402
 
 from fluentytdl.storage.task_db import TaskDB  # noqa: E402
 from fluentytdl.ui.models import download_list_model as dlm_mod  # noqa: E402
@@ -38,9 +39,9 @@ from fluentytdl.ui.models.task_row import TaskRow  # noqa: E402
 
 
 @pytest.fixture(scope="module", autouse=True)
-def qt_app():
-    """`QTimer` / `QThreadPool` 需要一个 QCoreApplication；不需要 QApplication。"""
-    return QCoreApplication.instance() or QCoreApplication([])
+def qt_app(qt_application):
+    """Share the application with widget tests instead of creating a core-only one."""
+    return qt_application
 
 
 class FakeWorker(QObject):

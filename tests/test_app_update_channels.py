@@ -114,7 +114,8 @@ def test_channel_switch_clears_cached_manifest_and_rechecks(manager):
         check.assert_called_once_with(silent=False)
 
 
-def test_ui_requires_consent_and_reverts_cancel(manager):
+@pytest.mark.windows_gui
+def test_ui_requires_consent_and_reverts_cancel(manager, dispose_qt_widget):
     from fluentytdl.ui.components.settings import app_update_card as ui
 
     with (
@@ -123,18 +124,20 @@ def test_ui_requires_consent_and_reverts_cancel(manager):
         patch.object(ui, "MessageBox") as box,
     ):
         card = ui.AppUpdateSettingCard()
-        request = Mock()
-        # Observe without launching an actual check.
-        manager.channel_change_requested.disconnect()
-        manager.channel_change_requested.connect(request)
-        box.return_value.exec.return_value = False
-        card.channelCombo.setCurrentIndex(1)
-        assert card.channelCombo.currentIndex() == 0
-        request.assert_not_called()
-        box.return_value.exec.return_value = True
-        card.channelCombo.setCurrentIndex(1)
-        request.assert_called_once_with("pre")
-        card.deleteLater()
+        try:
+            request = Mock()
+            # Observe without launching an actual check.
+            manager.channel_change_requested.disconnect()
+            manager.channel_change_requested.connect(request)
+            box.return_value.exec.return_value = False
+            card.channelCombo.setCurrentIndex(1)
+            assert card.channelCombo.currentIndex() == 0
+            request.assert_not_called()
+            box.return_value.exec.return_value = True
+            card.channelCombo.setCurrentIndex(1)
+            request.assert_called_once_with("pre")
+        finally:
+            dispose_qt_widget(card)
 
 
 @pytest.mark.parametrize("busy", ["_manifest_worker", "_download_worker"])

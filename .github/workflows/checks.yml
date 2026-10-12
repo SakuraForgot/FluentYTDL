@@ -55,7 +55,7 @@ jobs:
       - name: Logic tests
         env:
           FLUENTYTDL_DATA_DIR_OVERRIDE: ${{ runner.temp }}/fluentytdl-tests
-        run: uv run --locked --no-sync pytest tests -m "not windows_only and not needs_components and not windows_gui" -n auto --dist loadscope -q --tb=short --junitxml=build/tests-linux.xml
+        run: uv run --locked --no-sync pytest tests -m "not windows_only and not needs_components and not windows_gui" -n auto --dist loadscope --max-worker-restart=0 -o faulthandler_timeout=60 -q --tb=short --junitxml=build/tests-linux.xml
       - name: Test reports
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
