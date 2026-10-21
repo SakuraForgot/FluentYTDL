@@ -2,7 +2,7 @@
 name = "FluentYTDL"
 version = "3.7.8-rc.1"
 description = "Windows desktop downloader for YouTube and X, powered by yt-dlp and FFmpeg"
-requires-python = ">=3.12,<3.13"
+requires-python = ">=3.12.15,<3.13"
 dependencies = [
   "certifi>=2026.10.19",
   "urllib3>=2.8.0",
