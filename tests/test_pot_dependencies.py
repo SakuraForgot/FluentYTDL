@@ -99,6 +99,33 @@ def test_shared_optional_peer_and_nested_versions_survive(server):
     assert prune_dependencies(server)["removed_files"] == 0
 
 
+def test_pot_security_lock_replaces_only_vulnerable_resolution(server, tmp_path):
+    lock = {
+        "specifiers": {},
+        "npm": {
+            "axios@1.20.0": {"integrity": "keep", "dependencies": ["follow-redirects@1.16.0"]},
+            "follow-redirects@1.16.0": {"integrity": "old"},
+        },
+    }
+    _write(server / "deno.lock", json.dumps(lock))
+    output = tmp_path / "secure.lock"
+    write_production_lock(server, output)
+    patched = json.loads(output.read_text())
+    assert "follow-redirects@1.16.0" not in patched["npm"]
+    assert patched["npm"]["follow-redirects@1.16.1"]["integrity"].startswith("sha512-")
+    assert patched["npm"]["axios@1.20.0"] == {
+        "integrity": "keep",
+        "dependencies": ["follow-redirects@1.16.1"],
+    }
+    assert json.loads((server / "deno.lock").read_text()) == lock
+
+
+def test_replayed_pot_tree_cannot_restore_unsafe_dependency(server):
+    _package(server / "node_modules", "follow-redirects")
+    with pytest.raises(ComponentError, match="Unsafe POT"):
+        verify_dependencies(server)
+
+
 def test_metadata_cleanup_preserves_licenses_and_exported_example_resources(server):
     runtime = _package(
         server / "node_modules",

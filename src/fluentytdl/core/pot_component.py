@@ -119,6 +119,20 @@ class PotBundle:
         return self.plugin_root / PLUGIN_ASSET
 
     def command(self, deno: Path, port: int, *, offline: bool = False) -> list[str]:
+        # App-core updates preserve external components. Never start a retained
+        # vulnerable POT tree; the existing component repair flow replaces it.
+        metadata = self.root / "server/node_modules/follow-redirects/package.json"
+        try:
+            package = json.loads(metadata.read_text(encoding="utf-8"))
+            version = package["version"]
+            if not re.fullmatch(r"\d+\.\d+\.\d+", version) or tuple(
+                map(int, version.split("."))
+            ) < (1, 16, 1):
+                raise ValueError("Outdated redirect library")
+        except (OSError, ValueError, KeyError, TypeError) as error:
+            raise ComponentError(
+                "pot_package_incompatible", "Repair POT security dependencies"
+            ) from error
         return [
             str(deno),
             "run",

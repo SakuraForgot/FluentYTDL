@@ -57,8 +57,8 @@ def release_metadata(release: dict) -> dict:
             "implementation": "brainicism",
             "release_tag": tag,
             "upstream_version": version,
-            "bundle_id": f"{BUNDLE_PREFIX}{version}-r1",
-            "bundle_revision": 1,
+            "bundle_id": f"{BUNDLE_PREFIX}{version}-r2",
+            "bundle_revision": 2,
             "asset_url": asset.get("browser_download_url"),
             "sha256": str(asset.get("digest", "")).removeprefix("sha256:"),
             "size": asset.get("size"),
@@ -77,15 +77,17 @@ def validate_release_metadata(value: dict) -> dict:
         or value.get("implementation") != "brainicism"
         or not re.fullmatch(r"v?\d+\.\d+\.\d+", tag)
         or value.get("upstream_version") != version
-        or value.get("bundle_id") != f"{BUNDLE_PREFIX}{version}-r1"
-        or value.get("bundle_revision") != 1
+        or value.get("bundle_id") != f"{BUNDLE_PREFIX}{version}-r{value.get('bundle_revision')}"
+        or value.get("bundle_revision") not in (1, 2)
         or value.get("asset_url") != url
         or not re.fullmatch(r"[a-f0-9]{64}", str(value.get("sha256", "")))
         or type(value.get("size")) is not int
         or not 0 < value["size"] <= 16 * 1024 * 1024
     ):
         raise ComponentError("pot_metadata_invalid")
-    return value
+    # Cached metadata from older clients still identifies the same upstream.
+    # Project it to the local security recipe revision before comparing/installing.
+    return {**value, "bundle_revision": 2, "bundle_id": f"{BUNDLE_PREFIX}{version}-r2"}
 
 
 def local_plugin_release(archive: Path, transport) -> dict:
@@ -387,7 +389,7 @@ def install_release(
             "schema": 2,
             "implementation": "brainicism",
             "bundle_id": metadata["bundle_id"],
-            "bundle_revision": 1,
+            "bundle_revision": 2,
             "upstream_version": version,
             "server_version": version,
             "plugin_version": version,

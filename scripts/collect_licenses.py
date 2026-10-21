@@ -10,7 +10,6 @@ FluentYTDL 许可证收集脚本
 
 from __future__ import annotations
 
-import ssl
 import sys
 from pathlib import Path
 from urllib.error import HTTPError, URLError
@@ -30,7 +29,9 @@ LICENSE_SOURCES = {
 
 def download_license(name: str, url: str, timeout: int = 15) -> str:
     """下载许可证文本"""
-    ctx = ssl.create_default_context()
+    from fluentytdl.utils.tls_trust import _tls_context
+
+    ctx = _tls_context()
     req = Request(url, headers={"User-Agent": "FluentYTDL-Builder/1.0"})
 
     try:

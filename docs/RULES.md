@@ -5,7 +5,7 @@
 ## 1. 项目身份
 
 - **名称**：FluentYTDL — 专业 YouTube/视频下载器
-- **语言**：Python 3.12.12
+- **语言**：Python 3.12.15
 - **UI 框架**：PySide6 (Qt6) + QFluentWidgets（Fluent 设计）
 - **下载引擎**：yt-dlp CLI 子进程（非 Python API）
 - **媒体处理**：FFmpeg
@@ -269,7 +269,7 @@ retry  transition  outcome  config  argv  identity
 
 ## 11. 打包与发布规则
 
-- 统一 Windows x64、Python 3.12.12，工具链读取 build-environment.json。依赖使用 `uv sync --locked --extra dev --extra build`，构建和检查不得自动刷新锁文件。
+- 统一 Windows x64、Python 3.12.15，工具链读取 build-environment.json。依赖使用 `uv sync --locked --extra dev --extra build`，构建和检查不得自动刷新锁文件。
 - VERSION 保存裸版本；tag 为 v+VERSION。仅 version_manager set/bump 修改源码版本并刷新 uv.lock；build --version 只覆盖本次暂存输入。
 - 每次发布必须拉取最新 yt-dlp、FFmpeg/ffprobe、Deno、AtomicParsley、POT Provider 和内嵌 7-Zip，沿用原渠道。TOOLS.lock.json 仅作历史参考，不阻止上游升级；下载校验失败禁止退回旧工具。
 - 每次构建解析一次组件快照，记录资产标识、URL、版本、哈希与大小，供所有产物共用。回放快照仅供诊断，不允许发布。

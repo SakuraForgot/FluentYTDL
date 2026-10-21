@@ -1,7 +1,7 @@
 """Prepare and audit the same POT dependency tree for updates and packaging.
 
-Versions are resolved by Deno using upstream's lockfile. This module only walks
-the installed tree; it does not resolve versions or download packages.
+Deno uses a production projection of the upstream lock, with a hash-pinned
+security replacement for follow-redirects. Unrelated resolutions stay unchanged.
 """
 
 from __future__ import annotations
@@ -14,6 +14,39 @@ from pathlib import Path
 from .pot_component import ComponentError, filesystem_path
 
 _PACKAGE_NAME = re.compile(r"(?:@[^./\\:]+/)?[^./\\:][^/\\:]*\Z")
+# npm registry integrity for the security-only replacement (CVE-2026-111755/111756).
+_FOLLOW_REDIRECTS_INTEGRITY = "sha512-FNvFGzoMLWmE6Yj9spb/zjd7yiNCHiAW9/Tg9CXrQ8wuu32HtlJOwWO11OJafl5FfY3DxTdQ0vj42zU1kvv5jg=="
+
+
+def _secure_resolutions(lock: dict) -> None:
+    npm = lock.get("npm", {})
+    replacements = {}
+    for key in list(npm):
+        if key.startswith("follow-redirects@"):
+            version = key.split("@", 1)[1]
+            if not re.fullmatch(r"\d+\.\d+\.\d+", version):
+                raise ComponentError(
+                    "worker_validate_failed", "Unrecognized follow-redirects version"
+                )
+            if tuple(map(int, version.split("."))) < (1, 16, 1):
+                replacements[key] = "follow-redirects@1.16.1"
+                del npm[key]
+    if not replacements:
+        return
+    npm["follow-redirects@1.16.1"] = {"integrity": _FOLLOW_REDIRECTS_INTEGRITY}
+    for package in npm.values():
+        if "dependencies" in package:
+            package["dependencies"] = [
+                replacements.get(dep, dep) for dep in package["dependencies"]
+            ]
+    for key, version in lock.get("specifiers", {}).items():
+        if (
+            key.startswith("npm:follow-redirects@")
+            and f"follow-redirects@{version}" in replacements
+        ):
+            lock["specifiers"][key] = "1.16.1"
+
+
 _UNUSED_DIRS = {
     "test",
     "tests",
@@ -74,6 +107,7 @@ def write_production_lock(server: Path, destination: Path) -> None:
         for key, value in specifiers.items()
         if not (key.startswith("npm:") and key[4:].rsplit("@", 1)[0] in development)
     }
+    _secure_resolutions(lock)
     destination.write_text(json.dumps(lock, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
@@ -216,6 +250,16 @@ def _cleanup_plan(server: Path):
 
 def verify_dependencies(server: Path) -> None:
     """Read-only packaging gate; replayed snapshots cannot bypass cleanup."""
+    _, packages, _, _ = _inventory(server)
+    for package in packages.values():
+        if package.get("name") == "follow-redirects":
+            version = str(package.get("version", ""))
+            if not re.fullmatch(r"\d+\.\d+\.\d+", version) or tuple(
+                map(int, version.split("."))
+            ) < (1, 16, 1):
+                raise ComponentError(
+                    "worker_validate_failed", "Unsafe POT follow-redirects dependency"
+                )
     _, _, remove, _ = _cleanup_plan(server)
     if remove:
         raise ComponentError(

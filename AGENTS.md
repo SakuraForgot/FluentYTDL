@@ -15,7 +15,7 @@
 ## 1. Project Identity
 
 - **Name**: FluentYTDL — Professional YouTube/video downloader
-- **Language**: Python 3.12.12
+- **Language**: Python 3.12.15
 - **UI Framework**: PySide6 (Qt6) + QFluentWidgets (Fluent Design)
 - **Download Engine**: yt-dlp CLI subprocess (NOT Python API)
 - **Media Processing**: FFmpeg
@@ -281,7 +281,7 @@ Metadata policy is persisted in `__fluentytdl_metadata_policy` at task creation;
 
 ## 11. Build & Release Rules
 
-- Build contract: Windows x64, Python **3.12.12**. Read `build-environment.json`; run `uv sync --locked --extra dev --extra build`. Do not silently re-lock during checks/builds.
+- Build contract: Windows x64, Python **3.12.15**. Read `build-environment.json`; run `uv sync --locked --extra dev --extra build`. Do not silently re-lock during checks/builds.
 - VERSION contains the bare version. Tags use `v` + VERSION. Only `version_manager.py set/bump` changes source versions and refreshes uv.lock. Build overrides are staged and NEVER modify source files.
 - Accepted versions: X.Y.Z, X.Y.Z-rc.N, X.Y.Z-beta.N. Stable releases are Latest, rc releases are prereleases, beta produces Actions artifacts only.
 - **Every new release MUST fetch the latest yt-dlp, FFmpeg/ffprobe, Deno, AtomicParsley, POT Provider AND embedded 7-Zip.** Keep existing upstream channels. Historical TOOLS.lock.json is an audit baseline, never a version ceiling. Fail download/integrity errors; never silently reuse older tools.
