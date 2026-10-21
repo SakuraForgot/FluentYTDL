@@ -94,8 +94,9 @@ REPOSITORIES = {
 
 def create_ssl_context() -> ssl.SSLContext:
     """创建 SSL 上下文"""
-    ctx = ssl.create_default_context()
-    return ctx
+    from fluentytdl.utils.tls_trust import _tls_context
+
+    return _tls_context()
 
 
 def download_file(

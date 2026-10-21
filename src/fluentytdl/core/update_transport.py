@@ -4,17 +4,17 @@ from __future__ import annotations
 
 import hashlib
 import random
-import ssl
 import threading
 import time
 import uuid
 from pathlib import Path
 from urllib.parse import quote, urlsplit
 
-import certifi
 import requests
 from requests.adapters import HTTPAdapter
 
+from ..utils.tls_trust import _DISTRUSTED_ROOT_SHA256 as _DISTRUSTED_ROOT_SHA256
+from ..utils.tls_trust import _tls_context
 from ..utils.ytdlp_runtime import SABR_REPOSITORY
 
 CF_BASE = "https://fluentytdl.sakuraforgot.com/v1"
@@ -54,11 +54,10 @@ class UpdateError(Exception):
 
 
 class SystemTLSAdapter(HTTPAdapter):
-    """Use OS trust plus bundled public roots, including HTTPS proxy pools."""
+    """Merge filtered OS trust and current certifi for direct and proxy HTTPS."""
 
     def __init__(self):
-        self.context = ssl.create_default_context()
-        self.context.load_verify_locations(cafile=certifi.where())
+        self.context = _tls_context()
         super().__init__(max_retries=0)
 
     def init_poolmanager(self, *args, **kwargs):
@@ -67,6 +66,7 @@ class SystemTLSAdapter(HTTPAdapter):
 
     def proxy_manager_for(self, proxy, **kwargs):
         kwargs["ssl_context"] = self.context
+        kwargs["proxy_ssl_context"] = self.context
         return super().proxy_manager_for(proxy, **kwargs)
 
     def build_connection_pool_key_attributes(self, request, verify, cert=None):

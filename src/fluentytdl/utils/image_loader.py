@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import io
+import sys
+from functools import lru_cache
 
 from PIL import Image
-from PySide6.QtCore import QObject, Qt, QUrl, Signal
+from PySide6.QtCore import QObject, Qt, QTimer, QUrl, Signal
 from PySide6.QtGui import QImage, QPainter, QPainterPath, QPixmap
 from PySide6.QtNetwork import (
     QNetworkAccessManager,
@@ -12,18 +14,57 @@ from PySide6.QtNetwork import (
     QNetworkProxyFactory,
     QNetworkReply,
     QNetworkRequest,
+    QSsl,
+    QSslCertificate,
+    QSslConfiguration,
+    QSslSocket,
 )
 
 from fluentytdl.utils.localized_log import log_text
 
 from ..core.config_manager import config_manager
 from .logger import logger
+from .tls_trust import _tls_context
 
 # 全局共享的 QNetworkAccessManager（复用 HTTP 连接）
 _global_manager: QNetworkAccessManager | None = None
 _global_manager_initialized: bool = False
 # P4: 全局单例 ImageLoader，避免每个窗口重复创建 Signal
 _global_image_loader: ImageLoader | None = None
+
+MAX_IMAGE_BYTES = 16 * 1024 * 1024
+MAX_IMAGE_PIXELS = 16_000_000
+IMAGE_TIMEOUT_MS = 30_000
+SAFE_IMAGE_FORMATS = ("JPEG", "PNG", "WEBP", "GIF", "BMP")
+
+
+@lru_cache(maxsize=1)
+def _thumbnail_tls() -> QSslConfiguration:
+    # Use Windows native TLS. The frozen Windows build excludes the unused
+    # OpenSSL Qt plugin so it cannot probe incompatible DLLs from PATH.
+    if sys.platform == "win32" and not QSslSocket.setActiveBackend("schannel"):
+        raise RuntimeError("Windows TLS backend unavailable")
+    config = QSslConfiguration.defaultConfiguration()
+    config.setCaCertificates(
+        [
+            QSslCertificate(root, QSsl.EncodingFormat.Der)
+            for root in _tls_context().get_ca_certs(binary_form=True)
+        ]
+    )
+    return config
+
+
+def decode_thumbnail(data: bytes) -> QPixmap:
+    """Select only raster decoders; reject oversized images before allocation."""
+    if not data or len(data) > MAX_IMAGE_BYTES:
+        raise ValueError("Thumbnail byte limit exceeded")
+    with Image.open(io.BytesIO(data), formats=SAFE_IMAGE_FORMATS) as image:
+        if image.width <= 0 or image.height <= 0 or image.width * image.height > MAX_IMAGE_PIXELS:
+            raise ValueError("Thumbnail pixel limit exceeded")
+        rgba = image.convert("RGBA")
+        pixels = rgba.tobytes("raw", "RGBA")
+        result = QImage(pixels, rgba.width, rgba.height, QImage.Format.Format_RGBA8888)
+        return QPixmap.fromImage(result.copy())
 
 
 def get_image_loader() -> ImageLoader:
@@ -187,7 +228,18 @@ class ImageLoader(QObject):
         if not allow_webp:
             url_str = self._force_youtube_webp_to_jpg(url_str)
 
-        request = QNetworkRequest(QUrl(url_str))
+        url = QUrl(url_str)
+        if not url.isValid() or url.scheme().lower() not in {"http", "https"} or not url.host():
+            self.failed.emit(original_req_url)
+            return
+        request = QNetworkRequest(url)
+        request.setSslConfiguration(_thumbnail_tls())
+        request.setTransferTimeout(IMAGE_TIMEOUT_MS)
+        request.setAttribute(QNetworkRequest.Attribute.Http2AllowedAttribute, False)
+        request.setAttribute(
+            QNetworkRequest.Attribute.RedirectPolicyAttribute,
+            QNetworkRequest.RedirectPolicy.NoLessSafeRedirectPolicy,
+        )
 
         # 设置请求头
         request.setRawHeader(
@@ -208,6 +260,28 @@ class ImageLoader(QObject):
         )
 
         reply = self.manager.get(request)
+        reply.setReadBufferSize(64 * 1024)
+        payload = bytearray()
+        timer = QTimer(reply)
+        timer.setSingleShot(True)
+        timer.timeout.connect(reply.abort)
+        timer.start(IMAGE_TIMEOUT_MS)
+
+        def receive():
+            available = reply.bytesAvailable()
+            if len(payload) + available > MAX_IMAGE_BYTES:
+                reply.abort()
+                return
+            payload.extend(bytes(reply.read(available)))
+
+        def check_length():
+            length = reply.header(QNetworkRequest.KnownHeaders.ContentLengthHeader)
+            if length is not None and int(length) > MAX_IMAGE_BYTES:
+                reply.abort()
+
+        reply.readyRead.connect(receive)
+        reply.metaDataChanged.connect(check_length)
+        reply.finished.connect(timer.stop)
 
         # SSL 错误处理
         try:
@@ -224,7 +298,7 @@ class ImageLoader(QObject):
             pass
 
         reply.finished.connect(
-            lambda: self._on_finished(reply, target_size, radius, original_req_url)
+            lambda: self._on_finished(reply, target_size, radius, original_req_url, payload)
         )
 
     def _on_finished(
@@ -233,6 +307,7 @@ class ImageLoader(QObject):
         target_size: tuple[int, int] | None,
         radius: int,
         original_url: str,
+        payload: bytearray,
     ) -> None:
         try:
             # 如果绑定的 UI 控件已经被销毁，C++ 对象也会被销毁，这里会引发 RuntimeError
@@ -252,30 +327,16 @@ class ImageLoader(QObject):
                 return
 
             # 2. 检查数据有效性
-            data = reply.readAll()
-            if data.size() == 0:
+            if len(payload) + reply.bytesAvailable() > MAX_IMAGE_BYTES:
                 self.failed.emit(str(original_url))
                 return
-
-            # 3. 尝试解码
-            pixmap = QPixmap()
-            if not pixmap.loadFromData(data):
-                # 尝试使用 Pillow 降级处理 (针对 WebP 等 Qt 可能不支持的格式)
-                try:
-                    image = Image.open(io.BytesIO(data.data()))
-                    image = image.convert("RGBA")
-                    data_bytes = image.tobytes("raw", "RGBA")
-                    qimage = QImage(
-                        data_bytes,
-                        image.width,
-                        image.height,
-                        QImage.Format.Format_RGBA8888,
-                    )
-                    pixmap = QPixmap.fromImage(qimage)
-                except Exception as e:
-                    log_text(logger, "warning", "[ImageLoader] Pillow 解码失败: {0}", e)
-                    self.failed.emit(str(original_url))
-                    return
+            payload.extend(bytes(reply.readAll()))
+            try:
+                pixmap = decode_thumbnail(bytes(payload))
+            except (OSError, ValueError, Image.DecompressionBombError) as error:
+                log_text(logger, "warning", "[ImageLoader] Pillow 解码失败: {0}", error)
+                self.failed.emit(str(original_url))
+                return
 
             # 4. 后处理 (缩放/圆角)
             if target_size:

@@ -2,7 +2,7 @@
 
 ## 环境与入口
 
-支持 Windows x64、Python 3.12.12；工具链版本见根目录 `build-environment.json`，Python 依赖由 `uv.lock` 锁定。
+支持 Windows x64、Python 3.12.15；工具链版本见根目录 `build-environment.json`，Python 依赖由 `uv.lock` 锁定。
 
 ```powershell
 uv sync --locked --extra dev --extra build

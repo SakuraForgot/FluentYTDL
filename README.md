@@ -112,7 +112,7 @@ Alternatively, use a Python virtual environment and install the project with `pi
 | Layer | Implementation |
 | --- | --- |
 | 🖼️ Desktop UI | PySide6 and PySide6-Fluent-Widgets |
-| 🐍 Application core | Python 3.12.12 with a `src/` package layout |
+| 🐍 Application core | Python 3.12.15 with a `src/` package layout |
 | ⬇️ Download engine | yt-dlp behind a CLI subprocess boundary |
 | 🎞️ Media pipeline | FFmpeg and companion media tools |
 | 🧱 Service boundaries | Authentication, download, processing, storage, and YouTube services |

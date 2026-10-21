@@ -6,7 +6,9 @@ import importlib.metadata
 import json
 import os
 import platform
+import pyexpat
 import shutil
+import ssl
 import struct
 import subprocess
 import tempfile
@@ -37,6 +39,11 @@ def preflight(target: str) -> list[tuple[bool, str]]:
     expected = versions()
     checks = [
         (
+            tuple(map(int, ssl.OPENSSL_VERSION.split()[1].split("."))) < (3, 5, 9),
+            f"OpenSSL >= 3.5.9 required: {ssl.OPENSSL_VERSION}",
+        ),
+        (pyexpat.version_info < (2, 8, 5), f"Expat >= 2.8.5 required: {pyexpat.EXPAT_VERSION}"),
+        (
             platform.system() != "Windows" or struct.calcsize("P") != 8,
             "Build platform must be Windows x64",
         ),
@@ -46,7 +53,17 @@ def preflight(target: str) -> list[tuple[bool, str]]:
         ),
     ]
     locked = tomllib.loads((ROOT / "uv.lock").read_text(encoding="utf-8"))["package"]
-    for package in ("pyinstaller", "PySide6", "py7zr", "pythonnet", "clr-loader", "pywebview"):
+    for package in (
+        "pyinstaller",
+        "PySide6",
+        "py7zr",
+        "pythonnet",
+        "clr-loader",
+        "pywebview",
+        "certifi",
+        "urllib3",
+        "Pillow",
+    ):
         try:
             actual = importlib.metadata.version(package)
             accepted = {

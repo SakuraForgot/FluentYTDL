@@ -92,6 +92,10 @@ a = Analysis(
 # ----------------------------------------------------------------------------
 # 4. 目标聚合阶段
 # ----------------------------------------------------------------------------
+# Qt uses Schannel on Windows. Python/requests still bundle their own patched
+# OpenSSL; only Qt's unused dynamic backend is removed to avoid DLL probing.
+if sys.platform == 'win32':
+    a.binaries = [item for item in a.binaries if not item[0].replace('\\', '/').endswith('/qopensslbackend.dll')]
 pyz = PYZ(a.pure)
 
 # 仅生成 onedir 的可执行文件入口（规避 onefile 的杀软特诊）

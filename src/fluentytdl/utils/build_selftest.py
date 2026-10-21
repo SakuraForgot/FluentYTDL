@@ -75,6 +75,15 @@ def run_selftest(output: Path) -> int:
         from .paths import resource_path
 
         app = QApplication.instance() or QApplication([])
+        from PySide6.QtNetwork import QSslSocket
+
+        from .image_loader import _thumbnail_tls
+
+        if not _thumbnail_tls().caCertificates() or not QSslSocket.supportsSsl():
+            raise RuntimeError("Filtered Qt TLS backend unavailable")
+        if sys.platform == "win32" and QSslSocket.activeBackend() != "schannel":
+            raise RuntimeError("Unexpected Windows TLS backend")
+        report["checks"].append("Filtered Qt trust and native Windows TLS backend")
         window = FluentWindow()
         icon = QIcon(str(resource_path("assets", "FluentYTDL_v2.ico")))
         if icon.isNull():

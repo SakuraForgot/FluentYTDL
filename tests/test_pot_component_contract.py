@@ -18,12 +18,14 @@ def bundle(tmp_path):
         "server/src/utils.ts",
         "server/package.json",
         "server/package-lock.json",
+        "server/node_modules/follow-redirects/package.json",
         "server/node_modules/canvas/build/Release/canvas.node",
     )
     for name in required:
         p = root / name
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_bytes(b"# test\n" if name.endswith(".py") else b"test")
+    (root / "server/node_modules/follow-redirects/package.json").write_text('{"version":"1.16.1"}')
     archive = component.PotBundle(root, {}).plugin_archive
     archive.parent.mkdir(parents=True)
     archive.write_bytes(b"official zip fixture")
@@ -57,6 +59,14 @@ def test_plugin_archive_is_verified_independently(bundle):
     installed.plugin_archive.write_bytes(b"changed official zip")
     with pytest.raises(component.ComponentError, match="pot_package_corrupt"):
         component.read_bundle(root)
+
+
+def test_retained_pot_requires_security_repair_before_launch(bundle):
+    root, manifest = bundle
+    metadata = root / "server/node_modules/follow-redirects/package.json"
+    metadata.write_text('{"version":"1.16.0"}')
+    with pytest.raises(component.ComponentError, match="pot_package_incompatible"):
+        component.PotBundle(root, manifest).command(Path("deno.exe"), 1234)
 
 
 @pytest.mark.parametrize("damage", ["corrupt", "missing", "unlisted_manifest", "pair", "app"])
