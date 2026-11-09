@@ -78,7 +78,7 @@ dev = [
 # py7zr 严格一致（tests/test_py7zr_pin.py 断言这一点）。
 # 构建工具用精确版本换取 release 可复现；不并入 dev 以免与锁文件的范围解析打架。
 build = [
-  "py7zr==1.1.3",
+  "py7zr==1.1.4",
 ]
 
 [tool.fluentytdl.build]
